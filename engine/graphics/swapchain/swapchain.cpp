@@ -96,8 +96,13 @@ vk::Result IdaSwapChain::SubmitCommandBuffers(const vk::CommandBuffer* buffers, 
                            .setPSwapchains(swapChains.data())
                            .setPImageIndices(imageIndex);
 
-    auto result = ctx.presentQueue.presentKHR(presentInfo);
-
+    vk::Result result;
+    try {
+        result = ctx.presentQueue.presentKHR(presentInfo);
+    } catch (const vk::OutOfDateKHRError& e) {
+        // TODO: 也许有更好的做法？
+        result = vk::Result::eErrorOutOfDateKHR;
+    }
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     return result;
 }
