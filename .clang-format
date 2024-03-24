@@ -1,0 +1,19 @@
+# clang - format
+BasedOnStyle: LLVM
+UseTab: Never
+IndentWidth: 4
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
+PointerAlignment: true
+AlwaysBreakAfterReturnType: None
+AlwaysBreakTemplateDeclarations: true
+AlwaysBreakBeforeMultilineStrings: false
+AlignOperands: true
+AlignAfterOpenBracket: Align
+AlignConsecutiveBitFields: true
+AlignConsecutiveMacros: true
+BinPackArguments: false
+BinPackParameters: false
+IncludeBlocks: Regroup
+ColumnLimit: 0
+SortIncludes: false
