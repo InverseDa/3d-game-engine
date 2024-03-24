@@ -1,5 +1,5 @@
 #include "model.hpp"
-#include "../utils.hpp"
+#include "tool/utils.hpp"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "include/tiny_obj_loader.h"
