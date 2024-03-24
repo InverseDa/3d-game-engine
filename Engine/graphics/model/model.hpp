@@ -1,7 +1,7 @@
 #ifndef VULKAN_LIB_MODEL_HPP
 #define VULKAN_LIB_MODEL_HPP
 
-#include "../buffer/buffer.hpp"
+#include "buffer/buffer.hpp"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE

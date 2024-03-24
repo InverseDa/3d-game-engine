@@ -3,7 +3,7 @@
 
 #include "window.hpp"
 
-#include "game_object.hpp"
+#include "object/game_object.hpp"
 
 namespace ida {
 class KeyboardMovementController {

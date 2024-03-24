@@ -3,7 +3,7 @@
 
 #include "vulkan/vulkan.hpp"
 
-#include "../global_info.hpp"
+#include "tool/global_info.hpp"
 #include "../render/pipeline.hpp"
 
 namespace ida {

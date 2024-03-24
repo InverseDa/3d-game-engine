@@ -5,7 +5,7 @@
 #include <memory>
 #include "glm/glm.hpp"
 
-#include "../model/model.hpp"
+#include "graphics/model/model.hpp"
 
 namespace ida {
 

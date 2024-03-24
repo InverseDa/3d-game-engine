@@ -5,9 +5,9 @@
 #include <limits>
 #include "glm/glm.hpp"
 
-#include "../buffer/buffer.hpp"
-#include "../core/window.hpp"
-#include "../swapchain/swapchain.hpp"
+#include "buffer/buffer.hpp"
+#include "core/window.hpp"
+#include "graphics/swapchain/swapchain.hpp"
 
 namespace ida {
 class IdaRenderer final {

@@ -3,7 +3,7 @@
 
 #include "glm/glm.hpp"
 
-#include "camera/camera.hpp"
+#include "object/camera.hpp"
 #include "core/game_object.hpp"
 
 namespace ida {

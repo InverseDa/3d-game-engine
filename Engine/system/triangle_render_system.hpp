@@ -2,7 +2,7 @@
 #define VULKAN_LIB_TRIANGLE_RENDER_SYSTEM_HPP
 #include "vulkan/vulkan.hpp"
 
-#include "../global_info.hpp"
+#include "tool/global_info.hpp"
 #include "../render/pipeline.hpp"
 
 namespace ida {

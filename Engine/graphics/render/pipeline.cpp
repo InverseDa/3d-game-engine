@@ -1,7 +1,7 @@
 #include "pipeline.hpp"
 #include "tool/tools.hpp"
-#include "../core/context.hpp"
-#include "../model/model.hpp"
+#include "core/context.hpp"
+#include "graphics/model/model.hpp"
 
 #include <vector>
 

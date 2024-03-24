@@ -1,14 +1,21 @@
-set(FMT_LIB ${GLOBAL_THIRD_PARTY_LIB_DIR}/fmtd.lib)
+function(recursive_glob_cpp dir result)
+    file(GLOB_RECURSE files "${dir}/*.cpp")
+    list(APPEND ${result} ${files})
 
+    file(GLOB subdirs RELATIVE "${dir}" "${dir}/*")
+    foreach(subdir ${subdirs})
+        if(IS_DIRECTORY ${dir}/${subdir})
+            recursive_glob_cpp(${dir}/${subdir} ${result})
+        endif()
+    endforeach()
+
+    set(${result} ${${result}} PARENT_SCOPE)
+endfunction()
+
+set(FMT_LIB ${GLOBAL_THIRD_PARTY_LIB_DIR}/fmtd.lib)
 set(ENGINE_SRCS)
 set(ENGINE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-file(GLOB ENGINE_SUB_DIRS RELATIVE ${ENGINE_SOURCE_DIR} ${ENGINE_SOURCE_DIR}/*)
-foreach (SUBDIR ${ENGINE_SUB_DIRS})
-    if (IS_DIRECTORY ${ENGINE_SOURCE_DIR}/${SUBDIR})
-        file(GLOB_RECURSE SUBDIR_SRCS "${ENGINE_SOURCE_DIR}/${SUBDIR}/*.cpp")
-        list(APPEND ENGINE_SRCS ${SUBDIR_SRCS})
-    endif ()
-endforeach ()
+recursive_glob_cpp(${ENGINE_SOURCE_DIR} ENGINE_SRCS)
 
 add_library(Core STATIC ${ENGINE_SRCS})
 
