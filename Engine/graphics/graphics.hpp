@@ -28,9 +28,19 @@ class Graphics {
 };
 
 namespace ida {
+class GraphicsCtx {
+  public:
+    GraphicsCtx() = default;
+    ~GraphicsCtx();
 
+  private:
+    std::unique_ptr<ida::IdaRenderer> renderer_;
+    std::unique_ptr<ida::IdaDescriptorPool> globalPool_{};
+    ida::IdaGameObject::Map gameObjects_;
 
+    void LoadGameObjects();
+};
 
-}
+} // namespace ida
 
 #endif // VULKAN_LIB_APP_HPP
