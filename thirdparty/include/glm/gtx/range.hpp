@@ -13,7 +13,7 @@
 #pragma once
 
 // Dependencies
-#include "include/glm/detail/setup.hpp"
+#include "../detail/setup.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	ifndef GLM_ENABLE_EXPERIMENTAL
@@ -23,8 +23,8 @@
 #	endif
 #endif
 
-#include "include/glm/gtc/type_ptr.hpp"
-#include "include/glm/gtc/vec1.hpp"
+#include "../gtc/type_ptr.hpp"
+#include "../gtc/vec1.hpp"
 
 namespace glm
 {

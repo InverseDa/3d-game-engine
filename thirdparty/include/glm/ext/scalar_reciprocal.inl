@@ -1,6 +1,6 @@
 /// @ref ext_scalar_reciprocal
 
-#include "include/glm/trigonometric.hpp"
+#include "../trigonometric.hpp"
 #include <limits>
 
 namespace glm

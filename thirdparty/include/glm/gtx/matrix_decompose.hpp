@@ -13,12 +13,12 @@
 #pragma once
 
 // Dependencies
-#include "include/glm/mat4x4.hpp"
-#include "include/glm/vec3.hpp"
-#include "include/glm/vec4.hpp"
-#include "include/glm/geometric.hpp"
-#include "include/glm/gtc/quaternion.hpp"
-#include "include/glm/gtc/matrix_transform.hpp"
+#include "../mat4x4.hpp"
+#include "../vec3.hpp"
+#include "../vec4.hpp"
+#include "../geometric.hpp"
+#include "../gtc/quaternion.hpp"
+#include "../gtc/matrix_transform.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	ifndef GLM_ENABLE_EXPERIMENTAL

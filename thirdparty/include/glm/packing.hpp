@@ -15,9 +15,9 @@
 
 #pragma once
 
-#include "include/glm/ext/vector_uint2.hpp"
-#include "include/glm/ext/vector_float2.hpp"
-#include "include/glm/ext/vector_float4.hpp"
+#include "./ext/vector_uint2.hpp"
+#include "./ext/vector_float2.hpp"
+#include "./ext/vector_float4.hpp"
 
 namespace glm
 {
@@ -170,4 +170,4 @@ namespace glm
 	/// @}
 }//namespace glm
 
-#include "include/glm/detail/func_packing.inl"
+#include "detail/func_packing.inl"

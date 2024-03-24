@@ -1,8 +1,8 @@
 /// @ref gtc_epsilon
 
 // Dependency:
-#include "include/glm/vector_relational.hpp"
-#include "include/glm/common.hpp"
+#include "../vector_relational.hpp"
+#include "../common.hpp"
 
 namespace glm
 {

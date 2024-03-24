@@ -13,7 +13,7 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/mat2x4.hpp"
+#include "../mat2x4.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_EXT_matrix_int2x4 extension included")

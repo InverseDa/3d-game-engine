@@ -13,8 +13,8 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/glm.hpp"
-#include "optimum_pow.hpp"
+#include "../glm.hpp"
+#include "../gtx/optimum_pow.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	ifndef GLM_ENABLE_EXPERIMENTAL

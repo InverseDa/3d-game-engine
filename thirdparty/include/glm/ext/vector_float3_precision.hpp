@@ -2,7 +2,7 @@
 /// @file glm/ext/vector_float3_precision.hpp
 
 #pragma once
-#include "include/glm/detail/type_vec3.hpp"
+#include "../detail/type_vec3.hpp"
 
 namespace glm
 {

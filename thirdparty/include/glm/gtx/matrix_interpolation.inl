@@ -1,6 +1,6 @@
 /// @ref gtx_matrix_interpolation
 
-#include "include/glm/ext/scalar_constants.hpp"
+#include "../ext/scalar_constants.hpp"
 
 #include <limits>
 

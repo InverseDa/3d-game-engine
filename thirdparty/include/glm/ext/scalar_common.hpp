@@ -14,7 +14,7 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/common.hpp"
+#include "../common.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_EXT_scalar_common extension included")

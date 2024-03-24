@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include "include/glm/detail/setup.hpp"
+#include "../detail/setup.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	ifndef GLM_ENABLE_EXPERIMENTAL
@@ -24,10 +24,10 @@
 #	endif
 #endif
 
-#include "include/glm/vec2.hpp"
-#include "include/glm/vec3.hpp"
-#include "include/glm/vec4.hpp"
-#include "include/glm/mat2x2.hpp"
+#include "../vec2.hpp"
+#include "../vec3.hpp"
+#include "../vec4.hpp"
+#include "../mat2x2.hpp"
 #include <type_traits>
 
 namespace glm

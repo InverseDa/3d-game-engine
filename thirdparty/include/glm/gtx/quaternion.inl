@@ -1,7 +1,7 @@
 /// @ref gtx_quaternion
 
 #include <limits>
-#include "include/glm/gtc/constants.hpp"
+#include "../gtc/constants.hpp"
 
 namespace glm
 {

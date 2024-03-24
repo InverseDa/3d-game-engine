@@ -20,10 +20,10 @@
 #pragma once
 
 // Dependencies
-#include "include/glm/gtc/constants.hpp"
-#include "include/glm/geometric.hpp"
-#include "include/glm/trigonometric.hpp"
-#include "include/glm/matrix.hpp"
+#include "../gtc/constants.hpp"
+#include "../geometric.hpp"
+#include "../trigonometric.hpp"
+#include "../matrix.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_EXT_matrix_integer extension included")

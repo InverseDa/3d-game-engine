@@ -13,7 +13,7 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/detail/setup.hpp"
+#include "../detail/setup.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_GTC_matrix_access extension included")

@@ -15,10 +15,10 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/glm.hpp"
-#include "include/glm/gtc/type_precision.hpp"
-#include "include/glm/gtc/quaternion.hpp"
-#include "dual_quaternion.hpp"
+#include "../glm.hpp"
+#include "../gtc/type_precision.hpp"
+#include "../gtc/quaternion.hpp"
+#include "../gtx/dual_quaternion.hpp"
 #include <string>
 #include <cmath>
 

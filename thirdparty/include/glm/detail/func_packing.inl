@@ -1,7 +1,7 @@
 /// @ref core
 /// @file glm/detail/func_packing.inl
 
-#include "include/glm/common.hpp"
+#include "../common.hpp"
 #include "type_half.hpp"
 
 namespace glm

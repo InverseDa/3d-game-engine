@@ -14,10 +14,10 @@
 #pragma once
 
 // Dependency:
-#include "transform.hpp"
-#include "include/glm/gtc/epsilon.hpp"
-#include "include/glm/ext/vector_relational.hpp"
-#include "include/glm/glm.hpp"
+#include "../gtx/transform.hpp"
+#include "../gtc/epsilon.hpp"
+#include "../ext/vector_relational.hpp"
+#include "../glm.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	ifndef GLM_ENABLE_EXPERIMENTAL

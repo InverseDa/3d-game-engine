@@ -1,7 +1,7 @@
-#include "include/glm/geometric.hpp"
-#include "include/glm/exponential.hpp"
-#include "include/glm/trigonometric.hpp"
-#include "include/glm/detail/type_vec1.hpp"
+#include "../geometric.hpp"
+#include "../exponential.hpp"
+#include "../trigonometric.hpp"
+#include "../detail/type_vec1.hpp"
 #include <cstdlib>
 #include <ctime>
 #include <cassert>
@@ -22,7 +22,7 @@ namespace detail
 		GLM_FUNC_QUALIFIER static vec<1, uint8, P> call()
 		{
 			return vec<1, uint8, P>(
-				std::rand() % std::numeric_limits<uint8>::max());
+				static_cast<uint8>(std::rand() % std::numeric_limits<uint8>::max()));
 		}
 	};
 

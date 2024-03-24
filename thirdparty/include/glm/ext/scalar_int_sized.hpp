@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include "include/glm/detail/setup.hpp"
+#include "../detail/setup.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_EXT_scalar_int_sized extension included")

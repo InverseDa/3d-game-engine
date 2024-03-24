@@ -15,7 +15,7 @@
 
 // Dependency:
 #include "type_precision.hpp"
-#include "include/glm/ext/vector_packing.hpp"
+#include "../ext/vector_packing.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_GTC_packing extension included")

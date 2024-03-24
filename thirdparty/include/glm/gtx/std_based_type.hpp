@@ -14,7 +14,7 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/glm.hpp"
+#include "../glm.hpp"
 #include <cstdlib>
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)

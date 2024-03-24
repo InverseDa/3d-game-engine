@@ -20,7 +20,7 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/detail/type_quat.hpp"
+#include "../detail/type_quat.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_EXT_quaternion_double extension included")

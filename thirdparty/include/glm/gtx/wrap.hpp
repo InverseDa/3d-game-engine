@@ -13,10 +13,10 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/glm.hpp"
-#include "include/glm/ext/scalar_common.hpp"
-#include "include/glm/ext/vector_common.hpp"
-#include "include/glm/gtc/vec1.hpp"
+#include "../glm.hpp"
+#include "../ext/scalar_common.hpp"
+#include "../ext/vector_common.hpp"
+#include "../gtc/vec1.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	ifndef GLM_ENABLE_EXPERIMENTAL

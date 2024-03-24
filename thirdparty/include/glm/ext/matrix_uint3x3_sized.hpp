@@ -13,8 +13,8 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/mat3x3.hpp"
-#include "scalar_uint_sized.hpp"
+#include "../mat3x3.hpp"
+#include "../ext/scalar_uint_sized.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_EXT_matrix_uint3x3_sized extension included")

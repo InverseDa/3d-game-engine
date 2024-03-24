@@ -39,8 +39,8 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/glm.hpp"
-#include "include/glm/ext/scalar_relational.hpp"
+#include "../glm.hpp"
+#include "../ext/scalar_relational.hpp"
 
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)

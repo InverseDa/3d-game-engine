@@ -1,7 +1,7 @@
 /// @ref gtx_matrix_transform_2d
 /// @author Miguel Ángel Pérez Martínez
 
-#include "include/glm/trigonometric.hpp"
+#include "../trigonometric.hpp"
 
 namespace glm
 {

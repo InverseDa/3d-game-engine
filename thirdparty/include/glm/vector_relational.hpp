@@ -19,8 +19,8 @@
 
 #pragma once
 
-#include "include/glm/detail/qualifier.hpp"
-#include "include/glm/detail/setup.hpp"
+#include "detail/qualifier.hpp"
+#include "detail/setup.hpp"
 
 namespace glm
 {
@@ -118,4 +118,4 @@ namespace glm
 	/// @}
 }//namespace glm
 
-#include "include/glm/detail/func_vector_relational.inl"
+#include "detail/func_vector_relational.inl"

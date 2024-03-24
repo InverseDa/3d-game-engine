@@ -14,9 +14,9 @@
 #pragma once
 
 // Dependencies
-#include "include/glm/detail/setup.hpp"
-#include "include/glm/detail/qualifier.hpp"
-#include "include/glm/vec3.hpp"
+#include "../detail/setup.hpp"
+#include "../detail/qualifier.hpp"
+#include "../vec3.hpp"
 #include <limits>
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)

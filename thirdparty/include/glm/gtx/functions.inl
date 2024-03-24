@@ -1,6 +1,6 @@
 /// @ref gtx_functions
 
-#include "include/glm/exponential.hpp"
+#include "../exponential.hpp"
 
 namespace glm
 {

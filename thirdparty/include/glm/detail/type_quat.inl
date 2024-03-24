@@ -1,7 +1,7 @@
-#include "include/glm/trigonometric.hpp"
-#include "include/glm/exponential.hpp"
-#include "include/glm/ext/quaternion_common.hpp"
-#include "include/glm/ext/quaternion_geometric.hpp"
+#include "../trigonometric.hpp"
+#include "../exponential.hpp"
+#include "../ext/quaternion_common.hpp"
+#include "../ext/quaternion_geometric.hpp"
 #include <limits>
 
 namespace glm{

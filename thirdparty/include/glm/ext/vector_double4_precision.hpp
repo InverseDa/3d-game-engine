@@ -2,8 +2,8 @@
 /// @file glm/ext/vector_double4_precision.hpp
 
 #pragma once
-#include "include/glm/detail/setup.hpp"
-#include "include/glm/detail/type_vec4.hpp"
+#include "../detail/setup.hpp"
+#include "../detail/type_vec4.hpp"
 
 namespace glm
 {

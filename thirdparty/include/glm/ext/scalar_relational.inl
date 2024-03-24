@@ -1,7 +1,7 @@
-#include "include/glm/common.hpp"
-#include "scalar_int_sized.hpp"
-#include "scalar_uint_sized.hpp"
-#include "include/glm/detail/type_float.hpp"
+#include "../common.hpp"
+#include "../ext/scalar_int_sized.hpp"
+#include "../ext/scalar_uint_sized.hpp"
+#include "../detail/type_float.hpp"
 
 namespace glm
 {

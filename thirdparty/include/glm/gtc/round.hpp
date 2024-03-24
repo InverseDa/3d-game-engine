@@ -14,11 +14,11 @@
 #pragma once
 
 // Dependencies
-#include "include/glm/detail/setup.hpp"
-#include "include/glm/detail/qualifier.hpp"
-#include "include/glm/detail/_vectorize.hpp"
-#include "include/glm/vector_relational.hpp"
-#include "include/glm/common.hpp"
+#include "../detail/setup.hpp"
+#include "../detail/qualifier.hpp"
+#include "../detail/_vectorize.hpp"
+#include "../vector_relational.hpp"
+#include "../common.hpp"
 #include <limits>
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)

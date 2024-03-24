@@ -13,8 +13,8 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/glm.hpp"
-#include "include/glm/ext/vector_common.hpp"
+#include "../glm.hpp"
+#include "../ext/vector_common.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	ifndef GLM_ENABLE_EXPERIMENTAL

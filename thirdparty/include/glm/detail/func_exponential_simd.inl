@@ -1,7 +1,7 @@
 /// @ref core
 /// @file glm/detail/func_exponential_simd.inl
 
-#include "include/glm/simd/exponential.h"
+#include "../simd/exponential.h"
 
 #if GLM_ARCH & GLM_ARCH_SSE2_BIT
 

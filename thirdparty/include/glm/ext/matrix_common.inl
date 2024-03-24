@@ -1,4 +1,4 @@
-#include "include/glm/matrix.hpp"
+#include "../matrix.hpp"
 
 namespace glm
 {

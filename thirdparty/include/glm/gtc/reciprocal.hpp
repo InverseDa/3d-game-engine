@@ -13,12 +13,12 @@
 #pragma once
 
 // Dependencies
-#include "include/glm/detail/setup.hpp"
+#include "../detail/setup.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_GTC_reciprocal extension included")
 #endif
 
-#include "include/glm/ext/scalar_reciprocal.hpp"
-#include "include/glm/ext/vector_reciprocal.hpp"
+#include "../ext/scalar_reciprocal.hpp"
+#include "../ext/vector_reciprocal.hpp"
 

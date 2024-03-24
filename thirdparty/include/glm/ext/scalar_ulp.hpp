@@ -16,9 +16,9 @@
 #pragma once
 
 // Dependencies
-#include "scalar_int_sized.hpp"
-#include "include/glm/common.hpp"
-#include "include/glm/detail/qualifier.hpp"
+#include "../ext/scalar_int_sized.hpp"
+#include "../common.hpp"
+#include "../detail/qualifier.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_EXT_scalar_ulp extension included")

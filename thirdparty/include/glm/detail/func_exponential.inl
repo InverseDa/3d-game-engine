@@ -1,7 +1,7 @@
 /// @ref core
 /// @file glm/detail/func_exponential.inl
 
-#include "include/glm/vector_relational.hpp"
+#include "../vector_relational.hpp"
 #include "_vectorize.hpp"
 #include <limits>
 #include <cmath>

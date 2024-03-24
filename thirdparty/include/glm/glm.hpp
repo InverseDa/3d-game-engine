@@ -100,9 +100,9 @@
 /// - <a href="modules.html">GLM API documentation</a>
 /// - <a href="https://github.com/g-truc/glm/blob/master/manual.md">GLM Manual</a>
 
-#include "include/glm/detail/_fixes.hpp"
+#include "detail/_fixes.hpp"
 
-#include "include/glm/detail/setup.hpp"
+#include "detail/setup.hpp"
 
 #pragma once
 

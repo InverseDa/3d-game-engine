@@ -16,9 +16,9 @@
 #pragma once
 
 // Dependency:
-#include "include/glm/glm.hpp"
-#include "include/glm/gtc/constants.hpp"
-#include "include/glm/gtc/quaternion.hpp"
+#include "../glm.hpp"
+#include "../gtc/constants.hpp"
+#include "../gtc/quaternion.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	ifndef GLM_ENABLE_EXPERIMENTAL

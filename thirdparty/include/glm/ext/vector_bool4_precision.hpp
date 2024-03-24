@@ -2,7 +2,7 @@
 /// @file glm/ext/vector_bool4_precision.hpp
 
 #pragma once
-#include "include/glm/detail/type_vec4.hpp"
+#include "../detail/type_vec4.hpp"
 
 namespace glm
 {

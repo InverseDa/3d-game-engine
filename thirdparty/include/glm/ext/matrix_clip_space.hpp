@@ -20,9 +20,9 @@
 #pragma once
 
 // Dependencies
-#include "scalar_constants.hpp"
-#include "include/glm/geometric.hpp"
-#include "include/glm/trigonometric.hpp"
+#include "../ext/scalar_constants.hpp"
+#include "../geometric.hpp"
+#include "../trigonometric.hpp"
 
 #if GLM_MESSAGES == GLM_ENABLE && !defined(GLM_EXT_INCLUDED)
 #	pragma message("GLM: GLM_EXT_matrix_clip_space extension included")

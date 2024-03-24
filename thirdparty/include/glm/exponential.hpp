@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include "include/glm/detail/type_vec1.hpp"
-#include "include/glm/detail/type_vec2.hpp"
-#include "include/glm/detail/type_vec3.hpp"
-#include "include/glm/detail/type_vec4.hpp"
+#include "detail/type_vec1.hpp"
+#include "detail/type_vec2.hpp"
+#include "detail/type_vec3.hpp"
+#include "detail/type_vec4.hpp"
 #include <cmath>
 
 namespace glm
@@ -107,4 +107,4 @@ namespace glm
 	/// @}
 }//namespace glm
 
-#include "include/glm/detail/func_exponential.inl"
+#include "detail/func_exponential.inl"
