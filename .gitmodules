@@ -1,0 +1,3 @@
+[submodule "vulkan-lib"]
+	path = vulkan-lib
+	url = git@github.com:InverseDa/vulkan-lib.git
