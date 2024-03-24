@@ -2,7 +2,7 @@
 #include "tool/utils.hpp"
 
 #define TINYOBJLOADER_IMPLEMENTATION
-#include "include/tiny_obj_loader.h"
+#include "tiny_obj_loader.h"
 #include "log/log.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL

@@ -1,9 +1,9 @@
-#include "app.hpp"
+#include "graphics.hpp"
 #include "object/camera.hpp"
-#include "../core/context.hpp"
-#include "../core/keyboard_controller.hpp"
+#include "core/context.hpp"
+#include "core/keyboard_controller.hpp"
 #include "tool/global_info.hpp"
-#include "../swapchain/swapchain.hpp"
+#include "swapchain/swapchain.hpp"
 #include "../system/point_light_system.hpp"
 #include "../system/triangle_render_system.hpp"
 #include "../system/simple_render_system.hpp"
@@ -14,7 +14,7 @@
 #include "glm/glm.hpp"
 #include "glm/gtx/rotate_vector.hpp"
 
-Application::Application(const std::string& title, int width, int height) {
+Graphics::Graphics(const std::string& title, int width, int height) {
     window_ = std::make_unique<ida::IdaWindow>(width, height, title);
     ida::Context::Init(window_->extensions, window_->getSurfaceCallback);
     renderer_ = std::make_unique<ida::IdaRenderer>(*window_);
@@ -28,7 +28,7 @@ Application::Application(const std::string& title, int width, int height) {
     LoadGameObjects();
 }
 
-Application::~Application() {
+Graphics::~Graphics() {
     ida::Context::GetInstance().device.waitIdle();
     globalPool.reset();
     renderer_.reset();
@@ -37,7 +37,7 @@ Application::~Application() {
     ida::Context::Quit();
 }
 
-int Application::Run() {
+int Graphics::Run() {
     std::vector<std::unique_ptr<ida::IdaBuffer>> uboBuffers(ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT);
     for (int i = 0; i < uboBuffers.size(); i++) {
         uboBuffers[i] = std::make_unique<ida::IdaBuffer>(
@@ -126,7 +126,7 @@ int Application::Run() {
     return 0;
 }
 
-void Application::LoadGameObjects() {
+void Graphics::LoadGameObjects() {
     std::shared_ptr<ida::IdaModel> model = ida::IdaModel::ImportModel("models/flat_vase.obj");
     auto vase = ida::IdaGameObject::CreateGameObject(ida::GameObjectType::Model);
     vase.model = model;

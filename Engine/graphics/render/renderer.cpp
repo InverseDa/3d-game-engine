@@ -1,5 +1,5 @@
 #include "renderer.hpp"
-#include "core/context.hpp"
+#include "../core/context.hpp"
 
 namespace ida {
 IdaRenderer::IdaRenderer(ida::IdaWindow& window) : window_{window} {

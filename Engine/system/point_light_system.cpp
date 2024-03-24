@@ -1,5 +1,5 @@
 #include "point_light_system.hpp"
-#include "../core/context.hpp"
+#include "../graphics/core/context.hpp"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE

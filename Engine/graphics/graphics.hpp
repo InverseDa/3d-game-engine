@@ -6,18 +6,16 @@
 #include <vector>
 
 #include "log/log.hpp"
-#include "../render/renderer.hpp"
-#include "../core/context.hpp"
-#include "../descriptor/descriptors.hpp"
-#include "../core/game_object.hpp"
-#include "../core/window.hpp"
+#include "render/renderer.hpp"
+#include "core/context.hpp"
+#include "descriptor/descriptors.hpp"
+#include "../object/game_object.hpp"
+#include "core/window.hpp"
 
-class Application {
+class Graphics {
   public:
-    Application(const std::string& title = "Vulkan Demo", int width = 800, int height = 600);
-
-    ~Application();
-
+    Graphics(const std::string& title = "Vulkan Demo", int width = 800, int height = 600);
+    ~Graphics();
     int Run();
 
   private:
@@ -28,5 +26,11 @@ class Application {
 
     void LoadGameObjects();
 };
+
+namespace ida {
+
+
+
+}
 
 #endif // VULKAN_LIB_APP_HPP
