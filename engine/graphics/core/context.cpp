@@ -64,7 +64,7 @@ vk::Instance Context::CreateInstance(std::vector<const char*>& extensions) {
 
 vk::PhysicalDevice Context::PickupPhysicalDevice() {
     auto devices = instance.enumeratePhysicalDevices();
-    if (devices.size() == 0) {
+    if (devices.empty()) {
         IO::ThrowError("Failed to find physical devices suitable for vulkan! Make sure you have a compatible GPU installed.");
     }
     return devices[0];
