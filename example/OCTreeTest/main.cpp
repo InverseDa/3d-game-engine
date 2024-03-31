@@ -1,7 +1,12 @@
 #include "scene/oc_tree.hpp"
 
 int main() {
-    ida::OcTreeNode<int> node(ida::AABB{glm::vec3(0.f), glm::vec3(10.f)});
+    ida::OcTree<int> tree(ida::AABB{glm::vec3(.0f), glm::vec3(1.0f)}, 2);
+    // preorder traversal
+    tree.PreOrderTraversal();
+
+    // oc_tree_render_system
+
 
     return 0;
 }

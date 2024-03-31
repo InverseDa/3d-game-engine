@@ -8,6 +8,28 @@ namespace ida {
 struct AABB {
     glm::vec3 min;
     glm::vec3 max;
+
+    [[nodiscard]] bool IsContain(const glm::vec3& point) const {
+        return (point.x >= min.x && point.x <= max.x) &&
+               (point.y >= min.y && point.y <= max.y) &&
+               (point.z >= min.z && point.z <= max.z);
+    }
+
+    AABB operator+(const glm::vec3& point) const {
+        return AABB{min + point, max + point};
+    }
+
+    AABB operator-(const glm::vec3& point) const {
+        return AABB{min - point, max - point};
+    }
+
+    AABB operator*(const glm::vec3& point) const {
+        return AABB{min * point, max * point};
+    }
+
+    AABB operator/(const glm::vec3& point) const {
+        return AABB{min / point, max / point};
+    }
 };
 
 // bounding sphere
@@ -41,7 +63,6 @@ bool Intersect(const AABB& a, const Frustum& b);
 bool Intersect(const BSphere& a, const BSphere& b);
 bool Intersect(const BSphere& a, const Ray& b);
 bool Intersect(const BSphere& a, const Frustum& b);
-
 
 } // namespace ida
 
