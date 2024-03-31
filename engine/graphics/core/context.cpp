@@ -73,7 +73,10 @@ vk::PhysicalDevice Context::PickupPhysicalDevice() {
 vk::Device Context::CreateDevice(vk::SurfaceKHR surface) {
     vk::DeviceCreateInfo deviceCreateInfo;
     QueueFamilyIndices queueInfo = QueryQueueFamily(surface);
+    auto enabledFeatures = vk::PhysicalDeviceFeatures()
+                               .setFillModeNonSolid(vk::True);
     deviceCreateInfo.setPEnabledExtensionNames(deviceExtensions);
+    deviceCreateInfo.setPEnabledFeatures(&enabledFeatures);
 
     std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
     float priority = 1.0;

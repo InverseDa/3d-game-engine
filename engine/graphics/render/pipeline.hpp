@@ -39,6 +39,7 @@ class IdaPipeline {
 
     static void DefaultPipelineConfigInfo(PipelineConfigInfo& configInfo);
     static void EnableAlphaBlending(PipelineConfigInfo& configInfo);
+    static void SwitchToLinePolygonMode(PipelineConfigInfo& configInfo);
 
   private:
     void CreateGraphicsPipeline(

@@ -2,6 +2,7 @@
 #include "system/simple_render_system.hpp"
 #include "graphics/core/keyboard_controller.hpp"
 #include "graphics/buffer/uniform_buffer_objects.hpp"
+#include "system/oc_tree_render_system.hpp"
 
 App::App(const std::string& title, int width, int height) {
     graphics_ = std::make_unique<ida::Graphics>();
@@ -22,13 +23,21 @@ int App::Run() {
     auto& globalDescriptorPool = graphics_->globalPool();
 
     ida::UniformBufferObject<
-        ida::GlobalUbo,
+        ida::SimpleRenderUniformPackage,
         vk::DescriptorType::eUniformBuffer>
-        globalUbo{globalDescriptorPool};
+        simpleRenderUbo{globalDescriptorPool};
+    ida::UniformBufferObject<
+        ida::OCTreeRenderUniformPackage,
+        vk::DescriptorType::eUniformBuffer>
+        ocTreeUbo{globalDescriptorPool};
 
     ida::SimpleRenderSystem simpleRenderSystem{
         renderer->GetRenderPass(),
-        globalUbo.GetDescriptorSetLayout(),
+        simpleRenderUbo.GetDescriptorSetLayout(),
+    };
+    ida::OCTreeRenderSystem ocTreeRenderSystem{
+        renderer->GetRenderPass(),
+        ocTreeUbo.GetDescriptorSetLayout(),
     };
 
     ida::KeyboardMovementController cameraController{};
@@ -50,25 +59,33 @@ int App::Run() {
         camera.SetPerspectiveProjection(glm::radians(50.f), aspect, 0.1f, 100.0f);
 
         if (auto commandBuffer = graphics_->renderer()->BeginFrame()) {
-            int frameIndex = graphics_->renderer()->GetCurrentFrameIndex();
+            int frameIndex = renderer->GetCurrentFrameIndex();
             ida::FrameInfo frameInfo{
                 frameIndex,
                 frameTime,
                 commandBuffer,
                 camera,
-                globalUbo.GetDescriptorSet(frameIndex),
                 gameObjects_,
             };
-            // update global UBO
-            ida::GlobalUbo data{};
+            frameInfo.descriptorSets["simple"] = simpleRenderUbo.GetDescriptorSet(frameIndex);
+            frameInfo.descriptorSets["octree"] = ocTreeUbo.GetDescriptorSet(frameIndex);
+
+            ida::SimpleRenderUniformPackage data{};
+            ida::OCTreeRenderUniformPackage ocTreeData{};
             data.view = camera.GetView();
             data.projection = camera.GetProjection();
             data.inverseView = camera.GetInverseView();
-            globalUbo.Update(frameIndex, data);
+            ocTreeData.view = camera.GetView();
+            ocTreeData.projection = camera.GetProjection();
+            ocTreeData.inverseView = camera.GetInverseView();
+
+            simpleRenderUbo.Update(frameIndex, data);
+            ocTreeUbo.Update(frameIndex, ocTreeData);
 
             renderer->BeginSwapChainRenderPass(commandBuffer);
             {
                 simpleRenderSystem.RenderGameObjects(frameInfo);
+                ocTreeRenderSystem.RenderGameObjects(frameInfo);
             }
             renderer->EndSwapChainRenderPass(commandBuffer);
             renderer->EndFrame();

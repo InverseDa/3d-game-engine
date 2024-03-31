@@ -55,7 +55,7 @@ void SimpleRenderSystem::RenderGameObjects(FrameInfo& frameInfo) {
     cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                            pipelineLayout_,
                            0,
-                           frameInfo.globalDescriptorSet,
+                           frameInfo.descriptorSets["simple"],
                            nullptr);
     for (auto& gameObject : frameInfo.gameObjects) {
         auto& obj = gameObject.second;

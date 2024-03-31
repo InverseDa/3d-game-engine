@@ -15,7 +15,13 @@ struct PointLight {
     glm::vec4 color{};
 };
 
-struct GlobalUbo {
+struct OCTreeRenderUniformPackage {
+    glm::mat4 projection{1.f};
+    glm::mat4 view{1.f};
+    glm::mat4 inverseView{1.f};
+};
+
+struct SimpleRenderUniformPackage {
     glm::mat4 projection{1.f};
     glm::mat4 view{1.f};
     glm::mat4 inverseView{1.f};
@@ -29,8 +35,8 @@ struct FrameInfo {
     float frameTime;
     vk::CommandBuffer commandBuffer;
     IdaCamera& camera;
-    vk::DescriptorSet globalDescriptorSet;
     IdaGameObject::Map& gameObjects;
+    std::unordered_map<std::string, vk::DescriptorSet> descriptorSets;
 };
 } // namespace ida
 #endif // VULKAN_LIB_GLOBAL_INFO_HPP

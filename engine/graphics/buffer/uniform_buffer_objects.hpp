@@ -57,6 +57,20 @@ class UniformBufferObject {
     std::vector<std::unique_ptr<IdaBuffer>> uboBuffers_;
     std::vector<vk::DescriptorSet> globalDescriptorSets_;
 };
+
+/** 用可变参数列表的方式来实现获取UniformPackageData结构体，比如：
+ ** struct OCTreeRenderUniformPackage {
+ **    glm::mat4 projection{1.f};
+ **    glm::mat4 view{1.f};
+ **    glm::mat4 inverseView{1.f};
+ ** } data;
+ ** 比如调用UniformPackage<glm::mat4, glm::mat4> data;
+ ** auto data = data.GetStructData("model", "view")就会返回一个结构体变量，包含两个glm::mat4的成员变量model和view
+ ** struct EG {
+ **     glm::mat4 model;
+ **     glm::mat4 view;
+ ** } data;
+ **/
 } // namespace ida
 
 #endif // ENGINE_UNIFORM_BUFFER_OBJECTS_HPP

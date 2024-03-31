@@ -25,7 +25,7 @@ PointLightSystem::~PointLightSystem() {
     Context::GetInstance().device.destroyPipelineLayout(pipelineLayout_);
 }
 
-void PointLightSystem::Update(FrameInfo& frameInfo, GlobalUbo& globalUbo) {
+void PointLightSystem::Update(FrameInfo& frameInfo, SimpleRenderUniformPackage& globalUbo) {
     auto rotateLight = glm::rotate(glm::mat4(1.f), 0.5f * frameInfo.frameTime, {0.f, -1.f, 0.f});
     int lightIndex = 0;
     for (auto& kv : frameInfo.gameObjects) {
@@ -57,7 +57,7 @@ void PointLightSystem::Render(FrameInfo& frameInfo) {
     frameInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                                pipelineLayout_,
                                                0,
-                                               frameInfo.globalDescriptorSet,
+                                               frameInfo.descriptorSets["simple"],
                                                nullptr);
     for (auto it = sorted.rbegin(); it != sorted.rend(); ++it) {
         auto& obj = frameInfo.gameObjects.at(it->second);

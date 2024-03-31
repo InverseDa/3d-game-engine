@@ -54,7 +54,8 @@ class Graphics {
 
     bool InitGlobalPool() {
         globalPool_ = ida::IdaDescriptorPool::Builder()
-                          .SetMaxSets(ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT)
+                          .SetMaxSets(2 * ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT)
+                          .AddPoolSize(vk::DescriptorType::eUniformBuffer, ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT)
                           .AddPoolSize(vk::DescriptorType::eUniformBuffer, ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT)
                           .Build();
         return globalPool_ != nullptr;

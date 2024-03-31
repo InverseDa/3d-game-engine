@@ -30,7 +30,7 @@ int App::Run() {
     std::vector<std::unique_ptr<ida::IdaBuffer>> uboBuffers(ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT);
     for (int i = 0; i < uboBuffers.size(); i++) {
         uboBuffers[i] = std::make_unique<ida::IdaBuffer>(
-            sizeof(ida::GlobalUbo),
+            sizeof(ida::SimpleRenderUniformPackage),
             1,
             vk::BufferUsageFlagBits::eUniformBuffer,
             vk::MemoryPropertyFlagBits::eHostVisible);
@@ -88,11 +88,11 @@ int App::Run() {
                 frameTime,
                 commandBuffer,
                 camera,
-                globalDescriptorSets[frameIndex],
                 gameObjects_,
             };
+            frameInfo.descriptorSets["simple"] = globalDescriptorSets[frameIndex];
             // update global UBO
-            ida::GlobalUbo globalUbo{};
+            ida::SimpleRenderUniformPackage globalUbo{};
             globalUbo.view = camera.GetView();
             globalUbo.projection = camera.GetProjection();
             globalUbo.inverseView = camera.GetInverseView();

@@ -103,6 +103,10 @@ void IdaPipeline::EnableAlphaBlending(PipelineConfigInfo& configInfo) {
     configInfo.colorBlendAttachment.alphaBlendOp = vk::BlendOp::eAdd;
 }
 
+void IdaPipeline::SwitchToLinePolygonMode(PipelineConfigInfo& configInfo) {
+    configInfo.rasterizationInfo.polygonMode = vk::PolygonMode::eLine;
+}
+
 void IdaPipeline::CreateGraphicsPipeline(const std::vector<char>& vertCode, const std::vector<char>& fragCode, const PipelineConfigInfo& configInfo) {
     CreateShaderModule(vertCode, &vertShaderModule_);
     CreateShaderModule(fragCode, &fragShaderModule_);
