@@ -1,7 +1,7 @@
-#include "graphics/graphics.hpp"
+#include "app.hpp"
 
 int main() {
-    auto app = Graphics{};
+    auto app = App{};
     app.Run();
     return 0;
 }

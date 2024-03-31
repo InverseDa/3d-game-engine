@@ -3,24 +3,20 @@
 
 #include <memory>
 
-#include "graphics/core/window.hpp"
+#include "graphics/graphics.hpp"
+#include "object/game_object.hpp"
 
-class Application {
-public:
-    Application();
+class App {
+  public:
+    App(const std::string& title = "Vulkan Demo", int width = 800, int height = 600);
+    ~App();
+    int Run();
 
-    ~Application();
+  private:
+    std::unique_ptr<ida::Graphics> graphics_;
+    ida::IdaGameObject::Map gameObjects_;
 
-    void Run();
-
-private:
-    void Init();
-
-    void Loop();
-
-    void CleanUp();
-
-    std::unique_ptr<ida::IdaWindow> window_;
+    void LoadGameObjects();
 };
 
-#endif //ENGINE_APP_HPP
+#endif // ENGINE_APP_HPP
