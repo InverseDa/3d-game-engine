@@ -77,20 +77,19 @@ void IdaBuffer::Utils::CopyBufferToImage(vk::Buffer buffer, vk::Image image, uin
 
 // **************************************** IdaBuffer ****************************************
 IdaBuffer::IdaBuffer(
-    BufferType type,
     vk::DeviceSize instanceSize,
     uint32_t instanceCount,
     vk::BufferUsageFlags usageFlags,
     vk::MemoryPropertyFlags properties,
     vk::DeviceSize minOffsetAlignment)
-    : type_(type), instanceSize_(instanceSize), instanceCount_(instanceCount), usageFlags_(usageFlags), memoryFlags_(properties) {
+    : instanceSize_(instanceSize), instanceCount_(instanceCount), usageFlags_(usageFlags), memoryFlags_(properties) {
     alignmentSize_ = GetAlignment(instanceSize, minOffsetAlignment);
     bufferSize_ = alignmentSize_ * instanceCount;
     Utils::CreateBuffer(bufferSize_, usageFlags_, memoryFlags_, buffer_, bufferMemory_);
 }
 
 IdaBuffer::~IdaBuffer() {
-    IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "Buffer destroyed, Type: {}", GetTypeName());
+    IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "Buffer destroyed, Type: <TODO>");
     auto& device = Context::GetInstance().device;
     Unmap();
     device.destroyBuffer(buffer_);

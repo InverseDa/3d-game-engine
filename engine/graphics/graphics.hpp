@@ -15,7 +15,7 @@
 namespace ida {
 /**
  * @brief The Graphics class is the main
- * class for the graphics engine. It is responsible
+ * class for the vulkan core. It is responsible
  * for initializing the window, renderer, and global
  * descriptor pool.
  */

@@ -60,7 +60,7 @@ glm::mat3 TransformComponent::normalMatrix() {
 }
 
 IdaGameObject IdaGameObject::MakePointLight(float intensity, float radius, glm::vec3 color) {
-    IdaGameObject gameObj = IdaGameObject::CreateGameObject(GameObjectType::Light);
+    IdaGameObject gameObj = IdaGameObject::CreateGameObject<GameObjectType::Light>();
     gameObj.color = color;
     gameObj.transform.scale.x = radius;
     gameObj.pointLight = std::make_unique<PointLightComponent>();

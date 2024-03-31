@@ -1,6 +1,10 @@
 set(FMT_LIB ${GLOBAL_THIRD_PARTY_LIB_DIR}/fmtd.lib)
+set(OC_TREE_TEST_SRC)
+set(OC_TREE_TEST_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
+file(GLOB files ${OC_TREE_TEST_SRC_DIR}/*.cpp)
+list(APPEND OC_TREE_TEST_SRC ${files})
 
-add_executable(OCTreeTest main.cpp)
+add_executable(OCTreeTest main.cpp ${OC_TREE_TEST_SRC})
 
 target_include_directories(OCTreeTest PUBLIC ${ENGINE_INCLUDE_DIR})
 target_include_directories(OCTreeTest PUBLIC ${HELLOWORLD_EXAMPLE_SRC_DIR})

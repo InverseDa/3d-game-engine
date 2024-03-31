@@ -40,9 +40,10 @@ class IdaGameObject {
     using id_t = unsigned int;
     using Map = std::unordered_map<id_t, IdaGameObject>;
 
-    static IdaGameObject CreateGameObject(GameObjectType type) {
+    template <GameObjectType T>
+    static IdaGameObject CreateGameObject() {
         static id_t currentId = 0;
-        return IdaGameObject{currentId++, type};
+        return IdaGameObject{currentId++, T};
     }
 
     static IdaGameObject MakePointLight(

@@ -159,7 +159,6 @@ void IdaModel::CreateVertexBuffer(const std::vector<Vertex>& vertices) {
     uint32_t vertexSize = sizeof(vertices[0]);
 
     IdaBuffer stagingBuffer{
-        BufferType::StagingBuffer,
         vertexSize,
         vertexCount_,
         vk::BufferUsageFlagBits::eTransferSrc,
@@ -169,7 +168,6 @@ void IdaModel::CreateVertexBuffer(const std::vector<Vertex>& vertices) {
     stagingBuffer.WriteToBuffer((void*)vertices.data());
 
     vertexBuffer_ = std::make_unique<IdaBuffer>(
-        BufferType::VertexBuffer,
         vertexSize,
         vertexCount_,
         vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
@@ -189,7 +187,6 @@ void IdaModel::CreateIndexBuffer(const std::vector<uint32_t>& indices) {
     uint32_t indexSize = sizeof(indices[0]);
 
     IdaBuffer stagingBuffer{
-        BufferType::StagingBuffer,
         indexSize,
         indexCount_,
         vk::BufferUsageFlagBits::eTransferSrc,
@@ -199,7 +196,6 @@ void IdaModel::CreateIndexBuffer(const std::vector<uint32_t>& indices) {
     stagingBuffer.WriteToBuffer((void*)indices.data());
 
     indexBuffer_ = std::make_unique<IdaBuffer>(
-        BufferType::IndexBuffer,
         indexSize,
         indexCount_,
         vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,

@@ -16,7 +16,7 @@
 
 App::App(const std::string& title, int width, int height) {
     graphics_ = std::make_unique<ida::Graphics>();
-    graphics_->InitGraphics();
+    graphics_->InitGraphics(title, width, height);
     LoadGameObjects();
 }
 
@@ -30,7 +30,6 @@ int App::Run() {
     std::vector<std::unique_ptr<ida::IdaBuffer>> uboBuffers(ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT);
     for (int i = 0; i < uboBuffers.size(); i++) {
         uboBuffers[i] = std::make_unique<ida::IdaBuffer>(
-            ida::BufferType::UniformBuffer,
             sizeof(ida::GlobalUbo),
             1,
             vk::BufferUsageFlagBits::eUniformBuffer,
@@ -63,7 +62,7 @@ int App::Run() {
 
     ida::IdaCamera camera{};
 
-    auto viewObject = ida::IdaGameObject::CreateGameObject(ida::GameObjectType::Camera);
+    auto viewObject = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Camera>();
     // TODO: ECS
     // viewObject->AddComponent<ida::IdaCameraComponent>(camera);
     viewObject.transform.translation.z = -2.5f;
@@ -117,24 +116,24 @@ int App::Run() {
 
 void App::LoadGameObjects() {
     std::shared_ptr<ida::IdaModel> model = ida::IdaModel::ImportModel("models/flat_vase.obj");
-    auto vase = ida::IdaGameObject::CreateGameObject(ida::GameObjectType::Model);
+    auto vase = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Model>();
     vase.model = model;
     vase.transform.translation = {-.5f, .5f, 0.f};
     vase.transform.scale = {3.f, 1.5f, 3.f};
     gameObjects_.emplace(vase.GetId(), std::move(vase));
 
     model = ida::IdaModel::ImportModel("models/smooth_vase.obj");
-    auto vase2 = ida::IdaGameObject::CreateGameObject(ida::GameObjectType::Model);
+    auto vase2 = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Model>();
     vase2.model = model;
     vase2.transform.translation = {.5f, .5f, 0.f};
     vase2.transform.scale = {3.f, 1.5f, 3.f};
     gameObjects_.emplace(vase2.GetId(), std::move(vase2));
 
     model = ida::IdaModel::ImportModel("models/quad.obj");
-    auto quad = ida::IdaGameObject::CreateGameObject(ida::GameObjectType::Model);
+    auto quad = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Model>();
     quad.model = model;
     quad.transform.translation = {0.f, .5f, 0.f};
-    quad.transform.scale = {300.f, 100.f, 300.f};
+    quad.transform.scale = {3.f, 1.f, 3.f};
     gameObjects_.emplace(quad.GetId(), std::move(quad));
 
     //    std::shared_ptr<ida::IdaModel> model = ida::IdaModel::CustomModel(
