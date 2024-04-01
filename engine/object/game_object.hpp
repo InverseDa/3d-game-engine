@@ -38,15 +38,16 @@ struct PointLightComponent {
 class IdaGameObject {
   public:
     using id_t = unsigned int;
-    using Map = std::unordered_map<id_t, IdaGameObject>;
+    using name_t = std::string;
+    using Map = std::unordered_map<name_t, IdaGameObject>;
 
     template <GameObjectType T>
-    static IdaGameObject CreateGameObject() {
-        static id_t currentId = 0;
-        return IdaGameObject{currentId++, T};
+    static IdaGameObject CreateGameObject(const std::string& name) {
+        return IdaGameObject{name, T};
     }
 
     static IdaGameObject MakePointLight(
+        const std::string& lightName,
         float intensity = 10.f,
         float radius = 0.1f,
         glm::vec3 color = glm::vec3(1.f));
@@ -58,7 +59,7 @@ class IdaGameObject {
 
     ~IdaGameObject();
 
-    id_t GetId() const { return id_; }
+    name_t GetName() const { return name_; }
 
     glm::vec3 color{};
     TransformComponent transform{};
@@ -67,9 +68,9 @@ class IdaGameObject {
     std::unique_ptr<PointLightComponent> pointLight{};
 
   private:
-    IdaGameObject(id_t id, GameObjectType type) : id_{id}, type_{type} {}
+    IdaGameObject(name_t name, GameObjectType type) : name_{name}, type_{type} {}
 
-    id_t id_;
+    name_t name_;
     GameObjectType type_;
 };
 

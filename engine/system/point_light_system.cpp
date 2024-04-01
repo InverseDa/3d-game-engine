@@ -44,14 +44,14 @@ void PointLightSystem::Update(FrameInfo& frameInfo, SimpleRenderUniformPackage& 
 }
 
 void PointLightSystem::Render(FrameInfo& frameInfo) {
-    std::map<float, IdaGameObject::id_t> sorted;
+    std::map<float, IdaGameObject::name_t> sorted;
     for (auto& kv : frameInfo.gameObjects) {
         auto& obj = kv.second;
         if (obj.pointLight == nullptr)
             continue;
         auto offset = frameInfo.camera.GetPosition() - obj.transform.translation;
         float disSquared = glm::dot(offset, offset);
-        sorted[disSquared] = obj.GetId();
+        sorted[disSquared] = obj.GetName();
     }
     pipeline_->Bind(frameInfo.commandBuffer);
     frameInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,

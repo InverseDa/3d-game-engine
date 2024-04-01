@@ -12,14 +12,7 @@ class App {
     ~App();
     int Run();
 
-    bool InitGlobalPool() {
-        globalPool_ = ida::IdaDescriptorPool::Builder()
-                          .SetMaxSets(2 * ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT)
-                          .AddPoolSize(vk::DescriptorType::eUniformBuffer, ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT)
-                          .AddPoolSize(vk::DescriptorType::eUniformBuffer, ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT)
-                          .Build();
-        return globalPool_ != nullptr;
-    };
+    bool InitGlobalPool();
 
     std::unique_ptr<ida::IdaDescriptorPool>& globalPool() { return globalPool_; }
 
