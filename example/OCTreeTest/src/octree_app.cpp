@@ -7,10 +7,13 @@
 App::App(const std::string& title, int width, int height) {
     graphics_ = std::make_unique<ida::Graphics>();
     graphics_->InitGraphics(title, width, height);
+    InitGlobalPool();
     LoadGameObjects();
 }
 
 App::~App() {
+    ida::Context::GetInstance().device.waitIdle();
+    globalPool_.reset();
     graphics_.reset();
     gameObjects_.clear();
     ida::Context::Quit();
@@ -20,16 +23,15 @@ int App::Run() {
     auto& ctx = ida::Context::GetInstance();
     auto& window = graphics_->window();
     auto& renderer = graphics_->renderer();
-    auto& globalDescriptorPool = graphics_->globalPool();
 
     ida::UniformBufferObject<
         ida::SimpleRenderUniformPackage,
         vk::DescriptorType::eUniformBuffer>
-        simpleRenderUbo{globalDescriptorPool};
+        simpleRenderUbo{globalPool_};
     ida::UniformBufferObject<
         ida::OCTreeRenderUniformPackage,
         vk::DescriptorType::eUniformBuffer>
-        ocTreeUbo{globalDescriptorPool};
+        ocTreeUbo{globalPool_};
 
     ida::SimpleRenderSystem simpleRenderSystem{
         renderer->GetRenderPass(),
@@ -53,12 +55,12 @@ int App::Run() {
         float frameTime = std::chrono::duration<float, std::chrono::seconds::period>(newTime - currentTime).count();
         currentTime = newTime;
 
-        cameraController.MoveInPlaneXZ(graphics_->window()->GetWindow(), frameTime, viewObject);
+        cameraController.MoveInPlaneXZ(window->GetWindow(), frameTime, viewObject);
         camera.SetViewYXZ(viewObject.transform.translation, viewObject.transform.rotation);
-        float aspect = graphics_->renderer()->GetAspectRatio();
+        float aspect = renderer->GetAspectRatio();
         camera.SetPerspectiveProjection(glm::radians(50.f), aspect, 0.1f, 100.0f);
 
-        if (auto commandBuffer = graphics_->renderer()->BeginFrame()) {
+        if (auto commandBuffer = renderer->BeginFrame()) {
             int frameIndex = renderer->GetCurrentFrameIndex();
             ida::FrameInfo frameInfo{
                 frameIndex,
@@ -114,6 +116,6 @@ void App::LoadGameObjects() {
     auto quad = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Model>();
     quad.model = model;
     quad.transform.translation = {0.f, .5f, 0.f};
-    quad.transform.scale = {3.f, 3.f, 3.f};
+    quad.transform.scale = {3.f, 1.f, 3.f};
     gameObjects_.emplace(quad.GetId(), std::move(quad));
 }

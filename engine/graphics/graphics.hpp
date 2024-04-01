@@ -25,17 +25,15 @@ class Graphics {
     ~Graphics();
 
     bool InitGraphics(const std::string& title = "Vulkan Demo", int width = 800, int height = 600) {
-        return InitWindow(title, width, height) && InitVulkanInstance() && InitRenderer() && InitGlobalPool();
+        return InitWindow(title, width, height) && InitVulkanInstance() && InitRenderer();
     }
 
     std::unique_ptr<ida::IdaWindow>& window() { return window_; }
     std::unique_ptr<ida::IdaRenderer>& renderer() { return renderer_; }
-    std::unique_ptr<ida::IdaDescriptorPool>& globalPool() { return globalPool_; }
 
   private:
     std::unique_ptr<ida::IdaWindow> window_{};
     std::unique_ptr<ida::IdaRenderer> renderer_{};
-    std::unique_ptr<ida::IdaDescriptorPool> globalPool_{};
 
     bool InitWindow(const std::string& title = "Vulkan Demo", int width = 800, int height = 600) {
         window_ = std::make_unique<IdaWindow>(width, height, title);
@@ -51,15 +49,6 @@ class Graphics {
         renderer_ = std::make_unique<IdaRenderer>(*window_);
         return renderer_ != nullptr;
     }
-
-    bool InitGlobalPool() {
-        globalPool_ = ida::IdaDescriptorPool::Builder()
-                          .SetMaxSets(2 * ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT)
-                          .AddPoolSize(vk::DescriptorType::eUniformBuffer, ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT)
-                          .AddPoolSize(vk::DescriptorType::eUniformBuffer, ida::IdaSwapChain::MAX_FRAMES_IN_FLIGHT)
-                          .Build();
-        return globalPool_ != nullptr;
-    };
 };
 
 } // namespace ida

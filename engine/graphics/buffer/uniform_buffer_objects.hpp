@@ -13,25 +13,25 @@ class UniformBufferObject {
   public:
     explicit UniformBufferObject(std::unique_ptr<ida::IdaDescriptorPool>& descriptorPool) {
         uboBuffers_.resize(IdaSwapChain::MAX_FRAMES_IN_FLIGHT);
-        globalDescriptorSets_.resize(IdaSwapChain::MAX_FRAMES_IN_FLIGHT);
-        globalSetLayout_ = IdaDescriptorSetLayout::Builder()
+        descriptorSets_.resize(IdaSwapChain::MAX_FRAMES_IN_FLIGHT);
+        descriptorSetLayout_ = IdaDescriptorSetLayout::Builder()
                                .AddBinding(0, DescriptorType, vk::ShaderStageFlagBits::eAllGraphics)
                                .Build();
 
-        for (int i = 0; i < uboBuffers_.size(); i++) {
-            uboBuffers_[i] = std::make_unique<ida::IdaBuffer>(
+        for (auto& uboBuffer : uboBuffers_) {
+            uboBuffer = std::make_unique<ida::IdaBuffer>(
                 sizeof(UboType),
                 1,
                 vk::BufferUsageFlagBits::eUniformBuffer,
                 vk::MemoryPropertyFlagBits::eHostVisible);
-            uboBuffers_[i]->Map();
+            uboBuffer->Map();
         }
 
-        for (int i = 0; i < globalDescriptorSets_.size(); i++) {
+        for (int i = 0; i < descriptorSets_.size(); i++) {
             auto bufferInfo = uboBuffers_[i]->GetDescriptorInfo();
-            ida::IdaDescriptorWriter(*globalSetLayout_, *descriptorPool)
+            ida::IdaDescriptorWriter(*descriptorSetLayout_, *descriptorPool)
                 .WriteBuffer(0, &bufferInfo)
-                .Build(globalDescriptorSets_[i]);
+                .Build(descriptorSets_[i]);
         }
     };
     ~UniformBufferObject() = default;
@@ -44,18 +44,18 @@ class UniformBufferObject {
     }
 
     vk::DescriptorSet GetDescriptorSet(int frameIndex) {
-        return globalDescriptorSets_[frameIndex];
+        return descriptorSets_[frameIndex];
     }
 
     vk::DescriptorSetLayout GetDescriptorSetLayout() {
-        return globalSetLayout_->GetDescriptorSetLayout();
+        return descriptorSetLayout_->GetDescriptorSetLayout();
     }
 
   private:
-    std::unique_ptr<IdaDescriptorSetLayout> globalSetLayout_;
+    std::unique_ptr<IdaDescriptorSetLayout> descriptorSetLayout_;
 
     std::vector<std::unique_ptr<IdaBuffer>> uboBuffers_;
-    std::vector<vk::DescriptorSet> globalDescriptorSets_;
+    std::vector<vk::DescriptorSet> descriptorSets_;
 };
 
 /** 用可变参数列表的方式来实现获取UniformPackageData结构体，比如：

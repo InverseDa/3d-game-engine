@@ -3,8 +3,6 @@
 
 namespace ida {
 Graphics::~Graphics() {
-    Context::GetInstance().device.waitIdle();
-    globalPool_.reset();
     renderer_.reset();
     window_.reset();
     //    gameObjects_.clear();
