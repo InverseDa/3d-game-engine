@@ -8,7 +8,7 @@
 
 class App {
   public:
-    App(const std::string& title = "Vulkan Demo", int width = 800, int height = 600);
+    explicit App(const std::string& title = "Vulkan Demo", int width = 800, int height = 600);
     ~App();
     int Run();
 
