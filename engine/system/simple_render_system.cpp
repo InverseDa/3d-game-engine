@@ -59,7 +59,7 @@ void SimpleRenderSystem::RenderGameObjects(FrameInfo& frameInfo) {
                            nullptr);
     for (auto& gameObject : frameInfo.gameObjects) {
         auto& obj = gameObject.second;
-        if(obj.model == nullptr) {
+        if(obj.model == nullptr || obj.GetName() == "cube") {
             continue;
         }
         SimplePushConstantData push{};

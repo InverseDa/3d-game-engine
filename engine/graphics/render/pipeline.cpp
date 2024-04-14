@@ -104,7 +104,12 @@ void IdaPipeline::EnableAlphaBlending(PipelineConfigInfo& configInfo) {
 }
 
 void IdaPipeline::SwitchToLinePolygonMode(PipelineConfigInfo& configInfo) {
+    configInfo.inputAssemblyInfo.topology = vk::PrimitiveTopology::eLineList;
+    configInfo.inputAssemblyInfo.primitiveRestartEnable = vk::False;
+
     configInfo.rasterizationInfo.polygonMode = vk::PolygonMode::eLine;
+    configInfo.rasterizationInfo.lineWidth = 1.0f;
+    configInfo.rasterizationInfo.cullMode = vk::CullModeFlagBits::eNone; // necessary for line mode
 }
 
 void IdaPipeline::CreateGraphicsPipeline(const std::vector<char>& vertCode, const std::vector<char>& fragCode, const PipelineConfigInfo& configInfo) {

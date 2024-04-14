@@ -21,6 +21,11 @@ enum OcTreeNodeType {
     TOP_RIGHT_BACK
 };
 
+enum OcTreePreOrderFunction {
+    PRINT,
+    DRAW
+};
+
 template <class T>
 class OcTreeNode {
   public:
@@ -40,7 +45,7 @@ class OcTreeNode {
     T* GetData() const { return data_.get(); }
 
     // bounding box
-    AABB aabb;
+    AABB aabb{};
     // eight children
     OcTreeNode<T>* topLeftFront = nullptr;
     OcTreeNode<T>* topLeftBack = nullptr;
@@ -161,16 +166,23 @@ class OcTree {
     int maxDepth_;
     AABB maxAABB_;
 
-    void PreOrderTraversalInternal(OcTreeNode<T>* node) {
+    void PreOrderTraversalInternal(OcTreeNode<T>* node, OcTreePreOrderFunction function = OcTreePreOrderFunction::PRINT) {
         if (node) {
-            IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO,
-                         "OCTree Node: min(x={},y={},z={}), max(x={},y={},z={})",
-                         node->aabb.min.x,
-                         node->aabb.min.y,
-                         node->aabb.min.z,
-                         node->aabb.max.x,
-                         node->aabb.max.y,
-                         node->aabb.max.z);
+            if (function == OcTreePreOrderFunction::PRINT) {
+                IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO,
+                             "OCTree Node: min(x={},y={},z={}), max(x={},y={},z={})",
+                             node->aabb.min.x,
+                             node->aabb.min.y,
+                             node->aabb.min.z,
+                             node->aabb.max.x,
+                             node->aabb.max.y,
+                             node->aabb.max.z);
+            } else if (function == OcTreePreOrderFunction::DRAW) {
+                // Draw node in vulkan
+
+
+            }
+
             PreOrderTraversalInternal(node->bottomLeftFront);
             PreOrderTraversalInternal(node->bottomLeftBack);
             PreOrderTraversalInternal(node->bottomRightFront);

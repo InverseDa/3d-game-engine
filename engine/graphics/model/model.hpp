@@ -10,6 +10,11 @@
 #include <memory>
 #include <vector>
 
+enum ModelDrawType {
+    TRIANGLE,
+    LINE,
+};
+
 namespace ida {
 class IdaModel {
   public:
@@ -39,7 +44,7 @@ class IdaModel {
     IdaModel& operator=(const IdaModel&) = delete;
 
     static std::unique_ptr<IdaModel> ImportModel(const std::string& path);
-    static std::unique_ptr<IdaModel> CustomModel(const std::vector<Vertex>& vertices);
+    static std::unique_ptr<IdaModel> CreateCube(ModelDrawType drawType = TRIANGLE);
 
     void Bind(vk::CommandBuffer cmd);
     void Draw(vk::CommandBuffer cmd);

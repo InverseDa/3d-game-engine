@@ -3,10 +3,14 @@
 #include "graphics/core/keyboard_controller.hpp"
 #include "graphics/buffer/uniform_buffer_objects.hpp"
 #include "system/oc_tree_render_system.hpp"
+#include "scene/oc_tree.hpp"
+
+std::unique_ptr<ida::OcTree<ida::IdaModel>> tree;
 
 App::App(const std::string& title, int width, int height) {
     graphics_ = std::make_unique<ida::Graphics>();
     graphics_->InitGraphics(title, width, height);
+    tree = std::make_unique<ida::OcTree<ida::IdaModel>>(ida::AABB{glm::vec3(.0f), glm::vec3(100.0f)}, 2);
     InitGlobalPool();
     LoadGameObjects();
 }
@@ -121,10 +125,10 @@ void App::LoadGameObjects() {
     vase2.transform.scale = {3.f, 1.5f, 3.f};
     gameObjects_.emplace(vase2.GetName(), std::move(vase2));
 
-    model = ida::IdaModel::ImportModel("models/quad.obj");
-    auto quad = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Model>("quad");
-    quad.model = model;
-    quad.transform.translation = {0.f, .5f, 0.f};
-    quad.transform.scale = {3.f, 1.f, 3.f};
-    gameObjects_.emplace(quad.GetName(), std::move(quad));
+    model = ida::IdaModel::CreateCube(ModelDrawType::LINE);
+    auto cube = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Model>("cube");
+    cube.model = model;
+    cube.transform.translation = {0.f, .5f, 0.f};
+    cube.transform.scale = {3.f, 1.f, 3.f};
+    gameObjects_.emplace(cube.GetName(), std::move(cube));
 }
