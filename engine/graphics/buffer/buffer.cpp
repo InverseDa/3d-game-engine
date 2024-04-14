@@ -110,7 +110,7 @@ void IdaBuffer::Unmap() {
 }
 
 void IdaBuffer::WriteToBuffer(void* data, vk::DeviceSize size, vk::DeviceSize offset) {
-    if (size = vk::WholeSize) {
+    if (size == vk::WholeSize) {
         memcpy(mapped_, data, bufferSize_);
     } else {
         char* dst = static_cast<char*>(mapped_) + offset;
