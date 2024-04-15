@@ -160,29 +160,23 @@ class OcTree {
     }
 
     void PreOrderTraversal() { PreOrderTraversalInternal(root_); }
+    void InitNodeDrawList(std::vector<IdaGameObject>& nodeGO) { CreateGOListWithPreOrderTraversalInternal(root_, nodeGO); }
 
   private:
     OcTreeNode<T>* root_;
     int maxDepth_;
     AABB maxAABB_;
 
-    void PreOrderTraversalInternal(OcTreeNode<T>* node, OcTreePreOrderFunction function = OcTreePreOrderFunction::PRINT) {
+    void PreOrderTraversalInternal(OcTreeNode<T>* node) {
         if (node) {
-            if (function == OcTreePreOrderFunction::PRINT) {
-                IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO,
-                             "OCTree Node: min(x={},y={},z={}), max(x={},y={},z={})",
-                             node->aabb.min.x,
-                             node->aabb.min.y,
-                             node->aabb.min.z,
-                             node->aabb.max.x,
-                             node->aabb.max.y,
-                             node->aabb.max.z);
-            } else if (function == OcTreePreOrderFunction::DRAW) {
-                // Draw node in vulkan
-
-
-            }
-
+            IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO,
+                         "OCTree Node: min(x={},y={},z={}), max(x={},y={},z={})",
+                         node->aabb.min.x,
+                         node->aabb.min.y,
+                         node->aabb.min.z,
+                         node->aabb.max.x,
+                         node->aabb.max.y,
+                         node->aabb.max.z);
             PreOrderTraversalInternal(node->bottomLeftFront);
             PreOrderTraversalInternal(node->bottomLeftBack);
             PreOrderTraversalInternal(node->bottomRightFront);
@@ -191,6 +185,29 @@ class OcTree {
             PreOrderTraversalInternal(node->topLeftBack);
             PreOrderTraversalInternal(node->topRightFront);
             PreOrderTraversalInternal(node->topRightBack);
+        }
+    }
+
+    void CreateGOListWithPreOrderTraversalInternal(OcTreeNode<T>* node, std::vector<IdaGameObject>& nodeGO) {
+        if (node) {
+            // only draw if node is leaf
+            if (node->IsLeaf()) {
+                std::shared_ptr<ida::IdaModel> model = IdaModel::CreateCube(ModelDrawType::LINE);
+                auto cubeGO = IdaGameObject::CreateGameObject<GameObjectType::Model>("cube");
+                cubeGO.model = model;
+                cubeGO.transform.translation = (node->aabb.max + node->aabb.min) * 0.5f;
+                cubeGO.transform.scale = (node->aabb.max - node->aabb.min) * 0.5f;
+                nodeGO.emplace_back(std::move(cubeGO));
+            }
+
+            CreateGOListWithPreOrderTraversalInternal(node->bottomLeftFront, nodeGO);
+            CreateGOListWithPreOrderTraversalInternal(node->bottomLeftBack, nodeGO);
+            CreateGOListWithPreOrderTraversalInternal(node->bottomRightFront, nodeGO);
+            CreateGOListWithPreOrderTraversalInternal(node->bottomRightBack, nodeGO);
+            CreateGOListWithPreOrderTraversalInternal(node->topLeftFront, nodeGO);
+            CreateGOListWithPreOrderTraversalInternal(node->topLeftBack, nodeGO);
+            CreateGOListWithPreOrderTraversalInternal(node->topRightFront, nodeGO);
+            CreateGOListWithPreOrderTraversalInternal(node->topRightBack, nodeGO);
         }
     }
 

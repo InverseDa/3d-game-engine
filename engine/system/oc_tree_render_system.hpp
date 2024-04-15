@@ -14,7 +14,7 @@ class OCTreeRenderSystem {
     OCTreeRenderSystem(const OCTreeRenderSystem&) = delete;
     OCTreeRenderSystem& operator=(const OCTreeRenderSystem&) = delete;
 
-    void RenderGameObjects(FrameInfo& frameInfo);
+    void RenderGameObjects(FrameInfo& frameInfo, std::vector<IdaGameObject>& octreeNodes);
 
   private:
     void CreatePipelineLayout(vk::DescriptorSetLayout globalSetLayout);

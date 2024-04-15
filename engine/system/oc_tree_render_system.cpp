@@ -24,7 +24,7 @@ OCTreeRenderSystem::~OCTreeRenderSystem() {
     Context::GetInstance().device.destroyPipelineLayout(pipelineLayout_);
 }
 
-void OCTreeRenderSystem::RenderGameObjects(FrameInfo& frameInfo) {
+void OCTreeRenderSystem::RenderGameObjects(FrameInfo& frameInfo, std::vector<IdaGameObject>& octreeNodes) {
     auto& cmd = frameInfo.commandBuffer;
     pipeline_->Bind(cmd);
     cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
@@ -32,8 +32,8 @@ void OCTreeRenderSystem::RenderGameObjects(FrameInfo& frameInfo) {
                            0,
                            frameInfo.descriptorSets["octree"],
                            nullptr);
-    for (auto& gameObject : frameInfo.gameObjects) {
-        auto& obj = gameObject.second;
+    for(auto& node : octreeNodes) {
+        auto& obj = node;
         if (obj.model == nullptr) {
             continue;
         }

@@ -6,11 +6,12 @@
 #include "scene/oc_tree.hpp"
 
 std::unique_ptr<ida::OcTree<ida::IdaModel>> tree;
+std::vector<ida::IdaGameObject> octreeNodeGO;
 
 App::App(const std::string& title, int width, int height) {
     graphics_ = std::make_unique<ida::Graphics>();
     graphics_->InitGraphics(title, width, height);
-    tree = std::make_unique<ida::OcTree<ida::IdaModel>>(ida::AABB{glm::vec3(.0f), glm::vec3(100.0f)}, 2);
+    tree = std::make_unique<ida::OcTree<ida::IdaModel>>(ida::AABB{glm::vec3(-1.5f), glm::vec3(1.5f)}, 1);
     InitGlobalPool();
     LoadGameObjects();
 }
@@ -20,6 +21,7 @@ App::~App() {
     globalPool_.reset();
     graphics_.reset();
     gameObjects_.clear();
+    octreeNodeGO.clear();
     ida::Context::Quit();
 }
 
@@ -100,7 +102,7 @@ int App::Run() {
             renderer->BeginSwapChainRenderPass(commandBuffer);
             {
                 simpleRenderSystem.RenderGameObjects(frameInfo);
-                ocTreeRenderSystem.RenderGameObjects(frameInfo);
+                ocTreeRenderSystem.RenderGameObjects(frameInfo, octreeNodeGO);
             }
             renderer->EndSwapChainRenderPass(commandBuffer);
             renderer->EndFrame();
@@ -125,10 +127,5 @@ void App::LoadGameObjects() {
     vase2.transform.scale = {3.f, 1.5f, 3.f};
     gameObjects_.emplace(vase2.GetName(), std::move(vase2));
 
-    model = ida::IdaModel::CreateCube(ModelDrawType::LINE);
-    auto cube = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Model>("cube");
-    cube.model = model;
-    cube.transform.translation = {0.f, .5f, 0.f};
-    cube.transform.scale = {3.f, 1.f, 3.f};
-    gameObjects_.emplace(cube.GetName(), std::move(cube));
+    tree->InitNodeDrawList(octreeNodeGO);
 }
