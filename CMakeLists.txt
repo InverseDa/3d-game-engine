@@ -6,6 +6,8 @@ set(ENGINE_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/engine)
 set(GLOBAL_THIRD_PARTY_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/include)
 set(GLOBAL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(GLOBAL_THIRD_PARTY_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/library)
+set(GLFW_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/src/glfw-3.4/include)
+set(FMT_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/src/fmt-10.2.1/include)
 
 if(APPLE)
     add_compile_definitions(IDA_OS_MACOS)
@@ -23,9 +25,7 @@ project(Engine
 include(cmake/FindVulkan.cmake)
 include(cmake/Copydll.cmake)
 include(cmake/CompileShaders.cmake)
-
-add_subdirectory(thirdparty/src/fmt-10.2.1)
-add_subdirectory(thirdparty/src/glfw-3.4)
+include(cmake/CompileThirdPartyLibrary.cmake)
 
 add_subdirectory(engine)
 add_subdirectory(example)

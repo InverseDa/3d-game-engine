@@ -11,5 +11,7 @@ target_include_directories(HelloWorld PUBLIC ${ENGINE_INCLUDE_DIR})
 target_include_directories(HelloWorld PUBLIC ${HELLOWORLD_EXAMPLE_SRC_DIR})
 target_include_directories(HelloWorld PUBLIC ${GLOBAL_INCLUDE_DIR})
 target_include_directories(HelloWorld PUBLIC ${GLOBAL_THIRD_PARTY_INCLUDE_DIR})
+target_include_directories(HelloWorld PUBLIC ${GLFW_INCLUDE_DIR})
+target_include_directories(HelloWorld PUBLIC ${FMT_INCLUDE_DIR})
 
 target_link_libraries(HelloWorld PUBLIC Core Vulkan::Vulkan)
