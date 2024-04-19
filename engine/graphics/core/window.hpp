@@ -20,21 +20,16 @@ class IdaWindow {
     vk::Extent2D GetExtent() { return {static_cast<uint32_t>(width_), static_cast<uint32_t>(height_)}; }
     bool IsResizeNow() { return resizeNow_; }
     void ResetResizeFlag() { resizeNow_ = false; }
-
     bool ShouldClose() { return glfwWindowShouldClose(window_); }
     GLFWwindow* GetWindow() { return window_; }
-
     void Run(std::function<void()> func);
 
     GetSurfaceCallback getSurfaceCallback;
-    KeyboardEventCallback keyboardEventCallback;
     std::vector<const char*> extensions;
-
     std::string title_;
     int width_;
     int height_;
     bool resizeNow_ = false;
-
     GLFWwindow* window_;
 
   private:

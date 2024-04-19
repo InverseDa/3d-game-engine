@@ -1,6 +1,7 @@
 #include "app.hpp"
 #include "system/simple_render_system.hpp"
 #include "graphics/core/keyboard_controller.hpp"
+#include "graphics/core/mouse_controller.hpp"
 #include "graphics/buffer/uniform_buffer_objects.hpp"
 #include "system/oc_tree_render_system.hpp"
 #include "scene/oc_tree.hpp"
@@ -58,6 +59,7 @@ int App::Run() {
     };
 
     ida::KeyboardMovementController cameraController{};
+    ida::MouseMovementController mouseController{};
     ida::IdaCamera camera{};
     auto viewObject = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Camera>("camera");
     viewObject.transform.translation.z = -2.5f;
@@ -70,7 +72,8 @@ int App::Run() {
         float frameTime = std::chrono::duration<float, std::chrono::seconds::period>(newTime - currentTime).count();
         currentTime = newTime;
 
-        cameraController.MoveInPlaneXZ(window->GetWindow(), frameTime, viewObject);
+        cameraController.Move(window->GetWindow(), frameTime, viewObject);
+        mouseController.MouseMovement(window->GetWindow(), frameTime, viewObject);
         camera.SetViewYXZ(viewObject.transform.translation, viewObject.transform.rotation);
         float aspect = renderer->GetAspectRatio();
         camera.SetPerspectiveProjection(glm::radians(50.f), aspect, 0.1f, 100.0f);

@@ -47,6 +47,7 @@ void IdaWindow::InitGLFWWindow() {
                 IO::ThrowError("GLFW Can't create surface");
                 }
                 return surface; };
+    IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "GLFW Window created");
 }
 
 } // namespace ida

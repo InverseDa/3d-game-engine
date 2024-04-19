@@ -164,7 +164,7 @@ class OcTree {
                CreateTree(node->topRightBack, depth + 1);
     }
 
-    void PreOrderTraversal() { PreOrderTraversalInternal(root_); }
+    [[maybe_unused]] void PreOrderTraversal() { PreOrderTraversalInternal(root_); }
     void InitNodeDrawList(std::vector<IdaGameObject>& nodeGO) { CreateGOListWithPreOrderTraversalInternal(root_, nodeGO); }
 
   private:

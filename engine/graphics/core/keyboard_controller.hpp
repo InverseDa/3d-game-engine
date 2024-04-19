@@ -2,7 +2,6 @@
 #define VULKAN_LIB_KEYBOARD_CONTROLLER_HPP
 
 #include "window.hpp"
-
 #include "object/game_object.hpp"
 
 namespace ida {
@@ -22,6 +21,7 @@ class KeyboardMovementController {
         int lookDown = GLFW_KEY_DOWN;
     };
     void MoveInPlaneXZ(GLFWwindow* window, float dt, IdaGameObject& gameObject);
+    void Move(GLFWwindow* window, float dt, IdaGameObject& gameObject);
 
     KeyMappings keys{};
     float movementSpeed = 3.0f;
