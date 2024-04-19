@@ -26,9 +26,10 @@ enum OcTreePreOrderFunction {
     DRAW
 };
 
-template <class T>
 class OcTreeNode {
   public:
+    friend class OcTree;
+
     explicit OcTreeNode(AABB aabb) : aabb(aabb){};
     ~OcTreeNode() = default;
 
@@ -42,32 +43,30 @@ class OcTreeNode {
                !bottomLeftFront && !bottomLeftBack && !bottomRightFront && !bottomRightBack;
     }
 
-    T* GetData() const { return data_.get(); }
+    std::vector<glm::vec3*>& GetMeshCenterPos() { return meshCenterPos_; }
 
     // bounding box
     AABB aabb{};
     // eight children
-    OcTreeNode<T>* topLeftFront = nullptr;
-    OcTreeNode<T>* topLeftBack = nullptr;
-    OcTreeNode<T>* topRightFront = nullptr;
-    OcTreeNode<T>* topRightBack = nullptr;
-    OcTreeNode<T>* bottomLeftFront = nullptr;
-    OcTreeNode<T>* bottomLeftBack = nullptr;
-    OcTreeNode<T>* bottomRightFront = nullptr;
-    OcTreeNode<T>* bottomRightBack = nullptr;
+    OcTreeNode* topLeftFront = nullptr;
+    OcTreeNode* topLeftBack = nullptr;
+    OcTreeNode* topRightFront = nullptr;
+    OcTreeNode* topRightBack = nullptr;
+    OcTreeNode* bottomLeftFront = nullptr;
+    OcTreeNode* bottomLeftBack = nullptr;
+    OcTreeNode* bottomRightFront = nullptr;
+    OcTreeNode* bottomRightBack = nullptr;
 
   private:
-    // node type
-    OcTreeNodeType type_ = ROOT;
     // node data
-    std::shared_ptr<T> data_;
+    std::vector<glm::vec3*> meshCenterPos_;
+    std::shared_ptr<ida::IdaModel> model_;
 };
 
-template <class T>
 class OcTree {
   public:
     explicit OcTree(AABB aabb, int depth = 8) : maxDepth_(depth), maxAABB_(aabb) {
-        root_ = new OcTreeNode<T>(aabb);
+        root_ = new OcTreeNode(aabb);
         IO::Assert(CreateTree(root_, 0), "Failed to create OcTree");
     }
     ~OcTree() {
@@ -79,23 +78,29 @@ class OcTree {
     OcTree(OcTree&&) = default;
     OcTree& operator=(OcTree&&) = default;
 
-    void Insert(T* data, glm::vec3 position) {
-        OcTreeNode<T>* node = Find(root_, position);
-        if (node) {
-            node->data_ = std::shared_ptr<T>(data);
+    void Insert(ida::IdaGameObject& gameObject) {
+        auto& vertices = gameObject.model->builder.vertices;
+        auto& indices = gameObject.model->builder.indices;
+        auto transform = gameObject.transform.mat4();
+        for (unsigned int i = 0; i < indices.size(); i += 3) {
+            auto worldPos1 = transform * glm::vec4(vertices[indices[i]].position, 1.0f);
+            auto worldPos2 = transform * glm::vec4(vertices[indices[i + 1]].position, 1.0f);
+            auto worldPos3 = transform * glm::vec4(vertices[indices[i + 2]].position, 1.0f);
+            glm::vec3 position = (worldPos1 + worldPos2 + worldPos3) / 3.0f;
+            Insert(position);
         }
     }
 
-    T* Find(OcTreeNode<T>* node, glm::vec3& position) {
+    OcTreeNode* Find(OcTreeNode* node, glm::vec3& position) {
         if (!node) {
             return nullptr;
         }
 
-        if (node->aabb.Contains(position)) {
+        if (node->aabb.IsContain(position)) {
             if (node->IsLeaf()) {
-                return node->GetData();
+                return node;
             } else {
-                T* result = Find(node->bottomLeftFront, position);
+                OcTreeNode* result = Find(node->bottomLeftFront, position);
                 if (result) {
                     return result;
                 }
@@ -133,21 +138,21 @@ class OcTree {
         return nullptr;
     }
 
-    bool CreateTree(OcTreeNode<T>* node, int depth = 8) {
+    bool CreateTree(OcTreeNode* node, int depth = 8) {
         if (depth == maxDepth_) {
             return true;
         }
 
         AABB aabb = node->aabb;
         glm::vec3 center = aabb.min + (aabb.max - aabb.min) / 2.0f;
-        node->bottomLeftFront = new OcTreeNode<T>(AABB{aabb.min, center});
-        node->bottomLeftBack = new OcTreeNode<T>(AABB{glm::vec3(aabb.min.x, aabb.min.y, center.z), glm::vec3(center.x, center.y, aabb.max.z)});
-        node->bottomRightFront = new OcTreeNode<T>(AABB{glm::vec3(center.x, aabb.min.y, aabb.min.z), glm::vec3(aabb.max.x, center.y, center.z)});
-        node->bottomRightBack = new OcTreeNode<T>(AABB{glm::vec3(center.x, aabb.min.y, center.z), glm::vec3(aabb.max.x, center.y, aabb.max.z)});
-        node->topLeftFront = new OcTreeNode<T>(AABB{glm::vec3(aabb.min.x, center.y, aabb.min.z), glm::vec3(center.x, aabb.max.y, center.z)});
-        node->topLeftBack = new OcTreeNode<T>(AABB{glm::vec3(aabb.min.x, center.y, center.z), glm::vec3(center.x, aabb.max.y, aabb.max.z)});
-        node->topRightFront = new OcTreeNode<T>(AABB{glm::vec3(center.x, center.y, aabb.min.z), glm::vec3(aabb.max.x, aabb.max.y, center.z)});
-        node->topRightBack = new OcTreeNode<T>(AABB{center, aabb.max});
+        node->bottomLeftFront = new OcTreeNode(AABB{aabb.min, center});
+        node->bottomLeftBack = new OcTreeNode(AABB{glm::vec3(aabb.min.x, aabb.min.y, center.z), glm::vec3(center.x, center.y, aabb.max.z)});
+        node->bottomRightFront = new OcTreeNode(AABB{glm::vec3(center.x, aabb.min.y, aabb.min.z), glm::vec3(aabb.max.x, center.y, center.z)});
+        node->bottomRightBack = new OcTreeNode(AABB{glm::vec3(center.x, aabb.min.y, center.z), glm::vec3(aabb.max.x, center.y, aabb.max.z)});
+        node->topLeftFront = new OcTreeNode(AABB{glm::vec3(aabb.min.x, center.y, aabb.min.z), glm::vec3(center.x, aabb.max.y, center.z)});
+        node->topLeftBack = new OcTreeNode(AABB{glm::vec3(aabb.min.x, center.y, center.z), glm::vec3(center.x, aabb.max.y, aabb.max.z)});
+        node->topRightFront = new OcTreeNode(AABB{glm::vec3(center.x, center.y, aabb.min.z), glm::vec3(aabb.max.x, aabb.max.y, center.z)});
+        node->topRightBack = new OcTreeNode(AABB{center, aabb.max});
 
         return CreateTree(node->bottomLeftFront, depth + 1) &&
                CreateTree(node->bottomLeftBack, depth + 1) &&
@@ -163,11 +168,18 @@ class OcTree {
     void InitNodeDrawList(std::vector<IdaGameObject>& nodeGO) { CreateGOListWithPreOrderTraversalInternal(root_, nodeGO); }
 
   private:
-    OcTreeNode<T>* root_;
+    OcTreeNode* root_;
     int maxDepth_;
     AABB maxAABB_;
 
-    void PreOrderTraversalInternal(OcTreeNode<T>* node) {
+    void Insert(glm::vec3 position) {
+        OcTreeNode* node = Find(root_, position);
+        if (node) {
+            node->meshCenterPos_.emplace_back(&position);
+        }
+    }
+
+    void PreOrderTraversalInternal(OcTreeNode* node) {
         if (node) {
             IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO,
                          "OCTree Node: min(x={},y={},z={}), max(x={},y={},z={})",
@@ -188,10 +200,10 @@ class OcTree {
         }
     }
 
-    void CreateGOListWithPreOrderTraversalInternal(OcTreeNode<T>* node, std::vector<IdaGameObject>& nodeGO) {
+    void CreateGOListWithPreOrderTraversalInternal(OcTreeNode* node, std::vector<IdaGameObject>& nodeGO) {
         if (node) {
             // only draw if node is leaf
-            if (node->IsLeaf()) {
+            if (!node->meshCenterPos_.empty()) {
                 std::shared_ptr<ida::IdaModel> model = IdaModel::CreateCube(ModelDrawType::LINE);
                 auto cubeGO = IdaGameObject::CreateGameObject<GameObjectType::Model>("cube");
                 cubeGO.model = model;
@@ -211,7 +223,7 @@ class OcTree {
         }
     }
 
-    void DeleteTree(OcTreeNode<T>*& node) {
+    void DeleteTree(OcTreeNode*& node) {
         if (node) {
             DeleteTree(node->bottomLeftFront);
             DeleteTree(node->bottomLeftBack);

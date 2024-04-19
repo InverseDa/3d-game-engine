@@ -47,6 +47,8 @@ struct hash<ida::IdaModel::Vertex> {
 } // namespace std
 
 namespace ida {
+IdaModel::Builder IdaModel::builder = IdaModel::Builder();
+
 std::vector<vk::VertexInputBindingDescription> IdaModel::Vertex::GetBindingDescriptions() {
     std::vector<vk::VertexInputBindingDescription> bindingDescriptions(1);
     bindingDescriptions[0].binding = 0;
@@ -130,7 +132,6 @@ IdaModel::~IdaModel() {
 
 std::unique_ptr<IdaModel> IdaModel::ImportModel(const std::string& path) {
     IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "Importing model: {}", path);
-    Builder builder{};
     builder.LoadModel(path);
     return std::make_unique<IdaModel>(builder);
 }
@@ -205,7 +206,6 @@ void IdaModel::CreateIndexBuffer(const std::vector<uint32_t>& indices) {
 }
 
 std::unique_ptr<IdaModel> IdaModel::CreateCube(ModelDrawType drawType) {
-    Builder builder{};
     builder.vertices = {
         // front
         {{-1.0f, -1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},

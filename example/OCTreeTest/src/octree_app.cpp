@@ -5,13 +5,13 @@
 #include "system/oc_tree_render_system.hpp"
 #include "scene/oc_tree.hpp"
 
-std::unique_ptr<ida::OcTree<glm::vec3>> tree;
+std::unique_ptr<ida::OcTree> tree;
 std::vector<ida::IdaGameObject> octreeNodeGO;
 
 App::App(const std::string& title, int width, int height) {
     graphics_ = std::make_unique<ida::Graphics>();
     graphics_->InitGraphics(title, width, height);
-    tree = std::make_unique<ida::OcTree<glm::vec3>>(ida::AABB{glm::vec3(-1.5f), glm::vec3(1.5f)}, 1);
+    tree = std::make_unique<ida::OcTree>(ida::AABB{glm::vec3(-1.5f), glm::vec3(1.5f)}, 6);
     InitGlobalPool();
     LoadGameObjects();
 }
@@ -120,6 +120,6 @@ void App::LoadGameObjects() {
     vase2.transform.scale = {3.f, 1.5f, 3.f};
     gameObjects_.emplace(vase2.GetName(), std::move(vase2));
 
-    tree->Insert(model);
+    tree->Insert(gameObjects_.at("vase2"));
     tree->InitNodeDrawList(octreeNodeGO);
 }

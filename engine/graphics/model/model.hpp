@@ -49,6 +49,8 @@ class IdaModel {
     void Bind(vk::CommandBuffer cmd);
     void Draw(vk::CommandBuffer cmd);
 
+    static Builder builder;
+
   private:
     void CreateVertexBuffer(const std::vector<Vertex>& vertices);
     void CreateIndexBuffer(const std::vector<uint32_t>& indices);
