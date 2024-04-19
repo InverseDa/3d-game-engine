@@ -7,6 +7,14 @@ set(GLOBAL_THIRD_PARTY_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/includ
 set(GLOBAL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(GLOBAL_THIRD_PARTY_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/library)
 
+if(APPLE)
+    add_compile_definitions(IDA_OS_MACOS)
+elseif(WIN32)
+    add_compile_definitions(IDA_OS_WINDOWS)
+elseif(UNIX AND NOT APPLE)
+    add_compile_definitions(IDA_OS_LINUX)
+endif()
+
 project(Engine
         VERSION 0.1.0
         LANGUAGES CXX

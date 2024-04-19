@@ -54,11 +54,16 @@ Context::~Context() {
 
 vk::Instance Context::CreateInstance(std::vector<const char*>& extensions) {
     auto appInfo = vk::ApplicationInfo()
-                       .setApiVersion(VK_VERSION_1_3);
+                       .setApiVersion(vk::ApiVersion13);
     auto createInfo = vk::InstanceCreateInfo()
-                          .setPApplicationInfo(&appInfo)
-                          .setPEnabledExtensionNames(extensions)
-                          .setPEnabledLayerNames(validationLayers);
+                          .setPApplicationInfo(&appInfo);
+#ifdef IDA_OS_MACOS
+    extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    createInfo.setFlags(vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR);
+#endif
+    createInfo.setPEnabledExtensionNames(extensions);
+    createInfo.setPEnabledLayerNames(validationLayers);
     return vk::createInstance(createInfo);
 }
 

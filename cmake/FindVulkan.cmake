@@ -1,1 +1,5 @@
-find_package(Vulkan REQUIRED)
+if(APPLE)
+    find_package(Vulkan REQUIRED COMPONENTS MoltenVK)
+else()
+    find_package(Vulkan REQUIRED)
+endif()

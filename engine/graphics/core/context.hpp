@@ -54,7 +54,11 @@ class Context final {
 
   private:
     const std::vector<const char*> validationLayers = {"VK_LAYER_KHRONOS_validation"};
+#ifdef IDA_OS_MACOS
+    const std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_portability_subset"};
+#else
     const std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+#endif
     static Context* instance_;
     vk::SurfaceKHR surface_ = nullptr;
     GetSurfaceCallback getSurfaceCb_ = nullptr;
