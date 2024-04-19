@@ -13,9 +13,11 @@ project(Engine
         DESCRIPTION "A simple game engine")
 
 include(cmake/FindVulkan.cmake)
-include(cmake/FindGLFW.cmake)
 include(cmake/Copydll.cmake)
 include(cmake/CompileShaders.cmake)
+
+add_subdirectory(thirdparty/src/fmt-10.2.1)
+add_subdirectory(thirdparty/src/glfw-3.4)
 
 add_subdirectory(engine)
 add_subdirectory(example)

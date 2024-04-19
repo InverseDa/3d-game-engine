@@ -12,7 +12,6 @@ function(recursive_glob_cpp dir result)
     set(${result} ${${result}} PARENT_SCOPE)
 endfunction()
 
-set(FMT_LIB ${GLOBAL_THIRD_PARTY_LIB_DIR}/fmtd.lib)
 set(ENGINE_SRCS)
 set(ENGINE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 recursive_glob_cpp(${ENGINE_SOURCE_DIR} ENGINE_SRCS)
@@ -25,4 +24,4 @@ target_include_directories(Core PRIVATE ${GLOBAL_THIRD_PARTY_INCLUDE_DIR})
 
 target_link_libraries(Core PRIVATE Vulkan::Vulkan)
 target_link_libraries(Core PRIVATE glfw)
-target_link_libraries(Core PRIVATE ${FMT_LIB})
+target_link_libraries(Core PRIVATE fmt)
