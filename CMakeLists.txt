@@ -7,7 +7,7 @@ set(GLOBAL_THIRD_PARTY_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/includ
 set(GLOBAL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(GLOBAL_THIRD_PARTY_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/library)
 set(GLFW_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/src/glfw-3.4/include)
-set(FMT_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/src/fmt-10.2.1/include)
+set(SPDLOG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/src/spdlog-1.13.0/include)
 
 if(APPLE)
     add_compile_definitions(IDA_OS_MACOS)

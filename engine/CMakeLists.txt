@@ -24,7 +24,7 @@ target_include_directories(Core PRIVATE ${GLOBAL_THIRD_PARTY_INCLUDE_DIR})
 
 target_link_libraries(Core PRIVATE Vulkan::Vulkan)
 target_link_libraries(Core PRIVATE glfw)
-target_link_libraries(Core PRIVATE fmt)
+target_link_libraries(Core PRIVATE spdlog::spdlog)
 if(APPLE)
     target_link_libraries(Core PRIVATE Vulkan::MoltenVK)
 endif ()

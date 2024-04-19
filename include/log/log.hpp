@@ -3,7 +3,7 @@
 
 #include <iostream>
 #include <format>
-#include "fmt/core.h"
+#include "spdlog/spdlog.h"
 
 enum LOG_LEVEL {
     LOG_LEVEL_INFO,
@@ -16,25 +16,22 @@ template <typename... Args>
 inline void PrintLog(LOG_LEVEL level, const fmt::format_string<Args...>& fmt, Args&&... args) {
     switch (level) {
     case LOG_LEVEL_INFO:
-        fmt::print("[INFO] ");
+        spdlog::info(fmt, std::forward<Args>(args)...);
         break;
     case LOG_LEVEL_WARNING:
-        fmt::print("[WARNING] ");
+        spdlog::warn(fmt, std::forward<Args>(args)...);
         break;
     case LOG_LEVEL_ERROR:
-        fmt::print("[ERROR] ");
+        spdlog::error(fmt, std::forward<Args>(args)...);
         break;
     }
-    fmt::print(fmt, std::forward<Args>(args)...);
-    fmt::print("\n");
 }
 
 template <typename... Args>
 inline void ThrowError(const fmt::format_string<Args...>& fmt, Args&&... args) {
-    auto msg = fmt::format(fmt, std::forward<Args>(args)...);
-    msg = "[ERROR] " + msg;
-    fmt::print("{}\n", msg);
-    throw std::runtime_error(msg);
+    // 改成spdlog
+    spdlog::error(fmt, std::forward<Args>(args)...);
+    throw std::runtime_error(fmt::format(fmt, std::forward<Args>(args)...));
 }
 
 template <typename... Args>

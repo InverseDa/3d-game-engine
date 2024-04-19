@@ -11,6 +11,6 @@ target_include_directories(OCTreeTest PUBLIC ${HELLOWORLD_EXAMPLE_SRC_DIR})
 target_include_directories(OCTreeTest PUBLIC ${GLOBAL_INCLUDE_DIR})
 target_include_directories(OCTreeTest PUBLIC ${GLOBAL_THIRD_PARTY_INCLUDE_DIR})
 target_include_directories(OCTreeTest PUBLIC ${GLFW_INCLUDE_DIR})
-target_include_directories(OCTreeTest PUBLIC ${FMT_INCLUDE_DIR})
+target_include_directories(OCTreeTest PUBLIC ${SPDLOG_INCLUDE_DIR})
 
 target_link_libraries(OCTreeTest PUBLIC Core Vulkan::Vulkan)
