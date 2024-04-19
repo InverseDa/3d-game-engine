@@ -113,19 +113,13 @@ int App::Run() {
 }
 
 void App::LoadGameObjects() {
-    std::shared_ptr<ida::IdaModel> model = ida::IdaModel::ImportModel("models/flat_vase.obj");
-    auto vase = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Model>("vase");
-    vase.model = model;
-    vase.transform.translation = {-.5f, .5f, 0.f};
-    vase.transform.scale = {3.f, 1.5f, 3.f};
-    gameObjects_.emplace(vase.GetName(), std::move(vase));
-
-    model = ida::IdaModel::ImportModel("models/smooth_vase.obj");
+    std::shared_ptr<ida::IdaModel> model = ida::IdaModel::ImportModel("models/smooth_vase.obj");
     auto vase2 = ida::IdaGameObject::CreateGameObject<ida::GameObjectType::Model>("vase2");
     vase2.model = model;
     vase2.transform.translation = {.5f, .5f, 0.f};
     vase2.transform.scale = {3.f, 1.5f, 3.f};
     gameObjects_.emplace(vase2.GetName(), std::move(vase2));
 
+    tree->Insert(model);
     tree->InitNodeDrawList(octreeNodeGO);
 }
