@@ -3,14 +3,13 @@
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
 namespace ida {
 class IdaCamera {
   public:
-    void SetOrthographicProjection(float left, float right, float bottom, float top, float near, float far);
-    void SetPerspectiveProjection(float fov, float aspect, float near, float far);
+    void SetOrthographicProjection(float left, float right, float bottom, float top, float near_, float far_);
+    void SetPerspectiveProjection(float fov, float aspect, float near_, float far_);
     void SetPerspectiveProjectionFromGLM(float fov, float aspect, float near_, float far_) {
         projection = glm::perspective(fov, aspect, near_, far_);
     }
