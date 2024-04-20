@@ -155,6 +155,7 @@ void App::LoadGameObjects() {
     quad.model = model;
     quad.transform.translation = {0.f, .5f, 0.f};
     quad.transform.scale = {3.f, 1.f, 3.f};
+    quad.transform.rotation = {glm::pi<float>(), 0, 0.f};
     gameObjects_.emplace(quad.GetName(), std::move(quad));
 
     //    std::shared_ptr<ida::IdaModel> model = ida::IdaModel::CustomModel(
