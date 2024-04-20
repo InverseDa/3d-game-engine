@@ -12,6 +12,7 @@ class IdaCamera {
     void SetPerspectiveProjection(float fov, float aspect, float near_, float far_);
     void SetPerspectiveProjectionFromGLM(float fov, float aspect, float near_, float far_) {
         projection = glm::perspective(fov, aspect, near_, far_);
+        projection[1][1] *= -1; // vulkan has y pointing down in clip space and ndc space, so we need to flip the y axis
     }
 
     void SetViewDirection(glm::vec3 position, glm::vec3 direction, glm::vec3 up);

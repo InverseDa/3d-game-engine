@@ -31,7 +31,7 @@ void MouseMovementController::MouseMovement(GLFWwindow* window, float dt, IdaGam
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
             }
             gameObject.transform.rotation.y += lookSpeed * xoffset * dt;
-            gameObject.transform.rotation.x += lookSpeed * yoffset * dt;
+            gameObject.transform.rotation.x -= lookSpeed * yoffset * dt;
         } else {
             if (glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_NORMAL) {
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);

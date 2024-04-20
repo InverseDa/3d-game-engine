@@ -3,12 +3,14 @@
 #include "object/camera.hpp"
 #include "graphics/core/context.hpp"
 #include "graphics/core/keyboard_controller.hpp"
+#include "graphics/core/mouse_controller.hpp"
 #include "tool/global_info.hpp"
 #include "graphics/swapchain/swapchain.hpp"
 #include "system/point_light_system.hpp"
 #include "system/simple_render_system.hpp"
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include "glm/gtc/constants.hpp"
 #include "glm/glm.hpp"
@@ -77,7 +79,9 @@ int App::Run() {
     // TODO: ECS
     // viewObject->AddComponent<ida::IdaCameraComponent>(camera);
     viewObject.transform.translation.z = -2.5f;
+    viewObject.transform.translation.y = 1.5f;
     ida::KeyboardMovementController cameraController{};
+    ida::MouseMovementController mouseController{};
 
     auto currentTime = std::chrono::high_resolution_clock::now();
     graphics_->window()->Run([&]() {
@@ -87,10 +91,14 @@ int App::Run() {
         float frameTime = std::chrono::duration<float, std::chrono::seconds::period>(newTime - currentTime).count();
         currentTime = newTime;
 
-        cameraController.MoveInPlaneXZ(graphics_->window()->GetWindow(), frameTime, viewObject);
-        camera.SetViewYXZ(viewObject.transform.translation, viewObject.transform.rotation);
         float aspect = graphics_->renderer()->GetAspectRatio();
+        cameraController.Move(graphics_->window()->GetWindow(), frameTime, viewObject);
+        mouseController.MouseMovement(graphics_->window()->GetWindow(), frameTime, viewObject);
+        camera.SetViewYXZ(viewObject.transform.translation, viewObject.transform.rotation);
         camera.SetPerspectiveProjection(glm::radians(50.f), aspect, 0.1f, 100.0f);
+        // camera.SetViewFromGLM(viewObject.transform.translation, viewObject.transform.translation + glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0});
+        // camera.SetPerspectiveProjectionFromGLM(glm::radians(50.f), aspect, 0.1f, 100.0f);
+        IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "Camera position: {}, {}, {}", viewObject.transform.translation.x, viewObject.transform.translation.y, viewObject.transform.translation.z);
 
         if (auto commandBuffer = graphics_->renderer()->BeginFrame()) {
             int frameIndex = graphics_->renderer()->GetCurrentFrameIndex();
@@ -131,6 +139,7 @@ void App::LoadGameObjects() {
     vase.model = model;
     vase.transform.translation = {-.5f, .5f, 0.f};
     vase.transform.scale = {3.f, 1.5f, 3.f};
+    vase.transform.rotation = {glm::pi<float>(), 0, 0.f};
     gameObjects_.emplace(vase.GetName(), std::move(vase));
 
     model = ida::IdaModel::ImportModel("models/smooth_vase.obj");
@@ -138,6 +147,7 @@ void App::LoadGameObjects() {
     vase2.model = model;
     vase2.transform.translation = {.5f, .5f, 0.f};
     vase2.transform.scale = {3.f, 1.5f, 3.f};
+    vase2.transform.rotation = {glm::pi<float>(), 0, 0.f};
     gameObjects_.emplace(vase2.GetName(), std::move(vase2));
 
     model = ida::IdaModel::ImportModel("models/quad.obj");
@@ -175,7 +185,7 @@ void App::LoadGameObjects() {
             glm::mat4(1.f),
             (i * glm::two_pi<float>()) / lightColors.size(),
             {0.f, -1.f, 0.f});
-        pointLight.transform.translation = glm::vec3(rotateLight * glm::vec4(-1.f, -1.f, -1.f, 1.f));
+        pointLight.transform.translation = glm::vec3(rotateLight * glm::vec4(-1.f, 2.f, -1.f, 1.f));
         gameObjects_.emplace(pointLight.GetName(), std::move(pointLight));
     }
 }

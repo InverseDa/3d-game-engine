@@ -25,7 +25,7 @@ void KeyboardMovementController::MoveInPlaneXZ(GLFWwindow* window, float dt, ida
     float yaw = gameObject.transform.rotation.y;
     const glm::vec3 forwardDir{std::sin(yaw), 0.0f, std::cos(yaw)};
     const glm::vec3 rightDir{forwardDir.z, 0.0f, -forwardDir.x};
-    const glm::vec3 upDir{0.0f, -1.0f, 0.0f};
+    const glm::vec3 upDir{0.0f, 1.0f, 0.0f};
 
     glm::vec3 moveDir{0.f};
     if (glfwGetKey(window, keys.moveForward) == GLFW_PRESS)
@@ -68,7 +68,7 @@ void KeyboardMovementController::Move(GLFWwindow* window, float dt, ida::IdaGame
     float pitch = gameObject.transform.rotation.x;
     const glm::vec3 forwardDir = glm::vec3(sin(yaw) * cos(pitch), -sin(pitch), cos(yaw) * cos(pitch));
     const glm::vec3 rightDir = glm::vec3(cos(yaw), 0.0f, -sin(yaw));
-    const glm::vec3 upDir = glm::vec3(0.0f, -1.0f, 0.0f);
+    const glm::vec3 upDir = glm::vec3(0.0f, 1.0f, 0.0f);
 
     glm::vec3 moveDir{0.f};
     if (glfwGetKey(window, keys.moveForward) == GLFW_PRESS)
