@@ -103,9 +103,9 @@ void IdaRenderer::BeginSwapChainRenderPass(vk::CommandBuffer commandBuffer) {
 
     auto viewport = vk::Viewport()
                         .setX(0.0f)
-                        .setY(0.0f)
+                        .setY(swapChain_->GetSwapChainExtent().height)
                         .setWidth(static_cast<float>(swapChain_->GetSwapChainExtent().width))
-                        .setHeight(static_cast<float>(swapChain_->GetSwapChainExtent().height))
+                        .setHeight(-static_cast<float>(swapChain_->GetSwapChainExtent().height))
                         .setMinDepth(0.0f)
                         .setMaxDepth(1.0f);
     auto scissor = vk::Rect2D()

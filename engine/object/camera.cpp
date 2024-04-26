@@ -16,7 +16,7 @@ void IdaCamera::SetPerspectiveProjection(float fov, float aspect, float near, fl
     const float tanHalfFov = tan(fov / 2.f);
     projection = glm::mat4{0.f};
     projection[0][0] = 1.f / (aspect * tanHalfFov);
-    projection[1][1] = -1.f / tanHalfFov;
+    projection[1][1] = 1.f / tanHalfFov;
     projection[2][2] = far / (far - near);
     projection[2][3] = 1.f;
     projection[3][2] = -(far * near) / (far - near);
