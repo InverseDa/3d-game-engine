@@ -59,10 +59,10 @@ std::vector<vk::VertexInputBindingDescription> IdaModel::Vertex::GetBindingDescr
 
 std::vector<vk::VertexInputAttributeDescription> IdaModel::Vertex::GetAttributeDescriptions() {
     std::vector<vk::VertexInputAttributeDescription> attributeDescriptions;
-    attributeDescriptions.push_back({0, 0, vk::Format::eR32G32B32Sfloat, static_cast<uint32_t>(offsetof(Vertex, position))});
-    attributeDescriptions.push_back({1, 0, vk::Format::eR32G32B32Sfloat, static_cast<uint32_t>(offsetof(Vertex, color))});
-    attributeDescriptions.push_back({2, 0, vk::Format::eR32G32B32Sfloat, static_cast<uint32_t>(offsetof(Vertex, normal))});
-    attributeDescriptions.push_back({3, 0, vk::Format::eR32G32Sfloat, static_cast<uint32_t>(offsetof(Vertex, uv))});
+    attributeDescriptions.emplace_back(0, 0, vk::Format::eR32G32B32Sfloat, static_cast<uint32_t>(offsetof(Vertex, position)));
+    attributeDescriptions.emplace_back(1, 0, vk::Format::eR32G32B32Sfloat, static_cast<uint32_t>(offsetof(Vertex, color)));
+    attributeDescriptions.emplace_back(2, 0, vk::Format::eR32G32B32Sfloat, static_cast<uint32_t>(offsetof(Vertex, normal)));
+    attributeDescriptions.emplace_back(3, 0, vk::Format::eR32G32Sfloat, static_cast<uint32_t>(offsetof(Vertex, uv)));
     return attributeDescriptions;
 }
 
@@ -206,6 +206,7 @@ void IdaModel::CreateIndexBuffer(const std::vector<uint32_t>& indices) {
 }
 
 std::unique_ptr<IdaModel> IdaModel::CreateCube(ModelDrawType drawType) {
+    // it will be change
     builder.vertices = {
         // front
         {{-1.0f, -1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
