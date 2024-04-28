@@ -18,30 +18,37 @@ Context& Context::GetInstance() {
 }
 
 Context::Context(std::vector<const char*>& extensions, GetSurfaceCallback cb) {
+    IO::PrintLog<LogLevel::info>("Initializing vulkan context");
     getSurfaceCb_ = cb;
 
+    IO::PrintLog<LogLevel::info>("Creating vulkan instance");
     instance = CreateInstance(extensions);
-    if (!instance) {
-        IO::ThrowError("Failed to create instance");
-    }
+    IO::Assert(instance, "Failed to create instance");
+    IO::PrintLog<LogLevel::info>("Vulkan instance created successfully");
 
+    IO::PrintLog<LogLevel::info>("Picking up physical device");
     phyDevice = PickupPhysicalDevice();
-    if (!phyDevice) {
-        IO::ThrowError("Failed to pickup physical device");
-    }
-    IO::PrintLog<LogLevel::info>("Physical device name: {}", phyDevice.getProperties().deviceName.data());
+    IO::Assert(phyDevice, "Failed to pick up Physical Device");
+    IO::PrintLog<LogLevel::info>("Successfully to pick up Physical Device, Physical device name: {}", phyDevice.getProperties().deviceName.data());
 
+    IO::PrintLog<LogLevel::info>("Creating GLFW surface");
     surface_ = getSurfaceCb_(instance);
+    IO::Assert(surface_, "Failed to create surface");
     device = CreateDevice(surface_);
-    if (!device) {
-        IO::ThrowError("Failed to create device");
-    }
+    IO::Assert(device, "Failed to create device");
 
+    IO::PrintLog<LogLevel::info>("Querying queue family for graphics and present queue");
     auto queueInfo = QueryQueueFamily(surface_);
     graphicsQueue = device.getQueue(queueInfo.graphicsIndex.value(), 0);
     presentQueue = device.getQueue(queueInfo.presentIndex.value(), 0);
+    IO::PrintLog<LogLevel::info>("Queue family queried successfully");
+    IO::PrintLog<LogLevel::info>("Graphics queue index: {}", queueInfo.graphicsIndex.value());
+    IO::PrintLog<LogLevel::info>("Present queue index: {}", queueInfo.presentIndex.value());
 
+    IO::PrintLog<LogLevel::info>("Creating command pool");
     commandPool = CreateCommandPool();
+
+    IO::PrintLog<LogLevel::info>("Vulkan context initialized successfully");
 }
 
 Context::~Context() {
@@ -53,6 +60,7 @@ Context::~Context() {
 }
 
 vk::Instance Context::CreateInstance(std::vector<const char*>& extensions) {
+    IO::PrintLog<LogLevel::info>("Vulkan Version: {}", vk::ApiVersion13);
     auto appInfo = vk::ApplicationInfo()
                        .setApiVersion(vk::ApiVersion13);
     auto createInfo = vk::InstanceCreateInfo()

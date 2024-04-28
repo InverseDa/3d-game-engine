@@ -13,6 +13,7 @@ Graphics::~Graphics() {
 }
 
 bool Graphics::InitGraphics(const std::string& title, int width, int height) {
+    IO::PrintLog<LogLevel::info>("Initializing engine graphic utils");
     return InitWindow(title, width, height) && InitVulkanInstance() && InitRenderer();
 }
 

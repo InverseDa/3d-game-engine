@@ -96,7 +96,7 @@ int App::Run() {
         camera.SetPerspectiveProjection(glm::radians(50.f), aspect, 0.1f, 100.0f);
         // camera.SetViewFromGLM(viewObject.transform.translation, viewObject.transform.translation + glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0});
         // camera.SetPerspectiveProjectionFromGLM(glm::radians(50.f), aspect, 0.1f, 100.0f);
-        IO::PrintLog(LogLevel::info, "Camera position: {}, {}, {}", viewObject.transform.translation.x, viewObject.transform.translation.y, viewObject.transform.translation.z);
+//        IO::PrintLog<LogLevel::info>("Camera position: {}, {}, {}", viewObject.transform.translation.x, viewObject.transform.translation.y, viewObject.transform.translation.z);
 
         if (auto commandBuffer = graphics_->renderer()->BeginFrame()) {
             int frameIndex = graphics_->renderer()->GetCurrentFrameIndex();

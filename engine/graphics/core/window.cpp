@@ -5,6 +5,7 @@
 namespace ida {
 
 IdaWindow::IdaWindow(int w, int h, std::string name) : width_(w), height_(h), title_(name) {
+    IO::PrintLog<LogLevel::info>("GLFW window details: width: {}, height: {}, title: {}", w, h, name);
     InitGLFWWindow();
 }
 
@@ -20,14 +21,12 @@ void IdaWindow::Run(std::function<void()> func) {
     }
 }
 void IdaWindow::InitGLFWWindow() {
-    if (!glfwInit()) {
-        IO::ThrowError("GLFW Can't init");
-    }
+    IO::Assert(glfwInit(), "GLFW Can't init");
+
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     window_ = glfwCreateWindow(width_, height_, title_.c_str(), nullptr, nullptr);
-    if (window_ == nullptr) {
-        IO::ThrowError("GLFW Can't create window");
-    }
+    IO::Assert(window_ != nullptr, "GLFW Can't create window");
+
     glfwSetWindowUserPointer(window_, this);
     glfwSetFramebufferSizeCallback(window_, [](GLFWwindow* window, int width, int height) {
         auto idaWindow = reinterpret_cast<IdaWindow*>(glfwGetWindowUserPointer(window));
@@ -44,9 +43,8 @@ void IdaWindow::InitGLFWWindow() {
 
     getSurfaceCallback = [&](vk::Instance instance) {
                 VkSurfaceKHR surface;
-                if (glfwCreateWindowSurface(instance, window_, nullptr, &surface) != VK_SUCCESS) {
-                IO::ThrowError("GLFW Can't create surface");
-                }
+                IO::Assert(glfwVulkanSupported(), "GLFW Can't support vulkan");
+                IO::Assert(glfwCreateWindowSurface(instance, window_, nullptr, &surface) == VK_SUCCESS, "GLFW Can't create surface");
                 return surface; };
     IO::PrintLog<LogLevel::info>("GLFW Window created");
 }

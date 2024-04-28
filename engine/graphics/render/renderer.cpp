@@ -22,6 +22,8 @@ void IdaRenderer::RecreateSwapChain() {
     if (swapChain_ == nullptr) {
         swapChain_ = std::make_unique<IdaSwapChain>(extent);
     } else {
+        IO::PrintLog<LogLevel::info>("Recreating swap chain");
+
         std::shared_ptr<IdaSwapChain> oldSwapChain = std::move(swapChain_);
         swapChain_ = std::make_unique<IdaSwapChain>(extent, oldSwapChain);
 
