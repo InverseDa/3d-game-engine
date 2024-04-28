@@ -5,23 +5,38 @@
 #include <format>
 #include "spdlog/spdlog.h"
 
-enum LOG_LEVEL {
-    LOG_LEVEL_INFO,
-    LOG_LEVEL_WARNING,
-    LOG_LEVEL_ERROR
+enum LogLevel {
+    info,
+    warning,
+    error
 };
 
 namespace IO {
-template <typename... Args>
-inline void PrintLog(LOG_LEVEL level, const fmt::format_string<Args...>& fmt, Args&&... args) {
+template <LogLevel level, typename... Args>
+inline void PrintLog(const fmt::format_string<Args...>& fmt, Args&&... args) {
     switch (level) {
-    case LOG_LEVEL_INFO:
+    case info:
         spdlog::info(fmt, std::forward<Args>(args)...);
         break;
-    case LOG_LEVEL_WARNING:
+    case warning:
         spdlog::warn(fmt, std::forward<Args>(args)...);
         break;
-    case LOG_LEVEL_ERROR:
+    case error:
+        spdlog::error(fmt, std::forward<Args>(args)...);
+        break;
+    }
+}
+
+template <typename... Args>
+inline void PrintLog(LogLevel level, const fmt::format_string<Args...>& fmt, Args&&... args) {
+    switch (level) {
+    case info:
+        spdlog::info(fmt, std::forward<Args>(args)...);
+        break;
+    case warning:
+        spdlog::warn(fmt, std::forward<Args>(args)...);
+        break;
+    case error:
         spdlog::error(fmt, std::forward<Args>(args)...);
         break;
     }

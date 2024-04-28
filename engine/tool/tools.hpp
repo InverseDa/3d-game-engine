@@ -15,7 +15,7 @@ inline std::vector<char> ReadWholeFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
 
     if (!file.is_open()) {
-        IO::PrintLog(LOG_LEVEL_WARNING, "Failed to read {}", filename);
+        IO::PrintLog(warning, "Failed to read {}", filename);
         return std::vector<char>{};
     }
 
@@ -25,7 +25,7 @@ inline std::vector<char> ReadWholeFile(const std::string& filename) {
 
     file.read(content.data(), content.size());
 
-    IO::PrintLog(LOG_LEVEL_INFO, "Read {} successfully", filename);
+    IO::PrintLog(info, "Read {} successfully", filename);
     return content;
 }
 

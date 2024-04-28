@@ -181,7 +181,7 @@ class OcTree {
 
     void PreOrderTraversalInternal(OcTreeNode* node) {
         if (node) {
-            IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO,
+            IO::PrintLog(LogLevel::info,
                          "OCTree Node: min(x={},y={},z={}), max(x={},y={},z={})",
                          node->aabb.min.x,
                          node->aabb.min.y,

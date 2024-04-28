@@ -69,7 +69,7 @@ IdaGameObject IdaGameObject::MakePointLight(const std::string &lightName, float 
 }
 
 IdaGameObject::~IdaGameObject() {
-    IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "GameObject destroyed, Type: {}", GameObjectTypeNames[type_]);
+    IO::PrintLog(LogLevel::info, "GameObject destroyed, Type: {}", GameObjectTypeNames[type_]);
 }
 
 } // namespace ida

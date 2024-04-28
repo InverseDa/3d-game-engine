@@ -29,7 +29,7 @@ Context::Context(std::vector<const char*>& extensions, GetSurfaceCallback cb) {
     if (!phyDevice) {
         IO::ThrowError("Failed to pickup physical device");
     }
-    IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "Physical device name: {}", phyDevice.getProperties().deviceName.data());
+    IO::PrintLog<LogLevel::info>("Physical device name: {}", phyDevice.getProperties().deviceName.data());
 
     surface_ = getSurfaceCb_(instance);
     device = CreateDevice(surface_);

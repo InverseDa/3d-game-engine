@@ -294,11 +294,11 @@ vk::SurfaceFormatKHR IdaSwapChain::ChooseSwapSurfaceFormat(const std::vector<vk:
 vk::PresentModeKHR IdaSwapChain::ChooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes) {
     for (const auto& availablePresentMode : availablePresentModes) {
         if (availablePresentMode == vk::PresentModeKHR::eMailbox) {
-            IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "Present Mode: Mailbox");
+            IO::PrintLog<LogLevel::info>("Present Mode: Mailbox");
             return availablePresentMode;
         }
     }
-    IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "Present Mode: V-Sync(FIFO)");
+    IO::PrintLog<LogLevel::info>("Present Mode: V-Sync(FIFO)");
     return vk::PresentModeKHR::eFifo;
 }
 

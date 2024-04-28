@@ -89,7 +89,7 @@ IdaBuffer::IdaBuffer(
 }
 
 IdaBuffer::~IdaBuffer() {
-    IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "Buffer destroyed, Type: <TODO>");
+    IO::PrintLog<LogLevel::info>("Buffer destroyed, Type: <TODO>");
     auto& device = Context::GetInstance().device;
     Unmap();
     device.destroyBuffer(buffer_);

@@ -125,13 +125,13 @@ IdaModel::IdaModel(const IdaModel::Builder& builder) {
 }
 
 IdaModel::~IdaModel() {
-    IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "Model destroyed");
+    IO::PrintLog<LogLevel::info>("Model destroyed");
     vertexBuffer_.reset();
     indexBuffer_.reset();
 }
 
 std::unique_ptr<IdaModel> IdaModel::ImportModel(const std::string& path) {
-    IO::PrintLog(LOG_LEVEL::LOG_LEVEL_INFO, "Importing model: {}", path);
+    IO::PrintLog<LogLevel::info>("Importing model: {}", path);
     builder.LoadModel(path);
     return std::make_unique<IdaModel>(builder);
 }
@@ -239,29 +239,96 @@ std::unique_ptr<IdaModel> IdaModel::CreateCube(ModelDrawType drawType) {
         {{-1.0f, 1.0f, -1.0f}, {0.0f, 0.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
         {{-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
     };
-    if(drawType == TRIANGLE) {
+    if (drawType == TRIANGLE) {
         builder.indices = {
             0, 1, 2, 2, 3, 0, // front
-            4, 5, 6, 6, 7, 4, // back
-            8, 9, 10, 10, 11, 8, // top
-            12, 13, 14, 14, 15, 12, // bottom
-            16, 17, 18, 18, 19, 16, // right
-            20, 21, 22, 22, 23, 20, // left
+            4,
+            5,
+            6,
+            6,
+            7,
+            4, // back
+            8,
+            9,
+            10,
+            10,
+            11,
+            8, // top
+            12,
+            13,
+            14,
+            14,
+            15,
+            12, // bottom
+            16,
+            17,
+            18,
+            18,
+            19,
+            16, // right
+            20,
+            21,
+            22,
+            22,
+            23,
+            20, // left
         };
-    } else if(drawType == LINE) {
+    } else if (drawType == LINE) {
         builder.indices = {
             // Front face
-            0, 1, 1, 2, 2, 3, 3, 0,
+            0,
+            1,
+            1,
+            2,
+            2,
+            3,
+            3,
+            0,
             // Back face
-            4, 5, 5, 6, 6, 7, 7, 4,
+            4,
+            5,
+            5,
+            6,
+            6,
+            7,
+            7,
+            4,
             // Top face
-            8, 9, 9, 10, 10, 11, 11, 8,
+            8,
+            9,
+            9,
+            10,
+            10,
+            11,
+            11,
+            8,
             // Bottom face
-            12, 13, 13, 14, 14, 15, 15, 12,
+            12,
+            13,
+            13,
+            14,
+            14,
+            15,
+            15,
+            12,
             // Right face
-            16, 17, 17, 18, 18, 19, 19, 16,
+            16,
+            17,
+            17,
+            18,
+            18,
+            19,
+            19,
+            16,
             // Left face
-            20, 21, 21, 22, 22, 23, 23, 20,
+            20,
+            21,
+            21,
+            22,
+            22,
+            23,
+            23,
+            20,
         };
     }
     return std::make_unique<IdaModel>(builder);
