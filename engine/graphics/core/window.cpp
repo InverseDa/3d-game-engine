@@ -15,6 +15,7 @@ IdaWindow::~IdaWindow() {
 
 void IdaWindow::Run(std::function<void()> func) {
     while (!glfwWindowShouldClose(window_)) {
+        glfwPollEvents();
         func();
     }
 }
