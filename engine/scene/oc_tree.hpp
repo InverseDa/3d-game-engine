@@ -202,7 +202,7 @@ class OcTree {
 
     void CreateGOListWithPreOrderTraversalInternal(OcTreeNode* node, std::vector<IdaGameObject>& nodeGO) {
         if (node) {
-            // only draw if node is leaf
+            // only draw if the data(vertices) of the node is not empty
             if (!node->meshCenterPos_.empty()) {
                 std::shared_ptr<ida::IdaModel> model = IdaModel::CreateCube(ModelDrawType::LINE);
                 auto cubeGO = IdaGameObject::CreateGameObject<GameObjectType::Model>("cube");
