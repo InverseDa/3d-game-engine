@@ -24,10 +24,7 @@ class Graphics {
     Graphics() = default;
     ~Graphics();
 
-    bool InitGraphics(const std::string& title = "Vulkan Demo", int width = 800, int height = 600) {
-        return InitWindow(title, width, height) && InitVulkanInstance() && InitRenderer();
-    }
-
+    bool InitGraphics(const std::string& title = "Vulkan Demo", int width = 800, int height = 600);
     std::unique_ptr<ida::IdaWindow>& window() { return window_; }
     std::unique_ptr<ida::IdaRenderer>& renderer() { return renderer_; }
 
@@ -35,20 +32,9 @@ class Graphics {
     std::unique_ptr<ida::IdaWindow> window_{};
     std::unique_ptr<ida::IdaRenderer> renderer_{};
 
-    bool InitWindow(const std::string& title = "Vulkan Demo", int width = 800, int height = 600) {
-        window_ = std::make_unique<IdaWindow>(width, height, title);
-        return window_ != nullptr;
-    };
-
-    bool InitVulkanInstance() {
-        Context::Init(window_->extensions, window_->getSurfaceCallback);
-        return Context::GetInstance().device != nullptr;
-    }
-
-    bool InitRenderer() {
-        renderer_ = std::make_unique<IdaRenderer>(*window_);
-        return renderer_ != nullptr;
-    }
+    bool InitWindow(const std::string& title, int width, int height);
+    bool InitVulkanInstance();
+    bool InitRenderer();
 };
 
 } // namespace ida
