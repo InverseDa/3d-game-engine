@@ -90,8 +90,9 @@ int App::Run() {
             frameInfo.descriptorSets["simple"] = simpleRenderUbo.GetDescriptorSet(frameIndex);
             frameInfo.descriptorSets["octree"] = ocTreeUbo.GetDescriptorSet(frameIndex);
 
-            ida::SimpleRenderUniformPackage data{};
-            ida::OCTreeRenderUniformPackage ocTreeData{};
+            auto& data = simpleRenderUbo.GetData();
+            auto& ocTreeData = ocTreeUbo.GetData();
+
             data.view = camera.GetView();
             data.projection = camera.GetProjection();
             data.inverseView = camera.GetInverseView();
@@ -99,8 +100,8 @@ int App::Run() {
             ocTreeData.projection = camera.GetProjection();
             ocTreeData.inverseView = camera.GetInverseView();
 
-            simpleRenderUbo.Update(frameIndex, data);
-            ocTreeUbo.Update(frameIndex, ocTreeData);
+            simpleRenderUbo.Update(frameIndex);
+            ocTreeUbo.Update(frameIndex);
 
             renderer->BeginSwapChainRenderPass(commandBuffer);
             {

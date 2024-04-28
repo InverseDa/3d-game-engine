@@ -15,8 +15,8 @@ class UniformBufferObject {
         uboBuffers_.resize(IdaSwapChain::MAX_FRAMES_IN_FLIGHT);
         descriptorSets_.resize(IdaSwapChain::MAX_FRAMES_IN_FLIGHT);
         descriptorSetLayout_ = IdaDescriptorSetLayout::Builder()
-                               .AddBinding(0, DescriptorType, vk::ShaderStageFlagBits::eAllGraphics)
-                               .Build();
+                                   .AddBinding(0, DescriptorType, vk::ShaderStageFlagBits::eAllGraphics)
+                                   .Build();
 
         for (auto& uboBuffer : uboBuffers_) {
             uboBuffer = std::make_unique<ida::IdaBuffer>(
@@ -38,8 +38,8 @@ class UniformBufferObject {
     UniformBufferObject(const UniformBufferObject&) = delete;
     UniformBufferObject& operator=(const UniformBufferObject&) = delete;
 
-    void Update(int frameIndex, UboType& data) {
-        uboBuffers_[frameIndex]->WriteToBuffer(&data);
+    void Update(int frameIndex) {
+        uboBuffers_[frameIndex]->WriteToBuffer(&data_);
         uboBuffers_[frameIndex]->Flush();
     }
 
@@ -51,7 +51,13 @@ class UniformBufferObject {
         return descriptorSetLayout_->GetDescriptorSetLayout();
     }
 
+    UboType& GetData() {
+        return data_;
+    }
+
   private:
+    UboType data_;
+
     std::unique_ptr<IdaDescriptorSetLayout> descriptorSetLayout_;
 
     std::vector<std::unique_ptr<IdaBuffer>> uboBuffers_;
