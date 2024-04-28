@@ -1,5 +1,5 @@
 #include "buffer.hpp"
-#include "../core/context.hpp"
+#include "graphics/core/context.hpp"
 
 namespace ida {
 /**

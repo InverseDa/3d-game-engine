@@ -8,8 +8,8 @@
 #include <optional>
 
 #include "tool/tools.hpp"
-#include "../swapchain/swapchain.hpp"
-#include "../render/renderer.hpp"
+#include "graphics/swapchain/swapchain.hpp"
+#include "graphics/render/renderer.hpp"
 
 namespace ida {
 struct SwapChainSupportDetails {
