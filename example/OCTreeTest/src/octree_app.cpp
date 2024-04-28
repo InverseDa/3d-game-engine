@@ -40,14 +40,8 @@ int App::Run() {
     auto& window = graphics_->window();
     auto& renderer = graphics_->renderer();
 
-    ida::UniformBufferObject<
-        ida::SimpleRenderUniformPackage,
-        vk::DescriptorType::eUniformBuffer>
-        simpleRenderUbo{globalPool_};
-    ida::UniformBufferObject<
-        ida::OCTreeRenderUniformPackage,
-        vk::DescriptorType::eUniformBuffer>
-        ocTreeUbo{globalPool_};
+    ida::UniformBufferObject<ida::SimpleRenderUniformPackage, vk::DescriptorType::eUniformBuffer> simpleRenderUbo{globalPool_};
+    ida::UniformBufferObject<ida::OCTreeRenderUniformPackage, vk::DescriptorType::eUniformBuffer> ocTreeUbo{globalPool_};
 
     ida::SimpleRenderSystem simpleRenderSystem{
         renderer->GetRenderPass(),
