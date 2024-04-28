@@ -1,7 +1,7 @@
 #ifndef ENGINE_MOUSE_CONTROLLER_HPP
 #define ENGINE_MOUSE_CONTROLLER_HPP
 
-#include "window.hpp"
+#include "graphics/core/window.hpp"
 #include "object/game_object.hpp"
 
 namespace ida {

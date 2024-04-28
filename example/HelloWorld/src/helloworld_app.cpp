@@ -2,8 +2,8 @@
 
 #include "object/camera.hpp"
 #include "graphics/core/context.hpp"
-#include "graphics/core/keyboard_controller.hpp"
-#include "graphics/core/mouse_controller.hpp"
+#include "controller/keyboard_controller.hpp"
+#include "controller/mouse_controller.hpp"
 #include "tool/global_info.hpp"
 #include "graphics/swapchain/swapchain.hpp"
 #include "system/point_light_system.hpp"

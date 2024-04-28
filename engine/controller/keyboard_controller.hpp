@@ -1,7 +1,7 @@
 #ifndef VULKAN_LIB_KEYBOARD_CONTROLLER_HPP
 #define VULKAN_LIB_KEYBOARD_CONTROLLER_HPP
 
-#include "window.hpp"
+#include "graphics/core/window.hpp"
 #include "object/game_object.hpp"
 
 namespace ida {
