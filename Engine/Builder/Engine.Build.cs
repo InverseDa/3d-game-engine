@@ -1,5 +1,6 @@
-
 using Sharpmake;
+
+[module: Sharpmake.Include(@"..\..\Engine\Source\ThirdParty\Spdlog\Spdlog.Build.cs")] 
 
 [module: Sharpmake.DebugProjectName("Sharpmake.Engine")]
 
@@ -11,13 +12,13 @@ namespace Engine
         public EngineProject()
         {
             Name = "Engine";
-
+            // ... (Targets 保持不变) ...
             AddTargets(new Target(
-                    Platform.win32 | Platform.win64,
-                    DevEnv.vs2022,
-                    Optimization.Debug | Optimization.Release
+                Platform.win32 | Platform.win64,
+                DevEnv.vs2022,
+                Optimization.Debug | Optimization.Release
             ));
-
+            
             SourceRootPath = @"[project.SharpmakeCsPath]\..\..\Engine";
         }
 
@@ -29,11 +30,11 @@ namespace Engine
 
             conf.Defines.Add("_HAS_EXCEPTIONS=0");
 
-            // if not set, no precompile option will be used.
-            // conf.PrecompHeader = "stdafx.h";
-            // conf.PrecompSource = "stdafx.cpp";
-
             conf.CustomProperties.Add("CustomOptimizationProperty", $"Custom-{target.Optimization}");
+
+            // 2. [新增] 告诉 Engine 我要用 Spdlog <--- 关键修复
+            // 这会自动把 Spdlog 的 IncludePaths 加进来，也会自动链接 Spdlog.lib
+            conf.AddPublicDependency<SpdlogProject>(target);
         }
     }
 
@@ -43,11 +44,11 @@ namespace Engine
         public EngineSolution()
         {
             Name = "Engine";
-
+            // ... (Targets 保持不变) ...
             AddTargets(new Target(
-                    Platform.win32 | Platform.win64,
-                    DevEnv.vs2022,
-                    Optimization.Debug | Optimization.Release
+                Platform.win32 | Platform.win64,
+                DevEnv.vs2022,
+                Optimization.Debug | Optimization.Release
             ));
         }
 
@@ -56,6 +57,9 @@ namespace Engine
         {
             conf.SolutionFileName = "[solution.Name]_[target.DevEnv]_[target.Platform]";
             conf.SolutionPath = @"[solution.SharpmakeCsPath]\..\..\Solution";
+
+            // 只要加了 EngineProject，因为 Engine 依赖 Spdlog，
+            // Sharpmake 会自动把 Spdlog 项目也加到 .sln 里。
             conf.AddProject<EngineProject>(target);
         }
     }
@@ -65,7 +69,9 @@ namespace Engine
         [Sharpmake.Main]
         public static void SharpmakeMain(Sharpmake.Arguments arguments)
         {
+            // SDK 版本如果没装，建议注释掉让它自动检测
             KitsRootPaths.SetUseKitsRootForDevEnv(DevEnv.vs2022, KitsRootEnum.KitsRoot10, Options.Vc.General.WindowsTargetPlatformVersion.v10_0_22621_0);
+            
             arguments.Generate<EngineSolution>();
         }
     }
