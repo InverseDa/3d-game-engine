@@ -1,4 +1,4 @@
-#include "Source/Runtime/Core/Public/Logger/Log.h"
+#include "CoreMinimal.h"
 
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogXBD);
 LE_DECLARE_LOG_CATEGORY(LogXBD);
