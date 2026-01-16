@@ -11,7 +11,7 @@ namespace spdlog {
     class logger;
 }
 
-// 引擎名：LE，Lxxxx Engine
+// 引擎名：LE，Limitless Engine
 namespace LE {
 
 enum class LogLevel {
