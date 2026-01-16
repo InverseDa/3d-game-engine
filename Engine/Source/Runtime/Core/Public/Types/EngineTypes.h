@@ -2,9 +2,9 @@
 
 #include <string>
 
-#define     USE_GLM      1
+#define     LE_USE_GLM      1
 
-#if USE_GLM
+#if LE_USE_GLM
 #include "glm/glm.hpp"
 #endif
 
@@ -23,7 +23,7 @@ typedef     double                  float64;   // 64-bit floating point number
 
 typedef     std::string     FString;
 
-#if USE_GLM
+#if LE_USE_GLM
 typedef     glm::vec4       FVector;
 typedef     glm::mat4       FMatrix;
 typedef     glm::mat3       FMatrix3x3;
