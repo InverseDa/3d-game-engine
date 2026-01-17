@@ -1,7 +1,5 @@
-# 获取脚本所在目录 (即项目根目录 Limitless/)
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
-# 定义路径
 $EngineSourceDir = Join-Path $RootDir "Engine\Source"
 $BuilderDir      = Join-Path $RootDir "Engine\Builder"
 $OutputFile      = Join-Path $BuilderDir "GeneratedIncludeFiles.cs"
@@ -10,10 +8,8 @@ Write-Host "------------------------------------------------" -ForegroundColor C
 Write-Host "Auto-Generating Includes..." -ForegroundColor Cyan
 Write-Host "Root: $RootDir" -ForegroundColor Gray
 
-# 确保 Builder 目录存在
 if (-not (Test-Path $BuilderDir)) { New-Item -ItemType Directory -Path $BuilderDir | Out-Null }
 
-# 准备文件头
 $Content = @"
 // ========================================================================
 // Limitless Engine Notice:
@@ -25,29 +21,19 @@ using Sharpmake;
 
 "@
 
-# 准备相对路径计算基准 (Builder目录)
-# 注意：一定要加斜杠 "\"，否则 Uri 会把它当成文件而不是目录
 $BuilderUri = New-Object System.Uri ($BuilderDir + "\")
 
-# 递归扫描
 if (Test-Path $EngineSourceDir) {
     $Files = Get-ChildItem -Path $EngineSourceDir -Recurse -Filter "*.Build.cs"
 
     foreach ($File in $Files) {
-        # 🟢 修复：使用 System.Uri 来计算相对路径 (兼容旧版 PowerShell)
         $FileUri = New-Object System.Uri $File.FullName
         $RelativeUri = $BuilderUri.MakeRelativeUri($FileUri)
-        
-        # 将 URI 转换为字符串，并解码 (处理空格等特殊字符)
         $RelativePath = [System.Uri]::UnescapeDataString($RelativeUri.ToString())
-        
-        # Uri 输出的已经是正斜杠 '/' 了，不需要再 replace
 
-        # 排除列表
         if ($RelativePath -notlike "*GeneratedIncludeFiles.cs*" -and 
             $RelativePath -notlike "*Engine.Build.cs*" -and 
             $RelativePath -notlike "*Globals.cs*") {
-            
             Write-Host "  [+] Mounted: $RelativePath" -ForegroundColor Green
             $Content += "[module: Sharpmake.Include(`"$RelativePath`")]`n"
         }
@@ -56,7 +42,6 @@ if (Test-Path $EngineSourceDir) {
     Write-Host "  [!] Warning: Engine/Source not found!" -ForegroundColor Red
 }
 
-# 写入文件
 $Content | Out-File -FilePath $OutputFile -Encoding UTF8
 Write-Host "Done. Written to Engine/Builder/GeneratedIncludeFiles.cs" -ForegroundColor Yellow
 Write-Host "------------------------------------------------" -ForegroundColor Cyan
