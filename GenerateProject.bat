@@ -12,7 +12,7 @@ echo [2/2] Running Sharpmake...
 
 set "SHARPMAKE_EXE=%ROOT_DIR%Engine\Builder\Sharpmake\Sharpmake.Application.exe"
 
-set "MAIN_SCRIPT=Engine/Builder/Engine.Build.cs"
+set "MAIN_SCRIPT=Engine/Builder/LimitlessBuilder.cs"
 
 "%SHARPMAKE_EXE%" "/sources('%MAIN_SCRIPT%')"
 

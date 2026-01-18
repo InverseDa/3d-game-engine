@@ -4,14 +4,14 @@ using System.IO;
 namespace Limitless
 {
     [Sharpmake.Generate]
-    public class SpdlogProject : LimitlessThirdPartyModule
+    public class SpdlogProject : ThirdPartyModuleRule
     {
         public SpdlogProject()
         {
             Name = "Spdlog";
         }
 
-        public override void ConfigureAll(Configuration conf, Target target)
+        public override void ConfigureAll(Configuration conf, TargetRule target)
         {
             base.ConfigureAll(conf, target);
 

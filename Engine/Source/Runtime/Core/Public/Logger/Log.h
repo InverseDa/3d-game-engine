@@ -22,7 +22,7 @@ enum class LogLevel {
     Fatal,
 };
 
-class Log
+class CORE_API Log
 {
 public:
     static void Init();
