@@ -9,6 +9,7 @@ namespace Limitless
         public ModuleRule() : base(typeof(TargetRule))
         {
             SourceRootPath = this.SharpmakeCsPath;
+            SourceFilesExtensions.Add(".cs");
             AddTargets(new TargetRule(
                 Platform.win64,
                 DevEnv.vs2022,
@@ -65,6 +66,7 @@ namespace Limitless
         public ThirdPartyModuleRule() : base(typeof(TargetRule))
         {
             SourceRootPath = @"[project.SharpmakeCsPath]";
+            SourceFilesExtensions.Add(".cs");
             AddTargets(new TargetRule(
                 Platform.win64,
                 DevEnv.vs2022,

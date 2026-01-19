@@ -10,22 +10,18 @@ namespace Limitless
         public LimitlessProject() : base(typeof(TargetRule))
         {
             Name = "LimitlessEngine";
-            SourceRootPath = Path.Combine(DirectoryHelper.SourceDir, "Runtime", "Launch");
+            SourceRootPath = DirectoryHelper.EngineDir;
             SourceFilesExtensions.Add(".cs");
+            SourceFilesExtensions.Add(".cpp");
+            SourceFilesExtensions.Add(".h");
+            SourceFilesExtensions.Add(".c");
+            SourceFilesExtensions.Add(".inl");
             AddTargets(new TargetRule(
                 Platform.win64,
                 DevEnv.vs2022,
                 Optimization.Debug | Optimization.Release,
                 TargetType.Game | TargetType.Editor
             ));
-
-            // Solution Engine does not contain the whole project, so we need to add the README.md file manually.
-            // This can force the solution to contain the whole project.
-            string ReadmePath = Path.Combine(DirectoryHelper.EngineDir, "README.md");
-            if (File.Exists(ReadmePath))
-            {
-                SourceFiles.Add(ReadmePath); 
-            }
         }
 
         [Configure]
@@ -45,6 +41,11 @@ namespace Limitless
 
             conf.Output = Configuration.OutputType.Exe;
             conf.Options.Add(Options.Vc.Linker.SubSystem.Windows);
+
+            // Exclude ALL files from build in this project. 
+            // The code is compiled by the respective Module projects (Launch, Core, etc.) and linked via dependencies.
+            // This allows the project to serve as a complete source browser without double-compilation.
+            conf.SourceFilesBuildExcludeRegex.Add(@".*");
 
             conf.TargetPath = Path.Combine(DirectoryHelper.EngineDir, "Binaries", "Win64");
 
