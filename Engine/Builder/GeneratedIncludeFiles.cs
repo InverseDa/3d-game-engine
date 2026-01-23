@@ -8,5 +8,6 @@ using Sharpmake;
 [module: Sharpmake.Include("../Source/Runtime/Core/Core.Build.cs")]
 [module: Sharpmake.Include("../Source/Runtime/Launch/Launch.Build.cs")]
 [module: Sharpmake.Include("../Source/Runtime/RAL/RAL.Build.cs")]
+[module: Sharpmake.Include("../Source/ThirdParty/Glm/Glm.Build.cs")]
 [module: Sharpmake.Include("../Source/ThirdParty/Spdlog/Spdlog.Build.cs")]
 
