@@ -2,7 +2,7 @@
 
 #include <string>
 
-#define     LE_USE_GLM      1
+#define     LE_USE_GLM      0
 
 #if LE_USE_GLM
 #include "glm/glm.hpp"
@@ -17,6 +17,8 @@ typedef     unsigned int            uint32;  // 32-bit unsigned integer
 typedef     unsigned long long      uint64;  // 64-bit unsigned integer
 typedef     float                   float32;   // 32-bit floating point number
 typedef     double                  float64;   // 64-bit floating point number
+
+using uint8 = uint8_t;
 
 // ************************************************************************
 // String
