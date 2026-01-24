@@ -24,29 +24,59 @@ using float64 = double             ;  // 64-bit floating point number
 // ************************************************************************
 // String
 
-using UWString = std::string ; // Unwrapped String, temporary use std::string
 
 class CORE_API FString
 {
+    using UWString = std::string ; // Unwrapped String, temporary use std::string
 
 public:
     FString() = default;
-    FString(const UWString& InString) { this->Real = InString; };
+    FString(const UWString& InString) : Real(InString) {}
+    FString(const char*     InString) : Real(InString) {}
+
+    FString(const FString& Other) : Real(Other.Real) {}
+    FString(FString&& Other) noexcept : Real(std::move(Other.Real)) {}
+
+    FString& operator=(const FString& Other)
+    {
+        Real = Other.Real;
+        return *this;
+    }
+
+    FString& operator=(FString&& Other) noexcept {
+        Real = std::move(Other.Real);
+        return *this;
+    }
+
+public:
+    const char* operator*() const { return Real.c_str(); }
+    const char* GetData() const { return Real.c_str(); }
+
+    bool IsEmpty() const { return Real.empty(); }
+    int32 Length() const { return static_cast<int32>(Real.length()); }
+
+public:
+    FString operator+(const FString& Other) const
+    {
+        return FString(this->Real + Other.Real); 
+    }
+    
+    FString& operator+=(const FString& Other)
+    {
+        Real += Other.Real;
+        return *this;
+    }
+
+    bool operator==(const FString& Other) const { return Real == Other.Real; }
+    bool operator!=(const FString& Other) const { return Real != Other.Real; }
+
+    friend std::ostream& operator<<(std::ostream& Os, const FString& Str) {
+        Os << Str.Real;
+        return Os;
+    }
     
 private:
     UWString Real;
-
-public:
-    UWString GetRealString() { return this->Real; }
-
-public:
-
-    FString operator+(FString& Other)
-    {
-        const UWString& A = this->GetRealString();
-        const UWString& B = Other.GetRealString();
-        return FString(A + B);
-    }
 };
 
 // ***********************************************************************************************

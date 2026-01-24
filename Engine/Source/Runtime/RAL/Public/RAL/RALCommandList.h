@@ -6,6 +6,30 @@
 #include "RALPipeline.h"
 #include "RALDescription.h"
 
+
+class FRALBuffer;
+class FRALGraphicsPipeline;
+class FRALBindGroup;
+class FRALTextureView;
+
+struct FRALViewport
+{
+    float X = 0.0f;
+    float Y = 0.0f;
+    float Width = 0.0f;
+    float Height = 0.0f;
+    float MinDepth = 0.0f;
+    float MaxDepth = 1.0f;
+};
+
+struct FRALScissorRect
+{
+    int32 X = 0;
+    int32 Y = 0;
+    int32 Width = 0;
+    int32 Height = 0;
+};
+
 class RAL_API FRALCommandList : public FRALResource
 {
 public:

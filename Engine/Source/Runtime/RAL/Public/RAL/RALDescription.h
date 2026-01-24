@@ -4,6 +4,7 @@
 #include "RALTypes.h"
 
 class FRALTexture;
+class FRALTextureView;
 
 struct FRALBufferDesc
 {
@@ -57,7 +58,94 @@ struct FRALTextureViewDesc
     uint32 ArrayLayers = 1;
 };
 
+// ***********************************************************************************************
+// ***********************************************************************************************
+// ******************************** Render Pass Relative *****************************************
+// ***********************************************************************************************
+// ***********************************************************************************************
+
+enum class EAttachmentLoadOp : uint8
+{
+    Load,       // Contain
+    Clear,      // Clear particular color
+    DontCare,   // Dont care
+};
+
+enum class EAttachmentStoreOp : uint8
+{
+    Store,      // Save the result to GPU memory
+    DontCare,   // Discard the result
+};
+
+struct FRALColorAttachmentDesc
+{
+    FRALTextureView* RenderTarget = nullptr;
+    EAttachmentLoadOp LoadOp = EAttachmentLoadOp::Clear;
+    EAttachmentStoreOp StoreOp = EAttachmentStoreOp::Store;
+    float ClearColor[4] = { 0.f, 0.f, 0.f, 1.f };
+};
+
+struct FRALDepthStencilAttachmentDesc
+{
+    FRALTextureView* DepthStencilTarget = nullptr;
+    EAttachmentLoadOp LoadOp = EAttachmentLoadOp::Clear;
+    EAttachmentStoreOp StoreOp = EAttachmentStoreOp::Store;
+    float ClearDepth = 1.f;
+    uint8 ClearStencil = 0;
+};
+
+struct FRALRenderPassDesc
+{
+    FRALColorAttachmentDesc ColorAttachments[8];    // Max support 8 MRT
+    uint32 ColorAttachmentCount = 0;
+
+    FRALDepthStencilAttachmentDesc DepthStencilAttachment;
+    bool bHasDepthStencil = false;
+};
+
+// ***********************************************************************************************
+// ***********************************************************************************************
+// ********************************** Pipeline Relative ******************************************
+// ***********************************************************************************************
+// ***********************************************************************************************
+
+struct FRALBlendStateDesc
+{
+    bool bEnable = false;
+    // TODO: kodak
+};
+
+struct FRALDepthStencilStateDesc
+{
+    bool bDepthTestEnable = true;
+    bool bDepthWriteEnable = true;
+    ECompareFunction DepthFunc = ECompareFunction::Less;
+};
+
+struct FRALRasterizerStateDesc
+{
+    ECullMode CullMode = ECullMode::Back;
+    EFillMode FillMode = EFillMode::Solid;
+    bool bFrontCounterClockwise = false;  // true: CCW is the right side (OpenGL Default); false: CW is the right side (DirectX Default)
+};
+
 struct FRALGraphicsPipelineDesc
 {
-    
+    FString Name;
+
+    // Shader
+    FRALShader* VertexShader = nullptr;
+    FRALShader* PixelShader = nullptr;
+
+    // State
+    FRALBlendStateDesc BlendState;
+    FRALDepthStencilStateDesc DepthStencilState;
+    FRALRasterizerStateDesc RasterizerState;
+
+    // TODO: kodak input layout
+
+    // Render Target Format
+    EPixelFormat RenderTargetFormats[8];
+    uint32 RenderTargetCount = 0;
+    EPixelFormat DepthStencilFormat = EPixelFormat::Unknown;
 };
