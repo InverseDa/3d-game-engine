@@ -6,6 +6,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include "RAL/RALCommandList.h"
+
 #define PLATFORM_WINDOWS 1 // TODO: kodak
 
 #if PLATFORM_WINDOWS
@@ -148,4 +150,109 @@ protected:
 
 protected:
     void AcquireNextImage();
+};
+
+// ***********************************************************************************************
+// ********************************** Regular Math Calc ******************************************
+// ***********************************************************************************************
+
+class FVulkanRALSemaphore : public FRALSemaphore
+{
+public:
+    FVulkanRALSemaphore(FVulkanRALDevice* InDevice);
+    ~FVulkanRALSemaphore() override;
+
+public:
+    VkSemaphore Handle = VK_NULL_HANDLE;
+
+private:
+    FVulkanRALDevice* Device;
+};
+
+class FVulkanRALFence : public FRALFence
+{
+public:
+    FVulkanRALFence(FVulkanRALDevice* InDevice, bool bSignaled= false);
+    ~FVulkanRALFence() override;
+
+public:
+    void Reset() override;
+    void Wait(uint64 Timeout) override;
+    bool IsSignaled() override;
+
+public:
+    VkFence Handle = VK_NULL_HANDLE;
+
+private:
+    FVulkanRALDevice* Device;
+};
+
+// ***********************************************************************************************
+// ********************************** Regular Math Calc ******************************************
+// ***********************************************************************************************
+
+class FVulkanRALQueue : public FRALQueue
+{
+public:
+    FVulkanRALQueue(FVulkanRALDevice* InDevice, uint32 FamilyIndex, uint32 QueueIndex);
+
+public:
+    void Submit(const FRALSubmitInfo& SubmitInfo) override;
+    void WaitIdle() override;
+    EQueueType GetType() const override { return EQueueType::Graphics; }
+
+public:
+    VkQueue Handle = VK_NULL_HANDLE;
+
+private:
+    FVulkanRALDevice* Device;
+};
+
+// ***********************************************************************************************
+// ********************************** Regular Math Calc ******************************************
+// ***********************************************************************************************
+
+class FVulkanRALCommandList : public FRALCommandList
+{
+public:
+    FVulkanRALCommandList(FVulkanRALDevice* InDevice, EQueueType Type);
+    ~FVulkanRALCommandList() override;
+
+public:
+    void Begin() override;
+    void End() override;
+
+public:
+    void BeginRenderPass(const FRALRenderPassDesc& Desc) override;
+    void EndRenderPass() override;
+
+public:
+    void SetViewport(const FRALViewport& Viewport) override;
+    void SetScissorRect(const FRALScissorRect& Scissor) override;
+
+public:
+    void SetGraphicsPipeline(FRALGraphicsPipeline* Pipeline) override;
+
+public:
+    void SetVertexBuffer(uint32 Slot, FRALBuffer* Buffer, uint64 Offset) override;
+    void SetIndexBuffer(FRALBuffer* Buffer, uint64 Offset, EPixelFormat IndexFormat) override;
+    void SetBindGroup(uint32 SetIndex, FRALBindGroup* BindGroup) override;
+
+public:
+    void Draw(uint32 VertexCount, uint32 InstanceCount, uint32 FirstInstance) override;
+    void DrawIndexed(uint32 IndexCount, uint32 InstanceCount, uint32 FirstIndex, int32 VertexOffset, uint32 FirstInstance) override;
+
+public:
+    VkCommandBuffer Handle = VK_NULL_HANDLE;
+
+private:
+    FVulkanRALDevice* Device = nullptr;
+    VkCommandPool Pool = VK_NULL_HANDLE;
+
+private:
+    FVulkanRALGraphicsPipeline* CurrentPipeline = nullptr;
+
+private:
+    VkRenderPass InternalGetRenderPass(const FRALRenderPassDesc& Desc, bool bIsCreate = false);
+    VkFramebuffer InternalGetFramebuffer(const FRALRenderPassDesc& Desc, VkRenderPass Pass, bool bIsCreate = false);
 };

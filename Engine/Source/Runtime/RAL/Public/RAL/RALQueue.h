@@ -2,23 +2,9 @@
 
 #include "CoreMinimal.h"
 #include "RALResource.h"
+#include "RALSyncPrimitives.h"
 
 class FRALCommandList;
-
-class RAL_API FRALSemaphore : public FRALResource
-{
-public:
-    virtual ~FRALSemaphore() = default;
-};
-
-class RAL_API FRALFence : public FRALResource
-{
-public:
-    virtual ~FRALFence() = default;
-    virtual void Reset() = 0;
-    virtual void Wait(uint64 Timeout = UINT64_MAX) = 0;
-    virtual bool IsSignaled() = 0;
-};
 
 enum class EQueueType : uint8
 {
