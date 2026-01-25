@@ -6,15 +6,24 @@
 class FRALTexture;
 class FRALTextureView;
 
+enum class EBufferUsageFlags : uint8
+{
+    None = 0,
+    VertexBuffer    = 1 << 0,
+    IndexBuffer     = 1 << 1,
+    UniformBuffer   = 1 << 2,
+    StorageBuffer   = 1 << 3, // Bindless Needed
+    IndirectArgs    = 1 << 4,
+    TransferSrc     = 1 << 5,
+    TransferDst     = 1 << 6,
+};
+
 struct FRALBufferDesc
 {
     FString Name;
     uint64 Size = 0;
-    EResourceUsage HeapType = EResourceUsage::Upload;
-
-    bool bIsVertextBuffer = false;
-    bool bIsIndexBuffer = false;
-    bool bIsUniformBuffer = false;
+    uint32 Usage;       // EResourceUsage
+    uint32 UsageFlag;   // EBufferUsageFlags
 };
 
 struct FRALTextureDesc
@@ -59,9 +68,7 @@ struct FRALTextureViewDesc
 };
 
 // ***********************************************************************************************
-// ***********************************************************************************************
 // ******************************** Render Pass Relative *****************************************
-// ***********************************************************************************************
 // ***********************************************************************************************
 
 enum class EAttachmentLoadOp : uint8
@@ -104,9 +111,7 @@ struct FRALRenderPassDesc
 };
 
 // ***********************************************************************************************
-// ***********************************************************************************************
 // ********************************** Pipeline Relative ******************************************
-// ***********************************************************************************************
 // ***********************************************************************************************
 
 struct FRALBlendStateDesc

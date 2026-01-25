@@ -9,5 +9,5 @@ public:
     virtual ~FRALResource() = default;
 
 public:
-    virtual uint32 GetBindlessIndex() const = 0;
+    virtual uint32 GetBindlessIndex() const { return 0xFFFFFFFF; }
 };
