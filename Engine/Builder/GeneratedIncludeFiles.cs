@@ -10,4 +10,5 @@ using Sharpmake;
 [module: Sharpmake.Include("../Source/Runtime/RAL/RAL.Build.cs")]
 [module: Sharpmake.Include("../Source/ThirdParty/Glm/Glm.Build.cs")]
 [module: Sharpmake.Include("../Source/ThirdParty/Spdlog/Spdlog.Build.cs")]
+[module: Sharpmake.Include("../Source/ThirdParty/Vulkan/Vulkan.Build.cs")]
 

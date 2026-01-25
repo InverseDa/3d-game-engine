@@ -2,6 +2,17 @@
 
 #include "CoreMinimal.h"
 
+#define LE_RAL_ENABLE_VALIDATION 1
+
+enum class ERALPlatform : uint8
+{
+    Unknown,
+    OpenGL,
+    D3D11,
+    D3D12,
+    Vulkan,
+};
+
 enum class EPixelFormat : uint8
 {
     Unknown = 0,
@@ -13,6 +24,7 @@ enum class EPixelFormat : uint8
     R8_SINT,
 
     // 32-bit
+    R32_UINT,
     R8G8B8A8_UNORM,
     R8G8B8A8_SNORM,
     R8G8B8A8_UINT,

@@ -14,6 +14,7 @@ namespace Limitless
         {
             base.ConfigureAll(conf, target);
             conf.AddPublicDependency<CoreProject>(target);
+            conf.AddPublicDependency<VulkanProject>(target);
         }
     }
 }

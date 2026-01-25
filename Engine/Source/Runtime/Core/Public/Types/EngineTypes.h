@@ -22,8 +22,24 @@ using float64 = double             ;  // 64-bit floating point number
 #define LE_KINDA_SMALL_NUMBER   1e-4
 
 // ************************************************************************
-// String
 
+class FNonCopyable
+{
+public:
+    FNonCopyable() = default;
+    virtual ~FNonCopyable() = default;
+
+    // Disallow copying
+    FNonCopyable(const FNonCopyable&) = delete;
+    FNonCopyable& operator=(const FNonCopyable&) = delete;
+
+    // allow moving
+    FNonCopyable(FNonCopyable&&) = default;
+    FNonCopyable& operator=(FNonCopyable&&) = default;
+};
+
+// ************************************************************************
+// String
 
 class CORE_API FString
 {
@@ -80,9 +96,7 @@ private:
 };
 
 // ***********************************************************************************************
-// ***********************************************************************************************
 // ********************************** Regular Math Calc ******************************************
-// ***********************************************************************************************
 // ***********************************************************************************************
 
 namespace FMath

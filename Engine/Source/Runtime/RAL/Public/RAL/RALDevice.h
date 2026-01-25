@@ -27,6 +27,10 @@ public:
     virtual FRALGraphicsPipeline* CreateGraphicsPipeline(const FRALGraphicsPipelineDesc& Desc) = 0;
     virtual FRALCommandList* CreateCommandList(EQueueType Type = EQueueType::Graphics) = 0;
     virtual FRALSwapchain* CreateSwapchain(const FRALSwapchainDesc& Desc) = 0;
+
+public:
+    virtual void* GetBindlessHeapGPUDescriptor() const = 0;
+    virtual uint32 AllocateBindlessIndex(FRALResource* Resource) = 0;
 };
 
 namespace RAL

@@ -10,12 +10,7 @@ namespace Limitless
         public LimitlessProject() : base(typeof(TargetRule))
         {
             Name = "LimitlessEngine";
-            SourceRootPath = DirectoryHelper.EngineDir;
-            SourceFilesExtensions.Add(".cs");
-            SourceFilesExtensions.Add(".cpp");
-            SourceFilesExtensions.Add(".h");
-            SourceFilesExtensions.Add(".c");
-            SourceFilesExtensions.Add(".inl");
+            SourceRootPath = Path.Combine(DirectoryHelper.SourceDir, "Runtime", "Launch");
             AddTargets(new TargetRule(
                 Platform.win64,
                 DevEnv.vs2022,
@@ -42,19 +37,16 @@ namespace Limitless
             conf.Output = Configuration.OutputType.Exe;
             conf.Options.Add(Options.Vc.Linker.SubSystem.Windows);
 
-            // Exclude ALL files from build in this project. 
-            // The code is compiled by the respective Module projects (Launch, Core, etc.) and linked via dependencies.
-            // This allows the project to serve as a complete source browser without double-compilation.
-            conf.SourceFilesBuildExcludeRegex.Add(@".*");
-
             conf.TargetPath = Path.Combine(DirectoryHelper.EngineDir, "Binaries", "Win64");
 
             bool IsEditor = target.TargetType == TargetType.Editor;
             conf.TargetFileName = IsEditor ? "LimitlessEditor" : "LimitlessGame";
             conf.Defines.Add("WITH_EDITOR=" + (IsEditor ? "1" : "0"));
 
+            // All Source Code Module must be added here
             conf.AddPublicDependency<CoreProject>(target);
             conf.AddPublicDependency<LaunchProject>(target);
+            conf.AddPublicDependency<RALProject>(target);
         }
     }
 }

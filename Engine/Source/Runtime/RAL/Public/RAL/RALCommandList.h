@@ -55,6 +55,9 @@ public:
     virtual void SetBindGroup(uint32 SetIndex, FRALBindGroup* BindGroup) = 0;
 
 public:
+    virtual void SetPushConstants(EShaderStage Stage, const void* Data, uint32 Size) = 0;
+
+public:
     virtual void Draw(uint32 VertexCount, uint32 InstanceCount = 1, uint32 FirstInstance = 0) = 0;
     virtual void DrawIndexed(uint32 IndexCount, uint32 InstanceCount = 1, uint32 FirstIndex = 0, int32 VertextOffset = 0, uint32 FirstInstance = 0) = 0;
 };
