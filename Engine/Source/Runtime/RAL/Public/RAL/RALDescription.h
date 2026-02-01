@@ -3,8 +3,12 @@
 #include "CoreMinimal.h"
 #include "RALTypes.h"
 
+class FRALBuffer;
+class FRALShader;
+class FRALSampler;
 class FRALTexture;
 class FRALTextureView;
+class FRALBindGroupLayout;
 
 enum class EBufferUsageFlags : uint8
 {
@@ -41,11 +45,6 @@ struct FRALTextureDesc
     bool bIsRenderTarget = false;
     bool bIsDepthStencil = false;
     bool bIsShaderResource = false;
-};
-
-struct FRALSamplerDesc
-{
-    
 };
 
 struct FRALSwapchainDesc
@@ -153,4 +152,124 @@ struct FRALGraphicsPipelineDesc
     EPixelFormat RenderTargetFormats[8];
     uint32 RenderTargetCount = 0;
     EPixelFormat DepthStencilFormat = EPixelFormat::Unknown;
+};
+
+// ***********************************************************************************************
+// ************************************ Shader Relative ******************************************
+// ***********************************************************************************************
+
+struct FRALShaderResourceBinding
+{
+    uint32 Set = 0;
+    uint32 Binding = 0;
+    uint32 Count = 1;
+    EShaderResourceType Type = EShaderResourceType::UniformBuffer;
+    EShaderStage StageFlags = EShaderStage::None;
+};
+
+struct FRALShaderDesc
+{
+    FString Name;
+    EShaderStage Stage = EShaderStage::None;
+    std::vector<FRALShaderResourceBinding> Bindings;
+    const void* ByteCode = nullptr;
+    uint64 ByteCodeSize = 0;
+    FString EntryPoint = "main";
+};
+
+// ***********************************************************************************************
+// ********************************** Bind Group / Layout ****************************************
+// ***********************************************************************************************
+
+enum class ERALBindGroupItemType : uint8
+{
+    UniformBuffer,
+    StorageBuffer,
+    SampledImage,
+    StorageImage,
+    Sampler,
+    CombinedImageSampler,
+};
+
+struct FRALBindGroupLayoutItem
+{
+    uint32 Binding = 0;
+    uint32 Count = 1;
+    ERALBindGroupItemType Type = ERALBindGroupItemType::UniformBuffer;
+    EShaderStage StageFlags = EShaderStage::None;
+};
+
+struct FRALBindGroupLayoutDesc
+{
+    FString Name;
+    uint32 SetIndex = 0; // set in a shader
+    std::vector<FRALBindGroupLayoutItem> Bindings;
+};
+
+struct FRALBindGroupItem
+{
+    uint32 Binding = 0;
+
+    FRALBuffer* Buffer = nullptr;
+    FRALTextureView* TextureView = nullptr;
+    FRALSampler* Sampler = nullptr;
+
+    uint64 Offset = 0;
+    uint64 Range  = 0;
+};
+
+struct FRALBindGroupDesc
+{
+    FString Name;
+    FRALBindGroupLayout* Layout = nullptr;
+    std::vector<FRALBindGroupItem> Items;
+};
+
+// ***********************************************************************************************
+// **************************************** Sampler **********************************************
+// ***********************************************************************************************
+
+enum class ESamplerFilter : uint8
+{
+    Nearest,
+    Linear,
+};
+
+enum class ESamplerMipmapMode : uint8
+{
+    Nearest,
+    Linear,
+};
+
+enum class ESamplerAddressMode : uint8
+{
+    Repeat,
+    MirroredRepeat,
+    ClampToEdge,
+    ClampToBorder,
+};
+
+struct FRALSamplerDesc
+{
+    FString Name;
+
+    ESamplerFilter MinFilter = ESamplerFilter::Linear;
+    ESamplerFilter MagFilter = ESamplerFilter::Linear;
+    ESamplerMipmapMode MipmapMode = ESamplerMipmapMode::Linear;
+
+    ESamplerAddressMode AddressU = ESamplerAddressMode::Repeat;
+    ESamplerAddressMode AddressV = ESamplerAddressMode::Repeat;
+    ESamplerAddressMode AddressW = ESamplerAddressMode::Repeat;
+
+    float MipLODBias = 0.f;
+    float MinLOD = 0.f;
+    float MaxLOD = 32.f;
+
+    bool bEnableAnisotropic = false;
+    float MaxAnisotropy = 1.f;
+
+    bool bEnableCompare = false;
+    ECompareFunction CompareFunc = ECompareFunction::LessEqual;
+
+    float BorderColor[4] = { 0.f, 0.f, 0.f, 1.f };
 };

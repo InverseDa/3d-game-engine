@@ -6,7 +6,9 @@
 
 #include <vulkan/vulkan.h>
 
+#include "RAL/RALBindGroup.h"
 #include "RAL/RALCommandList.h"
+#include "RAL/RALSampler.h"
 
 #define PLATFORM_WINDOWS 1 // TODO: kodak
 
@@ -66,6 +68,17 @@ class RAL_API FVulkanRALDevice : public FRALDevice
 public:
     FVulkanRALDevice();
     virtual ~FVulkanRALDevice();
+
+public:
+    FRALBuffer* CreateBuffer(const FRALBufferDesc& Desc) override;
+    FRALTexture* CreateTexture(const FRALTextureDesc& Desc) override;
+    FRALShader* CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size) override;
+    FRALGraphicsPipeline* CreateGraphicsPipeline(const FRALGraphicsPipelineDesc& Desc) override;
+    FRALCommandList* CreateCommandList(EQueueType Type = EQueueType::Graphics) override;
+    FRALSwapchain* CreateSwapchain(const FRALSwapchainDesc& Desc) override;
+    FRALBindGroup* CreateBindGroup(const FRALBindGroupDesc& Desc) override;
+    FRALBindGroupLayout* CreateBindGroupLayout(const FRALBindGroupLayoutDesc& Desc) override;
+    FRALSampler* CreateSampler(const FRALSamplerDesc& Desc) override;
 
 public:
     FVulkanRALContext VkContext;
@@ -255,4 +268,52 @@ private:
 private:
     VkRenderPass InternalGetRenderPass(const FRALRenderPassDesc& Desc, bool bIsCreate = false);
     VkFramebuffer InternalGetFramebuffer(const FRALRenderPassDesc& Desc, VkRenderPass Pass, bool bIsCreate = false);
+};
+
+// ***********************************************************************************************
+// ********************************** Regular Math Calc ******************************************
+// ***********************************************************************************************
+
+class FVulkanRALSampler : public FRALSampler
+{
+public:
+    FVulkanRALSampler(FVulkanRALDevice* InDevice, const FRALSamplerDesc& InDesc);
+    ~FVulkanRALSampler() override;
+
+public:
+    const FRALSamplerDesc& GetDesc() const override { return this->Desc; }
+
+public:
+    VkSampler Handle = VK_NULL_HANDLE;
+
+private:
+    FVulkanRALDevice* Device;
+    FRALSamplerDesc Desc;
+};
+
+// ***********************************************************************************************
+// ********************************** Regular Math Calc ******************************************
+// ***********************************************************************************************
+
+#define GENERATE_VULKAN_RESOURCE_BODY(ClassName, VkHandleType, DescriptionType) \
+    public: \
+    ClassName(FVulkanRALDevice* InDevice, const DescriptionType& InDesc); \
+    ~ClassName() override; \
+    const DescriptionType& GetDesc() const override { return this->Desc; } \
+    VkHandleType Handle = VK_NULL_HANDLE; \
+    private: \
+    FVulkanRALDevice* Device; \
+    DescriptionType Desc;
+
+class FVulkanRALBindGroupLayout : public FRALBindGroupLayout
+{
+    GENERATE_VULKAN_RESOURCE_BODY(FVulkanRALBindGroupLayout, VkDescriptorSetLayout, FRALBindGroupLayoutDesc)
+};
+
+class FVulkanRALBindGroup : public FRALBindGroup
+{
+    GENERATE_VULKAN_RESOURCE_BODY(FVulkanRALBindGroup, VkDescriptorSet, FRALBindGroupDesc)
+
+public:
+    VkDescriptorPool Pool = VK_NULL_HANDLE;
 };

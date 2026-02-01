@@ -72,6 +72,17 @@ inline bool EnumHasAnyFlags(EShaderStage Value, EShaderStage Flags)
     return (static_cast<uint8>(Value) & static_cast<uint8>(Flags)) != 0;
 }
 
+enum class EShaderResourceType : uint8
+{
+    UniformBuffer,
+    StorageBuffer,
+    SampledImage,
+    StorageImage,
+    Sampler,
+    CombinedImageSampler,
+    AccelerationStructure,
+};
+
 enum class EResourceUsage : uint8
 {
     Local,      // GPU local memory only, the fastest access, CPU has not accessed to read

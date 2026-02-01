@@ -167,3 +167,18 @@ void FVulkanRALDevice::InternalSetupBindlessHeap()
     }
     vkAllocateDescriptorSets(this->VkContext.LogicalDevice, &AllocateInfo, &this->VkContext.BindlessDescriptorSet);
 }
+
+FRALSampler* FVulkanRALDevice::CreateSampler(const FRALSamplerDesc& Desc)
+{
+    return new FVulkanRALSampler(this, Desc);
+}
+
+FRALBindGroupLayout* FVulkanRALDevice::CreateBindGroupLayout(const FRALBindGroupLayoutDesc& Desc)
+{
+    return new FVulkanRALBindGroupLayout(this, Desc);
+}
+
+FRALBindGroup* FVulkanRALDevice::CreateBindGroup(const FRALBindGroupDesc& Desc)
+{
+    return new FVulkanRALBindGroup(this, Desc);
+}

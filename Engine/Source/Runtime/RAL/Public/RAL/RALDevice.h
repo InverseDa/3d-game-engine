@@ -7,10 +7,13 @@
 
 class FRALBuffer;
 class FRALShader;
+class FRALSampler;
 class FRALTexture;
 class FRALCommandList;
 class FRALSwapchain;
 class FRALGraphicsPipeline;
+class FRALBindGroup;
+class FRALBindGroupLayout;
 
 class RAL_API FRALDevice : public FRALResource
 {
@@ -27,6 +30,9 @@ public:
     virtual FRALGraphicsPipeline* CreateGraphicsPipeline(const FRALGraphicsPipelineDesc& Desc) = 0;
     virtual FRALCommandList* CreateCommandList(EQueueType Type = EQueueType::Graphics) = 0;
     virtual FRALSwapchain* CreateSwapchain(const FRALSwapchainDesc& Desc) = 0;
+    virtual FRALBindGroup* CreateBindGroup(const FRALBindGroupDesc& Desc) = 0;
+    virtual FRALBindGroupLayout* CreateBindGroupLayout(const FRALBindGroupLayoutDesc& Desc) = 0;
+    virtual FRALSampler* CreateSampler(const FRALSamplerDesc& Desc) = 0;
 
 public:
     virtual void* GetBindlessHeapGPUDescriptor() const = 0;
