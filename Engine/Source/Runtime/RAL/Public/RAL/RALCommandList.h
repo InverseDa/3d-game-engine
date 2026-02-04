@@ -8,7 +8,7 @@
 
 
 class FRALBuffer;
-class FRALGraphicsPipeline;
+class FRALPipeline_Graphics;
 class FRALBindGroup;
 class FRALTextureView;
 
@@ -44,7 +44,7 @@ public:
     virtual void EndRenderPass() = 0;
 
 public:
-    virtual void SetGraphicsPipeline(FRALGraphicsPipeline* Pipeline) = 0;
+    virtual void SetGraphicsPipeline(FRALPipeline_Graphics* Pipeline) = 0;
     virtual void SetViewport(const FRALViewport& Viewport) = 0;
     virtual void SetScissorRect(const FRALScissorRect& Scissor) = 0;
 

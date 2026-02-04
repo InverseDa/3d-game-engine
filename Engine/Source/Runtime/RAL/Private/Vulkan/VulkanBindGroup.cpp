@@ -1,7 +1,8 @@
 ﻿#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
 
-static VkShaderStageFlags ToVkStageFlags(EShaderStage StageFlags)
+namespace {
+VkShaderStageFlags ToVkStageFlags(EShaderStage StageFlags)
 {
     VkShaderStageFlags Flags = 0;
     if (EnumHasAnyFlags(StageFlags, EShaderStage::Vertex))   Flags |= VK_SHADER_STAGE_VERTEX_BIT;
@@ -15,7 +16,7 @@ static VkShaderStageFlags ToVkStageFlags(EShaderStage StageFlags)
     return Flags;
 }
 
-static VkDescriptorType ToVkDescriptorType(ERALBindGroupItemType Type)
+VkDescriptorType ToVkDescriptorType(ERALBindGroupItemType Type)
 {
     switch (Type)
     {
@@ -29,7 +30,7 @@ static VkDescriptorType ToVkDescriptorType(ERALBindGroupItemType Type)
     }
 }
 
-static void CollectPoolSize(const FRALBindGroupLayoutDesc& Desc, std::vector<VkDescriptorPoolSize>& OutPoolSizes)
+void CollectPoolSize(const FRALBindGroupLayoutDesc& Desc, std::vector<VkDescriptorPoolSize>& OutPoolSizes)
 {
     OutPoolSizes.clear();
 
@@ -57,9 +58,112 @@ static void CollectPoolSize(const FRALBindGroupLayoutDesc& Desc, std::vector<VkD
     }
 }
 
+const FRALBindGroupLayoutItem* FindLayoutItem(const FRALBindGroupLayoutDesc& LayoutDesc, uint32 Binding)
+{
+    for (const auto& Item : LayoutDesc.Bindings)
+    {
+        if (Item.Binding == Binding) return &Item;
+    }
+    return nullptr;
+}
+}
+
+static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, const FRALBindGroupDesc& Desc)
+{
+    const FRALBindGroupLayoutDesc& LayoutDesc = Desc.Layout->GetDesc();
+
+    std::vector<VkWriteDescriptorSet> Writes;
+    std::vector<VkDescriptorBufferInfo> BufferInfos;
+    std::vector<VkDescriptorImageInfo> ImageInfos;
+
+    Writes.reserve(Desc.Items.size());
+    BufferInfos.reserve(Desc.Items.size());
+    ImageInfos.reserve(Desc.Items.size());
+
+    for (const FRALBindGroupItem& Item : Desc.Items)
+    {
+        const FRALBindGroupLayoutItem* LayoutItem = FindLayoutItem(LayoutDesc, Item.Binding);
+        if (LayoutItem == nullptr)
+        {
+            continue;
+        }
+
+        VkWriteDescriptorSet Write{};
+        {
+            Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            Write.dstSet = Set;
+            Write.dstBinding = Item.Binding;
+            Write.dstArrayElement = 0;
+            Write.descriptorCount = 1;
+            Write.descriptorType = ToVkDescriptorType(LayoutItem->Type);
+        }
+
+        switch (LayoutItem->Type)
+        {
+            case ERALBindGroupItemType::UniformBuffer:
+            case ERALBindGroupItemType::StorageBuffer:
+            {
+                FVulkanRALBuffer* Buffer = static_cast<FVulkanRALBuffer*>(Item.Buffer);
+                VkDescriptorBufferInfo Info{};
+                {
+                    Info.buffer = Buffer->Handle;
+                    Info.offset = Item.Offset;
+                    Info.range = Item.Range == 0 ? VK_WHOLE_SIZE : Item.Range;
+                }
+                BufferInfos.emplace_back(Info);
+                Write.pBufferInfo = &BufferInfos.back();
+                break;
+            }
+            case ERALBindGroupItemType::SampledImage:
+            case ERALBindGroupItemType::StorageImage:
+            {
+                FVulkanRALTextureView* VkView = static_cast<FVulkanRALTextureView*>(Item.TextureView);
+                VkDescriptorImageInfo Info{};
+                {
+                    Info.imageView = VkView->View;
+                    Info.imageLayout = (LayoutItem->Type == ERALBindGroupItemType::StorageImage) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                }
+                ImageInfos.emplace_back(Info);
+                Write.pImageInfo = &ImageInfos.back();
+                break;
+            }
+            case ERALBindGroupItemType::Sampler:
+            {
+                FVulkanRALSampler* VkSampler = static_cast<FVulkanRALSampler*>(Item.Sampler);
+                VkDescriptorImageInfo Info{};
+                {
+                    Info.sampler = VkSampler->Handle;
+                }
+                ImageInfos.emplace_back(Info);
+                Write.pImageInfo = &ImageInfos.back();
+                break;
+            }
+            case ERALBindGroupItemType::CombinedImageSampler:
+            {
+                FVulkanRALTextureView* VkView = static_cast<FVulkanRALTextureView*>(Item.TextureView);
+                FVulkanRALSampler* VkSampler = static_cast<FVulkanRALSampler*>(Item.Sampler);
+                VkDescriptorImageInfo Info{};
+                {
+                    Info.sampler = VkSampler->Handle;
+                    Info.imageView = VkView->View;
+                    Info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                }
+                ImageInfos.emplace_back(Info);
+                Write.pImageInfo = &ImageInfos.back();
+                break;
+            }
+        }
+        Writes.emplace_back(Write);
+    }
+
+    if (Writes.empty() != true)
+    {
+        vkUpdateDescriptorSets(Device->VkContext.LogicalDevice, static_cast<uint32>(Writes.size()), Writes.data(), 0, nullptr);
+    }
+}
+
 FVulkanRALBindGroupLayout::FVulkanRALBindGroupLayout(FVulkanRALDevice* InDevice, const FRALBindGroupLayoutDesc& InDesc)
-    : Device(InDevice)
-    , Desc(InDesc)
+    : TVulkanResourceBase<FRALBindGroupLayoutDesc>(InDevice, InDesc)
 {
     std::vector<VkDescriptorSetLayoutBinding> Bindings{};
     Bindings.reserve(Desc.Bindings.size());
@@ -95,8 +199,7 @@ FVulkanRALBindGroupLayout::~FVulkanRALBindGroupLayout()
 }
 
 FVulkanRALBindGroup::FVulkanRALBindGroup(FVulkanRALDevice* InDevice, const FRALBindGroupDesc& InDesc)
-    : Device(InDevice)
-    , Desc(InDesc)
+    : TVulkanResourceBase<FRALBindGroupDesc>(InDevice, InDesc)
 {
     FVulkanRALBindGroupLayout* Layout = static_cast<FVulkanRALBindGroupLayout*>(Desc.Layout);
 
@@ -119,9 +222,9 @@ FVulkanRALBindGroup::FVulkanRALBindGroup(FVulkanRALDevice* InDevice, const FRALB
         AllocInfo.descriptorSetCount = 1;
         AllocInfo.pSetLayouts = &Layout->Handle;
     }
-    vkAllocateDescriptorSets(Device->VkContext.LogicalDevice, &AllocInfo, &this->Handle);
+    vkAllocateDescriptorSets(Device->VkContext.LogicalDevice, &AllocInfo, &this->Set);
 
-    // TODO: UpdateDescriptorSets func
+    UpdateDescriptorSets(Device, this->Set, this->Desc);
 }
 
 FVulkanRALBindGroup::~FVulkanRALBindGroup()
@@ -130,6 +233,6 @@ FVulkanRALBindGroup::~FVulkanRALBindGroup()
     {
         vkDestroyDescriptorPool(Device->VkContext.LogicalDevice, this->Pool, nullptr);
         this->Pool = VK_NULL_HANDLE;
-        this->Handle = VK_NULL_HANDLE; // Set
+        this->Set = VK_NULL_HANDLE; // Set
     }
 }

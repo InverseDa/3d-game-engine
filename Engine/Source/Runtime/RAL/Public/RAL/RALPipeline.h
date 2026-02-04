@@ -4,11 +4,11 @@
 #include "RALResource.h"
 #include "RALDescription.h"
 
-class RAL_API FRALGraphicsPipeline : public FRALResource
+class RAL_API FRALPipeline_Graphics : public FRALResource
 {
 public:
-    virtual ~FRALGraphicsPipeline() = default;
+    virtual ~FRALPipeline_Graphics() = default;
 
 public:
-    virtual const FRALGraphicsPipelineDesc& GetDesc() const = 0;
+    virtual const FRALPipelineDesc_Graphics& GetDesc() const = 0;
 };

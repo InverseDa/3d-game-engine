@@ -182,3 +182,18 @@ FRALBindGroup* FVulkanRALDevice::CreateBindGroup(const FRALBindGroupDesc& Desc)
 {
     return new FVulkanRALBindGroup(this, Desc);
 }
+
+FRALShader* FVulkanRALDevice::CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size)
+{
+    FRALShaderDesc Desc;
+    Desc.Stage = Stage;
+    Desc.ByteCode = Data;
+    Desc.ByteCodeSize = Size;
+    Desc.EntryPoint = "main";
+    return new FVulkanRALShader(this, Desc);
+}
+
+FRALPipeline_Graphics* FVulkanRALDevice::CreateGraphicsPipeline(const FRALPipelineDesc_Graphics& Desc)
+{
+    return new FVulkanRALPipeline_Graphics(this, Desc);
+}

@@ -9,6 +9,7 @@
 #include "RAL/RALBindGroup.h"
 #include "RAL/RALCommandList.h"
 #include "RAL/RALSampler.h"
+#include "RAL/RALShader.h"
 
 #define PLATFORM_WINDOWS 1 // TODO: kodak
 
@@ -42,6 +43,19 @@ namespace RAL
     }
 }
 
+class FVulkanRALDevice;
+class FVulkanRALPipeline_Graphics;
+
+template <typename TDesc>
+class TVulkanResourceBase
+{
+protected:
+    TVulkanResourceBase(FVulkanRALDevice* InDevice, const TDesc& InDesc): Device(InDevice), Desc(InDesc) {}
+
+    FVulkanRALDevice* Device = nullptr;
+    TDesc Desc;
+};
+
 // ***********************************************************************************************
 // **************************************** Device ***********************************************
 // ***********************************************************************************************
@@ -73,7 +87,7 @@ public:
     FRALBuffer* CreateBuffer(const FRALBufferDesc& Desc) override;
     FRALTexture* CreateTexture(const FRALTextureDesc& Desc) override;
     FRALShader* CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size) override;
-    FRALGraphicsPipeline* CreateGraphicsPipeline(const FRALGraphicsPipelineDesc& Desc) override;
+    FRALPipeline_Graphics* CreateGraphicsPipeline(const FRALPipelineDesc_Graphics& Desc) override;
     FRALCommandList* CreateCommandList(EQueueType Type = EQueueType::Graphics) override;
     FRALSwapchain* CreateSwapchain(const FRALSwapchainDesc& Desc) override;
     FRALBindGroup* CreateBindGroup(const FRALBindGroupDesc& Desc) override;
@@ -93,29 +107,6 @@ public:
 
 private:
     FRALQueue* GraphicsQueue = nullptr;
-};
-
-// ***********************************************************************************************
-// ********************************** Regular Math Calc ******************************************
-// ***********************************************************************************************
-
-class FVulkanRALTexture : public FRALTexture
-{
-    public:
-    VkImage Image = VK_NULL_HANDLE;
-    VkDeviceMemory Memory = VK_NULL_HANDLE;
-    FRALTextureDesc TextureDesc;
-
-    const FRALTextureDesc& GetDesc() const override { return this->TextureDesc; }
-};
-
-class FVulkanRALTextureView : public FRALTextureView
-{
-public:
-    FVulkanRALTexture* Owner = nullptr;
-    VkImageView View = VK_NULL_HANDLE;
-
-    FRALTexture* GetTexture() const override { return this->Owner; }
 };
 
 // ***********************************************************************************************
@@ -244,7 +235,7 @@ public:
     void SetScissorRect(const FRALScissorRect& Scissor) override;
 
 public:
-    void SetGraphicsPipeline(FRALGraphicsPipeline* Pipeline) override;
+    void SetGraphicsPipeline(FRALPipeline_Graphics* Pipeline) override;
 
 public:
     void SetVertexBuffer(uint32 Slot, FRALBuffer* Buffer, uint64 Offset) override;
@@ -263,10 +254,9 @@ private:
     VkCommandPool Pool = VK_NULL_HANDLE;
 
 private:
-    FVulkanRALGraphicsPipeline* CurrentPipeline = nullptr;
+    FVulkanRALPipeline_Graphics* CurrentPipeline = nullptr;
 
 private:
-    VkRenderPass InternalGetRenderPass(const FRALRenderPassDesc& Desc, bool bIsCreate = false);
     VkFramebuffer InternalGetFramebuffer(const FRALRenderPassDesc& Desc, VkRenderPass Pass, bool bIsCreate = false);
 };
 
@@ -295,25 +285,115 @@ private:
 // ********************************** Regular Math Calc ******************************************
 // ***********************************************************************************************
 
-#define GENERATE_VULKAN_RESOURCE_BODY(ClassName, VkHandleType, DescriptionType) \
-    public: \
-    ClassName(FVulkanRALDevice* InDevice, const DescriptionType& InDesc); \
-    ~ClassName() override; \
-    const DescriptionType& GetDesc() const override { return this->Desc; } \
-    VkHandleType Handle = VK_NULL_HANDLE; \
-    private: \
-    FVulkanRALDevice* Device; \
-    DescriptionType Desc;
-
-class FVulkanRALBindGroupLayout : public FRALBindGroupLayout
+class FVulkanRALBindGroupLayout : public FRALBindGroupLayout, public TVulkanResourceBase<FRALBindGroupLayoutDesc>
 {
-    GENERATE_VULKAN_RESOURCE_BODY(FVulkanRALBindGroupLayout, VkDescriptorSetLayout, FRALBindGroupLayoutDesc)
+public:
+    FVulkanRALBindGroupLayout(FVulkanRALDevice* InDevice, const FRALBindGroupLayoutDesc& InDesc);
+    ~FVulkanRALBindGroupLayout() override;
+
+public:
+    const FRALBindGroupLayoutDesc& GetDesc() const override { return this->Desc; }
+
+public:
+    VkDescriptorSetLayout Handle = VK_NULL_HANDLE;
 };
 
-class FVulkanRALBindGroup : public FRALBindGroup
+class FVulkanRALBindGroup : public FRALBindGroup, public TVulkanResourceBase<FRALBindGroupDesc>
 {
-    GENERATE_VULKAN_RESOURCE_BODY(FVulkanRALBindGroup, VkDescriptorSet, FRALBindGroupDesc)
+public:
+    FVulkanRALBindGroup(FVulkanRALDevice* InDevice, const FRALBindGroupDesc& InDesc);
+    ~FVulkanRALBindGroup() override;
+
+public:
+    const FRALBindGroupDesc& GetDesc() const override { return this->Desc; }
 
 public:
     VkDescriptorPool Pool = VK_NULL_HANDLE;
+    VkDescriptorSet Set = VK_NULL_HANDLE;
+};
+
+// ***********************************************************************************************
+// ********************************** Regular Math Calc ******************************************
+// ***********************************************************************************************
+
+class FVulkanRALShader : public FRALShader, public TVulkanResourceBase<FRALShaderDesc>
+{
+public:
+    FVulkanRALShader(FVulkanRALDevice* InDevice, const FRALShaderDesc& InDesc);
+    ~FVulkanRALShader() override;
+
+public:
+    const FRALShaderDesc& GetDesc() const override { return this->Desc; }
+
+public:
+    VkShaderModule Module = VK_NULL_HANDLE;
+};
+
+class FVulkanRALPipeline_Graphics : public FRALPipeline_Graphics, public TVulkanResourceBase<FRALPipelineDesc_Graphics>
+{
+public:
+    FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDevice, const FRALPipelineDesc_Graphics& InDesc);
+    ~FVulkanRALPipeline_Graphics() override;
+
+public:
+    const FRALPipelineDesc_Graphics& GetDesc() const override { return this->Desc; }
+
+public:
+    VkPipeline Pipeline = VK_NULL_HANDLE;
+    VkRenderPass RenderPass = VK_NULL_HANDLE;
+    VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
+};
+
+// ***********************************************************************************************
+// ********************************** Regular Math Calc ******************************************
+// ***********************************************************************************************
+
+class FVulkanRALBuffer : public FRALBuffer, public TVulkanResourceBase<FRALBufferDesc>
+{
+public:
+    FVulkanRALBuffer(FVulkanRALDevice* InDevice, const FRALBufferDesc& InDesc);
+    ~FVulkanRALBuffer() override;
+
+public:
+    const FRALBufferDesc& GetDesc() const override { return this->Desc; }
+
+public:
+    void* Map(uint64 Offset, uint64 Size) override;
+    void  Unmap() override;
+
+public:
+    VkBuffer Buffer = VK_NULL_HANDLE;
+    VkDeviceMemory Memory = VK_NULL_HANDLE;
+
+private:
+    void* MappedPtr = nullptr;
+};
+
+class FVulkanRALTexture : public FRALTexture, public TVulkanResourceBase<FRALTextureDesc>
+{
+public:
+    FVulkanRALTexture(FVulkanRALDevice* InDevice, const FRALTextureDesc& InDesc);
+    ~FVulkanRALTexture() override;
+    
+public:
+    const FRALTextureDesc& GetDesc() const override { return this->Desc; }
+
+public:
+    VkImage Image = VK_NULL_HANDLE;
+    VkDeviceMemory Memory = VK_NULL_HANDLE;
+};
+
+class FVulkanRALTextureView : public FRALTextureView, public TVulkanResourceBase<FRALTextureViewDesc>
+{
+public:
+    FVulkanRALTextureView(FVulkanRALDevice* InDevice, const FRALTextureViewDesc& InDesc);
+    ~FVulkanRALTextureView() override;
+    
+public:
+    FRALTexture* GetTexture() const override { return this->Owner; }
+    const FRALTextureViewDesc& GetDesc() const override { return this->Desc; }
+
+public:
+    FVulkanRALTexture* Owner = nullptr;
+    VkImageView View = VK_NULL_HANDLE;
 };

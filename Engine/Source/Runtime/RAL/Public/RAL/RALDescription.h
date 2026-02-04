@@ -133,7 +133,7 @@ struct FRALRasterizerStateDesc
     bool bFrontCounterClockwise = false;  // true: CCW is the right side (OpenGL Default); false: CW is the right side (DirectX Default)
 };
 
-struct FRALGraphicsPipelineDesc
+struct FRALPipelineDesc_Graphics
 {
     FString Name;
 
@@ -146,7 +146,8 @@ struct FRALGraphicsPipelineDesc
     FRALDepthStencilStateDesc DepthStencilState;
     FRALRasterizerStateDesc RasterizerState;
 
-    // TODO: kodak input layout
+    // BindGroup Layouts
+    std::vector<FRALBindGroupLayout*> BindGroupLayouts;
 
     // Render Target Format
     EPixelFormat RenderTargetFormats[8];

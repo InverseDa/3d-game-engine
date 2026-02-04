@@ -20,4 +20,6 @@ public:
 
 public:
     virtual FRALTexture* GetTexture() const = 0;
+    virtual const FRALTextureViewDesc& GetDesc() const = 0;
+    
 };
