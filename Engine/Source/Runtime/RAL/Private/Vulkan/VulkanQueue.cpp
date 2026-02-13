@@ -1,6 +1,17 @@
 ﻿#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
 
+FVulkanRALQueue::FVulkanRALQueue(FVulkanRALDevice* InDevice, uint32 FamilyIndex, uint32 QueueIndex)
+	: Device(InDevice)
+{
+	vkGetDeviceQueue(Device->VkContext.LogicalDevice, FamilyIndex, QueueIndex, &this->Handle);
+}
+
+void FVulkanRALQueue::WaitIdle()
+{
+	vkQueueWaitIdle(this->Handle);
+}
+
 void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
 {
     VkCommandBuffer CmdBufferHandle = VK_NULL_HANDLE;

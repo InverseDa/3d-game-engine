@@ -1,6 +1,55 @@
 ﻿#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
 
+FVulkanRALDevice::FVulkanRALDevice()
+{
+	this->InternalCreateInstance();
+	this->InternalSelectPhysicalDevice();
+	this->InternalCreateLogicalDevice();
+	this->InternalSetupBindlessHeap();
+
+	// Create graphics queue
+	this->GraphicsQueue = new FVulkanRALQueue(this, this->VkContext.GraphicsFamilyIndex, 0);
+}
+
+FVulkanRALDevice::~FVulkanRALDevice()
+{
+	// Clean up graphics queue
+	if (this->GraphicsQueue)
+	{
+		delete this->GraphicsQueue;
+		this->GraphicsQueue = nullptr;
+	}
+
+	// Clean up bindless resources
+	if (this->VkContext.BindlessDescriptorSet != VK_NULL_HANDLE)
+	{
+		// Descriptor sets are freed when pool is destroyed, no need to free individually
+	}
+	if (this->VkContext.BindlessPool != VK_NULL_HANDLE)
+	{
+		vkDestroyDescriptorPool(this->VkContext.LogicalDevice, this->VkContext.BindlessPool, nullptr);
+		this->VkContext.BindlessPool = VK_NULL_HANDLE;
+	}
+	if (this->VkContext.BindlessLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyDescriptorSetLayout(this->VkContext.LogicalDevice, this->VkContext.BindlessLayout, nullptr);
+		this->VkContext.BindlessLayout = VK_NULL_HANDLE;
+	}
+
+	// Clean up device and instance
+	if (this->VkContext.LogicalDevice != VK_NULL_HANDLE)
+	{
+		vkDestroyDevice(this->VkContext.LogicalDevice, nullptr);
+		this->VkContext.LogicalDevice = VK_NULL_HANDLE;
+	}
+	if (this->VkContext.Instance != VK_NULL_HANDLE)
+	{
+		vkDestroyInstance(this->VkContext.Instance, nullptr);
+		this->VkContext.Instance = VK_NULL_HANDLE;
+	}
+}
+
 void FVulkanRALDevice::InternalCreateInstance()
 {
     VkApplicationInfo AppInfo{};
@@ -17,10 +66,10 @@ void FVulkanRALDevice::InternalCreateInstance()
     {
         CreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         CreateInfo.pApplicationInfo = &AppInfo;
-        CreateInfo.enabledExtensionCount = static_cast<uint32>(RAL::Vulkan::InstanceExtensions.size());
-        CreateInfo.ppEnabledExtensionNames = RAL::Vulkan::InstanceExtensions.data();
-        CreateInfo.enabledLayerCount = static_cast<uint32>(RAL::Vulkan::InstanceLayers.size());
-        CreateInfo.ppEnabledLayerNames = RAL::Vulkan::InstanceLayers.data();
+        CreateInfo.enabledExtensionCount = RAL::Vulkan::InstanceExtensionCount;
+        CreateInfo.ppEnabledExtensionNames = RAL::Vulkan::InstanceExtensions;
+        CreateInfo.enabledLayerCount = RAL::Vulkan::InstanceLayerCount;
+        CreateInfo.ppEnabledLayerNames = RAL::Vulkan::InstanceLayers;
     }
 
     vkCreateInstance(&CreateInfo, nullptr, &this->VkContext.Instance);
@@ -98,10 +147,10 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
     {
         DeviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         DeviceInfo.pNext = &DeviceFeatures;
-        DeviceInfo.queueCreateInfoCount = 1; 
+        DeviceInfo.queueCreateInfoCount = 1;
         DeviceInfo.pQueueCreateInfos = &QueueInfo;
-        DeviceInfo.enabledExtensionCount = static_cast<uint32>(RAL::Vulkan::DeviceExtensions.size());
-        DeviceInfo.ppEnabledExtensionNames = RAL::Vulkan::DeviceExtensions.data();
+        DeviceInfo.enabledExtensionCount = RAL::Vulkan::DeviceExtensionCount;
+        DeviceInfo.ppEnabledExtensionNames = RAL::Vulkan::DeviceExtensions;
     }
     vkCreateDevice(this->VkContext.PhysicalDevice, &DeviceInfo, nullptr, &this->VkContext.LogicalDevice);
 }
@@ -196,4 +245,57 @@ FRALShader* FVulkanRALDevice::CreateShaderFromFile(EShaderStage Stage, const voi
 FRALPipeline_Graphics* FVulkanRALDevice::CreateGraphicsPipeline(const FRALPipelineDesc_Graphics& Desc)
 {
     return new FVulkanRALPipeline_Graphics(this, Desc);
+}
+
+FRALBuffer* FVulkanRALDevice::CreateBuffer(const FRALBufferDesc& Desc)
+{
+    return new FVulkanRALBuffer(this, Desc);
+}
+
+FRALTexture* FVulkanRALDevice::CreateTexture(const FRALTextureDesc& Desc)
+{
+    return new FVulkanRALTexture(this, Desc);
+}
+
+FRALCommandList* FVulkanRALDevice::CreateCommandList(EQueueType Type)
+{
+	return new FVulkanRALCommandList(this, Type);
+}
+
+FRALSwapchain* FVulkanRALDevice::CreateSwapchain(const FRALSwapchainDesc& Desc)
+{
+	return this->InternalCreateSwapchain(Desc);
+}
+
+FRALQueue* FVulkanRALDevice::GetGraphicsQueue() const
+{
+	return this->GraphicsQueue;
+}
+
+void* FVulkanRALDevice::GetBindlessHeapGPUDescriptor() const
+{
+	return reinterpret_cast<void*>(this->VkContext.BindlessDescriptorSet);
+}
+
+uint32 FVulkanRALDevice::AllocateBindlessIndex(FRALResource* Resource)
+{
+	// TODO: kodak - Implement proper bindless index allocation
+	// For now, return a placeholder index
+	// This needs a proper allocation strategy (free list, etc.)
+	static uint32 NextIndex = 0;
+	return NextIndex++;
+}
+
+// ***********************************************************************************************
+// ********************************** Factory Function *******************************************
+// ***********************************************************************************************
+
+namespace RAL
+{
+	FRALDevice* CreateDevice()
+	{
+		// For now, always create Vulkan device
+		// TODO: kodak - Add platform selection logic (D3D12, OpenGL, etc.)
+		return new FVulkanRALDevice();
+	}
 }

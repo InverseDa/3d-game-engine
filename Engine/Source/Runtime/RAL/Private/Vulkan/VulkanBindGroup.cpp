@@ -103,10 +103,10 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
             case ERALBindGroupItemType::UniformBuffer:
             case ERALBindGroupItemType::StorageBuffer:
             {
-                FVulkanRALBuffer* Buffer = static_cast<FVulkanRALBuffer*>(Item.Buffer);
+                FVulkanRALBuffer* VkBuffer = static_cast<FVulkanRALBuffer*>(Item.Buffer);
                 VkDescriptorBufferInfo Info{};
                 {
-                    Info.buffer = Buffer->Handle;
+                    Info.buffer = VkBuffer->Buffer;
                     Info.offset = Item.Offset;
                     Info.range = Item.Range == 0 ? VK_WHOLE_SIZE : Item.Range;
                 }

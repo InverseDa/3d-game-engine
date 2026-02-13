@@ -14,11 +14,22 @@ FVulkanRALCommandList::FVulkanRALCommandList(FVulkanRALDevice* InDevice, EQueueT
 
     VkCommandBufferAllocateInfo AllocateInfo{};
     {
+        AllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         AllocateInfo.commandPool = this->Pool;
         AllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         AllocateInfo.commandBufferCount = 1;
     }
     vkAllocateCommandBuffers(this->Device->VkContext.LogicalDevice, &AllocateInfo, &this->Handle);
+}
+
+FVulkanRALCommandList::~FVulkanRALCommandList()
+{
+    // Command buffers are automatically freed when pool is destroyed
+    if (this->Pool != VK_NULL_HANDLE)
+    {
+        vkDestroyCommandPool(this->Device->VkContext.LogicalDevice, this->Pool, nullptr);
+        this->Pool = VK_NULL_HANDLE;
+    }
 }
 
 void FVulkanRALCommandList::Begin()
@@ -112,6 +123,45 @@ void FVulkanRALCommandList::SetBindGroup(uint32 SetIndex, FRALBindGroup* BindGro
         0,
         nullptr
     );
+}
+
+void FVulkanRALCommandList::EndRenderPass()
+{
+    vkCmdEndRenderPass(this->Handle);
+}
+
+void FVulkanRALCommandList::SetVertexBuffer(uint32 Slot, FRALBuffer* Buffer, uint64 Offset)
+{
+    const FVulkanRALBuffer* VkRALBuffer = static_cast<FVulkanRALBuffer*>(Buffer);
+    VkBuffer BufferHandle = VkRALBuffer->Buffer;
+    VkDeviceSize VkOffset = Offset;
+    vkCmdBindVertexBuffers(this->Handle, Slot, 1, &BufferHandle, &VkOffset);
+}
+
+void FVulkanRALCommandList::SetIndexBuffer(FRALBuffer* Buffer, uint64 Offset, EPixelFormat IndexFormat)
+{
+    const FVulkanRALBuffer* VkRALBuffer = static_cast<FVulkanRALBuffer*>(Buffer);
+    VkIndexType IndexType = (IndexFormat == EPixelFormat::R32_UINT) ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+    vkCmdBindIndexBuffer(this->Handle, VkRALBuffer->Buffer, Offset, IndexType);
+}
+
+void FVulkanRALCommandList::Draw(uint32 VertexCount, uint32 InstanceCount, uint32 FirstInstance)
+{
+    vkCmdDraw(this->Handle, VertexCount, InstanceCount, 0, FirstInstance);
+}
+
+void FVulkanRALCommandList::SetPushConstants(EShaderStage Stage, const void* Data, uint32 Size)
+{
+    // Map EShaderStage to VkShaderStageFlags
+    VkShaderStageFlags StageFlags = 0;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Vertex))   StageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Pixel))    StageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Compute))  StageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Geometry)) StageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Hull))     StageFlags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Domain))   StageFlags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+
+    vkCmdPushConstants(this->Handle, this->CurrentPipeline->PipelineLayout, StageFlags, 0, Size, Data);
 }
 
 

@@ -1,41 +1,44 @@
 ﻿#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
 
-static uint32 FindMemoryTypeIndex(VkPhysicalDevice PhysDev, uint32 TypeBits, VkMemoryPropertyFlags Props)
+namespace
 {
-    VkPhysicalDeviceMemoryProperties MemProps;
-    vkGetPhysicalDeviceMemoryProperties(PhysDev, &MemProps);
-
-    for (uint32 i = 0; i < MemProps.memoryTypeCount; ++i)
+    uint32 FindMemoryTypeIndex(VkPhysicalDevice PhysDev, uint32 TypeBits, VkMemoryPropertyFlags Props)
     {
-        if ((TypeBits & (1u << i)) && (MemProps.memoryTypes[i].propertyFlags & Props) == Props)
-            return i;
+        VkPhysicalDeviceMemoryProperties MemProps;
+        vkGetPhysicalDeviceMemoryProperties(PhysDev, &MemProps);
+
+        for (uint32 i = 0; i < MemProps.memoryTypeCount; ++i)
+        {
+            if ((TypeBits & (1u << i)) && (MemProps.memoryTypes[i].propertyFlags & Props) == Props)
+                return i;
+        }
+        return 0;
     }
-    return 0;
-}
 
-static VkBufferUsageFlags ToVkBufferUsage(uint32 UsageFlags)
-{
-    VkBufferUsageFlags Flags = 0;
-    if (UsageFlags & (uint32)EBufferUsageFlags::VertexBuffer)  Flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    if (UsageFlags & (uint32)EBufferUsageFlags::IndexBuffer)   Flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    if (UsageFlags & (uint32)EBufferUsageFlags::UniformBuffer) Flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    if (UsageFlags & (uint32)EBufferUsageFlags::StorageBuffer) Flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    if (UsageFlags & (uint32)EBufferUsageFlags::IndirectArgs)  Flags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    if (UsageFlags & (uint32)EBufferUsageFlags::TransferSrc)   Flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    if (UsageFlags & (uint32)EBufferUsageFlags::TransferDst)   Flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    return Flags;
-}
-
-static VkMemoryPropertyFlags ToVkMemoryProps(EResourceUsage Usage)
-{
-    switch (Usage)
+    VkBufferUsageFlags ToVkBufferUsage(uint32 UsageFlags)
     {
-    case EResourceUsage::Upload:    return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    case EResourceUsage::Readback:  return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-    case EResourceUsage::Local:     return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        VkBufferUsageFlags Flags = 0;
+        if (UsageFlags & (uint32)EBufferUsageFlags::VertexBuffer)  Flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        if (UsageFlags & (uint32)EBufferUsageFlags::IndexBuffer)   Flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        if (UsageFlags & (uint32)EBufferUsageFlags::UniformBuffer) Flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        if (UsageFlags & (uint32)EBufferUsageFlags::StorageBuffer) Flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        if (UsageFlags & (uint32)EBufferUsageFlags::IndirectArgs)  Flags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+        if (UsageFlags & (uint32)EBufferUsageFlags::TransferSrc)   Flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        if (UsageFlags & (uint32)EBufferUsageFlags::TransferDst)   Flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        return Flags;
     }
-    return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    VkMemoryPropertyFlags ToVkMemoryProps(EResourceUsage Usage)
+    {
+        switch (Usage)
+        {
+        case EResourceUsage::Upload:    return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        case EResourceUsage::Readback:  return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+        case EResourceUsage::Local:     return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        }
+        return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    }
 }
 
 FVulkanRALBuffer::FVulkanRALBuffer(FVulkanRALDevice* InDevice, const FRALBufferDesc& InDesc)

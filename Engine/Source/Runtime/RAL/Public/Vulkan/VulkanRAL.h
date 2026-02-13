@@ -25,24 +25,39 @@ namespace RAL
 {
     namespace Vulkan
     {
-        static constexpr std::vector<const char*> DeviceExtensions = {
+        static const char* const DeviceExtensions[] = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
         };
-        static constexpr std::vector<const char*> InstanceExtensions = {
+        static const uint32 DeviceExtensionCount = 1;
+
+        static const char* const InstanceExtensions[] = {
             VK_KHR_SURFACE_EXTENSION_NAME,
 #if PLATFORM_WINDOWS
             VK_KHR_WIN32_SURFACE_EXTENSION_NAME
 #endif
         };
-        static constexpr std::vector<const char*> InstanceLayers = {
-#if LE_RAL_ENABLE_VALIDATION
-            "VK_LAYER_KHRONOS_validation",
+#if PLATFORM_WINDOWS
+        static const uint32 InstanceExtensionCount = 2;
+#else
+        static const uint32 InstanceExtensionCount = 1;
 #endif
+
+#if LE_RAL_ENABLE_VALIDATION
+        static const char* const InstanceLayers[] = {
+            "VK_LAYER_KHRONOS_validation"
         };
-        static constexpr uint32 MaxBindlessDescriptorCount = 1e6;
+        static const uint32 InstanceLayerCount = 1;
+#else
+        static const char* const InstanceLayers[] = { nullptr };
+        static const uint32 InstanceLayerCount = 0;
+#endif
+
+        static const uint32 MaxBindlessDescriptorCount = 1000000;
     }
 }
 
+class FVulkanRALTexture;
+class FVulkanRALTextureView;
 class FVulkanRALDevice;
 class FVulkanRALPipeline_Graphics;
 
@@ -82,6 +97,11 @@ class RAL_API FVulkanRALDevice : public FRALDevice
 public:
     FVulkanRALDevice();
     virtual ~FVulkanRALDevice();
+
+public:
+    FRALQueue* GetGraphicsQueue() const override;
+    void* GetBindlessHeapGPUDescriptor() const override;
+    uint32 AllocateBindlessIndex(FRALResource* Resource) override;
 
 public:
     FRALBuffer* CreateBuffer(const FRALBufferDesc& Desc) override;
@@ -241,6 +261,7 @@ public:
     void SetVertexBuffer(uint32 Slot, FRALBuffer* Buffer, uint64 Offset) override;
     void SetIndexBuffer(FRALBuffer* Buffer, uint64 Offset, EPixelFormat IndexFormat) override;
     void SetBindGroup(uint32 SetIndex, FRALBindGroup* BindGroup) override;
+    void SetPushConstants(EShaderStage Stage, const void* Data, uint32 Size) override;
 
 public:
     void Draw(uint32 VertexCount, uint32 InstanceCount, uint32 FirstInstance) override;
@@ -373,22 +394,26 @@ class FVulkanRALTexture : public FRALTexture, public TVulkanResourceBase<FRALTex
 {
 public:
     FVulkanRALTexture(FVulkanRALDevice* InDevice, const FRALTextureDesc& InDesc);
+    FVulkanRALTexture(FVulkanRALDevice* InDevice, const FRALTextureDesc& InDesc, VkImage InImage, bool bInOwnsImage);
     ~FVulkanRALTexture() override;
-    
+
 public:
     const FRALTextureDesc& GetDesc() const override { return this->Desc; }
 
 public:
     VkImage Image = VK_NULL_HANDLE;
     VkDeviceMemory Memory = VK_NULL_HANDLE;
-};
 
+private:
+    bool bOwnsImage = true;
+};
 class FVulkanRALTextureView : public FRALTextureView, public TVulkanResourceBase<FRALTextureViewDesc>
 {
 public:
     FVulkanRALTextureView(FVulkanRALDevice* InDevice, const FRALTextureViewDesc& InDesc);
+    FVulkanRALTextureView(FVulkanRALDevice* InDevice, FVulkanRALTexture* InOwner, VkImageView InView, const FRALTextureViewDesc& InDesc);
     ~FVulkanRALTextureView() override;
-    
+
 public:
     FRALTexture* GetTexture() const override { return this->Owner; }
     const FRALTextureViewDesc& GetDesc() const override { return this->Desc; }
@@ -396,4 +421,7 @@ public:
 public:
     FVulkanRALTexture* Owner = nullptr;
     VkImageView View = VK_NULL_HANDLE;
+
+private:
+    void InitTextureView(FVulkanRALTexture* InOwner, VkImageView InViewHandle);
 };

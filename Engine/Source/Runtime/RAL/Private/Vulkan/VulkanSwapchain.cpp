@@ -1,8 +1,9 @@
 ﻿#include "CoreMinimal.h"
-#include "Vulkan/VulkanRAL.h"
 
-#include <windef.h>
-#include <libloaderapi.h>
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+
+#include "Vulkan/VulkanRAL.h"
 
 FVulkanRALSwapchain::FVulkanRALSwapchain(FVulkanRALDevice* InDevice, const FRALSwapchainDesc& InDesc)
     : FRALSwapchain()
@@ -62,7 +63,7 @@ void FVulkanRALSwapchain::InternalCreateSwapchain()
 
     VkSwapchainCreateInfoKHR CreateInfo{};
     {
-        CreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_GROUP_SWAPCHAIN_CREATE_INFO_KHR;
+        CreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         CreateInfo.surface = this->SurfaceHandle;
         CreateInfo.minImageCount = MinImageCount;
         CreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_SRGB; // 简化处理，实际应通过 vkGetPhysicalDeviceSurfaceFormatsKHR 查询
@@ -99,14 +100,20 @@ void FVulkanRALSwapchain::InternalCreateImageViews()
 
     for (uint32 i = 0; i < ImageCount; ++i)
     {
-        FVulkanRALTexture* Texture = new FVulkanRALTexture();
+        FRALTextureDesc TextureDesc;
         {
-            Texture->Image = this->Images[i];
-            Texture->TextureDesc.Width = Desc.Width;
-            Texture->TextureDesc.Height = Desc.Height;
-            Texture->TextureDesc.Format = EPixelFormat::B8G8R8A8_SRGB;
-            this->BackBufferTextures[i] = Texture;
+            TextureDesc.Width = Desc.Width;
+            TextureDesc.Height = Desc.Height;
+            TextureDesc.Depth = 1;
+            TextureDesc.MipLevels = 1;
+            TextureDesc.ArrayLayers = 1;
+            TextureDesc.Format = Desc.BackBufferFormat;
+            TextureDesc.bIsRenderTarget = true;
+            TextureDesc.bIsShaderResource = true;
         }
+        FVulkanRALTexture* Texture = new FVulkanRALTexture(this->Device, TextureDesc, this->Images[i], false);
+        this->BackBufferTextures[i] = Texture;
+
         VkImageViewCreateInfo ViewInfo{};
         {
             ViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -127,12 +134,12 @@ void FVulkanRALSwapchain::InternalCreateImageViews()
         {
             vkCreateImageView(this->Device->VkContext.LogicalDevice, &ViewInfo, nullptr, &ViewHandle);
         }
-        FVulkanRALTextureView* View = new FVulkanRALTextureView();
+        FRALTextureViewDesc ViewDesc;
         {
-            View->View = ViewHandle;
-            View->Owner = Texture;
-            this->BackBufferViews[i] = View;
+            ViewDesc.Texture = Texture;
         }
+        FVulkanRALTextureView* View = new FVulkanRALTextureView(this->Device, Texture, ViewHandle, ViewDesc);
+        this->BackBufferViews[i] = View;
     }
 }
 
@@ -140,7 +147,6 @@ void FVulkanRALSwapchain::InternalDestroySwapchainResources()
 {
     for (auto* View : BackBufferViews)
     {
-        vkDestroyImageView(Device->VkContext.LogicalDevice, View->View, nullptr);
         delete View;
     }
     BackBufferViews.clear();
@@ -166,7 +172,7 @@ void FVulkanRALSwapchain::AcquireNextImage()
         UINT64_MAX,
         this->ImageAvailableSemaphore,
         VK_NULL_HANDLE,
-        &this->CurrentBackBufferIndex
+        &this->CurrentImageIndex
     );
     if (Result == VK_ERROR_OUT_OF_DATE_KHR)
     {
@@ -180,9 +186,9 @@ void FVulkanRALSwapchain::AcquireNextImage()
 
 FRALTextureView* FVulkanRALSwapchain::GetCurrentBackBufferView() const
 {
-    if (this->CurrentBackBufferIndex < BackBufferViews.size())
+    if (this->CurrentImageIndex < BackBufferViews.size())
     {
-        return BackBufferViews[CurrentBackBufferIndex];
+        return BackBufferViews[CurrentImageIndex];
     }
     return nullptr;
 }
@@ -212,9 +218,11 @@ void FVulkanRALSwapchain::Present()
         VkSwapchainKHR Swapchains[] = { this->SwapchainHandle };
         PresentInfo.swapchainCount = 1;
         PresentInfo.pSwapchains = Swapchains;
-        PresentInfo.pImageIndices = &this->CurrentBackBufferIndex;
+        PresentInfo.pImageIndices = &this->CurrentImageIndex;
 
-        auto Result = vkQueuePresentKHR(this->Device->GetGraphicsQueueHandle(), &PresentInfo);
+        VkQueue GraphicsQueue = VK_NULL_HANDLE;
+        vkGetDeviceQueue(this->Device->VkContext.LogicalDevice, this->Device->VkContext.GraphicsFamilyIndex, 0, &GraphicsQueue);
+        auto Result = vkQueuePresentKHR(GraphicsQueue, &PresentInfo);
         if (Result == VK_ERROR_OUT_OF_DATE_KHR || Result == VK_SUBOPTIMAL_KHR)
         {
             this->Resize(Desc.Width, Desc.Height);
