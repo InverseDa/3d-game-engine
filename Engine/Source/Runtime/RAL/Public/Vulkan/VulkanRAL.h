@@ -100,7 +100,7 @@ public:
     VkDescriptorSet BindlessDescriptorSet = VK_NULL_HANDLE;
 };
 
-class RAL_API FVulkanRALDevice : public FRALDevice
+class FVulkanRALDevice : public FRALDevice
 {
 public:
     FVulkanRALDevice();
@@ -141,7 +141,7 @@ private:
 // ********************************** Regular Math Calc ******************************************
 // ***********************************************************************************************
 
-class RAL_API FVulkanRALSwapchain : public FRALSwapchain
+class FVulkanRALSwapchain : public FRALSwapchain
 {
 public:
     FVulkanRALSwapchain(FVulkanRALDevice* InDevice, const FRALSwapchainDesc& InDesc);
@@ -169,7 +169,8 @@ private:
     FRALSwapchainDesc Desc;
 
 private:
-    VkFence AcquireFence = VK_NULL_HANDLE;
+    VkSemaphore ImageAvailableSemaphore = VK_NULL_HANDLE;
+    VkSemaphore RenderFinishedSemaphore = VK_NULL_HANDLE;
 
 private:
     void InternalCreateSurface();

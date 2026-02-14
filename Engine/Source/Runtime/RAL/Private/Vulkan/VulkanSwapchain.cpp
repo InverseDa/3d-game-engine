@@ -12,12 +12,12 @@ FVulkanRALSwapchain::FVulkanRALSwapchain(FVulkanRALDevice* InDevice, const FRALS
 {
     this->InternalCreateSurface();
 
-    VkFenceCreateInfo FenceInfo{};
+    VkSemaphoreCreateInfo SemaphoreInfo{};
     {
-        FenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        FenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        SemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     }
-    vkCreateFence(this->Device->VkContext.LogicalDevice, &FenceInfo, nullptr, &this->AcquireFence);
+    vkCreateSemaphore(this->Device->VkContext.LogicalDevice, &SemaphoreInfo, nullptr, &this->ImageAvailableSemaphore);
+    vkCreateSemaphore(this->Device->VkContext.LogicalDevice, &SemaphoreInfo, nullptr, &this->RenderFinishedSemaphore);
 
     this->InternalCreateSwapchain();
     this->InternalCreateImageViews();
@@ -31,11 +31,8 @@ FVulkanRALSwapchain::~FVulkanRALSwapchain()
     vkDeviceWaitIdle(this->Device->VkContext.LogicalDevice);
     this->InternalDestroySwapchainResources();
 
-    if (this->AcquireFence != VK_NULL_HANDLE)
-    {
-        vkDestroyFence(this->Device->VkContext.LogicalDevice, this->AcquireFence, nullptr);
-        this->AcquireFence = VK_NULL_HANDLE;
-    }
+    vkDestroySemaphore(this->Device->VkContext.LogicalDevice, this->ImageAvailableSemaphore, nullptr);
+    vkDestroySemaphore(this->Device->VkContext.LogicalDevice, this->RenderFinishedSemaphore, nullptr);
     vkDestroySurfaceKHR(this->Device->VkContext.Instance, this->SurfaceHandle, nullptr);
 }
 
@@ -169,14 +166,12 @@ void FVulkanRALSwapchain::InternalDestroySwapchainResources()
 
 void FVulkanRALSwapchain::AcquireNextImage()
 {
-    vkResetFences(this->Device->VkContext.LogicalDevice, 1, &this->AcquireFence);
-
     const VkResult Result = vkAcquireNextImageKHR(
         this->Device->VkContext.LogicalDevice,
         SwapchainHandle,
         UINT64_MAX,
+        this->ImageAvailableSemaphore,
         VK_NULL_HANDLE,
-        this->AcquireFence,
         &this->CurrentImageIndex
     );
     if (Result == VK_ERROR_OUT_OF_DATE_KHR)
@@ -189,8 +184,28 @@ void FVulkanRALSwapchain::AcquireNextImage()
         // Handle Error
         return;
     }
+    
+    VkQueue GraphicsQueue = VK_NULL_HANDLE;
+    vkGetDeviceQueue(this->Device->VkContext.LogicalDevice, this->Device->VkContext.GraphicsFamilyIndex, 0, &GraphicsQueue);
 
-    vkWaitForFences(this->Device->VkContext.LogicalDevice, 1, &this->AcquireFence, VK_TRUE, UINT64_MAX);
+    // Consume acquire semaphore on the graphics queue so the next acquire can legally reuse it.
+    VkPipelineStageFlags WaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo SubmitInfo{};
+    {
+        SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        SubmitInfo.waitSemaphoreCount = 1;
+        SubmitInfo.pWaitSemaphores = &this->ImageAvailableSemaphore;
+        SubmitInfo.pWaitDstStageMask = &WaitStage;
+        SubmitInfo.commandBufferCount = 0;
+        SubmitInfo.pCommandBuffers = nullptr;
+        SubmitInfo.signalSemaphoreCount = 0;
+        SubmitInfo.pSignalSemaphores = nullptr;
+    }
+    const VkResult SubmitResult = vkQueueSubmit(GraphicsQueue, 1, &SubmitInfo, VK_NULL_HANDLE);
+    if (SubmitResult != VK_SUCCESS)
+    {
+        // Handle Error
+    }
 }
 
 FRALTextureView* FVulkanRALSwapchain::GetCurrentBackBufferView() const
@@ -249,7 +264,3 @@ void FVulkanRALSwapchain::Present()
         this->AcquireNextImage();
     }
 }
-
-
-
-
