@@ -3,19 +3,26 @@
 #include "CoreMinimal.h"
 #include "RAL/RALDevice.h"
 #include "RAL/RALSwapchain.h"
-
-#include <vulkan/vulkan.h>
-
 #include "RAL/RALBindGroup.h"
 #include "RAL/RALCommandList.h"
 #include "RAL/RALSampler.h"
 #include "RAL/RALShader.h"
 
-#define PLATFORM_WINDOWS 1 // TODO: kodak
+// Windows.h must be included before vulkan_win32.h to define HANDLE, HWND, etc.
+// Include it AFTER all RAL headers to avoid macro pollution
+#if PLATFORM_WINDOWS
+    #define WIN32_LEAN_AND_MEAN
+    #define NOMINMAX
+    #include <Windows.h>
+#endif
+
+#include <vulkan/vulkan.h>
 
 #if PLATFORM_WINDOWS
 #include <vulkan/vulkan_win32.h>
 #endif
+
+#include <unordered_map>
 
 #if PLATFORM_WINDOWS
 #define VK_USE_PLATFORM_WIN32_KHR 1
@@ -87,6 +94,7 @@ public:
 
 public:
     // ====== Bindless
+    bool bBindlessSupported = false;
     VkDescriptorPool BindlessPool = VK_NULL_HANDLE;
     VkDescriptorSetLayout BindlessLayout = VK_NULL_HANDLE;
     VkDescriptorSet BindlessDescriptorSet = VK_NULL_HANDLE;
@@ -276,6 +284,7 @@ private:
 
 private:
     FVulkanRALPipeline_Graphics* CurrentPipeline = nullptr;
+    std::unordered_map<uint64, VkFramebuffer> FramebufferCache;
 
 private:
     VkFramebuffer InternalGetFramebuffer(const FRALRenderPassDesc& Desc, VkRenderPass Pass, bool bIsCreate = false);

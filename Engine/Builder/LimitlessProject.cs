@@ -47,6 +47,9 @@ namespace Limitless
             conf.AddPublicDependency<CoreProject>(target);
             conf.AddPublicDependency<LaunchProject>(target);
             conf.AddPublicDependency<RALProject>(target);
+
+            // Keep source/execution charset consistent for the executable project too.
+            conf.AdditionalCompilerOptions.Add("/utf-8");
         }
     }
 }

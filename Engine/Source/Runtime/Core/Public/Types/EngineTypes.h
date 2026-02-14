@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iosfwd>
 #include <string>
 
 #if LE_USE_GLM
@@ -46,50 +47,31 @@ class CORE_API FString
     using UWString = std::string ; // Unwrapped String, temporary use std::string
 
 public:
-    FString() = default;
-    FString(const UWString& InString) : Real(InString) {}
-    FString(const char*     InString) : Real(InString) {}
+    FString();
+    FString(const UWString& InString);
+    FString(const char* InString);
+    FString(const FString& Other);
+    FString(FString&& Other) noexcept;
+    ~FString();
 
-    FString(const FString& Other) : Real(Other.Real) {}
-    FString(FString&& Other) noexcept : Real(std::move(Other.Real)) {}
-
-    FString& operator=(const FString& Other)
-    {
-        Real = Other.Real;
-        return *this;
-    }
-
-    FString& operator=(FString&& Other) noexcept {
-        Real = std::move(Other.Real);
-        return *this;
-    }
+    FString& operator=(const FString& Other);
+    FString& operator=(FString&& Other) noexcept;
 
 public:
-    const char* operator*() const { return Real.c_str(); }
-    const char* GetData() const { return Real.c_str(); }
+    const char* operator*() const;
+    const char* GetData() const;
 
-    bool IsEmpty() const { return Real.empty(); }
-    int32 Length() const { return static_cast<int32>(Real.length()); }
+    bool IsEmpty() const;
+    int32 Length() const;
 
 public:
-    FString operator+(const FString& Other) const
-    {
-        return FString(this->Real + Other.Real); 
-    }
-    
-    FString& operator+=(const FString& Other)
-    {
-        Real += Other.Real;
-        return *this;
-    }
+    FString operator+(const FString& Other) const;
+    FString& operator+=(const FString& Other);
 
-    bool operator==(const FString& Other) const { return Real == Other.Real; }
-    bool operator!=(const FString& Other) const { return Real != Other.Real; }
+    bool operator==(const FString& Other) const;
+    bool operator!=(const FString& Other) const;
 
-    friend std::ostream& operator<<(std::ostream& Os, const FString& Str) {
-        Os << Str.Real;
-        return Os;
-    }
+    friend CORE_API std::ostream& operator<<(std::ostream& Os, const FString& Str);
     
 private:
     UWString Real;

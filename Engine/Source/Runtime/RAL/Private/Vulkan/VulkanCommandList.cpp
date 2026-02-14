@@ -24,6 +24,13 @@ FVulkanRALCommandList::FVulkanRALCommandList(FVulkanRALDevice* InDevice, EQueueT
 
 FVulkanRALCommandList::~FVulkanRALCommandList()
 {
+    // 销毁缓存的 Framebuffer
+    for (auto& Pair : this->FramebufferCache)
+    {
+        vkDestroyFramebuffer(this->Device->VkContext.LogicalDevice, Pair.second, nullptr);
+    }
+    this->FramebufferCache.clear();
+
     // Command buffers are automatically freed when pool is destroyed
     if (this->Pool != VK_NULL_HANDLE)
     {
@@ -49,8 +56,24 @@ void FVulkanRALCommandList::End()
 
 void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
 {
+    if (this->CurrentPipeline == nullptr || this->CurrentPipeline->RenderPass == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
     VkRenderPass RenderPass = this->CurrentPipeline->RenderPass;
     VkFramebuffer Framebuffer = this->InternalGetFramebuffer(Desc, RenderPass, true);
+
+    // 获取渲染区域尺寸
+    uint32 Width = 0, Height = 0;
+    if (Desc.ColorAttachmentCount > 0)
+    {
+        FVulkanRALTextureView* View = static_cast<FVulkanRALTextureView*>(
+            Desc.ColorAttachments[0].RenderTarget);
+        const FRALTextureDesc& TexDesc = View->Owner->GetDesc();
+        Width = TexDesc.Width;
+        Height = TexDesc.Height;
+    }
 
     std::vector<VkClearValue> ClearValues;
     // TODO: kodak
@@ -64,7 +87,7 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         Info.renderPass = RenderPass;
         Info.framebuffer = Framebuffer;
         Info.renderArea.offset = { 0, 0 };
-        Info.renderArea.extent = { 0, 0 }; // TODO: kodak
+        Info.renderArea.extent = { Width, Height };
         Info.clearValueCount = 1;
         Info.pClearValues = &ColorClear;
     }
@@ -78,8 +101,16 @@ void FVulkanRALCommandList::DrawIndexed(uint32 IndexCount, uint32 InstanceCount,
 
 void FVulkanRALCommandList::SetGraphicsPipeline(FRALPipeline_Graphics* Pipeline)
 {
+    if (Pipeline == nullptr)
+    {
+        return;
+    }
+
     this->CurrentPipeline = static_cast<FVulkanRALPipeline_Graphics*>(Pipeline);
-    vkCmdBindPipeline(this->Handle, VK_PIPELINE_BIND_POINT_GRAPHICS, this->CurrentPipeline->Pipeline);
+    if (this->CurrentPipeline->Pipeline != VK_NULL_HANDLE)
+    {
+        vkCmdBindPipeline(this->Handle, VK_PIPELINE_BIND_POINT_GRAPHICS, this->CurrentPipeline->Pipeline);
+    }
 }
 
 void FVulkanRALCommandList::SetViewport(const FRALViewport& Viewport)
@@ -108,6 +139,11 @@ void FVulkanRALCommandList::SetScissorRect(const FRALScissorRect& Scissor)
 
 void FVulkanRALCommandList::SetBindGroup(uint32 SetIndex, FRALBindGroup* BindGroup)
 {
+    if (this->CurrentPipeline == nullptr || this->CurrentPipeline->PipelineLayout == VK_NULL_HANDLE || BindGroup == nullptr)
+    {
+        return;
+    }
+
     const FVulkanRALBindGroup* VkBindGroup = static_cast<FVulkanRALBindGroup*>(BindGroup);
     const FRALBindGroupDesc& BindGroupDesc = VkBindGroup->GetDesc();
     const uint32 ActualSetIndex = BindGroupDesc.Layout ? BindGroupDesc.Layout->GetDesc().SetIndex : SetIndex;
@@ -152,6 +188,11 @@ void FVulkanRALCommandList::Draw(uint32 VertexCount, uint32 InstanceCount, uint3
 
 void FVulkanRALCommandList::SetPushConstants(EShaderStage Stage, const void* Data, uint32 Size)
 {
+    if (this->CurrentPipeline == nullptr || this->CurrentPipeline->PipelineLayout == VK_NULL_HANDLE || Data == nullptr || Size == 0)
+    {
+        return;
+    }
+
     // Map EShaderStage to VkShaderStageFlags
     VkShaderStageFlags StageFlags = 0;
     if (EnumHasAnyFlags(Stage, EShaderStage::Vertex))   StageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
@@ -162,6 +203,68 @@ void FVulkanRALCommandList::SetPushConstants(EShaderStage Stage, const void* Dat
     if (EnumHasAnyFlags(Stage, EShaderStage::Domain))   StageFlags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 
     vkCmdPushConstants(this->Handle, this->CurrentPipeline->PipelineLayout, StageFlags, 0, Size, Data);
+}
+
+VkFramebuffer FVulkanRALCommandList::InternalGetFramebuffer(
+    const FRALRenderPassDesc& Desc,
+    VkRenderPass Pass,
+    bool bIsCreate)
+{
+    // 1. 收集图像视图和尺寸
+    std::vector<VkImageView> Attachments;
+    uint32 Width = 0, Height = 0;
+
+    for (uint32 i = 0; i < Desc.ColorAttachmentCount; ++i)
+    {
+        FVulkanRALTextureView* View = static_cast<FVulkanRALTextureView*>(
+            Desc.ColorAttachments[i].RenderTarget);
+        Attachments.push_back(View->View);
+
+        if (i == 0) {
+            const FRALTextureDesc& TexDesc = View->Owner->GetDesc();
+            Width = TexDesc.Width;
+            Height = TexDesc.Height;
+        }
+    }
+
+    if (Desc.bHasDepthStencil)
+    {
+        FVulkanRALTextureView* DepthView = static_cast<FVulkanRALTextureView*>(
+            Desc.DepthStencilAttachment.DepthStencilTarget);
+        Attachments.push_back(DepthView->View);
+    }
+
+    // 2. 生成缓存哈希
+    uint64 Hash = reinterpret_cast<uint64>(Pass);
+    for (VkImageView View : Attachments) {
+        Hash ^= reinterpret_cast<uint64>(View) + 0x9e3779b9 + (Hash << 6) + (Hash >> 2);
+    }
+
+    // 3. 检查缓存
+    auto It = this->FramebufferCache.find(Hash);
+    if (It != this->FramebufferCache.end()) {
+        return It->second;
+    }
+
+    if (!bIsCreate) {
+        return VK_NULL_HANDLE;
+    }
+
+    // 4. 创建 Framebuffer
+    VkFramebufferCreateInfo FbInfo{};
+    FbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    FbInfo.renderPass = Pass;
+    FbInfo.attachmentCount = static_cast<uint32>(Attachments.size());
+    FbInfo.pAttachments = Attachments.data();
+    FbInfo.width = Width;
+    FbInfo.height = Height;
+    FbInfo.layers = 1;
+
+    VkFramebuffer Framebuffer = VK_NULL_HANDLE;
+    vkCreateFramebuffer(this->Device->VkContext.LogicalDevice, &FbInfo, nullptr, &Framebuffer);
+
+    this->FramebufferCache[Hash] = Framebuffer;
+    return Framebuffer;
 }
 
 

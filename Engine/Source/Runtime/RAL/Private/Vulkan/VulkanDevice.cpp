@@ -1,11 +1,29 @@
 ﻿#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
 
+#include <algorithm>
+#include <cstring>
+
 FVulkanRALDevice::FVulkanRALDevice()
 {
 	this->InternalCreateInstance();
+    if (this->VkContext.Instance == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
 	this->InternalSelectPhysicalDevice();
+    if (this->VkContext.PhysicalDevice == VK_NULL_HANDLE || this->VkContext.GraphicsFamilyIndex == static_cast<uint32>(-1))
+    {
+        return;
+    }
+
 	this->InternalCreateLogicalDevice();
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
 	this->InternalSetupBindlessHeap();
 
 	// Create graphics queue
@@ -72,7 +90,18 @@ void FVulkanRALDevice::InternalCreateInstance()
         CreateInfo.ppEnabledLayerNames = RAL::Vulkan::InstanceLayers;
     }
 
-    vkCreateInstance(&CreateInfo, nullptr, &this->VkContext.Instance);
+    VkResult Result = vkCreateInstance(&CreateInfo, nullptr, &this->VkContext.Instance);
+    if (Result == VK_ERROR_LAYER_NOT_PRESENT && CreateInfo.enabledLayerCount > 0)
+    {
+        // Retry without validation layers if they are unavailable in current runtime.
+        CreateInfo.enabledLayerCount = 0;
+        CreateInfo.ppEnabledLayerNames = nullptr;
+        Result = vkCreateInstance(&CreateInfo, nullptr, &this->VkContext.Instance);
+    }
+    if (Result != VK_SUCCESS)
+    {
+        this->VkContext.Instance = VK_NULL_HANDLE;
+    }
 }
 
 void FVulkanRALDevice::InternalSelectPhysicalDevice()
@@ -80,6 +109,12 @@ void FVulkanRALDevice::InternalSelectPhysicalDevice()
     uint32 DeviceCount = 0;
     {
         vkEnumeratePhysicalDevices(this->VkContext.Instance, &DeviceCount, nullptr);
+    }
+    if (DeviceCount == 0)
+    {
+        this->VkContext.PhysicalDevice = VK_NULL_HANDLE;
+        this->VkContext.GraphicsFamilyIndex = static_cast<uint32>(-1);
+        return;
     }
     std::vector<VkPhysicalDevice> Devices(DeviceCount);
     {
@@ -129,30 +164,99 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
         QueueInfo.queueCount = 1;
         QueueInfo.pQueuePriorities = &QueuePriority;
     }
-    // Enable bindless feature for default
-    VkPhysicalDeviceDescriptorIndexingFeatures IndexingFeatures{};
+
+    VkPhysicalDeviceFeatures2 SupportedFeatures{};
+    VkPhysicalDeviceDescriptorIndexingFeatures SupportedIndexingFeatures{};
     {
-        IndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-        IndexingFeatures.descriptorBindingPartiallyBound = VK_TRUE; // Allow array has hollow
-        IndexingFeatures.runtimeDescriptorArray = VK_TRUE; // Allow runtime dynamic array size
-        IndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE; // Allow update after binding
+        SupportedFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        SupportedFeatures.pNext = &SupportedIndexingFeatures;
+        SupportedIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+        vkGetPhysicalDeviceFeatures2(this->VkContext.PhysicalDevice, &SupportedFeatures);
     }
-    VkPhysicalDeviceFeatures2 DeviceFeatures; // kodak: why 2 ???
+
+    VkPhysicalDeviceProperties PhysicalDeviceProperties{};
+    {
+        vkGetPhysicalDeviceProperties(this->VkContext.PhysicalDevice, &PhysicalDeviceProperties);
+    }
+
+    const bool bSupportsDescriptorIndexingCore =
+        VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion) > 1 ||
+        (VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion) == 1 &&
+         VK_VERSION_MINOR(PhysicalDeviceProperties.apiVersion) >= 2);
+
+    bool bSupportsDescriptorIndexingExt = false;
+    if (!bSupportsDescriptorIndexingCore)
+    {
+        uint32 ExtensionCount = 0;
+        vkEnumerateDeviceExtensionProperties(this->VkContext.PhysicalDevice, nullptr, &ExtensionCount, nullptr);
+        if (ExtensionCount > 0)
+        {
+            std::vector<VkExtensionProperties> ExtensionProps(ExtensionCount);
+            vkEnumerateDeviceExtensionProperties(this->VkContext.PhysicalDevice, nullptr, &ExtensionCount, ExtensionProps.data());
+            for (const VkExtensionProperties& Ext : ExtensionProps)
+            {
+                if (strcmp(Ext.extensionName, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME) == 0)
+                {
+                    bSupportsDescriptorIndexingExt = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    const bool bCanEnableBindless =
+        SupportedIndexingFeatures.descriptorBindingPartiallyBound == VK_TRUE &&
+        SupportedIndexingFeatures.runtimeDescriptorArray == VK_TRUE &&
+        SupportedIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind == VK_TRUE &&
+        (bSupportsDescriptorIndexingCore || bSupportsDescriptorIndexingExt);
+
+    VkPhysicalDeviceDescriptorIndexingFeatures EnabledIndexingFeatures{};
+    {
+        EnabledIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+        if (bCanEnableBindless)
+        {
+            EnabledIndexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
+            EnabledIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
+            EnabledIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+        }
+    }
+
+    VkPhysicalDeviceFeatures2 DeviceFeatures{};
     {
         DeviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        DeviceFeatures.pNext = &IndexingFeatures;
-        DeviceFeatures.features.samplerAnisotropy = VK_TRUE;
+        DeviceFeatures.pNext = bCanEnableBindless ? &EnabledIndexingFeatures : nullptr;
+        DeviceFeatures.features.samplerAnisotropy = SupportedFeatures.features.samplerAnisotropy;
     }
+
+    std::vector<const char*> EnabledDeviceExtensions;
+    EnabledDeviceExtensions.reserve(RAL::Vulkan::DeviceExtensionCount + 1);
+    for (uint32 i = 0; i < RAL::Vulkan::DeviceExtensionCount; ++i)
+    {
+        EnabledDeviceExtensions.push_back(RAL::Vulkan::DeviceExtensions[i]);
+    }
+    if (bCanEnableBindless && !bSupportsDescriptorIndexingCore)
+    {
+        EnabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+    }
+
     VkDeviceCreateInfo DeviceInfo{};
     {
         DeviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         DeviceInfo.pNext = &DeviceFeatures;
         DeviceInfo.queueCreateInfoCount = 1;
         DeviceInfo.pQueueCreateInfos = &QueueInfo;
-        DeviceInfo.enabledExtensionCount = RAL::Vulkan::DeviceExtensionCount;
-        DeviceInfo.ppEnabledExtensionNames = RAL::Vulkan::DeviceExtensions;
+        DeviceInfo.enabledExtensionCount = static_cast<uint32>(EnabledDeviceExtensions.size());
+        DeviceInfo.ppEnabledExtensionNames = EnabledDeviceExtensions.data();
     }
-    vkCreateDevice(this->VkContext.PhysicalDevice, &DeviceInfo, nullptr, &this->VkContext.LogicalDevice);
+    const VkResult Result = vkCreateDevice(this->VkContext.PhysicalDevice, &DeviceInfo, nullptr, &this->VkContext.LogicalDevice);
+    if (Result != VK_SUCCESS)
+    {
+        this->VkContext.LogicalDevice = VK_NULL_HANDLE;
+        this->VkContext.bBindlessSupported = false;
+        return;
+    }
+
+    this->VkContext.bBindlessSupported = bCanEnableBindless;
 }
 
 FRALSwapchain* FVulkanRALDevice::InternalCreateSwapchain(const FRALSwapchainDesc& InDesc)
@@ -165,12 +269,37 @@ FRALSwapchain* FVulkanRALDevice::InternalCreateSwapchain(const FRALSwapchainDesc
 
 void FVulkanRALDevice::InternalSetupBindlessHeap()
 {
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || !this->VkContext.bBindlessSupported)
+    {
+        return;
+    }
+
+    VkPhysicalDeviceDescriptorIndexingProperties DescriptorIndexingProperties{};
+    VkPhysicalDeviceProperties2 Properties2{};
+    {
+        DescriptorIndexingProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
+        Properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        Properties2.pNext = &DescriptorIndexingProperties;
+        vkGetPhysicalDeviceProperties2(this->VkContext.PhysicalDevice, &Properties2);
+    }
+
+    uint32 DescriptorCount = RAL::Vulkan::MaxBindlessDescriptorCount;
+    DescriptorCount = std::min(DescriptorCount, DescriptorIndexingProperties.maxDescriptorSetUpdateAfterBindSampledImages);
+    DescriptorCount = std::min(DescriptorCount, DescriptorIndexingProperties.maxDescriptorSetUpdateAfterBindSamplers);
+    DescriptorCount = std::min(DescriptorCount, DescriptorIndexingProperties.maxPerStageDescriptorUpdateAfterBindSampledImages);
+    DescriptorCount = std::min(DescriptorCount, DescriptorIndexingProperties.maxPerStageDescriptorUpdateAfterBindSamplers);
+    if (DescriptorCount == 0)
+    {
+        this->VkContext.bBindlessSupported = false;
+        return;
+    }
+
     // A large binding slot, store all Texture2D
     VkDescriptorSetLayoutBinding Binding{};
     {
         Binding.binding = 0;
         Binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        Binding.descriptorCount = RAL::Vulkan::MaxBindlessDescriptorCount;
+        Binding.descriptorCount = DescriptorCount;
         Binding.stageFlags = VK_SHADER_STAGE_ALL;
     }
     VkDescriptorBindingFlags Flags =
@@ -190,12 +319,18 @@ void FVulkanRALDevice::InternalSetupBindlessHeap()
         LayoutInfo.pBindings = &Binding;
         LayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
     }
-    vkCreateDescriptorSetLayout(this->VkContext.LogicalDevice, &LayoutInfo, nullptr, &this->VkContext.BindlessLayout);
+    VkResult Result = vkCreateDescriptorSetLayout(this->VkContext.LogicalDevice, &LayoutInfo, nullptr, &this->VkContext.BindlessLayout);
+    if (Result != VK_SUCCESS)
+    {
+        this->VkContext.BindlessLayout = VK_NULL_HANDLE;
+        this->VkContext.bBindlessSupported = false;
+        return;
+    }
 
     VkDescriptorPoolSize PoolSize;
     {
         PoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        PoolSize.descriptorCount = RAL::Vulkan::MaxBindlessDescriptorCount;
+        PoolSize.descriptorCount = DescriptorCount;
     }
     VkDescriptorPoolCreateInfo PoolInfo{};
     {
@@ -205,7 +340,15 @@ void FVulkanRALDevice::InternalSetupBindlessHeap()
         PoolInfo.poolSizeCount = 1;
         PoolInfo.pPoolSizes = &PoolSize;
     }
-    vkCreateDescriptorPool(this->VkContext.LogicalDevice, &PoolInfo, nullptr, &this->VkContext.BindlessPool);
+    Result = vkCreateDescriptorPool(this->VkContext.LogicalDevice, &PoolInfo, nullptr, &this->VkContext.BindlessPool);
+    if (Result != VK_SUCCESS)
+    {
+        vkDestroyDescriptorSetLayout(this->VkContext.LogicalDevice, this->VkContext.BindlessLayout, nullptr);
+        this->VkContext.BindlessLayout = VK_NULL_HANDLE;
+        this->VkContext.BindlessPool = VK_NULL_HANDLE;
+        this->VkContext.bBindlessSupported = false;
+        return;
+    }
 
     VkDescriptorSetAllocateInfo AllocateInfo{};
     {
@@ -214,7 +357,17 @@ void FVulkanRALDevice::InternalSetupBindlessHeap()
         AllocateInfo.descriptorSetCount = 1;
         AllocateInfo.pSetLayouts = &this->VkContext.BindlessLayout;
     }
-    vkAllocateDescriptorSets(this->VkContext.LogicalDevice, &AllocateInfo, &this->VkContext.BindlessDescriptorSet);
+    Result = vkAllocateDescriptorSets(this->VkContext.LogicalDevice, &AllocateInfo, &this->VkContext.BindlessDescriptorSet);
+    if (Result != VK_SUCCESS)
+    {
+        vkDestroyDescriptorPool(this->VkContext.LogicalDevice, this->VkContext.BindlessPool, nullptr);
+        vkDestroyDescriptorSetLayout(this->VkContext.LogicalDevice, this->VkContext.BindlessLayout, nullptr);
+        this->VkContext.BindlessPool = VK_NULL_HANDLE;
+        this->VkContext.BindlessLayout = VK_NULL_HANDLE;
+        this->VkContext.BindlessDescriptorSet = VK_NULL_HANDLE;
+        this->VkContext.bBindlessSupported = false;
+        return;
+    }
 }
 
 FRALSampler* FVulkanRALDevice::CreateSampler(const FRALSamplerDesc& Desc)
@@ -234,17 +387,40 @@ FRALBindGroup* FVulkanRALDevice::CreateBindGroup(const FRALBindGroupDesc& Desc)
 
 FRALShader* FVulkanRALDevice::CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size)
 {
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || Data == nullptr || Size == 0 || (Size % 4) != 0)
+    {
+        return nullptr;
+    }
+
     FRALShaderDesc Desc;
     Desc.Stage = Stage;
     Desc.ByteCode = Data;
     Desc.ByteCodeSize = Size;
     Desc.EntryPoint = "main";
-    return new FVulkanRALShader(this, Desc);
+
+    FVulkanRALShader* Shader = new FVulkanRALShader(this, Desc);
+    if (Shader->Module == VK_NULL_HANDLE)
+    {
+        delete Shader;
+        return nullptr;
+    }
+    return Shader;
 }
 
 FRALPipeline_Graphics* FVulkanRALDevice::CreateGraphicsPipeline(const FRALPipelineDesc_Graphics& Desc)
 {
-    return new FVulkanRALPipeline_Graphics(this, Desc);
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        return nullptr;
+    }
+
+    FVulkanRALPipeline_Graphics* Pipeline = new FVulkanRALPipeline_Graphics(this, Desc);
+    if (Pipeline->Pipeline == VK_NULL_HANDLE || Pipeline->PipelineLayout == VK_NULL_HANDLE || Pipeline->RenderPass == VK_NULL_HANDLE)
+    {
+        delete Pipeline;
+        return nullptr;
+    }
+    return Pipeline;
 }
 
 FRALBuffer* FVulkanRALDevice::CreateBuffer(const FRALBufferDesc& Desc)
@@ -296,6 +472,12 @@ namespace RAL
 	{
 		// For now, always create Vulkan device
 		// TODO: kodak - Add platform selection logic (D3D12, OpenGL, etc.)
-		return new FVulkanRALDevice();
+		FVulkanRALDevice* Device = new FVulkanRALDevice();
+        if (Device->VkContext.LogicalDevice == VK_NULL_HANDLE || Device->GetGraphicsQueue() == nullptr)
+        {
+            delete Device;
+            return nullptr;
+        }
+        return Device;
 	}
 }

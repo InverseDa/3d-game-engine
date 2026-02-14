@@ -67,6 +67,26 @@ struct FRALTextureViewDesc
 };
 
 // ***********************************************************************************************
+// ******************************* Vertex Input Layout *******************************************
+// ***********************************************************************************************
+
+// 顶点输入布局结构
+struct FRALVertexInputBinding
+{
+    uint32 Binding = 0;
+    uint32 Stride = 0;
+    bool bPerInstance = false; // false = 逐顶点, true = 逐实例
+};
+
+struct FRALVertexInputAttribute
+{
+    uint32 Location = 0;    // Shader 位置
+    uint32 Binding = 0;     // 绑定槽位
+    EPixelFormat Format = EPixelFormat::Unknown;
+    uint32 Offset = 0;      // 顶点内偏移
+};
+
+// ***********************************************************************************************
 // ******************************** Render Pass Relative *****************************************
 // ***********************************************************************************************
 
@@ -140,6 +160,10 @@ struct FRALPipelineDesc_Graphics
     // Shader
     FRALShader* VertexShader = nullptr;
     FRALShader* PixelShader = nullptr;
+
+    // Vertex Input Layout
+    std::vector<FRALVertexInputBinding> VertexBindings;
+    std::vector<FRALVertexInputAttribute> VertexAttributes;
 
     // State
     FRALBlendStateDesc BlendState;

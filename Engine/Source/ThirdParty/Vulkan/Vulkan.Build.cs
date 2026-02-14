@@ -15,9 +15,28 @@ namespace Limitless
         {
             base.ConfigureAll(conf, target);
 
-            conf.Output = Configuration.OutputType.Lib;
+            // Vulkan in this repo is headers + SDK import library; this module does not build a local .lib.
+            conf.Output = Configuration.OutputType.None;
 
             conf.IncludePaths.Add(@"[project.SourceRootPath]\Include");
+
+            // Link Vulkan SDK library
+            if (target.Platform == Platform.win64)
+            {
+                string vulkanSdkPath = System.Environment.GetEnvironmentVariable("VULKAN_SDK");
+                if (string.IsNullOrEmpty(vulkanSdkPath))
+                {
+                    // Fallback to default path if environment variable is not set
+                    vulkanSdkPath = @"C:\VulkanSDK\1.3.275.0";
+                }
+
+                string libPath = Path.Combine(vulkanSdkPath, "Lib");
+                if (System.IO.Directory.Exists(libPath))
+                {
+                    conf.LibraryPaths.Add(libPath);
+                    conf.LibraryFiles.Add("vulkan-1.lib");
+                }
+            }
         }
     }
 }

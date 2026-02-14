@@ -5,9 +5,23 @@ static VkFormat ToVkFormat(EPixelFormat Format)
 {
     switch (Format)
     {
+    case EPixelFormat::R8_UNORM:         return VK_FORMAT_R8_UNORM;
+    case EPixelFormat::R8_SNORM:         return VK_FORMAT_R8_SNORM;
+    case EPixelFormat::R8_UINT:          return VK_FORMAT_R8_UINT;
+    case EPixelFormat::R8_SINT:          return VK_FORMAT_R8_SINT;
+    case EPixelFormat::R32_UINT:         return VK_FORMAT_R32_UINT;
     case EPixelFormat::R8G8B8A8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
+    case EPixelFormat::R8G8B8A8_SNORM: return VK_FORMAT_R8G8B8A8_SNORM;
+    case EPixelFormat::R8G8B8A8_UINT:  return VK_FORMAT_R8G8B8A8_UINT;
+    case EPixelFormat::R8G8B8A8_SINT:  return VK_FORMAT_R8G8B8A8_SINT;
     case EPixelFormat::R8G8B8A8_SRGB:  return VK_FORMAT_R8G8B8A8_SRGB;
     case EPixelFormat::B8G8R8A8_SRGB:  return VK_FORMAT_B8G8R8A8_SRGB;
+    case EPixelFormat::R16G16_FLOAT:      return VK_FORMAT_R16G16_SFLOAT;
+    case EPixelFormat::R16G16B16A16_FLOAT:return VK_FORMAT_R16G16B16A16_SFLOAT;
+    case EPixelFormat::R32_FLOAT:         return VK_FORMAT_R32_SFLOAT;
+    case EPixelFormat::R32G32_FLOAT:      return VK_FORMAT_R32G32_SFLOAT;
+    case EPixelFormat::R32G32B32_FLOAT:   return VK_FORMAT_R32G32B32_SFLOAT;
+    case EPixelFormat::R32G32B32A32_FLOAT:return VK_FORMAT_R32G32B32A32_SFLOAT;
     case EPixelFormat::D32_FLOAT:      return VK_FORMAT_D32_SFLOAT;
     case EPixelFormat::D24_UNORM_S8_UINT: return VK_FORMAT_D24_UNORM_S8_UINT;
     default: return VK_FORMAT_UNDEFINED;
@@ -55,7 +69,12 @@ static VkRenderPass CreateMinimalRenderPass(FVulkanRALDevice* Device, const FRAL
     {
         VkAttachmentDescription ColorAttachment{};
         {
-            ColorAttachment.format = ToVkFormat(Desc.RenderTargetFormats[i]);
+            const VkFormat VkRtFormat = ToVkFormat(Desc.RenderTargetFormats[i]);
+            if (VkRtFormat == VK_FORMAT_UNDEFINED)
+            {
+                return VK_NULL_HANDLE;
+            }
+            ColorAttachment.format = VkRtFormat;
             ColorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
             ColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             ColorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -79,7 +98,12 @@ static VkRenderPass CreateMinimalRenderPass(FVulkanRALDevice* Device, const FRAL
     {
         VkAttachmentDescription Depth{};
         {
-            Depth.format = ToVkFormat(Desc.DepthStencilFormat);
+            const VkFormat VkDepthFormat = ToVkFormat(Desc.DepthStencilFormat);
+            if (VkDepthFormat == VK_FORMAT_UNDEFINED)
+            {
+                return VK_NULL_HANDLE;
+            }
+            Depth.format = VkDepthFormat;
             Depth.samples = VK_SAMPLE_COUNT_1_BIT;
             Depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             Depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -115,7 +139,11 @@ static VkRenderPass CreateMinimalRenderPass(FVulkanRALDevice* Device, const FRAL
     }
 
     VkRenderPass RenderPass = VK_NULL_HANDLE;
-    vkCreateRenderPass(Device->VkContext.LogicalDevice, &RenderPassInfo, nullptr, &RenderPass);
+    const VkResult Result = vkCreateRenderPass(Device->VkContext.LogicalDevice, &RenderPassInfo, nullptr, &RenderPass);
+    if (Result != VK_SUCCESS)
+    {
+        return VK_NULL_HANDLE;
+    }
     return RenderPass;
 }
 
@@ -136,10 +164,19 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         LayoutInfo.setLayoutCount = static_cast<uint32>(SetLayouts.size());
         LayoutInfo.pSetLayouts = SetLayouts.data();
     }
-    vkCreatePipelineLayout(this->Device->VkContext.LogicalDevice, &LayoutInfo, nullptr, &this->PipelineLayout);
+    VkResult Result = vkCreatePipelineLayout(this->Device->VkContext.LogicalDevice, &LayoutInfo, nullptr, &this->PipelineLayout);
+    if (Result != VK_SUCCESS)
+    {
+        this->PipelineLayout = VK_NULL_HANDLE;
+        return;
+    }
 
     // TODO: kodak Currently create the minimal render pass
     this->RenderPass = CreateMinimalRenderPass(this->Device, this->Desc);
+    if (this->RenderPass == VK_NULL_HANDLE)
+    {
+        return;
+    }
 
     // Shader stages
     std::vector<VkPipelineShaderStageCreateInfo> ShaderStages{};
@@ -148,6 +185,10 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
     if (this->Desc.VertexShader)
     {
         FVulkanRALShader* VS = static_cast<FVulkanRALShader*>(this->Desc.VertexShader);
+        if (VS->Module == VK_NULL_HANDLE)
+        {
+            return;
+        }
         VkPipelineShaderStageCreateInfo ShaderStage{};
         {
             ShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -160,6 +201,10 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
     if (this->Desc.PixelShader)
     {
         FVulkanRALShader* PS = static_cast<FVulkanRALShader*>(this->Desc.PixelShader);
+        if (PS->Module == VK_NULL_HANDLE)
+        {
+            return;
+        }
         VkPipelineShaderStageCreateInfo ShaderStage{};
         {
             ShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -170,9 +215,40 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         }
     }
 
+    // 将 RAL 顶点输入转换为 Vulkan
+    std::vector<VkVertexInputBindingDescription> VkBindings;
+    for (const auto& Binding : Desc.VertexBindings)
+    {
+        VkVertexInputBindingDescription VkBinding{};
+        VkBinding.binding = Binding.Binding;
+        VkBinding.stride = Binding.Stride;
+        VkBinding.inputRate = Binding.bPerInstance ?
+            VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
+        VkBindings.push_back(VkBinding);
+    }
+
+    std::vector<VkVertexInputAttributeDescription> VkAttributes;
+    for (const auto& Attr : Desc.VertexAttributes)
+    {
+        VkVertexInputAttributeDescription VkAttr{};
+        VkAttr.location = Attr.Location;
+        VkAttr.binding = Attr.Binding;
+        VkAttr.format = ToVkFormat(Attr.Format);
+        if (VkAttr.format == VK_FORMAT_UNDEFINED)
+        {
+            return;
+        }
+        VkAttr.offset = Attr.Offset;
+        VkAttributes.push_back(VkAttr);
+    }
+
     VkPipelineVertexInputStateCreateInfo VertexInput{};
     {
         VertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        VertexInput.vertexBindingDescriptionCount = static_cast<uint32>(VkBindings.size());
+        VertexInput.pVertexBindingDescriptions = VkBindings.data();
+        VertexInput.vertexAttributeDescriptionCount = static_cast<uint32>(VkAttributes.size());
+        VertexInput.pVertexAttributeDescriptions = VkAttributes.data();
     }
 
     VkPipelineInputAssemblyStateCreateInfo InputAssembly{};
@@ -266,7 +342,11 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         PipelineInfo.renderPass = this->RenderPass;
         PipelineInfo.subpass = 0; // TODO: kodak
     }
-    vkCreateGraphicsPipelines(this->Device->VkContext.LogicalDevice, VK_NULL_HANDLE, 1, &PipelineInfo, nullptr, &this->Pipeline);
+    Result = vkCreateGraphicsPipelines(this->Device->VkContext.LogicalDevice, VK_NULL_HANDLE, 1, &PipelineInfo, nullptr, &this->Pipeline);
+    if (Result != VK_SUCCESS)
+    {
+        this->Pipeline = VK_NULL_HANDLE;
+    }
 }
 
 FVulkanRALPipeline_Graphics::~FVulkanRALPipeline_Graphics()

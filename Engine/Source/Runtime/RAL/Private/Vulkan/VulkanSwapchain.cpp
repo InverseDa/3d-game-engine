@@ -211,9 +211,11 @@ void FVulkanRALSwapchain::Present()
     VkPresentInfoKHR PresentInfo{};
     {
         PresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        PresentInfo.pNext = nullptr;
 
-        PresentInfo.waitSemaphoreCount = 1;
-        PresentInfo.pWaitSemaphores = &RenderFinishedSemaphore;
+        // Current render path does Queue->WaitIdle() before present, so no semaphore wait is required here.
+        PresentInfo.waitSemaphoreCount = 0;
+        PresentInfo.pWaitSemaphores = nullptr;
 
         VkSwapchainKHR Swapchains[] = { this->SwapchainHandle };
         PresentInfo.swapchainCount = 1;

@@ -23,9 +23,23 @@ namespace
     {
         switch (Format)
         {
+        case EPixelFormat::R8_UNORM:         return VK_FORMAT_R8_UNORM;
+        case EPixelFormat::R8_SNORM:         return VK_FORMAT_R8_SNORM;
+        case EPixelFormat::R8_UINT:          return VK_FORMAT_R8_UINT;
+        case EPixelFormat::R8_SINT:          return VK_FORMAT_R8_SINT;
+        case EPixelFormat::R32_UINT:         return VK_FORMAT_R32_UINT;
         case EPixelFormat::R8G8B8A8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
+        case EPixelFormat::R8G8B8A8_SNORM: return VK_FORMAT_R8G8B8A8_SNORM;
+        case EPixelFormat::R8G8B8A8_UINT:  return VK_FORMAT_R8G8B8A8_UINT;
+        case EPixelFormat::R8G8B8A8_SINT:  return VK_FORMAT_R8G8B8A8_SINT;
         case EPixelFormat::R8G8B8A8_SRGB:  return VK_FORMAT_R8G8B8A8_SRGB;
         case EPixelFormat::B8G8R8A8_SRGB:  return VK_FORMAT_B8G8R8A8_SRGB;
+        case EPixelFormat::R16G16_FLOAT:      return VK_FORMAT_R16G16_SFLOAT;
+        case EPixelFormat::R16G16B16A16_FLOAT:return VK_FORMAT_R16G16B16A16_SFLOAT;
+        case EPixelFormat::R32_FLOAT:         return VK_FORMAT_R32_SFLOAT;
+        case EPixelFormat::R32G32_FLOAT:      return VK_FORMAT_R32G32_SFLOAT;
+        case EPixelFormat::R32G32B32_FLOAT:   return VK_FORMAT_R32G32B32_SFLOAT;
+        case EPixelFormat::R32G32B32A32_FLOAT:return VK_FORMAT_R32G32B32A32_SFLOAT;
         case EPixelFormat::D32_FLOAT:      return VK_FORMAT_D32_SFLOAT;
         case EPixelFormat::D24_UNORM_S8_UINT: return VK_FORMAT_D24_UNORM_S8_UINT;
         default: return VK_FORMAT_UNDEFINED;

@@ -26,11 +26,21 @@ namespace Limitless
 
             conf.SolutionFolder = "Programs";
 
+            // Keep source/execution charset consistent across modules.
+            conf.AdditionalCompilerOptions.Add("/utf-8");
+
             conf.TargetPath = Path.Combine(DirectoryHelper.TmpDir, "Bin", "[project.Name]");
             conf.IntermediatePath = Path.Combine(DirectoryHelper.TmpDir, "Obj", "[project.Name]");
 
             conf.IncludePaths.Add(@"[project.SourceRootPath]\Public");
             conf.IncludePaths.Add(@"[project.SourceRootPath]\Private");
+
+            // Platform defines
+            if (target.Platform == Platform.win64)
+            {
+                conf.Defines.Add("PLATFORM_WINDOWS=1");
+                conf.ExportDefines.Add("PLATFORM_WINDOWS=1");
+            }
 
             string configName = target.Optimization.ToString();
             if (target.TargetType == TargetType.Editor)
@@ -80,6 +90,9 @@ namespace Limitless
         {
             conf.ProjectPath = DirectoryHelper.SolutionDir;
             conf.Output = Configuration.OutputType.None;
+
+            // Keep source/execution charset consistent across third-party modules.
+            conf.AdditionalCompilerOptions.Add("/utf-8");
 
             string configName = target.Optimization.ToString();
             if (target.TargetType == TargetType.Editor)
