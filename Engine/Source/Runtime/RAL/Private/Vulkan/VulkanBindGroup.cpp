@@ -12,6 +12,10 @@ VkShaderStageFlags ToVkStageFlags(EShaderStage StageFlags)
     if (EnumHasAnyFlags(StageFlags, EShaderStage::Hull))     Flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
     if (EnumHasAnyFlags(StageFlags, EShaderStage::Domain))   Flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 
+    if (Flags == 0)
+    {
+        LE_LOG(LogRAL, Error, "Invalid shader stage flags for bind group layout.");
+    }
     assert(Flags != 0);
     return Flags;
 }
@@ -70,6 +74,12 @@ const FRALBindGroupLayoutItem* FindLayoutItem(const FRALBindGroupLayoutDesc& Lay
 
 static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, const FRALBindGroupDesc& Desc)
 {
+    if (Device == nullptr || Device->VkContext.LogicalDevice == VK_NULL_HANDLE || Desc.Layout == nullptr)
+    {
+        LE_LOG(LogRAL, Error, "UpdateDescriptorSets failed: invalid device/layout.");
+        return;
+    }
+
     const FRALBindGroupLayoutDesc& LayoutDesc = Desc.Layout->GetDesc();
 
     std::vector<VkWriteDescriptorSet> Writes;
@@ -85,6 +95,7 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
         const FRALBindGroupLayoutItem* LayoutItem = FindLayoutItem(LayoutDesc, Item.Binding);
         if (LayoutItem == nullptr)
         {
+            LE_LOG(LogRAL, Warn, "UpdateDescriptorSets: binding {} not found in layout.", Item.Binding);
             continue;
         }
 
@@ -103,6 +114,11 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
             case ERALBindGroupItemType::UniformBuffer:
             case ERALBindGroupItemType::StorageBuffer:
             {
+                if (Item.Buffer == nullptr)
+                {
+                    LE_LOG(LogRAL, Error, "UpdateDescriptorSets failed: buffer item at binding {} is null.", Item.Binding);
+                    continue;
+                }
                 FVulkanRALBuffer* VkBuffer = static_cast<FVulkanRALBuffer*>(Item.Buffer);
                 VkDescriptorBufferInfo Info{};
                 {
@@ -117,6 +133,11 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
             case ERALBindGroupItemType::SampledImage:
             case ERALBindGroupItemType::StorageImage:
             {
+                if (Item.TextureView == nullptr)
+                {
+                    LE_LOG(LogRAL, Error, "UpdateDescriptorSets failed: texture view item at binding {} is null.", Item.Binding);
+                    continue;
+                }
                 FVulkanRALTextureView* VkView = static_cast<FVulkanRALTextureView*>(Item.TextureView);
                 VkDescriptorImageInfo Info{};
                 {
@@ -129,6 +150,11 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
             }
             case ERALBindGroupItemType::Sampler:
             {
+                if (Item.Sampler == nullptr)
+                {
+                    LE_LOG(LogRAL, Error, "UpdateDescriptorSets failed: sampler item at binding {} is null.", Item.Binding);
+                    continue;
+                }
                 FVulkanRALSampler* VkSampler = static_cast<FVulkanRALSampler*>(Item.Sampler);
                 VkDescriptorImageInfo Info{};
                 {
@@ -140,6 +166,11 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
             }
             case ERALBindGroupItemType::CombinedImageSampler:
             {
+                if (Item.TextureView == nullptr || Item.Sampler == nullptr)
+                {
+                    LE_LOG(LogRAL, Error, "UpdateDescriptorSets failed: combined image sampler item at binding {} is invalid.", Item.Binding);
+                    continue;
+                }
                 FVulkanRALTextureView* VkView = static_cast<FVulkanRALTextureView*>(Item.TextureView);
                 FVulkanRALSampler* VkSampler = static_cast<FVulkanRALSampler*>(Item.Sampler);
                 VkDescriptorImageInfo Info{};
@@ -165,6 +196,13 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
 FVulkanRALBindGroupLayout::FVulkanRALBindGroupLayout(FVulkanRALDevice* InDevice, const FRALBindGroupLayoutDesc& InDesc)
     : TVulkanResourceBase<FRALBindGroupLayoutDesc>(InDevice, InDesc)
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "BindGroupLayout creation failed: invalid device.");
+        this->Handle = VK_NULL_HANDLE;
+        return;
+    }
+
     std::vector<VkDescriptorSetLayoutBinding> Bindings{};
     Bindings.reserve(Desc.Bindings.size());
 
@@ -186,11 +224,22 @@ FVulkanRALBindGroupLayout::FVulkanRALBindGroupLayout(FVulkanRALDevice* InDevice,
         Info.bindingCount = static_cast<uint32>(Bindings.size());
         Info.pBindings = Bindings.data();
     }
-    vkCreateDescriptorSetLayout(Device->VkContext.LogicalDevice, &Info, nullptr, &this->Handle);
+    const VkResult Result = vkCreateDescriptorSetLayout(Device->VkContext.LogicalDevice, &Info, nullptr, &this->Handle);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateDescriptorSetLayout failed. VkResult={}", static_cast<int32>(Result));
+        this->Handle = VK_NULL_HANDLE;
+    }
 }
 
 FVulkanRALBindGroupLayout::~FVulkanRALBindGroupLayout()
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        this->Handle = VK_NULL_HANDLE;
+        return;
+    }
+
     if (this->Handle != VK_NULL_HANDLE)
     {
         vkDestroyDescriptorSetLayout(Device->VkContext.LogicalDevice, this->Handle, nullptr);
@@ -201,7 +250,22 @@ FVulkanRALBindGroupLayout::~FVulkanRALBindGroupLayout()
 FVulkanRALBindGroup::FVulkanRALBindGroup(FVulkanRALDevice* InDevice, const FRALBindGroupDesc& InDesc)
     : TVulkanResourceBase<FRALBindGroupDesc>(InDevice, InDesc)
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE || this->Desc.Layout == nullptr)
+    {
+        LE_LOG(LogRAL, Error, "BindGroup creation failed: invalid device/layout.");
+        this->Pool = VK_NULL_HANDLE;
+        this->Set = VK_NULL_HANDLE;
+        return;
+    }
+
     FVulkanRALBindGroupLayout* Layout = static_cast<FVulkanRALBindGroupLayout*>(Desc.Layout);
+    if (Layout->Handle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "BindGroup creation failed: descriptor set layout handle is null.");
+        this->Pool = VK_NULL_HANDLE;
+        this->Set = VK_NULL_HANDLE;
+        return;
+    }
 
     std::vector<VkDescriptorPoolSize> PoolSizes{};
     CollectPoolSize(Layout->GetDesc(), PoolSizes);
@@ -213,7 +277,14 @@ FVulkanRALBindGroup::FVulkanRALBindGroup(FVulkanRALDevice* InDevice, const FRALB
         PoolInfo.poolSizeCount = static_cast<uint32>(PoolSizes.size());
         PoolInfo.pPoolSizes = PoolSizes.data();
     }
-    vkCreateDescriptorPool(Device->VkContext.LogicalDevice, &PoolInfo, nullptr, &this->Pool);
+    VkResult Result = vkCreateDescriptorPool(Device->VkContext.LogicalDevice, &PoolInfo, nullptr, &this->Pool);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateDescriptorPool failed. VkResult={}", static_cast<int32>(Result));
+        this->Pool = VK_NULL_HANDLE;
+        this->Set = VK_NULL_HANDLE;
+        return;
+    }
 
     VkDescriptorSetAllocateInfo AllocInfo{};
     {
@@ -222,13 +293,28 @@ FVulkanRALBindGroup::FVulkanRALBindGroup(FVulkanRALDevice* InDevice, const FRALB
         AllocInfo.descriptorSetCount = 1;
         AllocInfo.pSetLayouts = &Layout->Handle;
     }
-    vkAllocateDescriptorSets(Device->VkContext.LogicalDevice, &AllocInfo, &this->Set);
+    Result = vkAllocateDescriptorSets(Device->VkContext.LogicalDevice, &AllocInfo, &this->Set);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkAllocateDescriptorSets failed. VkResult={}", static_cast<int32>(Result));
+        vkDestroyDescriptorPool(Device->VkContext.LogicalDevice, this->Pool, nullptr);
+        this->Pool = VK_NULL_HANDLE;
+        this->Set = VK_NULL_HANDLE;
+        return;
+    }
 
     UpdateDescriptorSets(Device, this->Set, this->Desc);
 }
 
 FVulkanRALBindGroup::~FVulkanRALBindGroup()
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        this->Pool = VK_NULL_HANDLE;
+        this->Set = VK_NULL_HANDLE;
+        return;
+    }
+
     if (this->Pool != VK_NULL_HANDLE)
     {
         vkDestroyDescriptorPool(Device->VkContext.LogicalDevice, this->Pool, nullptr);

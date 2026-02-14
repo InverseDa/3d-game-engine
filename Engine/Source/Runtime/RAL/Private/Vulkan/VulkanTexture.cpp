@@ -94,8 +94,17 @@ FVulkanRALTexture::FVulkanRALTexture(FVulkanRALDevice* InDevice, const FRALTextu
     , Image(InImage)
     , bOwnsImage(bInOwnsImage)
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE || this->Device->VkContext.PhysicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Texture creation failed: invalid Vulkan device context.");
+        this->Image = VK_NULL_HANDLE;
+        this->Memory = VK_NULL_HANDLE;
+        return;
+    }
+
     if (this->Image != VK_NULL_HANDLE)
     {
+        LE_LOG(LogRAL, Info, "Texture created from external image handle.");
         return;
     }
 
@@ -104,6 +113,11 @@ FVulkanRALTexture::FVulkanRALTexture(FVulkanRALDevice* InDevice, const FRALTextu
         Info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         Info.imageType = (Desc.Depth > 1) ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
         Info.format = ToVkFormat(InDesc.Format);
+        if (Info.format == VK_FORMAT_UNDEFINED)
+        {
+            LE_LOG(LogRAL, Error, "Texture creation failed: unsupported format={}.", static_cast<uint32>(InDesc.Format));
+            return;
+        }
         Info.extent = { Desc.Width, Desc.Height, Desc.Depth};
         Info.mipLevels = Desc.MipLevels;
         Info.arrayLayers = Desc.ArrayLayers;
@@ -113,7 +127,13 @@ FVulkanRALTexture::FVulkanRALTexture(FVulkanRALDevice* InDevice, const FRALTextu
         Info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         Info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     }
-    vkCreateImage(Device->VkContext.LogicalDevice, &Info, nullptr, &this->Image);
+    VkResult Result = vkCreateImage(Device->VkContext.LogicalDevice, &Info, nullptr, &this->Image);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateImage failed. Size={}x{}x{}, VkResult={}", Desc.Width, Desc.Height, Desc.Depth, static_cast<int32>(Result));
+        this->Image = VK_NULL_HANDLE;
+        return;
+    }
 
     VkMemoryRequirements Req{};
     vkGetImageMemoryRequirements(Device->VkContext.LogicalDevice, this->Image, &Req);
@@ -124,12 +144,39 @@ FVulkanRALTexture::FVulkanRALTexture(FVulkanRALDevice* InDevice, const FRALTextu
         AllocInfo.allocationSize = Req.size;
         AllocInfo.memoryTypeIndex = FindMemoryTypeIndex(Device->VkContext.PhysicalDevice, Req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     }
-    vkAllocateMemory(Device->VkContext.LogicalDevice, &AllocInfo, nullptr, &this->Memory);
-    vkBindImageMemory(Device->VkContext.LogicalDevice, this->Image, this->Memory, 0);
+    Result = vkAllocateMemory(Device->VkContext.LogicalDevice, &AllocInfo, nullptr, &this->Memory);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkAllocateMemory(texture) failed. AllocationSize={}, VkResult={}", AllocInfo.allocationSize, static_cast<int32>(Result));
+        vkDestroyImage(Device->VkContext.LogicalDevice, this->Image, nullptr);
+        this->Image = VK_NULL_HANDLE;
+        this->Memory = VK_NULL_HANDLE;
+        return;
+    }
+
+    Result = vkBindImageMemory(Device->VkContext.LogicalDevice, this->Image, this->Memory, 0);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkBindImageMemory failed. VkResult={}", static_cast<int32>(Result));
+        vkFreeMemory(Device->VkContext.LogicalDevice, this->Memory, nullptr);
+        vkDestroyImage(Device->VkContext.LogicalDevice, this->Image, nullptr);
+        this->Image = VK_NULL_HANDLE;
+        this->Memory = VK_NULL_HANDLE;
+        return;
+    }
+
+    LE_LOG(LogRAL, Info, "Texture created. Size={}x{}x{}, Format={}", Desc.Width, Desc.Height, Desc.Depth, static_cast<uint32>(InDesc.Format));
 }
 
 FVulkanRALTexture::~FVulkanRALTexture()
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        this->Image = VK_NULL_HANDLE;
+        this->Memory = VK_NULL_HANDLE;
+        return;
+    }
+
     if (this->Image != VK_NULL_HANDLE && this->bOwnsImage)
     {
         vkDestroyImage(Device->VkContext.LogicalDevice, this->Image, nullptr);
@@ -160,12 +207,21 @@ void FVulkanRALTextureView::InitTextureView(FVulkanRALTexture* InOwner, VkImageV
     this->Owner = InOwner;
     if (this->Owner == nullptr)
     {
+        LE_LOG(LogRAL, Error, "TextureView creation failed: owner texture is null.");
         return;
     }
 
     if (InViewHandle != VK_NULL_HANDLE)
     {
         this->View = InViewHandle;
+        LE_LOG(LogRAL, Info, "TextureView created from external image view handle.");
+        return;
+    }
+
+    if (this->Owner->Image == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "TextureView creation failed: owner image is null.");
+        this->View = VK_NULL_HANDLE;
         return;
     }
 
@@ -175,6 +231,12 @@ void FVulkanRALTextureView::InitTextureView(FVulkanRALTexture* InOwner, VkImageV
         Info.image = this->Owner->Image;
         Info.viewType = ToVkImageViewType(this->Owner->GetDesc(), Desc);
         Info.format = ToVkFormat(Desc.Format == EPixelFormat::Unknown ? this->Owner->GetDesc().Format : Desc.Format);
+        if (Info.format == VK_FORMAT_UNDEFINED)
+        {
+            LE_LOG(LogRAL, Error, "TextureView creation failed: unsupported format.");
+            this->View = VK_NULL_HANDLE;
+            return;
+        }
 
         Info.subresourceRange.aspectMask = ToVkImageAspect(this->Owner->GetDesc());
         Info.subresourceRange.baseMipLevel = Desc.MipSlice;
@@ -182,7 +244,12 @@ void FVulkanRALTextureView::InitTextureView(FVulkanRALTexture* InOwner, VkImageV
         Info.subresourceRange.baseArrayLayer = Desc.ArraySlice;
         Info.subresourceRange.layerCount = Desc.ArrayLayers ? Desc.ArrayLayers : 1;
     }
-    vkCreateImageView(Device->VkContext.LogicalDevice, &Info, nullptr, &this->View);
+    const VkResult Result = vkCreateImageView(Device->VkContext.LogicalDevice, &Info, nullptr, &this->View);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateImageView(texture) failed. VkResult={}", static_cast<int32>(Result));
+        this->View = VK_NULL_HANDLE;
+    }
 }
 
 FVulkanRALTextureView::~FVulkanRALTextureView()

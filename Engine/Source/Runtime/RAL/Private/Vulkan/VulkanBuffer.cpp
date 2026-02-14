@@ -44,6 +44,14 @@ namespace
 FVulkanRALBuffer::FVulkanRALBuffer(FVulkanRALDevice* InDevice, const FRALBufferDesc& InDesc)
     : TVulkanResourceBase<FRALBufferDesc>(InDevice, InDesc)
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE || this->Device->VkContext.PhysicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Buffer creation failed: invalid Vulkan device context.");
+        this->Buffer = VK_NULL_HANDLE;
+        this->Memory = VK_NULL_HANDLE;
+        return;
+    }
+
     VkBufferCreateInfo BufferInfo = {};
     {
         BufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -51,7 +59,14 @@ FVulkanRALBuffer::FVulkanRALBuffer(FVulkanRALDevice* InDevice, const FRALBufferD
         BufferInfo.usage = ToVkBufferUsage(InDesc.Usage);
         BufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // TODO: kodak
     }
-    vkCreateBuffer(Device->VkContext.LogicalDevice, &BufferInfo, nullptr, &this->Buffer);
+    VkResult Result = vkCreateBuffer(Device->VkContext.LogicalDevice, &BufferInfo, nullptr, &this->Buffer);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateBuffer failed. Size={}, Usage={}, VkResult={}", InDesc.Size, InDesc.Usage, static_cast<int32>(Result));
+        this->Buffer = VK_NULL_HANDLE;
+        this->Memory = VK_NULL_HANDLE;
+        return;
+    }
 
     VkMemoryRequirements Requirements;
     {
@@ -64,12 +79,40 @@ FVulkanRALBuffer::FVulkanRALBuffer(FVulkanRALDevice* InDevice, const FRALBufferD
         AllocateInfo.allocationSize = Requirements.size;
         AllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(Device->VkContext.PhysicalDevice, Requirements.memoryTypeBits, ToVkMemoryProps(static_cast<EResourceUsage>(Desc.Usage)));
     }
-    vkAllocateMemory(Device->VkContext.LogicalDevice, &AllocateInfo, nullptr, &this->Memory);
-    vkBindBufferMemory(Device->VkContext.LogicalDevice, this->Buffer, this->Memory, 0);
+    Result = vkAllocateMemory(Device->VkContext.LogicalDevice, &AllocateInfo, nullptr, &this->Memory);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkAllocateMemory(buffer) failed. AllocationSize={}, VkResult={}", AllocateInfo.allocationSize, static_cast<int32>(Result));
+        vkDestroyBuffer(this->Device->VkContext.LogicalDevice, this->Buffer, nullptr);
+        this->Buffer = VK_NULL_HANDLE;
+        this->Memory = VK_NULL_HANDLE;
+        return;
+    }
+
+    Result = vkBindBufferMemory(Device->VkContext.LogicalDevice, this->Buffer, this->Memory, 0);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkBindBufferMemory failed. VkResult={}", static_cast<int32>(Result));
+        vkFreeMemory(this->Device->VkContext.LogicalDevice, this->Memory, nullptr);
+        vkDestroyBuffer(this->Device->VkContext.LogicalDevice, this->Buffer, nullptr);
+        this->Buffer = VK_NULL_HANDLE;
+        this->Memory = VK_NULL_HANDLE;
+        return;
+    }
+
+    LE_LOG(LogRAL, Info, "Buffer created. Size={}, Usage={}", InDesc.Size, InDesc.Usage);
 }
 
 FVulkanRALBuffer::~FVulkanRALBuffer()
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        this->MappedPtr = nullptr;
+        this->Buffer = VK_NULL_HANDLE;
+        this->Memory = VK_NULL_HANDLE;
+        return;
+    }
+
     if (this->MappedPtr)
     {
         vkUnmapMemory(this->Device->VkContext.LogicalDevice, this->Memory);
@@ -86,14 +129,32 @@ FVulkanRALBuffer::~FVulkanRALBuffer()
 
 void* FVulkanRALBuffer::Map(uint64 Offset, uint64 Size)
 {
+    if (this->Memory == VK_NULL_HANDLE || this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Buffer map failed: invalid memory or device.");
+        return nullptr;
+    }
+
     void* Data = nullptr;
-    vkMapMemory(Device->VkContext.LogicalDevice, Memory, Offset, Size == 0 ? VK_WHOLE_SIZE : Size, 0, &Data);
+    const VkResult Result = vkMapMemory(Device->VkContext.LogicalDevice, Memory, Offset, Size == 0 ? VK_WHOLE_SIZE : Size, 0, &Data);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkMapMemory failed. Offset={}, Size={}, VkResult={}", Offset, Size, static_cast<int32>(Result));
+        return nullptr;
+    }
     this->MappedPtr = Data;
     return Data;
 }
 
 void FVulkanRALBuffer::Unmap()
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Warn, "Buffer unmap skipped: invalid device.");
+        this->MappedPtr = nullptr;
+        return;
+    }
+
     if (this->MappedPtr)
     {
         vkUnmapMemory(this->Device->VkContext.LogicalDevice, this->Memory);

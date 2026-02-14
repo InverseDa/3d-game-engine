@@ -3,24 +3,134 @@
 
 #include <algorithm>
 #include <cstring>
+#include <sstream>
+#include <string>
+
+LE_DECLARE_LOG_CATEGORY(LogRAL);
+
+namespace
+{
+#if LE_RAL_ENABLE_VALIDATION
+const char* ValidationSeverityToText(VkDebugUtilsMessageSeverityFlagBitsEXT Severity)
+{
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)   return "ERROR";
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) return "WARN";
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)    return "INFO";
+    return "VERBOSE";
+}
+
+LE::LogLevel ValidationSeverityToLogLevel(VkDebugUtilsMessageSeverityFlagBitsEXT Severity)
+{
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)   return LE::LogLevel::Error;
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) return LE::LogLevel::Warn;
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)    return LE::LogLevel::Info;
+    return LE::LogLevel::Trace;
+}
+
+std::string ValidationTypeToText(VkDebugUtilsMessageTypeFlagsEXT TypeFlags)
+{
+    std::string Text;
+    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)     Text += "General|";
+    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)  Text += "Validation|";
+    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) Text += "Performance|";
+    if (!Text.empty())
+    {
+        Text.pop_back();
+    }
+    return Text.empty() ? "Unknown" : Text;
+}
+
+std::string ValidationObjectsToText(const VkDebugUtilsMessengerCallbackDataEXT* CallbackData)
+{
+    if (CallbackData == nullptr || CallbackData->objectCount == 0 || CallbackData->pObjects == nullptr)
+    {
+        return "Objects: none";
+    }
+
+    std::ostringstream Stream;
+    Stream << "Objects(" << CallbackData->objectCount << "):";
+    for (uint32 i = 0; i < CallbackData->objectCount; ++i)
+    {
+        const VkDebugUtilsObjectNameInfoEXT& Obj = CallbackData->pObjects[i];
+        Stream << " [#" << i
+               << " type=" << static_cast<uint32>(Obj.objectType)
+               << " handle=0x" << std::hex << static_cast<unsigned long long>(Obj.objectHandle) << std::dec;
+        if (Obj.pObjectName != nullptr)
+        {
+            Stream << " name=" << Obj.pObjectName;
+        }
+        Stream << "]";
+    }
+    return Stream.str();
+}
+
+VKAPI_ATTR VkBool32 VKAPI_CALL VulkanValidationCallback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverity,
+    VkDebugUtilsMessageTypeFlagsEXT MessageType,
+    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+    void* pUserData)
+{
+    (void)pUserData;
+
+    const char* MessageIdName = (pCallbackData != nullptr && pCallbackData->pMessageIdName != nullptr)
+        ? pCallbackData->pMessageIdName
+        : "UnknownMessageId";
+    const int32 MessageIdNumber = (pCallbackData != nullptr) ? pCallbackData->messageIdNumber : 0;
+    const char* MessageText = (pCallbackData != nullptr && pCallbackData->pMessage != nullptr)
+        ? pCallbackData->pMessage
+        : "No validation message.";
+
+    const std::string TypeText = ValidationTypeToText(MessageType);
+    const std::string ObjectsText = ValidationObjectsToText(pCallbackData);
+
+    switch (ValidationSeverityToLogLevel(MessageSeverity))
+    {
+    case LE::LogLevel::Error:
+        LE_LOG(LogRAL, Error, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
+            ValidationSeverityToText(MessageSeverity), TypeText, MessageIdName, MessageIdNumber, MessageText, ObjectsText);
+        break;
+    case LE::LogLevel::Warn:
+        LE_LOG(LogRAL, Warn, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
+            ValidationSeverityToText(MessageSeverity), TypeText, MessageIdName, MessageIdNumber, MessageText, ObjectsText);
+        break;
+    case LE::LogLevel::Info:
+        LE_LOG(LogRAL, Info, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
+            ValidationSeverityToText(MessageSeverity), TypeText, MessageIdName, MessageIdNumber, MessageText, ObjectsText);
+        break;
+    default:
+        LE_LOG(LogRAL, Trace, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
+            ValidationSeverityToText(MessageSeverity), TypeText, MessageIdName, MessageIdNumber, MessageText, ObjectsText);
+        break;
+    }
+
+    return VK_FALSE;
+}
+#endif
+}
 
 FVulkanRALDevice::FVulkanRALDevice()
 {
+    LE_LOG(LogRAL, Info, "Initializing Vulkan RAL device...");
+
 	this->InternalCreateInstance();
     if (this->VkContext.Instance == VK_NULL_HANDLE)
     {
+        LE_LOG(LogRAL, Error, "Vulkan instance creation failed.");
         return;
     }
+    this->InternalSetupValidationMessenger();
 
 	this->InternalSelectPhysicalDevice();
     if (this->VkContext.PhysicalDevice == VK_NULL_HANDLE || this->VkContext.GraphicsFamilyIndex == static_cast<uint32>(-1))
     {
+        LE_LOG(LogRAL, Error, "Vulkan physical device selection failed.");
         return;
     }
 
 	this->InternalCreateLogicalDevice();
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
+        LE_LOG(LogRAL, Error, "Vulkan logical device creation failed.");
         return;
     }
 
@@ -28,10 +138,21 @@ FVulkanRALDevice::FVulkanRALDevice()
 
 	// Create graphics queue
 	this->GraphicsQueue = new FVulkanRALQueue(this, this->VkContext.GraphicsFamilyIndex, 0);
+    if (this->GraphicsQueue == nullptr || static_cast<FVulkanRALQueue*>(this->GraphicsQueue)->Handle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Failed to create graphics queue (family={}, index=0).", this->VkContext.GraphicsFamilyIndex);
+    }
+    else
+    {
+        LE_LOG(LogRAL, Info, "Vulkan RAL device initialized successfully. GraphicsFamilyIndex={}, BindlessSupported={}",
+            this->VkContext.GraphicsFamilyIndex, this->VkContext.bBindlessSupported);
+    }
 }
 
 FVulkanRALDevice::~FVulkanRALDevice()
 {
+    LE_LOG(LogRAL, Info, "Destroying Vulkan RAL device...");
+
 	// Clean up graphics queue
 	if (this->GraphicsQueue)
 	{
@@ -63,9 +184,12 @@ FVulkanRALDevice::~FVulkanRALDevice()
 	}
 	if (this->VkContext.Instance != VK_NULL_HANDLE)
 	{
+        this->InternalDestroyValidationMessenger();
 		vkDestroyInstance(this->VkContext.Instance, nullptr);
 		this->VkContext.Instance = VK_NULL_HANDLE;
 	}
+
+    LE_LOG(LogRAL, Info, "Vulkan RAL device destroyed.");
 }
 
 void FVulkanRALDevice::InternalCreateInstance()
@@ -93,6 +217,7 @@ void FVulkanRALDevice::InternalCreateInstance()
     VkResult Result = vkCreateInstance(&CreateInfo, nullptr, &this->VkContext.Instance);
     if (Result == VK_ERROR_LAYER_NOT_PRESENT && CreateInfo.enabledLayerCount > 0)
     {
+        LE_LOG(LogRAL, Warn, "Validation layer not present, retrying vkCreateInstance without validation layers.");
         // Retry without validation layers if they are unavailable in current runtime.
         CreateInfo.enabledLayerCount = 0;
         CreateInfo.ppEnabledLayerNames = nullptr;
@@ -100,30 +225,121 @@ void FVulkanRALDevice::InternalCreateInstance()
     }
     if (Result != VK_SUCCESS)
     {
+        LE_LOG(LogRAL, Error, "vkCreateInstance failed. VkResult={}", static_cast<int32>(Result));
         this->VkContext.Instance = VK_NULL_HANDLE;
+        return;
     }
+
+    LE_LOG(LogRAL, Info, "Vulkan instance created. ApiVersion={}.{}.{}", 
+        VK_VERSION_MAJOR(AppInfo.apiVersion), VK_VERSION_MINOR(AppInfo.apiVersion), VK_VERSION_PATCH(AppInfo.apiVersion));
+}
+
+void FVulkanRALDevice::InternalSetupValidationMessenger()
+{
+#if LE_RAL_ENABLE_VALIDATION
+    if (this->VkContext.Instance == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
+    auto CreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(this->VkContext.Instance, "vkCreateDebugUtilsMessengerEXT"));
+    if (CreateDebugUtilsMessengerEXT == nullptr)
+    {
+        LE_LOG(LogRAL, Warn, "vkCreateDebugUtilsMessengerEXT is unavailable. Validation callback will not be installed.");
+        return;
+    }
+
+    VkDebugUtilsMessengerCreateInfoEXT CreateInfo{};
+    {
+        CreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        // Validation output policy: only emit hard errors.
+        CreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        CreateInfo.messageType =
+            VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        CreateInfo.pfnUserCallback = VulkanValidationCallback;
+        CreateInfo.pUserData = this;
+    }
+
+    VkResult Result = CreateDebugUtilsMessengerEXT(this->VkContext.Instance, &CreateInfo, nullptr, &this->VkContext.DebugMessenger);
+    if (Result != VK_SUCCESS)
+    {
+        this->VkContext.DebugMessenger = VK_NULL_HANDLE;
+        LE_LOG(LogRAL, Warn, "Failed to create Vulkan validation messenger. VkResult={}", static_cast<int32>(Result));
+        return;
+    }
+
+    LE_LOG(LogRAL, Info, "Vulkan validation messenger installed.");
+#endif
+}
+
+void FVulkanRALDevice::InternalDestroyValidationMessenger()
+{
+#if LE_RAL_ENABLE_VALIDATION
+    if (this->VkContext.Instance == VK_NULL_HANDLE || this->VkContext.DebugMessenger == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
+    auto DestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(this->VkContext.Instance, "vkDestroyDebugUtilsMessengerEXT"));
+    if (DestroyDebugUtilsMessengerEXT == nullptr)
+    {
+        LE_LOG(LogRAL, Warn, "vkDestroyDebugUtilsMessengerEXT is unavailable. Skipping validation messenger destroy.");
+        this->VkContext.DebugMessenger = VK_NULL_HANDLE;
+        return;
+    }
+
+    DestroyDebugUtilsMessengerEXT(this->VkContext.Instance, this->VkContext.DebugMessenger, nullptr);
+    this->VkContext.DebugMessenger = VK_NULL_HANDLE;
+    LE_LOG(LogRAL, Info, "Vulkan validation messenger destroyed.");
+#endif
 }
 
 void FVulkanRALDevice::InternalSelectPhysicalDevice()
 {
     uint32 DeviceCount = 0;
+    VkResult Result = VK_SUCCESS;
     {
-        vkEnumeratePhysicalDevices(this->VkContext.Instance, &DeviceCount, nullptr);
+        Result = vkEnumeratePhysicalDevices(this->VkContext.Instance, &DeviceCount, nullptr);
+    }
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkEnumeratePhysicalDevices(count) failed. VkResult={}", static_cast<int32>(Result));
+        this->VkContext.PhysicalDevice = VK_NULL_HANDLE;
+        this->VkContext.GraphicsFamilyIndex = static_cast<uint32>(-1);
+        return;
     }
     if (DeviceCount == 0)
     {
+        LE_LOG(LogRAL, Error, "No Vulkan physical device found.");
         this->VkContext.PhysicalDevice = VK_NULL_HANDLE;
         this->VkContext.GraphicsFamilyIndex = static_cast<uint32>(-1);
         return;
     }
     std::vector<VkPhysicalDevice> Devices(DeviceCount);
     {
-        vkEnumeratePhysicalDevices(this->VkContext.Instance, &DeviceCount, Devices.data());
+        Result = vkEnumeratePhysicalDevices(this->VkContext.Instance, &DeviceCount, Devices.data());
+    }
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkEnumeratePhysicalDevices(list) failed. VkResult={}", static_cast<int32>(Result));
+        this->VkContext.PhysicalDevice = VK_NULL_HANDLE;
+        this->VkContext.GraphicsFamilyIndex = static_cast<uint32>(-1);
+        return;
     }
     for (const VkPhysicalDevice& Device : Devices)
     {
-        VkPhysicalDeviceProperties Props;
+        VkPhysicalDeviceProperties Props{};
         vkGetPhysicalDeviceProperties(Device, &Props);
+        LE_LOG(LogRAL, Info, "Detected Vulkan GPU: {} (type={}, api={}.{}.{})",
+            Props.deviceName,
+            static_cast<uint32>(Props.deviceType),
+            VK_VERSION_MAJOR(Props.apiVersion),
+            VK_VERSION_MINOR(Props.apiVersion),
+            VK_VERSION_PATCH(Props.apiVersion));
         // Prefer pick discrete gpu
         if (Props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
         {
@@ -134,6 +350,7 @@ void FVulkanRALDevice::InternalSelectPhysicalDevice()
     if (this->VkContext.PhysicalDevice == VK_NULL_HANDLE)
     {
         this->VkContext.PhysicalDevice = Devices[0];
+        LE_LOG(LogRAL, Warn, "No discrete GPU found. Fallback to first available physical device.");
     }
 
     uint32 QueueFamilyCount = 0;
@@ -152,10 +369,29 @@ void FVulkanRALDevice::InternalSelectPhysicalDevice()
             break;
         }
     }
+
+    if (this->VkContext.GraphicsFamilyIndex == static_cast<uint32>(-1))
+    {
+        LE_LOG(LogRAL, Error, "Failed to find graphics queue family.");
+        return;
+    }
+
+    VkPhysicalDeviceProperties SelectedProps{};
+    vkGetPhysicalDeviceProperties(this->VkContext.PhysicalDevice, &SelectedProps);
+    LE_LOG(LogRAL, Info, "Selected Vulkan GPU: {} (graphicsFamily={})",
+        SelectedProps.deviceName, this->VkContext.GraphicsFamilyIndex);
 }
 
 void FVulkanRALDevice::InternalCreateLogicalDevice()
 {
+    if (this->VkContext.PhysicalDevice == VK_NULL_HANDLE || this->VkContext.GraphicsFamilyIndex == static_cast<uint32>(-1))
+    {
+        LE_LOG(LogRAL, Error, "InternalCreateLogicalDevice called with invalid physical device or queue family.");
+        this->VkContext.LogicalDevice = VK_NULL_HANDLE;
+        this->VkContext.bBindlessSupported = false;
+        return;
+    }
+
     float QueuePriority = 1.f;
     VkDeviceQueueCreateInfo QueueInfo{};
     {
@@ -188,18 +424,30 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
     if (!bSupportsDescriptorIndexingCore)
     {
         uint32 ExtensionCount = 0;
-        vkEnumerateDeviceExtensionProperties(this->VkContext.PhysicalDevice, nullptr, &ExtensionCount, nullptr);
+        VkResult ExtensionResult = vkEnumerateDeviceExtensionProperties(this->VkContext.PhysicalDevice, nullptr, &ExtensionCount, nullptr);
+        if (ExtensionResult != VK_SUCCESS)
+        {
+            LE_LOG(LogRAL, Warn, "vkEnumerateDeviceExtensionProperties(count) failed. VkResult={}", static_cast<int32>(ExtensionResult));
+            ExtensionCount = 0;
+        }
         if (ExtensionCount > 0)
         {
             std::vector<VkExtensionProperties> ExtensionProps(ExtensionCount);
-            vkEnumerateDeviceExtensionProperties(this->VkContext.PhysicalDevice, nullptr, &ExtensionCount, ExtensionProps.data());
-            for (const VkExtensionProperties& Ext : ExtensionProps)
+            ExtensionResult = vkEnumerateDeviceExtensionProperties(this->VkContext.PhysicalDevice, nullptr, &ExtensionCount, ExtensionProps.data());
+            if (ExtensionResult == VK_SUCCESS)
             {
-                if (strcmp(Ext.extensionName, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME) == 0)
+                for (const VkExtensionProperties& Ext : ExtensionProps)
                 {
-                    bSupportsDescriptorIndexingExt = true;
-                    break;
+                    if (strcmp(Ext.extensionName, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME) == 0)
+                    {
+                        bSupportsDescriptorIndexingExt = true;
+                        break;
+                    }
                 }
+            }
+            else
+            {
+                LE_LOG(LogRAL, Warn, "vkEnumerateDeviceExtensionProperties(list) failed. VkResult={}", static_cast<int32>(ExtensionResult));
             }
         }
     }
@@ -251,17 +499,21 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
     const VkResult Result = vkCreateDevice(this->VkContext.PhysicalDevice, &DeviceInfo, nullptr, &this->VkContext.LogicalDevice);
     if (Result != VK_SUCCESS)
     {
+        LE_LOG(LogRAL, Error, "vkCreateDevice failed. VkResult={}", static_cast<int32>(Result));
         this->VkContext.LogicalDevice = VK_NULL_HANDLE;
         this->VkContext.bBindlessSupported = false;
         return;
     }
 
     this->VkContext.bBindlessSupported = bCanEnableBindless;
+    LE_LOG(LogRAL, Info, "Logical device created. BindlessSupported={} (coreIndexing={}, extIndexing={})",
+        this->VkContext.bBindlessSupported, bSupportsDescriptorIndexingCore, bSupportsDescriptorIndexingExt);
 }
 
 FRALSwapchain* FVulkanRALDevice::InternalCreateSwapchain(const FRALSwapchainDesc& InDesc)
 {
     // TODO: kodak Memory manage
+    LE_LOG(LogRAL, Info, "Creating swapchain: {}x{}, vsync={}", InDesc.Width, InDesc.Height, InDesc.bEnableVsync);
     FVulkanRALSwapchain* Result = new FVulkanRALSwapchain(this, InDesc);
     return Result;
 }
@@ -271,6 +523,8 @@ void FVulkanRALDevice::InternalSetupBindlessHeap()
 {
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || !this->VkContext.bBindlessSupported)
     {
+        LE_LOG(LogRAL, Info, "Skip bindless heap setup. LogicalDeviceValid={}, BindlessSupported={}",
+            this->VkContext.LogicalDevice != VK_NULL_HANDLE, this->VkContext.bBindlessSupported);
         return;
     }
 
@@ -290,6 +544,7 @@ void FVulkanRALDevice::InternalSetupBindlessHeap()
     DescriptorCount = std::min(DescriptorCount, DescriptorIndexingProperties.maxPerStageDescriptorUpdateAfterBindSamplers);
     if (DescriptorCount == 0)
     {
+        LE_LOG(LogRAL, Warn, "Bindless descriptor count resolved to 0. Disabling bindless.");
         this->VkContext.bBindlessSupported = false;
         return;
     }
@@ -322,6 +577,7 @@ void FVulkanRALDevice::InternalSetupBindlessHeap()
     VkResult Result = vkCreateDescriptorSetLayout(this->VkContext.LogicalDevice, &LayoutInfo, nullptr, &this->VkContext.BindlessLayout);
     if (Result != VK_SUCCESS)
     {
+        LE_LOG(LogRAL, Error, "vkCreateDescriptorSetLayout(bindless) failed. VkResult={}", static_cast<int32>(Result));
         this->VkContext.BindlessLayout = VK_NULL_HANDLE;
         this->VkContext.bBindlessSupported = false;
         return;
@@ -343,6 +599,7 @@ void FVulkanRALDevice::InternalSetupBindlessHeap()
     Result = vkCreateDescriptorPool(this->VkContext.LogicalDevice, &PoolInfo, nullptr, &this->VkContext.BindlessPool);
     if (Result != VK_SUCCESS)
     {
+        LE_LOG(LogRAL, Error, "vkCreateDescriptorPool(bindless) failed. VkResult={}", static_cast<int32>(Result));
         vkDestroyDescriptorSetLayout(this->VkContext.LogicalDevice, this->VkContext.BindlessLayout, nullptr);
         this->VkContext.BindlessLayout = VK_NULL_HANDLE;
         this->VkContext.BindlessPool = VK_NULL_HANDLE;
@@ -360,6 +617,7 @@ void FVulkanRALDevice::InternalSetupBindlessHeap()
     Result = vkAllocateDescriptorSets(this->VkContext.LogicalDevice, &AllocateInfo, &this->VkContext.BindlessDescriptorSet);
     if (Result != VK_SUCCESS)
     {
+        LE_LOG(LogRAL, Error, "vkAllocateDescriptorSets(bindless) failed. VkResult={}", static_cast<int32>(Result));
         vkDestroyDescriptorPool(this->VkContext.LogicalDevice, this->VkContext.BindlessPool, nullptr);
         vkDestroyDescriptorSetLayout(this->VkContext.LogicalDevice, this->VkContext.BindlessLayout, nullptr);
         this->VkContext.BindlessPool = VK_NULL_HANDLE;
@@ -368,20 +626,37 @@ void FVulkanRALDevice::InternalSetupBindlessHeap()
         this->VkContext.bBindlessSupported = false;
         return;
     }
+
+    LE_LOG(LogRAL, Info, "Bindless heap initialized. DescriptorCount={}", DescriptorCount);
 }
 
 FRALSampler* FVulkanRALDevice::CreateSampler(const FRALSamplerDesc& Desc)
 {
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateSampler failed: logical device is null.");
+        return nullptr;
+    }
     return new FVulkanRALSampler(this, Desc);
 }
 
 FRALBindGroupLayout* FVulkanRALDevice::CreateBindGroupLayout(const FRALBindGroupLayoutDesc& Desc)
 {
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateBindGroupLayout failed: logical device is null.");
+        return nullptr;
+    }
     return new FVulkanRALBindGroupLayout(this, Desc);
 }
 
 FRALBindGroup* FVulkanRALDevice::CreateBindGroup(const FRALBindGroupDesc& Desc)
 {
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateBindGroup failed: logical device is null.");
+        return nullptr;
+    }
     return new FVulkanRALBindGroup(this, Desc);
 }
 
@@ -389,6 +664,8 @@ FRALShader* FVulkanRALDevice::CreateShaderFromFile(EShaderStage Stage, const voi
 {
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || Data == nullptr || Size == 0 || (Size % 4) != 0)
     {
+        LE_LOG(LogRAL, Error, "CreateShaderFromFile failed: invalid input. LogicalDeviceValid={}, DataValid={}, Size={}",
+            this->VkContext.LogicalDevice != VK_NULL_HANDLE, Data != nullptr, Size);
         return nullptr;
     }
 
@@ -401,9 +678,11 @@ FRALShader* FVulkanRALDevice::CreateShaderFromFile(EShaderStage Stage, const voi
     FVulkanRALShader* Shader = new FVulkanRALShader(this, Desc);
     if (Shader->Module == VK_NULL_HANDLE)
     {
+        LE_LOG(LogRAL, Error, "CreateShaderFromFile failed: shader module creation returned null.");
         delete Shader;
         return nullptr;
     }
+    LE_LOG(LogRAL, Info, "Shader module created. Stage={}, Size={} bytes", static_cast<uint32>(Stage), Size);
     return Shader;
 }
 
@@ -411,35 +690,58 @@ FRALPipeline_Graphics* FVulkanRALDevice::CreateGraphicsPipeline(const FRALPipeli
 {
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
+        LE_LOG(LogRAL, Error, "CreateGraphicsPipeline failed: logical device is null.");
         return nullptr;
     }
 
     FVulkanRALPipeline_Graphics* Pipeline = new FVulkanRALPipeline_Graphics(this, Desc);
     if (Pipeline->Pipeline == VK_NULL_HANDLE || Pipeline->PipelineLayout == VK_NULL_HANDLE || Pipeline->RenderPass == VK_NULL_HANDLE)
     {
+        LE_LOG(LogRAL, Error, "CreateGraphicsPipeline failed: invalid Vulkan pipeline handles.");
         delete Pipeline;
         return nullptr;
     }
+    LE_LOG(LogRAL, Info, "Graphics pipeline created successfully.");
     return Pipeline;
 }
 
 FRALBuffer* FVulkanRALDevice::CreateBuffer(const FRALBufferDesc& Desc)
 {
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateBuffer failed: logical device is null.");
+        return nullptr;
+    }
     return new FVulkanRALBuffer(this, Desc);
 }
 
 FRALTexture* FVulkanRALDevice::CreateTexture(const FRALTextureDesc& Desc)
 {
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateTexture failed: logical device is null.");
+        return nullptr;
+    }
     return new FVulkanRALTexture(this, Desc);
 }
 
 FRALCommandList* FVulkanRALDevice::CreateCommandList(EQueueType Type)
 {
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateCommandList failed: logical device is null.");
+        return nullptr;
+    }
 	return new FVulkanRALCommandList(this, Type);
 }
 
 FRALSwapchain* FVulkanRALDevice::CreateSwapchain(const FRALSwapchainDesc& Desc)
 {
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || this->VkContext.Instance == VK_NULL_HANDLE || this->VkContext.PhysicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateSwapchain failed: Vulkan context is incomplete.");
+        return nullptr;
+    }
 	return this->InternalCreateSwapchain(Desc);
 }
 
@@ -458,6 +760,10 @@ uint32 FVulkanRALDevice::AllocateBindlessIndex(FRALResource* Resource)
 	// TODO: kodak - Implement proper bindless index allocation
 	// For now, return a placeholder index
 	// This needs a proper allocation strategy (free list, etc.)
+    if (Resource == nullptr)
+    {
+        LE_LOG(LogRAL, Warn, "AllocateBindlessIndex called with null resource.");
+    }
 	static uint32 NextIndex = 0;
 	return NextIndex++;
 }
@@ -475,9 +781,11 @@ namespace RAL
 		FVulkanRALDevice* Device = new FVulkanRALDevice();
         if (Device->VkContext.LogicalDevice == VK_NULL_HANDLE || Device->GetGraphicsQueue() == nullptr)
         {
+            LE_LOG(LogRAL, Error, "CreateDevice failed: invalid Vulkan device or graphics queue.");
             delete Device;
             return nullptr;
         }
+        LE_LOG(LogRAL, Info, "CreateDevice succeeded.");
         return Device;
 	}
 }

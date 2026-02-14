@@ -28,6 +28,8 @@
 #define VK_USE_PLATFORM_WIN32_KHR 1
 #endif
 
+LE_DECLARE_LOG_CATEGORY_EXTERN(LogRAL);
+
 namespace RAL
 {
     namespace Vulkan
@@ -40,13 +42,24 @@ namespace RAL
         static const char* const InstanceExtensions[] = {
             VK_KHR_SURFACE_EXTENSION_NAME,
 #if PLATFORM_WINDOWS
-            VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+            VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+#endif
+#if LE_RAL_ENABLE_VALIDATION
+            VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 #endif
         };
 #if PLATFORM_WINDOWS
+#if LE_RAL_ENABLE_VALIDATION
+        static const uint32 InstanceExtensionCount = 3;
+#else
+        static const uint32 InstanceExtensionCount = 2;
+#endif
+#else
+#if LE_RAL_ENABLE_VALIDATION
         static const uint32 InstanceExtensionCount = 2;
 #else
         static const uint32 InstanceExtensionCount = 1;
+#endif
 #endif
 
 #if LE_RAL_ENABLE_VALIDATION
@@ -88,6 +101,9 @@ public:
     VkInstance Instance = VK_NULL_HANDLE;
     VkDevice LogicalDevice = VK_NULL_HANDLE;
     VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
+#if LE_RAL_ENABLE_VALIDATION
+    VkDebugUtilsMessengerEXT DebugMessenger = VK_NULL_HANDLE;
+#endif
 
 public:
     uint32 GraphicsFamilyIndex = -1;
@@ -128,6 +144,8 @@ public:
     void InternalCreateInstance();
     void InternalSelectPhysicalDevice();
     void InternalCreateLogicalDevice();
+    void InternalSetupValidationMessenger();
+    void InternalDestroyValidationMessenger();
 
     FRALSwapchain* InternalCreateSwapchain(const FRALSwapchainDesc& InDesc);
 

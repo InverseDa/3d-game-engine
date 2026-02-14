@@ -4,13 +4,28 @@
 FVulkanRALCommandList::FVulkanRALCommandList(FVulkanRALDevice* InDevice, EQueueType Type)
     : Device(InDevice)
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CommandList creation failed: invalid device.");
+        this->Pool = VK_NULL_HANDLE;
+        this->Handle = VK_NULL_HANDLE;
+        return;
+    }
+
     VkCommandPoolCreateInfo PoolInfo{};
     {
         PoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         PoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         PoolInfo.queueFamilyIndex = this->Device->VkContext.GraphicsFamilyIndex; // assume graphics
     }
-    vkCreateCommandPool(this->Device->VkContext.LogicalDevice, &PoolInfo, nullptr, &this->Pool);
+    VkResult Result = vkCreateCommandPool(this->Device->VkContext.LogicalDevice, &PoolInfo, nullptr, &this->Pool);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateCommandPool failed. VkResult={}", static_cast<int32>(Result));
+        this->Pool = VK_NULL_HANDLE;
+        this->Handle = VK_NULL_HANDLE;
+        return;
+    }
 
     VkCommandBufferAllocateInfo AllocateInfo{};
     {
@@ -19,11 +34,26 @@ FVulkanRALCommandList::FVulkanRALCommandList(FVulkanRALDevice* InDevice, EQueueT
         AllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         AllocateInfo.commandBufferCount = 1;
     }
-    vkAllocateCommandBuffers(this->Device->VkContext.LogicalDevice, &AllocateInfo, &this->Handle);
+    Result = vkAllocateCommandBuffers(this->Device->VkContext.LogicalDevice, &AllocateInfo, &this->Handle);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkAllocateCommandBuffers failed. VkResult={}", static_cast<int32>(Result));
+        vkDestroyCommandPool(this->Device->VkContext.LogicalDevice, this->Pool, nullptr);
+        this->Pool = VK_NULL_HANDLE;
+        this->Handle = VK_NULL_HANDLE;
+        return;
+    }
 }
 
 FVulkanRALCommandList::~FVulkanRALCommandList()
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        this->FramebufferCache.clear();
+        this->Pool = VK_NULL_HANDLE;
+        return;
+    }
+
     // 销毁缓存的 Framebuffer
     for (auto& Pair : this->FramebufferCache)
     {
@@ -41,28 +71,53 @@ FVulkanRALCommandList::~FVulkanRALCommandList()
 
 void FVulkanRALCommandList::Begin()
 {
+    if (this->Handle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CommandList Begin failed: command buffer handle is null.");
+        return;
+    }
+
     VkCommandBufferBeginInfo BeginInfo{};
     {
         BeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         BeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     }
-    vkBeginCommandBuffer(this->Handle, &BeginInfo);
+    const VkResult Result = vkBeginCommandBuffer(this->Handle, &BeginInfo);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkBeginCommandBuffer failed. VkResult={}", static_cast<int32>(Result));
+    }
 }
 
 void FVulkanRALCommandList::End()
 {
-    vkEndCommandBuffer(this->Handle);
+    if (this->Handle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CommandList End failed: command buffer handle is null.");
+        return;
+    }
+    const VkResult Result = vkEndCommandBuffer(this->Handle);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkEndCommandBuffer failed. VkResult={}", static_cast<int32>(Result));
+    }
 }
 
 void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
 {
     if (this->CurrentPipeline == nullptr || this->CurrentPipeline->RenderPass == VK_NULL_HANDLE)
     {
+        LE_LOG(LogRAL, Warn, "BeginRenderPass skipped: pipeline or render pass is invalid.");
         return;
     }
 
     VkRenderPass RenderPass = this->CurrentPipeline->RenderPass;
     VkFramebuffer Framebuffer = this->InternalGetFramebuffer(Desc, RenderPass, true);
+    if (Framebuffer == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: framebuffer creation failed.");
+        return;
+    }
 
     // 获取渲染区域尺寸
     uint32 Width = 0, Height = 0;
@@ -70,6 +125,11 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
     {
         FVulkanRALTextureView* View = static_cast<FVulkanRALTextureView*>(
             Desc.ColorAttachments[0].RenderTarget);
+        if (View == nullptr || View->Owner == nullptr)
+        {
+            LE_LOG(LogRAL, Error, "BeginRenderPass failed: first color attachment is invalid.");
+            return;
+        }
         const FRALTextureDesc& TexDesc = View->Owner->GetDesc();
         Width = TexDesc.Width;
         Height = TexDesc.Height;
@@ -128,6 +188,7 @@ void FVulkanRALCommandList::SetGraphicsPipeline(FRALPipeline_Graphics* Pipeline)
 {
     if (Pipeline == nullptr)
     {
+        LE_LOG(LogRAL, Warn, "SetGraphicsPipeline skipped: pipeline is null.");
         return;
     }
 
@@ -166,6 +227,7 @@ void FVulkanRALCommandList::SetBindGroup(uint32 SetIndex, FRALBindGroup* BindGro
 {
     if (this->CurrentPipeline == nullptr || this->CurrentPipeline->PipelineLayout == VK_NULL_HANDLE || BindGroup == nullptr)
     {
+        LE_LOG(LogRAL, Warn, "SetBindGroup skipped: invalid pipeline/bind group.");
         return;
     }
 
@@ -188,6 +250,12 @@ void FVulkanRALCommandList::SetBindGroup(uint32 SetIndex, FRALBindGroup* BindGro
 
 void FVulkanRALCommandList::EndRenderPass()
 {
+    if (this->Handle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "EndRenderPass failed: command buffer handle is null.");
+        return;
+    }
+
     vkCmdEndRenderPass(this->Handle);
 
     for (VkImage Image : this->PendingPresentTransitionImages)
@@ -227,7 +295,17 @@ void FVulkanRALCommandList::EndRenderPass()
 
 void FVulkanRALCommandList::SetVertexBuffer(uint32 Slot, FRALBuffer* Buffer, uint64 Offset)
 {
+    if (Buffer == nullptr)
+    {
+        LE_LOG(LogRAL, Error, "SetVertexBuffer failed: buffer is null.");
+        return;
+    }
     const FVulkanRALBuffer* VkRALBuffer = static_cast<FVulkanRALBuffer*>(Buffer);
+    if (VkRALBuffer->Buffer == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "SetVertexBuffer failed: Vulkan buffer handle is null.");
+        return;
+    }
     VkBuffer BufferHandle = VkRALBuffer->Buffer;
     VkDeviceSize VkOffset = Offset;
     vkCmdBindVertexBuffers(this->Handle, Slot, 1, &BufferHandle, &VkOffset);
@@ -235,7 +313,17 @@ void FVulkanRALCommandList::SetVertexBuffer(uint32 Slot, FRALBuffer* Buffer, uin
 
 void FVulkanRALCommandList::SetIndexBuffer(FRALBuffer* Buffer, uint64 Offset, EPixelFormat IndexFormat)
 {
+    if (Buffer == nullptr)
+    {
+        LE_LOG(LogRAL, Error, "SetIndexBuffer failed: buffer is null.");
+        return;
+    }
     const FVulkanRALBuffer* VkRALBuffer = static_cast<FVulkanRALBuffer*>(Buffer);
+    if (VkRALBuffer->Buffer == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "SetIndexBuffer failed: Vulkan buffer handle is null.");
+        return;
+    }
     VkIndexType IndexType = (IndexFormat == EPixelFormat::R32_UINT) ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
     vkCmdBindIndexBuffer(this->Handle, VkRALBuffer->Buffer, Offset, IndexType);
 }
@@ -249,6 +337,7 @@ void FVulkanRALCommandList::SetPushConstants(EShaderStage Stage, const void* Dat
 {
     if (this->CurrentPipeline == nullptr || this->CurrentPipeline->PipelineLayout == VK_NULL_HANDLE || Data == nullptr || Size == 0)
     {
+        LE_LOG(LogRAL, Warn, "SetPushConstants skipped: invalid pipeline or push constant data.");
         return;
     }
 
@@ -277,6 +366,11 @@ VkFramebuffer FVulkanRALCommandList::InternalGetFramebuffer(
     {
         FVulkanRALTextureView* View = static_cast<FVulkanRALTextureView*>(
             Desc.ColorAttachments[i].RenderTarget);
+        if (View == nullptr || View->Owner == nullptr || View->View == VK_NULL_HANDLE)
+        {
+            LE_LOG(LogRAL, Error, "Framebuffer creation failed: color attachment {} is invalid.", i);
+            return VK_NULL_HANDLE;
+        }
         Attachments.push_back(View->View);
 
         if (i == 0) {
@@ -290,6 +384,16 @@ VkFramebuffer FVulkanRALCommandList::InternalGetFramebuffer(
     {
         FVulkanRALTextureView* DepthView = static_cast<FVulkanRALTextureView*>(
             Desc.DepthStencilAttachment.DepthStencilTarget);
+        if (DepthView == nullptr)
+        {
+            LE_LOG(LogRAL, Error, "Framebuffer creation failed: depth view is null.");
+            return VK_NULL_HANDLE;
+        }
+        if (DepthView->View == VK_NULL_HANDLE)
+        {
+            LE_LOG(LogRAL, Error, "Framebuffer creation failed: depth image view handle is null.");
+            return VK_NULL_HANDLE;
+        }
         Attachments.push_back(DepthView->View);
     }
 
@@ -320,7 +424,12 @@ VkFramebuffer FVulkanRALCommandList::InternalGetFramebuffer(
     FbInfo.layers = 1;
 
     VkFramebuffer Framebuffer = VK_NULL_HANDLE;
-    vkCreateFramebuffer(this->Device->VkContext.LogicalDevice, &FbInfo, nullptr, &Framebuffer);
+    const VkResult Result = vkCreateFramebuffer(this->Device->VkContext.LogicalDevice, &FbInfo, nullptr, &Framebuffer);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateFramebuffer failed. VkResult={}", static_cast<int32>(Result));
+        return VK_NULL_HANDLE;
+    }
 
     this->FramebufferCache[Hash] = Framebuffer;
     return Framebuffer;

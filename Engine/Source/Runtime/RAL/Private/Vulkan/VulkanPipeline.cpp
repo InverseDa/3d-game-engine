@@ -62,6 +62,12 @@ static VkPolygonMode ToVkPolygonMode(EFillMode Mode)
 
 static VkRenderPass CreateMinimalRenderPass(FVulkanRALDevice* Device, const FRALPipelineDesc_Graphics& Desc)
 {
+    if (Device == nullptr || Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateMinimalRenderPass failed: invalid device.");
+        return VK_NULL_HANDLE;
+    }
+
     std::vector<VkAttachmentDescription> Attachments;
     std::vector<VkAttachmentReference> ColorRefs;
 
@@ -72,6 +78,7 @@ static VkRenderPass CreateMinimalRenderPass(FVulkanRALDevice* Device, const FRAL
             const VkFormat VkRtFormat = ToVkFormat(Desc.RenderTargetFormats[i]);
             if (VkRtFormat == VK_FORMAT_UNDEFINED)
             {
+                LE_LOG(LogRAL, Error, "CreateMinimalRenderPass failed: invalid color format at index {}.", i);
                 return VK_NULL_HANDLE;
             }
             ColorAttachment.format = VkRtFormat;
@@ -101,6 +108,7 @@ static VkRenderPass CreateMinimalRenderPass(FVulkanRALDevice* Device, const FRAL
             const VkFormat VkDepthFormat = ToVkFormat(Desc.DepthStencilFormat);
             if (VkDepthFormat == VK_FORMAT_UNDEFINED)
             {
+                LE_LOG(LogRAL, Error, "CreateMinimalRenderPass failed: invalid depth format.");
                 return VK_NULL_HANDLE;
             }
             Depth.format = VkDepthFormat;
@@ -142,6 +150,7 @@ static VkRenderPass CreateMinimalRenderPass(FVulkanRALDevice* Device, const FRAL
     const VkResult Result = vkCreateRenderPass(Device->VkContext.LogicalDevice, &RenderPassInfo, nullptr, &RenderPass);
     if (Result != VK_SUCCESS)
     {
+        LE_LOG(LogRAL, Error, "vkCreateRenderPass failed. VkResult={}", static_cast<int32>(Result));
         return VK_NULL_HANDLE;
     }
     return RenderPass;
@@ -150,10 +159,27 @@ static VkRenderPass CreateMinimalRenderPass(FVulkanRALDevice* Device, const FRAL
 FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDevice, const FRALPipelineDesc_Graphics& InDesc)
     : TVulkanResourceBase<FRALPipelineDesc_Graphics>(InDevice, InDesc)
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Pipeline creation failed: invalid device.");
+        this->Pipeline = VK_NULL_HANDLE;
+        this->PipelineLayout = VK_NULL_HANDLE;
+        this->RenderPass = VK_NULL_HANDLE;
+        return;
+    }
+
     std::vector<VkDescriptorSetLayout> SetLayouts{};
     SetLayouts.reserve(Desc.BindGroupLayouts.size());
     for (FRALBindGroupLayout* SetLayout : Desc.BindGroupLayouts)
     {
+        if (SetLayout == nullptr)
+        {
+            LE_LOG(LogRAL, Error, "Pipeline creation failed: bind group layout is null.");
+            this->Pipeline = VK_NULL_HANDLE;
+            this->PipelineLayout = VK_NULL_HANDLE;
+            this->RenderPass = VK_NULL_HANDLE;
+            return;
+        }
         FVulkanRALBindGroupLayout* VkLayout = static_cast<FVulkanRALBindGroupLayout*>(SetLayout);
         SetLayouts.push_back(VkLayout->Handle);
     }
@@ -167,6 +193,7 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
     VkResult Result = vkCreatePipelineLayout(this->Device->VkContext.LogicalDevice, &LayoutInfo, nullptr, &this->PipelineLayout);
     if (Result != VK_SUCCESS)
     {
+        LE_LOG(LogRAL, Error, "vkCreatePipelineLayout failed. VkResult={}", static_cast<int32>(Result));
         this->PipelineLayout = VK_NULL_HANDLE;
         return;
     }
@@ -175,6 +202,7 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
     this->RenderPass = CreateMinimalRenderPass(this->Device, this->Desc);
     if (this->RenderPass == VK_NULL_HANDLE)
     {
+        LE_LOG(LogRAL, Error, "Pipeline creation failed: render pass creation failed.");
         return;
     }
 
@@ -187,6 +215,7 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         FVulkanRALShader* VS = static_cast<FVulkanRALShader*>(this->Desc.VertexShader);
         if (VS->Module == VK_NULL_HANDLE)
         {
+            LE_LOG(LogRAL, Error, "Pipeline creation failed: vertex shader module is null.");
             return;
         }
         VkPipelineShaderStageCreateInfo ShaderStage{};
@@ -203,6 +232,7 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         FVulkanRALShader* PS = static_cast<FVulkanRALShader*>(this->Desc.PixelShader);
         if (PS->Module == VK_NULL_HANDLE)
         {
+            LE_LOG(LogRAL, Error, "Pipeline creation failed: pixel shader module is null.");
             return;
         }
         VkPipelineShaderStageCreateInfo ShaderStage{};
@@ -236,6 +266,7 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         VkAttr.format = ToVkFormat(Attr.Format);
         if (VkAttr.format == VK_FORMAT_UNDEFINED)
         {
+            LE_LOG(LogRAL, Error, "Pipeline creation failed: invalid vertex attribute format at location {}.", Attr.Location);
             return;
         }
         VkAttr.offset = Attr.Offset;
@@ -345,12 +376,25 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
     Result = vkCreateGraphicsPipelines(this->Device->VkContext.LogicalDevice, VK_NULL_HANDLE, 1, &PipelineInfo, nullptr, &this->Pipeline);
     if (Result != VK_SUCCESS)
     {
+        LE_LOG(LogRAL, Error, "vkCreateGraphicsPipelines failed. VkResult={}", static_cast<int32>(Result));
         this->Pipeline = VK_NULL_HANDLE;
+        return;
     }
+
+    LE_LOG(LogRAL, Info, "Vulkan graphics pipeline created. RenderTargets={}, HasDepth={}",
+        this->Desc.RenderTargetCount, this->Desc.DepthStencilFormat != EPixelFormat::Unknown);
 }
 
 FVulkanRALPipeline_Graphics::~FVulkanRALPipeline_Graphics()
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        this->Pipeline = VK_NULL_HANDLE;
+        this->PipelineLayout = VK_NULL_HANDLE;
+        this->RenderPass = VK_NULL_HANDLE;
+        return;
+    }
+
     if (this->Pipeline != VK_NULL_HANDLE)
     {
         vkDestroyPipeline(Device->VkContext.LogicalDevice, this->Pipeline, nullptr);

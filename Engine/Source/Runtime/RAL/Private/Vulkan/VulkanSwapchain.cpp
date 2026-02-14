@@ -10,49 +10,124 @@ FVulkanRALSwapchain::FVulkanRALSwapchain(FVulkanRALDevice* InDevice, const FRALS
     , Device(InDevice)
     , Desc(InDesc)
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Swapchain creation failed: invalid device.");
+        return;
+    }
+
+    LE_LOG(LogRAL, Info, "Creating Vulkan swapchain. Size={}x{}, VSync={}", this->Desc.Width, this->Desc.Height, this->Desc.bEnableVsync);
+
     this->InternalCreateSurface();
+    if (this->SurfaceHandle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Swapchain creation failed: surface creation failed.");
+        return;
+    }
 
     VkSemaphoreCreateInfo SemaphoreInfo{};
     {
         SemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     }
-    vkCreateSemaphore(this->Device->VkContext.LogicalDevice, &SemaphoreInfo, nullptr, &this->ImageAvailableSemaphore);
-    vkCreateSemaphore(this->Device->VkContext.LogicalDevice, &SemaphoreInfo, nullptr, &this->RenderFinishedSemaphore);
+    VkResult Result = vkCreateSemaphore(this->Device->VkContext.LogicalDevice, &SemaphoreInfo, nullptr, &this->ImageAvailableSemaphore);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateSemaphore(ImageAvailable) failed. VkResult={}", static_cast<int32>(Result));
+    }
+    Result = vkCreateSemaphore(this->Device->VkContext.LogicalDevice, &SemaphoreInfo, nullptr, &this->RenderFinishedSemaphore);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateSemaphore(RenderFinished) failed. VkResult={}", static_cast<int32>(Result));
+    }
 
     this->InternalCreateSwapchain();
+    if (this->SwapchainHandle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Swapchain creation failed: vkCreateSwapchainKHR failed.");
+        return;
+    }
     this->InternalCreateImageViews();
 
     // Get the first frame picture
     this->AcquireNextImage();
+    LE_LOG(LogRAL, Info, "Vulkan swapchain created with {} images.", static_cast<uint32>(this->Images.size()));
 }
 
 FVulkanRALSwapchain::~FVulkanRALSwapchain()
 {
-    vkDeviceWaitIdle(this->Device->VkContext.LogicalDevice);
+    if (this->Device == nullptr)
+    {
+        LE_LOG(LogRAL, Warn, "Destroying swapchain with null device.");
+        return;
+    }
+
+    if (this->Device->VkContext.LogicalDevice != VK_NULL_HANDLE)
+    {
+        vkDeviceWaitIdle(this->Device->VkContext.LogicalDevice);
+    }
     this->InternalDestroySwapchainResources();
 
-    vkDestroySemaphore(this->Device->VkContext.LogicalDevice, this->ImageAvailableSemaphore, nullptr);
-    vkDestroySemaphore(this->Device->VkContext.LogicalDevice, this->RenderFinishedSemaphore, nullptr);
-    vkDestroySurfaceKHR(this->Device->VkContext.Instance, this->SurfaceHandle, nullptr);
+    if (this->ImageAvailableSemaphore != VK_NULL_HANDLE)
+    {
+        vkDestroySemaphore(this->Device->VkContext.LogicalDevice, this->ImageAvailableSemaphore, nullptr);
+        this->ImageAvailableSemaphore = VK_NULL_HANDLE;
+    }
+    if (this->RenderFinishedSemaphore != VK_NULL_HANDLE)
+    {
+        vkDestroySemaphore(this->Device->VkContext.LogicalDevice, this->RenderFinishedSemaphore, nullptr);
+        this->RenderFinishedSemaphore = VK_NULL_HANDLE;
+    }
+    if (this->SurfaceHandle != VK_NULL_HANDLE)
+    {
+        vkDestroySurfaceKHR(this->Device->VkContext.Instance, this->SurfaceHandle, nullptr);
+        this->SurfaceHandle = VK_NULL_HANDLE;
+    }
 }
 
 void FVulkanRALSwapchain::InternalCreateSurface()
 {
 #if PLATFORM_WINDOWS
+    if (this->Desc.WindowHandle == nullptr)
+    {
+        LE_LOG(LogRAL, Error, "InternalCreateSurface failed: window handle is null.");
+        this->SurfaceHandle = VK_NULL_HANDLE;
+        return;
+    }
+
     VkWin32SurfaceCreateInfoKHR Info{};
     {
         Info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
         Info.hinstance = GetModuleHandle(nullptr); // Get the current process handle
         Info.hwnd = static_cast<HWND>(this->Desc.WindowHandle);
     }
-    vkCreateWin32SurfaceKHR(this->Device->VkContext.Instance, &Info, nullptr, &this->SurfaceHandle);
+    const VkResult Result = vkCreateWin32SurfaceKHR(this->Device->VkContext.Instance, &Info, nullptr, &this->SurfaceHandle);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateWin32SurfaceKHR failed. VkResult={}", static_cast<int32>(Result));
+        this->SurfaceHandle = VK_NULL_HANDLE;
+        return;
+    }
+    LE_LOG(LogRAL, Info, "Vulkan surface created.");
 #endif
 }
 
 void FVulkanRALSwapchain::InternalCreateSwapchain()
 {
+    if (this->SurfaceHandle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "InternalCreateSwapchain failed: surface handle is null.");
+        this->SwapchainHandle = VK_NULL_HANDLE;
+        return;
+    }
+
     VkSurfaceCapabilitiesKHR Capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &Capabilities);
+    const VkResult CapResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &Capabilities);
+    if (CapResult != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR failed. VkResult={}", static_cast<int32>(CapResult));
+        this->SwapchainHandle = VK_NULL_HANDLE;
+        return;
+    }
 
     // Check the max buffer count
     uint32 MinImageCount = Capabilities.minImageCount + 1;
@@ -81,18 +156,46 @@ void FVulkanRALSwapchain::InternalCreateSwapchain()
         CreateInfo.clipped = true;
         CreateInfo.oldSwapchain = VK_NULL_HANDLE; // Resize needed
     }
-    vkCreateSwapchainKHR(this->Device->VkContext.LogicalDevice, &CreateInfo, nullptr, &this->SwapchainHandle);
+    const VkResult Result = vkCreateSwapchainKHR(this->Device->VkContext.LogicalDevice, &CreateInfo, nullptr, &this->SwapchainHandle);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateSwapchainKHR failed. VkResult={}", static_cast<int32>(Result));
+        this->SwapchainHandle = VK_NULL_HANDLE;
+        return;
+    }
 }
 
 void FVulkanRALSwapchain::InternalCreateImageViews()
 {
-    uint32 ImageCount;
+    if (this->SwapchainHandle == VK_NULL_HANDLE)
     {
-        vkGetSwapchainImagesKHR(this->Device->VkContext.LogicalDevice, this->SwapchainHandle, &ImageCount, nullptr);
+        LE_LOG(LogRAL, Error, "InternalCreateImageViews failed: swapchain handle is null.");
+        return;
+    }
+
+    uint32 ImageCount = 0;
+    {
+        const VkResult Result = vkGetSwapchainImagesKHR(this->Device->VkContext.LogicalDevice, this->SwapchainHandle, &ImageCount, nullptr);
+        if (Result != VK_SUCCESS)
+        {
+            LE_LOG(LogRAL, Error, "vkGetSwapchainImagesKHR(count) failed. VkResult={}", static_cast<int32>(Result));
+            return;
+        }
+    }
+    if (ImageCount == 0)
+    {
+        LE_LOG(LogRAL, Error, "Swapchain returned zero images.");
+        return;
     }
     this->Images.resize(ImageCount);
     {
-        vkGetSwapchainImagesKHR(this->Device->VkContext.LogicalDevice, this->SwapchainHandle, &ImageCount, this->Images.data());
+        const VkResult Result = vkGetSwapchainImagesKHR(this->Device->VkContext.LogicalDevice, this->SwapchainHandle, &ImageCount, this->Images.data());
+        if (Result != VK_SUCCESS)
+        {
+            LE_LOG(LogRAL, Error, "vkGetSwapchainImagesKHR(list) failed. VkResult={}", static_cast<int32>(Result));
+            this->Images.clear();
+            return;
+        }
     }
 
     this->BackBufferViews.resize(ImageCount);
@@ -132,7 +235,12 @@ void FVulkanRALSwapchain::InternalCreateImageViews()
         }
         VkImageView ViewHandle;
         {
-            vkCreateImageView(this->Device->VkContext.LogicalDevice, &ViewInfo, nullptr, &ViewHandle);
+            const VkResult Result = vkCreateImageView(this->Device->VkContext.LogicalDevice, &ViewInfo, nullptr, &ViewHandle);
+            if (Result != VK_SUCCESS)
+            {
+                LE_LOG(LogRAL, Error, "vkCreateImageView for swapchain image[{}] failed. VkResult={}", i, static_cast<int32>(Result));
+                ViewHandle = VK_NULL_HANDLE;
+            }
         }
         FRALTextureViewDesc ViewDesc;
         {
@@ -166,6 +274,17 @@ void FVulkanRALSwapchain::InternalDestroySwapchainResources()
 
 void FVulkanRALSwapchain::AcquireNextImage()
 {
+    if (this->SwapchainHandle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "AcquireNextImage failed: swapchain handle is null.");
+        return;
+    }
+    if (this->ImageAvailableSemaphore == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "AcquireNextImage failed: image-available semaphore is null.");
+        return;
+    }
+
     const VkResult Result = vkAcquireNextImageKHR(
         this->Device->VkContext.LogicalDevice,
         SwapchainHandle,
@@ -176,17 +295,23 @@ void FVulkanRALSwapchain::AcquireNextImage()
     );
     if (Result == VK_ERROR_OUT_OF_DATE_KHR)
     {
+        LE_LOG(LogRAL, Warn, "AcquireNextImage returned OUT_OF_DATE. Triggering resize.");
         this->Resize(this->Desc.Width, this->Desc.Height);
         return;
     }
     if (Result != VK_SUCCESS && Result != VK_SUBOPTIMAL_KHR)
     {
-        // Handle Error
+        LE_LOG(LogRAL, Error, "vkAcquireNextImageKHR failed. VkResult={}", static_cast<int32>(Result));
         return;
     }
     
     VkQueue GraphicsQueue = VK_NULL_HANDLE;
     vkGetDeviceQueue(this->Device->VkContext.LogicalDevice, this->Device->VkContext.GraphicsFamilyIndex, 0, &GraphicsQueue);
+    if (GraphicsQueue == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "AcquireNextImage failed: graphics queue is null.");
+        return;
+    }
 
     // Consume acquire semaphore on the graphics queue so the next acquire can legally reuse it.
     VkPipelineStageFlags WaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -204,7 +329,7 @@ void FVulkanRALSwapchain::AcquireNextImage()
     const VkResult SubmitResult = vkQueueSubmit(GraphicsQueue, 1, &SubmitInfo, VK_NULL_HANDLE);
     if (SubmitResult != VK_SUCCESS)
     {
-        // Handle Error
+        LE_LOG(LogRAL, Error, "vkQueueSubmit(acquire semaphore consume) failed. VkResult={}", static_cast<int32>(SubmitResult));
     }
 }
 
@@ -219,12 +344,24 @@ FRALTextureView* FVulkanRALSwapchain::GetCurrentBackBufferView() const
 
 void FVulkanRALSwapchain::Resize(uint32 Width, uint32 Height)
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Resize failed: invalid device.");
+        return;
+    }
+
     this->Desc.Width = Width;
     this->Desc.Height = Height;
+    LE_LOG(LogRAL, Info, "Resizing swapchain to {}x{}.", Width, Height);
 
     vkDeviceWaitIdle(this->Device->VkContext.LogicalDevice);
     this->InternalDestroySwapchainResources();
     this->InternalCreateSwapchain();
+    if (this->SwapchainHandle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Resize failed: swapchain recreation failed.");
+        return;
+    }
     this->InternalCreateImageViews();
 
     this->AcquireNextImage();
@@ -232,6 +369,12 @@ void FVulkanRALSwapchain::Resize(uint32 Width, uint32 Height)
 
 void FVulkanRALSwapchain::Present()
 {
+    if (this->SwapchainHandle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Present failed: swapchain handle is null.");
+        return;
+    }
+
     VkPresentInfoKHR PresentInfo{};
     {
         PresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -248,16 +391,32 @@ void FVulkanRALSwapchain::Present()
 
         VkQueue GraphicsQueue = VK_NULL_HANDLE;
         vkGetDeviceQueue(this->Device->VkContext.LogicalDevice, this->Device->VkContext.GraphicsFamilyIndex, 0, &GraphicsQueue);
+        if (GraphicsQueue == VK_NULL_HANDLE)
+        {
+            LE_LOG(LogRAL, Error, "Present failed: graphics queue is null.");
+            return;
+        }
         auto Result = vkQueuePresentKHR(GraphicsQueue, &PresentInfo);
         if (Result == VK_ERROR_OUT_OF_DATE_KHR || Result == VK_SUBOPTIMAL_KHR)
         {
+            LE_LOG(LogRAL, Warn, "vkQueuePresentKHR returned {}. Recreating swapchain.", static_cast<int32>(Result));
             VkSurfaceCapabilitiesKHR SurfaceCaps{};
-            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &SurfaceCaps);
+            const VkResult SurfaceResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &SurfaceCaps);
+            if (SurfaceResult != VK_SUCCESS)
+            {
+                LE_LOG(LogRAL, Error, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR during present failed. VkResult={}", static_cast<int32>(SurfaceResult));
+                return;
+            }
 
             uint32 NewWidth  = SurfaceCaps.currentExtent.width;
             uint32 NewHeight = SurfaceCaps.currentExtent.height;
 
             this->Resize(NewWidth, NewHeight);
+            return;
+        }
+        if (Result != VK_SUCCESS)
+        {
+            LE_LOG(LogRAL, Error, "vkQueuePresentKHR failed. VkResult={}", static_cast<int32>(Result));
             return;
         }
     

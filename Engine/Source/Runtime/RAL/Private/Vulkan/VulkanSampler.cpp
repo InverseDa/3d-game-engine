@@ -53,7 +53,12 @@ static VkCompareOp ToVkCompareOp(ECompareFunction CompareFunc)
 
 static VkBorderColor ToVkBorderColor(const float* BorderColor)
 {
-    assert(BorderColor != nullptr);
+    if (BorderColor == nullptr)
+    {
+        LE_LOG(LogRAL, Warn, "Sampler border color is null. Falling back to transparent black.");
+        return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+    }
+
     float R = BorderColor[0];
     float G = BorderColor[1];
     float B = BorderColor[2];
@@ -79,6 +84,13 @@ FVulkanRALSampler::FVulkanRALSampler(FVulkanRALDevice* InDevice, const FRALSampl
     : Device(InDevice)
     , Desc(InDesc)
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Sampler creation failed: invalid device.");
+        this->Handle = VK_NULL_HANDLE;
+        return;
+    }
+
     VkSamplerCreateInfo Info{};
     {
         Info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -104,11 +116,22 @@ FVulkanRALSampler::FVulkanRALSampler(FVulkanRALDevice* InDevice, const FRALSampl
         Info.borderColor = ToVkBorderColor(Desc.BorderColor);
         Info.unnormalizedCoordinates = VK_FALSE;
     }
-    vkCreateSampler(this->Device->VkContext.LogicalDevice, &Info, nullptr, &this->Handle);
+    const VkResult Result = vkCreateSampler(this->Device->VkContext.LogicalDevice, &Info, nullptr, &this->Handle);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkCreateSampler failed. VkResult={}", static_cast<int32>(Result));
+        this->Handle = VK_NULL_HANDLE;
+    }
 }
 
 FVulkanRALSampler::~FVulkanRALSampler()
 {
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        this->Handle = VK_NULL_HANDLE;
+        return;
+    }
+
     if (Handle != VK_NULL_HANDLE)
     {
         vkDestroySampler(this->Device->VkContext.LogicalDevice, Handle, nullptr);
