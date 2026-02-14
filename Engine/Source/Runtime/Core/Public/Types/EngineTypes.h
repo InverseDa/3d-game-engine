@@ -7,6 +7,8 @@
 #include "glm/glm.hpp"
 #endif
 
+#define FORCE_INLINE __forceinline
+
 // ************************************************************************
 // Numeric Types
 
