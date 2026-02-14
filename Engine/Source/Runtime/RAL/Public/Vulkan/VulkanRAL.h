@@ -169,8 +169,7 @@ private:
     FRALSwapchainDesc Desc;
 
 private:
-    VkSemaphore ImageAvailableSemaphore = VK_NULL_HANDLE;
-    VkSemaphore RenderFinishedSemaphore = VK_NULL_HANDLE;
+    VkFence AcquireFence = VK_NULL_HANDLE;
 
 private:
     void InternalCreateSurface();
@@ -285,6 +284,7 @@ private:
 private:
     FVulkanRALPipeline_Graphics* CurrentPipeline = nullptr;
     std::unordered_map<uint64, VkFramebuffer> FramebufferCache;
+    std::vector<VkImage> PendingPresentTransitionImages;
 
 private:
     VkFramebuffer InternalGetFramebuffer(const FRALRenderPassDesc& Desc, VkRenderPass Pass, bool bIsCreate = false);

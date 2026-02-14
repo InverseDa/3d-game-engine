@@ -75,8 +75,33 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         Height = TexDesc.Height;
     }
 
-    std::vector<VkClearValue> ClearValues;
-    // TODO: kodak
+    this->PendingPresentTransitionImages.clear();
+    for (uint32 i = 0; i < Desc.ColorAttachmentCount; ++i)
+    {
+        FVulkanRALTextureView* View = static_cast<FVulkanRALTextureView*>(Desc.ColorAttachments[i].RenderTarget);
+        if (View == nullptr || View->Owner == nullptr)
+        {
+            continue;
+        }
+
+        // Swapchain-wrapped images are externally owned and do not have VkDeviceMemory allocated here.
+        if (View->Owner->Image != VK_NULL_HANDLE && View->Owner->Memory == VK_NULL_HANDLE)
+        {
+            bool bAlreadyTracked = false;
+            for (VkImage TrackedImage : this->PendingPresentTransitionImages)
+            {
+                if (TrackedImage == View->Owner->Image)
+                {
+                    bAlreadyTracked = true;
+                    break;
+                }
+            }
+            if (!bAlreadyTracked)
+            {
+                this->PendingPresentTransitionImages.push_back(View->Owner->Image);
+            }
+        }
+    }
 
     VkClearValue ColorClear;
     ColorClear.color = { 0.f, 0.f, 0.f, 1.f };
@@ -164,6 +189,40 @@ void FVulkanRALCommandList::SetBindGroup(uint32 SetIndex, FRALBindGroup* BindGro
 void FVulkanRALCommandList::EndRenderPass()
 {
     vkCmdEndRenderPass(this->Handle);
+
+    for (VkImage Image : this->PendingPresentTransitionImages)
+    {
+        VkImageMemoryBarrier Barrier{};
+        {
+            Barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            Barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            Barrier.dstAccessMask = 0;
+            Barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            Barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            Barrier.image = Image;
+            Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            Barrier.subresourceRange.baseMipLevel = 0;
+            Barrier.subresourceRange.levelCount = 1;
+            Barrier.subresourceRange.baseArrayLayer = 0;
+            Barrier.subresourceRange.layerCount = 1;
+        }
+
+        vkCmdPipelineBarrier(
+            this->Handle,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            0,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            1,
+            &Barrier
+        );
+    }
+    this->PendingPresentTransitionImages.clear();
 }
 
 void FVulkanRALCommandList::SetVertexBuffer(uint32 Slot, FRALBuffer* Buffer, uint64 Offset)

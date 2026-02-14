@@ -12,12 +12,12 @@ FVulkanRALSwapchain::FVulkanRALSwapchain(FVulkanRALDevice* InDevice, const FRALS
 {
     this->InternalCreateSurface();
 
-    VkSemaphoreCreateInfo SemaphoreInfo{};
+    VkFenceCreateInfo FenceInfo{};
     {
-        SemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        FenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        FenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     }
-    vkCreateSemaphore(this->Device->VkContext.LogicalDevice, &SemaphoreInfo, nullptr, &this->ImageAvailableSemaphore);
-    vkCreateSemaphore(this->Device->VkContext.LogicalDevice, &SemaphoreInfo, nullptr, &this->RenderFinishedSemaphore);
+    vkCreateFence(this->Device->VkContext.LogicalDevice, &FenceInfo, nullptr, &this->AcquireFence);
 
     this->InternalCreateSwapchain();
     this->InternalCreateImageViews();
@@ -31,8 +31,11 @@ FVulkanRALSwapchain::~FVulkanRALSwapchain()
     vkDeviceWaitIdle(this->Device->VkContext.LogicalDevice);
     this->InternalDestroySwapchainResources();
 
-    vkDestroySemaphore(this->Device->VkContext.LogicalDevice, this->ImageAvailableSemaphore, nullptr);
-    vkDestroySemaphore(this->Device->VkContext.LogicalDevice, this->RenderFinishedSemaphore, nullptr);
+    if (this->AcquireFence != VK_NULL_HANDLE)
+    {
+        vkDestroyFence(this->Device->VkContext.LogicalDevice, this->AcquireFence, nullptr);
+        this->AcquireFence = VK_NULL_HANDLE;
+    }
     vkDestroySurfaceKHR(this->Device->VkContext.Instance, this->SurfaceHandle, nullptr);
 }
 
@@ -166,22 +169,28 @@ void FVulkanRALSwapchain::InternalDestroySwapchainResources()
 
 void FVulkanRALSwapchain::AcquireNextImage()
 {
-    auto Result = vkAcquireNextImageKHR(
+    vkResetFences(this->Device->VkContext.LogicalDevice, 1, &this->AcquireFence);
+
+    const VkResult Result = vkAcquireNextImageKHR(
         this->Device->VkContext.LogicalDevice,
         SwapchainHandle,
         UINT64_MAX,
-        this->ImageAvailableSemaphore,
         VK_NULL_HANDLE,
+        this->AcquireFence,
         &this->CurrentImageIndex
     );
     if (Result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         this->Resize(this->Desc.Width, this->Desc.Height);
+        return;
     }
-    else if (Result != VK_SUCCESS && Result != VK_SUBOPTIMAL_KHR)
+    if (Result != VK_SUCCESS && Result != VK_SUBOPTIMAL_KHR)
     {
         // Handle Error
+        return;
     }
+
+    vkWaitForFences(this->Device->VkContext.LogicalDevice, 1, &this->AcquireFence, VK_TRUE, UINT64_MAX);
 }
 
 FRALTextureView* FVulkanRALSwapchain::GetCurrentBackBufferView() const
@@ -227,7 +236,14 @@ void FVulkanRALSwapchain::Present()
         auto Result = vkQueuePresentKHR(GraphicsQueue, &PresentInfo);
         if (Result == VK_ERROR_OUT_OF_DATE_KHR || Result == VK_SUBOPTIMAL_KHR)
         {
-            this->Resize(Desc.Width, Desc.Height);
+            VkSurfaceCapabilitiesKHR SurfaceCaps{};
+            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &SurfaceCaps);
+
+            uint32 NewWidth  = SurfaceCaps.currentExtent.width;
+            uint32 NewHeight = SurfaceCaps.currentExtent.height;
+
+            this->Resize(NewWidth, NewHeight);
+            return;
         }
     
         this->AcquireNextImage();
