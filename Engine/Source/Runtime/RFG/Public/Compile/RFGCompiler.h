@@ -5,7 +5,6 @@
 #include "Compile/RFGCompiledPlan.h"
 #include "Compile/RFGCuller.h"
 #include "Compile/RFGDependencyAnalyzer.h"
-#include "Compile/RFGPlanCache.h"
 #include "Core/RFGTypes.h"
 
 #include <memory>
@@ -31,8 +30,7 @@ public:
 public:
     FRFGCompileResult Compile(
         const FRFGRecordedGraph& RecordedGraph,
-        const FRFGGraphSignature& Signature,
-        FRFGPlanCache* PlanCache = nullptr) const;
+        const FRFGGraphSignature& Signature) const;
 
 private:
     FRFGCompileOptions CompileOptions;

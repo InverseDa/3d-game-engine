@@ -3,6 +3,8 @@
 #include "Core/RFGHandles.h"
 #include "Core/RFGTypes.h"
 #include "Core/RFGBlackboard.h"
+#include "Core/RFGRuntime.h"
+#include "Core/RFGInstance.h"
 
 #include "Record/RFGPassRegistry.h"
 #include "Record/RFGRecordedGraph.h"
@@ -26,5 +28,4 @@
 #include "Authoring/RFGAuthoringCompiler.h"
 #include "Authoring/RFGTemplateInstancer.h"
 
-#include "RFGInstance.h"
 #include "RFGMacros.h"

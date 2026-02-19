@@ -1,26 +1,32 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Compile/RFGCompiler.h"
 #include "Core/RFGTypes.h"
 #include "Execute/RFGExecutor.h"
 #include "Record/RFGBuilder.h"
+#include "Compile/RFGCompiler.h"
 
-#include <memory>
-
+class FRFGRuntime;
 class IRFGPassRegistry;
 class FRFGRecordedGraph;
-class FRFGPlanCache;
 
 class RFG_API FRFGInstance : public FNonCopyable
 {
 public:
-    FRFGInstance() override;
-    ~FRFGInstance() override;
+    FRFGInstance();
+    ~FRFGInstance();
 
 public:
-    void Initialize(IRFGPassRegistry* InPassRegistry);
+    void Initialize(FRFGRuntime* InRuntime);
     void Shutdown();
+    bool IsInitialized() const;
+
+public:
+    FRFGRuntime* GetRuntime();
+    const FRFGRuntime* GetRuntime() const;
+
+public:
+    IRFGPassRegistry* GetPassRegistry() const;
 
 public:
     FRFGBuilder CreateBuilder() const;
@@ -41,11 +47,6 @@ public:
     const FRFGCompileOptions& GetCompileOptions() const;
 
 private:
-    IRFGPassRegistry* PassRegistry = nullptr;
-    FRFGCompileOptions CompileOptions;
-
-private:
-    FRFGCompiler* Compiler;
-    FRFGExecutor* Executor;
-    FRFGPlanCache* PlanCache;
+    FRFGRuntime* Runtime = nullptr;
+    FRFGExecutor* Executor = nullptr;
 };

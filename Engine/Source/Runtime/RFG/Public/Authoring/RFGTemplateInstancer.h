@@ -6,7 +6,7 @@
 #include "Authoring/RFGValidationReport.h"
 #include "Core/RFGTypes.h"
 
-class FRFGBuilder;
+class FRFGInstance;
 
 struct FRFGTemplateInstantiateOptions
 {
@@ -31,6 +31,6 @@ public:
     FRFGTemplateInstantiateResult Instantiate(
         const FRFGTemplate& Template,
         const FRFGParameterStore& ParameterStore,
-        FRFGBuilder& Builder,
+        FRFGInstance& Instance,
         const FRFGTemplateInstantiateOptions& Options = {}) const;
 };
