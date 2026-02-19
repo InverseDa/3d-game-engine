@@ -1,10 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GenericPlatform/GenericWindow.h"
+#include "Platform/Platform.h"
 #include <Windows.h>
 
-class FWindowsWindow : public IGenericWindow
+class FWindowsWindow : public FPlatformWindow
 {
 public:
     FWindowsWindow(uint32 Width, uint32 Height, const char* Title);

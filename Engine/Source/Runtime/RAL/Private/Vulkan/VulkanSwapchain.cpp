@@ -399,7 +399,7 @@ void FVulkanRALSwapchain::Present()
         auto Result = vkQueuePresentKHR(GraphicsQueue, &PresentInfo);
         if (Result == VK_ERROR_OUT_OF_DATE_KHR || Result == VK_SUBOPTIMAL_KHR)
         {
-            LE_LOG(LogRAL, Warn, "vkQueuePresentKHR returned {}. Recreating swapchain.", static_cast<int32>(Result));
+            LE_LOG(LogRAL, Info, "vkQueuePresentKHR returned {}. Recreating swapchain.", static_cast<int32>(Result));
             VkSurfaceCapabilitiesKHR SurfaceCaps{};
             const VkResult SurfaceResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &SurfaceCaps);
             if (SurfaceResult != VK_SUCCESS)

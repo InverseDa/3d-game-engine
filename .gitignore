@@ -430,3 +430,12 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+################################################################
+# Following is Limitless namespace
+
+.claude/
+Engine/binaries/
+skills/
+solution/
+temp/

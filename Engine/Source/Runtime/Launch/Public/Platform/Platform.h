@@ -2,10 +2,10 @@
 
 #include "CoreMinimal.h"
 
-class IGenericWindow
+class FPlatformWindow
 {
 public:
-    virtual ~IGenericWindow() = default;
+    virtual ~FPlatformWindow() = default;
 
     virtual void* GetNativeHandle() const = 0;
     virtual bool ProcessMessages() = 0;
