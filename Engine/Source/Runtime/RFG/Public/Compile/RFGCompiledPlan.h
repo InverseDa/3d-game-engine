@@ -17,9 +17,13 @@ struct FRFGBarrierTransition
 {
     FRFGResourceHandle Resource;
     ERFGPipelineStage BeforeStage = ERFGPipelineStage::None;
-    ERFGPipelineStage AfterStage = ERFGPipelineStage::None;
-    ERFGAccessType BeforeAccess = ERFGAccessType::None;
-    ERFGAccessType AfterAccess = ERFGAccessType::None;
+    ERFGPipelineStage AfterStage  = ERFGPipelineStage::None;
+    ERFGAccessType BeforeAccess   = ERFGAccessType::None;
+    ERFGAccessType AfterAccess    = ERFGAccessType::None;
+    // SrcQueue == DstQueue: 普通 Pipeline Barrier
+    // SrcQueue != DstQueue: Queue Family Ownership Transfer (Release + Acquire)
+    ERFGQueueType SrcQueue = ERFGQueueType::Graphics;
+    ERFGQueueType DstQueue = ERFGQueueType::Graphics;
 };
 
 struct FRFGCompiledPass
@@ -28,6 +32,9 @@ struct FRFGCompiledPass
     FString Name;
     ERFGQueueType Queue = ERFGQueueType::Graphics;
     ERFGPassFlags Flags = ERFGPassFlags::None;
+    // 拓扑层级：同 DependencyLevel 的 Pass 之间无依赖关系，可在多队列下并行执行
+    // 当前单线程实现可忽略，保留供后续 AsyncCompute 调度使用
+    uint32 DependencyLevel = 0;
 
     std::vector<FRFGDependencyEdge> IncomingEdges;
     std::vector<FRFGBarrierTransition> PreBarriers;

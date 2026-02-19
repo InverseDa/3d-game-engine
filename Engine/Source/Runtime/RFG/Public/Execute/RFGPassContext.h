@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Core/RFGHandles.h"
+#include "Core/RFGTypes.h"
 
 class FRALDevice;
 class FRALQueue;
@@ -15,11 +16,19 @@ struct FRFGExecutionContext
 {
     FRALDevice* Device = nullptr;
 
-    FRALQueue* GraphicsQueue = nullptr;
-    FRALQueue* ComputeQueue = nullptr;
-    FRALQueue* TransferQueue = nullptr;
+    FRALQueue* GraphicsQueue  = nullptr;
+    FRALQueue* ComputeQueue   = nullptr;
+    FRALQueue* TransferQueue  = nullptr;
 
+    // 当前阶段：单 CommandList，所有 Pass 共享
     FRALCommandList* CommandList = nullptr;
+
+    // 多队列预留：根据 Pass 所属队列返回对应 CommandList
+    // 当前实现统一返回 CommandList，后续多线程扩展时在此分发
+    FRALCommandList* GetCommandList(ERFGQueueType /*Queue*/) const
+    {
+        return CommandList;
+    }
 };
 
 class RFG_API FRFGPassContext
