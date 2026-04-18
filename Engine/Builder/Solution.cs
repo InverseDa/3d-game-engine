@@ -9,18 +9,26 @@ namespace Limitless
         public SolutionRule(): base(typeof(TargetRule))
         {
             Name = "Limitless";
-            AddTargets(new TargetRule(
-                Platform.win64,
-                DevEnv.vs2022,
-                Optimization.Debug | Optimization.Release,
-                TargetType.Editor | TargetType.Game
-            ));
+            AddTargets(
+                new TargetRule(
+                    Platform.win64,
+                    DevEnv.vs2022,
+                    Optimization.Debug | Optimization.Release,
+                    TargetType.Editor | TargetType.Game
+                ),
+                new TargetRule(
+                    Platform.mac,
+                    DevEnv.xcode,
+                    Optimization.Debug | Optimization.Release,
+                    TargetType.Editor | TargetType.Game
+                )
+            );
         }
 
         [Configure]
         public void ConfigureAll(Configuration conf, TargetRule target)
         {
-            conf.SolutionFileName = "[solution.Name]";
+            conf.SolutionFileName = "[solution.Name]_[target.DevEnv]_[target.Platform]";
             conf.SolutionPath = DirectoryHelper.SolutionDir;
 
             string configName = target.Optimization.ToString();
