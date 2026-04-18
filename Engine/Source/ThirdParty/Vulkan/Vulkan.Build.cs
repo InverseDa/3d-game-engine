@@ -18,7 +18,7 @@ namespace Limitless
             // Vulkan in this repo is headers + SDK import library; this module does not build a local .lib.
             conf.Output = Configuration.OutputType.None;
 
-            conf.IncludePaths.Add(@"[project.SourceRootPath]\Include");
+            conf.IncludePaths.Add("[project.SourceRootPath]/Include");
 
             // Link Vulkan SDK library
             if (target.Platform == Platform.win64)
@@ -35,6 +35,29 @@ namespace Limitless
                 {
                     conf.LibraryPaths.Add(libPath);
                     conf.LibraryFiles.Add("vulkan-1.lib");
+                }
+            }
+            else if (target.Platform == Platform.mac)
+            {
+                string vulkanSdkPath = System.Environment.GetEnvironmentVariable("VULKAN_SDK");
+                string libPath = string.Empty;
+                if (!string.IsNullOrEmpty(vulkanSdkPath))
+                {
+                    libPath = Path.Combine(vulkanSdkPath, "lib");
+                }
+                else if (Directory.Exists("/opt/homebrew/lib"))
+                {
+                    libPath = "/opt/homebrew/lib";
+                }
+                else if (Directory.Exists("/usr/local/lib"))
+                {
+                    libPath = "/usr/local/lib";
+                }
+
+                if (!string.IsNullOrEmpty(libPath) && Directory.Exists(libPath))
+                {
+                    conf.LibraryPaths.Add(libPath);
+                    conf.LibraryFiles.Add("vulkan");
                 }
             }
         }

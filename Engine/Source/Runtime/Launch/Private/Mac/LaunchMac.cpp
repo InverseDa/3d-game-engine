@@ -1,25 +1,21 @@
 #include "CoreMinimal.h"
+
+#if PLATFORM_MAC
+
 #include <fstream>
+#include <chrono>
+#include <cstring>
 #include <string>
+#include <thread>
 #include <vector>
+#include <mach-o/dyld.h>
 
-#if PLATFORM_WINDOWS
-    #ifndef WIN32_LEAN_AND_MEAN
-        #define WIN32_LEAN_AND_MEAN
-    #endif
-    #ifndef NOMINMAX
-        #define NOMINMAX
-    #endif
-    #include <Windows.h>
-    #include "Windows/WindowsWindow.h"
-#endif
-
+#include "Mac/MacWindow.h"
 #include "RALMinimal.h"
 
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogXBD);
 LE_DECLARE_LOG_CATEGORY(LogXBD);
 
-// 顶点结构：位置 + 颜色
 struct FSimpleVertex
 {
     FVector3f Position;
@@ -83,22 +79,25 @@ static std::string JoinPath(const std::string& Left, const std::string& Right)
     return Left + "/" + Right;
 }
 
-#if PLATFORM_WINDOWS
 static std::string GetExecutableDirectory()
 {
-    char ModulePath[MAX_PATH] = {};
-    const DWORD PathLength = GetModuleFileNameA(nullptr, ModulePath, static_cast<DWORD>(sizeof(ModulePath)));
-    if (PathLength == 0 || PathLength >= sizeof(ModulePath))
+    uint32 BufferSize = 0;
+    _NSGetExecutablePath(nullptr, &BufferSize);
+    if (BufferSize == 0)
     {
         return std::string();
     }
 
-    return GetParentPath(std::string(ModulePath, PathLength));
-}
-#endif
+    std::vector<char> Buffer(BufferSize);
+    if (_NSGetExecutablePath(Buffer.data(), &BufferSize) != 0)
+    {
+        return std::string();
+    }
 
-// Load SPIRV shader from file
-std::vector<char> ReadShaderFile(const char* Filename)
+    return GetParentPath(std::string(Buffer.data()));
+}
+
+static std::vector<char> ReadShaderFile(const char* Filename)
 {
     std::vector<char> Buffer;
 
@@ -125,7 +124,6 @@ std::vector<char> ReadShaderFile(const char* Filename)
         }
     }
 
-#if PLATFORM_WINDOWS
     std::string SearchBase = GetExecutableDirectory();
     for (int32 i = 0; i < 10 && !SearchBase.empty(); ++i)
     {
@@ -136,13 +134,12 @@ std::vector<char> ReadShaderFile(const char* Filename)
         }
         SearchBase = GetParentPath(SearchBase);
     }
-#endif
 
     LE_LOG(LogXBD, Error, "Failed to open shader (all tried paths): {}", Filename);
     return {};
 }
 
-bool IsValidSpirv(const std::vector<char>& ByteCode, const char* ShaderLabel)
+static bool IsValidSpirv(const std::vector<char>& ByteCode, const char* ShaderLabel)
 {
     if (ByteCode.empty())
     {
@@ -157,13 +154,12 @@ bool IsValidSpirv(const std::vector<char>& ByteCode, const char* ShaderLabel)
     return true;
 }
 
-// Create triangle vertex buffer
-FRALBuffer* CreateTriangleVertexBuffer(FRALDevice* Device)
+static FRALBuffer* CreateTriangleVertexBuffer(FRALDevice* Device)
 {
     FSimpleVertex Vertices[3] = {
-        { FVector3f( 0.0f,  0.5f, 0.0f), FVector3f(1.0f, 0.0f, 0.0f) }, // Top - Red
-        { FVector3f( 0.5f, -0.5f, 0.0f), FVector3f(0.0f, 1.0f, 0.0f) }, // Right - Green
-        { FVector3f(-0.5f, -0.5f, 0.0f), FVector3f(0.0f, 0.0f, 1.0f) }, // Left - Blue
+        { FVector3f( 0.0f,  0.5f, 0.0f), FVector3f(1.0f, 0.0f, 0.0f) },
+        { FVector3f( 0.5f, -0.5f, 0.0f), FVector3f(0.0f, 1.0f, 0.0f) },
+        { FVector3f(-0.5f, -0.5f, 0.0f), FVector3f(0.0f, 0.0f, 1.0f) },
     };
 
     const uint64 BufferSize = sizeof(Vertices);
@@ -175,17 +171,14 @@ FRALBuffer* CreateTriangleVertexBuffer(FRALDevice* Device)
     BufferDesc.UsageFlag = static_cast<uint32>(EBufferUsageFlags::VertexBuffer);
 
     FRALBuffer* Buffer = Device->CreateBuffer(BufferDesc);
-
     void* MappedData = Buffer->Map(0, BufferSize);
     memcpy(MappedData, Vertices, BufferSize);
     Buffer->Unmap();
 
-    LE_LOG(LogXBD, Info, "Created triangle vertex buffer");
     return Buffer;
 }
 
-// Render one frame
-void RenderFrame(
+static void RenderFrame(
     FRALSwapchain* Swapchain,
     FRALCommandList* CmdList,
     FRALPipeline_Graphics* Pipeline,
@@ -193,6 +186,11 @@ void RenderFrame(
     FRALDevice* Device)
 {
     FRALTextureView* BackBufferView = Swapchain->GetCurrentBackBufferView();
+    if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
+    {
+        LE_LOG(LogXBD, Warn, "Skipping frame because the swapchain back buffer is not ready yet.");
+        return;
+    }
 
     CmdList->Begin();
     CmdList->SetGraphicsPipeline(Pipeline);
@@ -240,36 +238,51 @@ void RenderFrame(
     Swapchain->Present();
 }
 
+static bool SyncSwapchainToWindowSize(FPlatformWindow* Window, FRALSwapchain* Swapchain, uint32& InOutWidth, uint32& InOutHeight)
+{
+    uint32 WindowWidth = 0;
+    uint32 WindowHeight = 0;
+    Window->GetSize(WindowWidth, WindowHeight);
+    if (WindowWidth == 0 || WindowHeight == 0)
+    {
+        return false;
+    }
+
+    if (WindowWidth != InOutWidth || WindowHeight != InOutHeight)
+    {
+        LE_LOG(LogXBD, Info, "Window resized to {}x{}. Recreating swapchain.", WindowWidth, WindowHeight);
+        Swapchain->Resize(WindowWidth, WindowHeight);
+        InOutWidth = WindowWidth;
+        InOutHeight = WindowHeight;
+    }
+
+    return true;
+}
+
 int32 GuardedMain()
 {
     LE_INIT()
-    LE_LOG(LogXBD, Info, "=== Limitless Engine P1: Triangle Demo ===")
+    LE_LOG(LogXBD, Info, "=== Limitless Engine P1: Triangle Demo (macOS) ===")
 
-#if !PLATFORM_WINDOWS
-    LE_LOG(LogXBD, Error, "Launch module is not implemented for this platform yet.");
-    LE_SHUTDOWN()
-    return -1;
-#else
-    // 创建窗口（使用平台抽象）
     const uint32 WindowWidth = 1280;
     const uint32 WindowHeight = 720;
-    FPlatformWindow* Window = new FWindowsWindow(WindowWidth, WindowHeight, "Limitless Engine - Triangle Demo");
-    if (!Window) {
-        LE_LOG(LogXBD, Error, "Failed to create window");
+    FPlatformWindow* Window = new FMacWindow(WindowWidth, WindowHeight, "Limitless Engine - Triangle Demo");
+    if (!Window)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create macOS window");
+        LE_SHUTDOWN()
         return -1;
     }
-    LE_LOG(LogXBD, Info, "Window created: {}x{}", WindowWidth, WindowHeight);
 
-    // 创建 RAL 设备
     FRALDevice* Device = RAL::CreateDevice();
-    if (!Device) {
+    if (!Device)
+    {
         LE_LOG(LogXBD, Error, "Failed to create RAL Device");
         delete Window;
+        LE_SHUTDOWN()
         return -1;
     }
-    LE_LOG(LogXBD, Info, "RAL Device created");
 
-    // 创建交换链
     FRALSwapchainDesc SwapchainDesc;
     SwapchainDesc.Surface = Window->GetSurfaceDesc();
     SwapchainDesc.Width = WindowWidth;
@@ -277,9 +290,15 @@ int32 GuardedMain()
     SwapchainDesc.BackBufferFormat = EPixelFormat::B8G8R8A8_SRGB;
     SwapchainDesc.bEnableVsync = true;
     FRALSwapchain* Swapchain = Device->CreateSwapchain(SwapchainDesc);
-    LE_LOG(LogXBD, Info, "Swapchain created");
+    if (!Swapchain)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create swapchain");
+        delete Device;
+        delete Window;
+        LE_SHUTDOWN()
+        return -1;
+    }
 
-    // Load shaders
     auto VertBytecode = ReadShaderFile("Engine/Content/Shaders/triangle.vert.spv");
     auto FragBytecode = ReadShaderFile("Engine/Content/Shaders/triangle.frag.spv");
     if (!IsValidSpirv(VertBytecode, "triangle.vert.spv") || !IsValidSpirv(FragBytecode, "triangle.frag.spv"))
@@ -297,7 +316,6 @@ int32 GuardedMain()
         EShaderStage::Pixel, FragBytecode.data(), FragBytecode.size());
     if (!VertexShader || !PixelShader)
     {
-        LE_LOG(LogXBD, Error, "Failed to create shader modules.");
         delete PixelShader;
         delete VertexShader;
         delete Swapchain;
@@ -307,13 +325,11 @@ int32 GuardedMain()
         return -1;
     }
 
-    // Pipeline
     FRALPipelineDesc_Graphics PipelineDesc;
     PipelineDesc.Name = "TrianglePipeline";
     PipelineDesc.VertexShader = VertexShader;
     PipelineDesc.PixelShader = PixelShader;
 
-    // Vertex input layout
     FRALVertexInputBinding Binding;
     Binding.Binding = 0;
     Binding.Stride = sizeof(FSimpleVertex);
@@ -344,7 +360,6 @@ int32 GuardedMain()
     FRALPipeline_Graphics* Pipeline = Device->CreateGraphicsPipeline(PipelineDesc);
     if (!Pipeline)
     {
-        LE_LOG(LogXBD, Error, "Failed to create graphics pipeline.");
         delete PixelShader;
         delete VertexShader;
         delete Swapchain;
@@ -353,24 +368,23 @@ int32 GuardedMain()
         LE_SHUTDOWN()
         return -1;
     }
-    LE_LOG(LogXBD, Info, "Graphics pipeline created");
 
-    // Vertex buffer
     FRALBuffer* VertexBuffer = CreateTriangleVertexBuffer(Device);
-
-    // Command list
     FRALCommandList* CmdList = Device->CreateCommandList(EQueueType::Graphics);
+    uint32 CachedWindowWidth = WindowWidth;
+    uint32 CachedWindowHeight = WindowHeight;
 
-    LE_LOG(LogXBD, Info, "Entering main loop...");
-
-    // 主循环
     while (Window->ProcessMessages())
     {
+        if (Window->IsMinimized() || !SyncSwapchainToWindowSize(Window, Swapchain, CachedWindowWidth, CachedWindowHeight))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+            continue;
+        }
+
         RenderFrame(Swapchain, CmdList, Pipeline, VertexBuffer, Device);
     }
 
-    // 清理资源
-    LE_LOG(LogXBD, Info, "Shutting down...");
     Device->GetGraphicsQueue()->WaitIdle();
 
     delete CmdList;
@@ -383,7 +397,7 @@ int32 GuardedMain()
     delete Window;
 
     LE_SHUTDOWN()
-    LE_LOG(LogXBD, Info, "Goodbye!");
     return 0;
-#endif
 }
+
+#endif

@@ -1,9 +1,78 @@
 ﻿#include "CoreMinimal.h"
 
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <algorithm>
+#include <limits>
+
+#if PLATFORM_WINDOWS
+    #define WIN32_LEAN_AND_MEAN
+    #include <Windows.h>
+#endif
 
 #include "Vulkan/VulkanRAL.h"
+
+namespace
+{
+VkFormat ToVkFormat(EPixelFormat Format)
+{
+    switch (Format)
+    {
+    case EPixelFormat::R8G8B8A8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
+    case EPixelFormat::R8G8B8A8_SRGB:  return VK_FORMAT_R8G8B8A8_SRGB;
+    case EPixelFormat::B8G8R8A8_SRGB:  return VK_FORMAT_B8G8R8A8_SRGB;
+    default:                           return VK_FORMAT_B8G8R8A8_SRGB;
+    }
+}
+
+VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& AvailableFormats, EPixelFormat PreferredFormat)
+{
+    const VkFormat DesiredFormat = ToVkFormat(PreferredFormat);
+    for (const VkSurfaceFormatKHR& SurfaceFormat : AvailableFormats)
+    {
+        if (SurfaceFormat.format == DesiredFormat)
+        {
+            return SurfaceFormat;
+        }
+    }
+
+    for (const VkSurfaceFormatKHR& SurfaceFormat : AvailableFormats)
+    {
+        if (SurfaceFormat.format == VK_FORMAT_B8G8R8A8_SRGB)
+        {
+            return SurfaceFormat;
+        }
+    }
+
+    return AvailableFormats.empty()
+        ? VkSurfaceFormatKHR{ VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }
+        : AvailableFormats[0];
+}
+
+VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& AvailableModes, bool bEnableVsync)
+{
+    if (bEnableVsync)
+    {
+        return VK_PRESENT_MODE_FIFO_KHR;
+    }
+
+    for (const VkPresentModeKHR PresentMode : AvailableModes)
+    {
+        if (PresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+        {
+            return PresentMode;
+        }
+    }
+
+    for (const VkPresentModeKHR PresentMode : AvailableModes)
+    {
+        if (PresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+        {
+            return PresentMode;
+        }
+    }
+
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+}
 
 FVulkanRALSwapchain::FVulkanRALSwapchain(FVulkanRALDevice* InDevice, const FRALSwapchainDesc& InDesc)
     : FRALSwapchain()
@@ -86,29 +155,86 @@ FVulkanRALSwapchain::~FVulkanRALSwapchain()
 
 void FVulkanRALSwapchain::InternalCreateSurface()
 {
-#if PLATFORM_WINDOWS
-    if (this->Desc.WindowHandle == nullptr)
+    if (this->Desc.Surface.Type == ERALSurfaceType::Unknown)
     {
-        LE_LOG(LogRAL, Error, "InternalCreateSurface failed: window handle is null.");
+        LE_LOG(LogRAL, Error, "InternalCreateSurface failed: surface type is unknown.");
         this->SurfaceHandle = VK_NULL_HANDLE;
         return;
     }
 
-    VkWin32SurfaceCreateInfoKHR Info{};
+#if PLATFORM_WINDOWS
+    if (this->Desc.Surface.Type == ERALSurfaceType::Win32)
     {
-        Info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-        Info.hinstance = GetModuleHandle(nullptr); // Get the current process handle
-        Info.hwnd = static_cast<HWND>(this->Desc.WindowHandle);
+        if (this->Desc.Surface.WindowHandle == nullptr)
+        {
+            LE_LOG(LogRAL, Error, "InternalCreateSurface failed: window handle is null.");
+            this->SurfaceHandle = VK_NULL_HANDLE;
+            return;
+        }
+
+        VkWin32SurfaceCreateInfoKHR Info{};
+        {
+            Info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+            Info.hinstance = GetModuleHandle(nullptr);
+            Info.hwnd = static_cast<HWND>(this->Desc.Surface.WindowHandle);
+        }
+        const VkResult Result = vkCreateWin32SurfaceKHR(this->Device->VkContext.Instance, &Info, nullptr, &this->SurfaceHandle);
+        if (Result != VK_SUCCESS)
+        {
+            LE_LOG(LogRAL, Error, "vkCreateWin32SurfaceKHR failed. VkResult={}", static_cast<int32>(Result));
+            this->SurfaceHandle = VK_NULL_HANDLE;
+            return;
+        }
     }
-    const VkResult Result = vkCreateWin32SurfaceKHR(this->Device->VkContext.Instance, &Info, nullptr, &this->SurfaceHandle);
-    if (Result != VK_SUCCESS)
+#endif
+
+#if PLATFORM_MAC
+    if (this->Desc.Surface.Type == ERALSurfaceType::MetalLayer)
     {
-        LE_LOG(LogRAL, Error, "vkCreateWin32SurfaceKHR failed. VkResult={}", static_cast<int32>(Result));
+        if (this->Desc.Surface.LayerHandle == nullptr)
+        {
+            LE_LOG(LogRAL, Error, "InternalCreateSurface failed: metal layer handle is null.");
+            this->SurfaceHandle = VK_NULL_HANDLE;
+            return;
+        }
+
+        VkMetalSurfaceCreateInfoEXT Info{};
+        {
+            Info.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+            Info.pLayer = static_cast<CAMetalLayer*>(this->Desc.Surface.LayerHandle);
+        }
+        const VkResult Result = vkCreateMetalSurfaceEXT(this->Device->VkContext.Instance, &Info, nullptr, &this->SurfaceHandle);
+        if (Result != VK_SUCCESS)
+        {
+            LE_LOG(LogRAL, Error, "vkCreateMetalSurfaceEXT failed. VkResult={}", static_cast<int32>(Result));
+            this->SurfaceHandle = VK_NULL_HANDLE;
+            return;
+        }
+    }
+#endif
+
+    if (this->SurfaceHandle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "InternalCreateSurface failed: unsupported surface type {}.", static_cast<uint32>(this->Desc.Surface.Type));
+        return;
+    }
+
+    VkBool32 bPresentSupported = VK_FALSE;
+    const VkResult PresentSupportResult = vkGetPhysicalDeviceSurfaceSupportKHR(
+        this->Device->VkContext.PhysicalDevice,
+        this->Device->VkContext.GraphicsFamilyIndex,
+        this->SurfaceHandle,
+        &bPresentSupported);
+    if (PresentSupportResult != VK_SUCCESS || bPresentSupported != VK_TRUE)
+    {
+        LE_LOG(LogRAL, Error, "Selected graphics queue does not support present. VkResult={}, Supported={}",
+            static_cast<int32>(PresentSupportResult), bPresentSupported == VK_TRUE);
+        vkDestroySurfaceKHR(this->Device->VkContext.Instance, this->SurfaceHandle, nullptr);
         this->SurfaceHandle = VK_NULL_HANDLE;
         return;
     }
+
     LE_LOG(LogRAL, Info, "Vulkan surface created.");
-#endif
 }
 
 void FVulkanRALSwapchain::InternalCreateSwapchain()
@@ -120,7 +246,7 @@ void FVulkanRALSwapchain::InternalCreateSwapchain()
         return;
     }
 
-    VkSurfaceCapabilitiesKHR Capabilities;
+    VkSurfaceCapabilitiesKHR Capabilities{};
     const VkResult CapResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &Capabilities);
     if (CapResult != VK_SUCCESS)
     {
@@ -129,11 +255,62 @@ void FVulkanRALSwapchain::InternalCreateSwapchain()
         return;
     }
 
-    // Check the max buffer count
+    uint32 SurfaceFormatCount = 0;
+    VkResult Result = vkGetPhysicalDeviceSurfaceFormatsKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &SurfaceFormatCount, nullptr);
+    if (Result != VK_SUCCESS || SurfaceFormatCount == 0)
+    {
+        LE_LOG(LogRAL, Error, "vkGetPhysicalDeviceSurfaceFormatsKHR(count) failed. VkResult={}, Count={}",
+            static_cast<int32>(Result), SurfaceFormatCount);
+        this->SwapchainHandle = VK_NULL_HANDLE;
+        return;
+    }
+    std::vector<VkSurfaceFormatKHR> SurfaceFormats(SurfaceFormatCount);
+    Result = vkGetPhysicalDeviceSurfaceFormatsKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &SurfaceFormatCount, SurfaceFormats.data());
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkGetPhysicalDeviceSurfaceFormatsKHR(list) failed. VkResult={}", static_cast<int32>(Result));
+        this->SwapchainHandle = VK_NULL_HANDLE;
+        return;
+    }
+
+    uint32 PresentModeCount = 0;
+    Result = vkGetPhysicalDeviceSurfacePresentModesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &PresentModeCount, nullptr);
+    if (Result != VK_SUCCESS || PresentModeCount == 0)
+    {
+        LE_LOG(LogRAL, Error, "vkGetPhysicalDeviceSurfacePresentModesKHR(count) failed. VkResult={}, Count={}",
+            static_cast<int32>(Result), PresentModeCount);
+        this->SwapchainHandle = VK_NULL_HANDLE;
+        return;
+    }
+    std::vector<VkPresentModeKHR> PresentModes(PresentModeCount);
+    Result = vkGetPhysicalDeviceSurfacePresentModesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &PresentModeCount, PresentModes.data());
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkGetPhysicalDeviceSurfacePresentModesKHR(list) failed. VkResult={}", static_cast<int32>(Result));
+        this->SwapchainHandle = VK_NULL_HANDLE;
+        return;
+    }
+
+    const VkSurfaceFormatKHR SelectedFormat = ChooseSurfaceFormat(SurfaceFormats, this->Desc.BackBufferFormat);
+    const VkPresentModeKHR SelectedPresentMode = ChoosePresentMode(PresentModes, this->Desc.bEnableVsync);
+
     uint32 MinImageCount = Capabilities.minImageCount + 1;
     if (0 < Capabilities.maxImageCount && MinImageCount > Capabilities.maxImageCount)
     {
         MinImageCount = Capabilities.maxImageCount;
+    }
+
+    VkExtent2D SwapchainExtent{};
+    if (Capabilities.currentExtent.width != std::numeric_limits<uint32>::max())
+    {
+        SwapchainExtent = Capabilities.currentExtent;
+        this->Desc.Width = SwapchainExtent.width;
+        this->Desc.Height = SwapchainExtent.height;
+    }
+    else
+    {
+        SwapchainExtent.width = std::clamp(this->Desc.Width, Capabilities.minImageExtent.width, Capabilities.maxImageExtent.width);
+        SwapchainExtent.height = std::clamp(this->Desc.Height, Capabilities.minImageExtent.height, Capabilities.maxImageExtent.height);
     }
 
     VkSwapchainCreateInfoKHR CreateInfo{};
@@ -141,22 +318,22 @@ void FVulkanRALSwapchain::InternalCreateSwapchain()
         CreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         CreateInfo.surface = this->SurfaceHandle;
         CreateInfo.minImageCount = MinImageCount;
-        CreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_SRGB; // 简化处理，实际应通过 vkGetPhysicalDeviceSurfaceFormatsKHR 查询
-        CreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-        CreateInfo.imageExtent = { this->Desc.Width, this->Desc.Height };
+        CreateInfo.imageFormat = SelectedFormat.format;
+        CreateInfo.imageColorSpace = SelectedFormat.colorSpace;
+        CreateInfo.imageExtent = SwapchainExtent;
         CreateInfo.imageArrayLayers = 1;
-        CreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // Used for render target
+        CreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-        CreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // TODO: kodak
+        CreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
         CreateInfo.preTransform = Capabilities.currentTransform;
-        CreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // Non alpha window
+        CreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
-        CreateInfo.presentMode = Desc.bEnableVsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
+        CreateInfo.presentMode = SelectedPresentMode;
         CreateInfo.clipped = true;
-        CreateInfo.oldSwapchain = VK_NULL_HANDLE; // Resize needed
+        CreateInfo.oldSwapchain = VK_NULL_HANDLE;
     }
-    const VkResult Result = vkCreateSwapchainKHR(this->Device->VkContext.LogicalDevice, &CreateInfo, nullptr, &this->SwapchainHandle);
+    Result = vkCreateSwapchainKHR(this->Device->VkContext.LogicalDevice, &CreateInfo, nullptr, &this->SwapchainHandle);
     if (Result != VK_SUCCESS)
     {
         LE_LOG(LogRAL, Error, "vkCreateSwapchainKHR failed. VkResult={}", static_cast<int32>(Result));
@@ -222,7 +399,7 @@ void FVulkanRALSwapchain::InternalCreateImageViews()
             ViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             ViewInfo.image = this->Images[i];
             ViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            ViewInfo.format = VK_FORMAT_B8G8R8A8_SRGB;
+            ViewInfo.format = ToVkFormat(Desc.BackBufferFormat);
             ViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
             ViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
             ViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -349,6 +526,11 @@ void FVulkanRALSwapchain::Resize(uint32 Width, uint32 Height)
         LE_LOG(LogRAL, Error, "Resize failed: invalid device.");
         return;
     }
+    if (Width == 0 || Height == 0)
+    {
+        LE_LOG(LogRAL, Warn, "Skipping swapchain resize for zero-sized surface ({}x{}).", Width, Height);
+        return;
+    }
 
     this->Desc.Width = Width;
     this->Desc.Height = Height;
@@ -410,6 +592,11 @@ void FVulkanRALSwapchain::Present()
 
             uint32 NewWidth  = SurfaceCaps.currentExtent.width;
             uint32 NewHeight = SurfaceCaps.currentExtent.height;
+            if (NewWidth == 0 || NewHeight == 0)
+            {
+                LE_LOG(LogRAL, Warn, "Swapchain present reported a zero-sized extent. Waiting for a valid window size before recreating.");
+                return;
+            }
 
             this->Resize(NewWidth, NewHeight);
             return;

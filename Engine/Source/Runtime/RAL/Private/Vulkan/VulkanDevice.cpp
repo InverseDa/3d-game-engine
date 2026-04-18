@@ -10,6 +10,40 @@ LE_DECLARE_LOG_CATEGORY(LogRAL);
 
 namespace
 {
+static const char* const GVkKhrPortabilitySubsetExtensionName = "VK_KHR_portability_subset";
+
+bool HasDeviceExtension(VkPhysicalDevice PhysicalDevice, const char* ExtensionName)
+{
+    if (PhysicalDevice == VK_NULL_HANDLE || ExtensionName == nullptr)
+    {
+        return false;
+    }
+
+    uint32 ExtensionCount = 0;
+    VkResult Result = vkEnumerateDeviceExtensionProperties(PhysicalDevice, nullptr, &ExtensionCount, nullptr);
+    if (Result != VK_SUCCESS || ExtensionCount == 0)
+    {
+        return false;
+    }
+
+    std::vector<VkExtensionProperties> ExtensionProps(ExtensionCount);
+    Result = vkEnumerateDeviceExtensionProperties(PhysicalDevice, nullptr, &ExtensionCount, ExtensionProps.data());
+    if (Result != VK_SUCCESS)
+    {
+        return false;
+    }
+
+    for (const VkExtensionProperties& Ext : ExtensionProps)
+    {
+        if (strcmp(Ext.extensionName, ExtensionName) == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 #if LE_RAL_ENABLE_VALIDATION
 const char* ValidationSeverityToText(VkDebugUtilsMessageSeverityFlagBitsEXT Severity)
 {
@@ -212,7 +246,22 @@ void FVulkanRALDevice::InternalCreateInstance()
         CreateInfo.ppEnabledExtensionNames = RAL::Vulkan::InstanceExtensions;
         CreateInfo.enabledLayerCount = RAL::Vulkan::InstanceLayerCount;
         CreateInfo.ppEnabledLayerNames = RAL::Vulkan::InstanceLayers;
+#if PLATFORM_MAC
+        CreateInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
     }
+
+    std::ostringstream ExtensionStream;
+    for (uint32 i = 0; i < CreateInfo.enabledExtensionCount; ++i)
+    {
+        if (i > 0)
+        {
+            ExtensionStream << ", ";
+        }
+        ExtensionStream << (CreateInfo.ppEnabledExtensionNames[i] != nullptr ? CreateInfo.ppEnabledExtensionNames[i] : "<null>");
+    }
+    LE_LOG(LogRAL, Info, "Creating Vulkan instance. Flags=0x{:x}, Extensions=[{}], Layers={}",
+        static_cast<uint32>(CreateInfo.flags), ExtensionStream.str(), CreateInfo.enabledLayerCount);
 
     VkResult Result = vkCreateInstance(&CreateInfo, nullptr, &this->VkContext.Instance);
     if (Result == VK_ERROR_LAYER_NOT_PRESENT && CreateInfo.enabledLayerCount > 0)
@@ -423,33 +472,7 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
     bool bSupportsDescriptorIndexingExt = false;
     if (!bSupportsDescriptorIndexingCore)
     {
-        uint32 ExtensionCount = 0;
-        VkResult ExtensionResult = vkEnumerateDeviceExtensionProperties(this->VkContext.PhysicalDevice, nullptr, &ExtensionCount, nullptr);
-        if (ExtensionResult != VK_SUCCESS)
-        {
-            LE_LOG(LogRAL, Warn, "vkEnumerateDeviceExtensionProperties(count) failed. VkResult={}", static_cast<int32>(ExtensionResult));
-            ExtensionCount = 0;
-        }
-        if (ExtensionCount > 0)
-        {
-            std::vector<VkExtensionProperties> ExtensionProps(ExtensionCount);
-            ExtensionResult = vkEnumerateDeviceExtensionProperties(this->VkContext.PhysicalDevice, nullptr, &ExtensionCount, ExtensionProps.data());
-            if (ExtensionResult == VK_SUCCESS)
-            {
-                for (const VkExtensionProperties& Ext : ExtensionProps)
-                {
-                    if (strcmp(Ext.extensionName, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME) == 0)
-                    {
-                        bSupportsDescriptorIndexingExt = true;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                LE_LOG(LogRAL, Warn, "vkEnumerateDeviceExtensionProperties(list) failed. VkResult={}", static_cast<int32>(ExtensionResult));
-            }
-        }
+        bSupportsDescriptorIndexingExt = HasDeviceExtension(this->VkContext.PhysicalDevice, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
     }
 
     const bool bCanEnableBindless =
@@ -457,6 +480,7 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
         SupportedIndexingFeatures.runtimeDescriptorArray == VK_TRUE &&
         SupportedIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind == VK_TRUE &&
         (bSupportsDescriptorIndexingCore || bSupportsDescriptorIndexingExt);
+    const bool bSupportsPortabilitySubset = HasDeviceExtension(this->VkContext.PhysicalDevice, GVkKhrPortabilitySubsetExtensionName);
 
     VkPhysicalDeviceDescriptorIndexingFeatures EnabledIndexingFeatures{};
     {
@@ -486,6 +510,12 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
     {
         EnabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
     }
+#if PLATFORM_MAC
+    if (bSupportsPortabilitySubset)
+    {
+        EnabledDeviceExtensions.push_back(GVkKhrPortabilitySubsetExtensionName);
+    }
+#endif
 
     VkDeviceCreateInfo DeviceInfo{};
     {
@@ -506,8 +536,8 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
     }
 
     this->VkContext.bBindlessSupported = bCanEnableBindless;
-    LE_LOG(LogRAL, Info, "Logical device created. BindlessSupported={} (coreIndexing={}, extIndexing={})",
-        this->VkContext.bBindlessSupported, bSupportsDescriptorIndexingCore, bSupportsDescriptorIndexingExt);
+    LE_LOG(LogRAL, Info, "Logical device created. BindlessSupported={} (coreIndexing={}, extIndexing={}, portabilitySubset={})",
+        this->VkContext.bBindlessSupported, bSupportsDescriptorIndexingCore, bSupportsDescriptorIndexingExt, bSupportsPortabilitySubset);
 }
 
 FRALSwapchain* FVulkanRALDevice::InternalCreateSwapchain(const FRALSwapchainDesc& InDesc)

@@ -12,6 +12,7 @@ public:
 
 public:
     void* GetNativeHandle() const override { return static_cast<void*>(Hwnd); }
+    FRALSurfaceDesc GetSurfaceDesc() const override;
     bool ProcessMessages() override;
     void GetSize(uint32& OutWidth, uint32& OutHeight) const override;
     bool IsMinimized() const override;

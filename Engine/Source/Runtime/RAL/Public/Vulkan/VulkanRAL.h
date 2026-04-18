@@ -16,10 +16,17 @@
     #include <Windows.h>
 #endif
 
+#if PLATFORM_MAC
+    #define VK_USE_PLATFORM_METAL_EXT 1
+#endif
+
 #include <vulkan/vulkan.h>
 
 #if PLATFORM_WINDOWS
-#include <vulkan/vulkan_win32.h>
+    #include <vulkan/vulkan_win32.h>
+#endif
+#if PLATFORM_MAC
+    #include <vulkan/vulkan_metal.h>
 #endif
 
 #include <unordered_map>
@@ -44,6 +51,10 @@ namespace RAL
 #if PLATFORM_WINDOWS
             VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 #endif
+#if PLATFORM_MAC
+            VK_EXT_METAL_SURFACE_EXTENSION_NAME,
+            VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
+#endif
 #if LE_RAL_ENABLE_VALIDATION
             VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 #endif
@@ -55,10 +66,18 @@ namespace RAL
         static const uint32 InstanceExtensionCount = 2;
 #endif
 #else
+#if PLATFORM_MAC
+#if LE_RAL_ENABLE_VALIDATION
+        static const uint32 InstanceExtensionCount = 4;
+#else
+        static const uint32 InstanceExtensionCount = 3;
+#endif
+#else
 #if LE_RAL_ENABLE_VALIDATION
         static const uint32 InstanceExtensionCount = 2;
 #else
         static const uint32 InstanceExtensionCount = 1;
+#endif
 #endif
 #endif
 

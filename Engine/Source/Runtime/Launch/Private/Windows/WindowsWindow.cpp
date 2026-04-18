@@ -41,6 +41,14 @@ FWindowsWindow::~FWindowsWindow()
     }
 }
 
+FRALSurfaceDesc FWindowsWindow::GetSurfaceDesc() const
+{
+    FRALSurfaceDesc SurfaceDesc;
+    SurfaceDesc.Type = ERALSurfaceType::Win32;
+    SurfaceDesc.WindowHandle = static_cast<void*>(Hwnd);
+    return SurfaceDesc;
+}
+
 bool FWindowsWindow::ProcessMessages()
 {
     MSG msg;

@@ -22,6 +22,21 @@ enum class EBufferUsageFlags : uint8
     TransferDst     = 1 << 6,
 };
 
+enum class ERALSurfaceType : uint8
+{
+    Unknown = 0,
+    Win32,
+    MetalLayer,
+};
+
+struct FRALSurfaceDesc
+{
+    ERALSurfaceType Type = ERALSurfaceType::Unknown;
+    void* WindowHandle = nullptr;
+    void* ViewHandle = nullptr;
+    void* LayerHandle = nullptr;
+};
+
 struct FRALBufferDesc
 {
     FString Name;
@@ -49,7 +64,7 @@ struct FRALTextureDesc
 
 struct FRALSwapchainDesc
 {
-    void* WindowHandle = nullptr;
+    FRALSurfaceDesc Surface;
     uint32 Width = 0;
     uint32 Height = 0;
     EPixelFormat BackBufferFormat = EPixelFormat::B8G8R8A8_SRGB;
