@@ -15,9 +15,10 @@ namespace Limitless
         {
             base.ConfigureAll(conf, target);
 
-            conf.Output = Configuration.OutputType.Lib;
+            conf.Output = Configuration.OutputType.None;
+            conf.SourceFilesBuildExcludeRegex.Add(@".*\.cpp$");
 
-            conf.IncludePaths.Add(@"[project.SourceRootPath]\include");
+            conf.IncludePaths.Add(@"[project.SourceRootPath]/include");
             conf.Defines.Add("LE_USE_GLM");
             conf.ExportDefines.Add("LE_USE_GLM");
         }

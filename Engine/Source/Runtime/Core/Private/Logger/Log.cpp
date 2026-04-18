@@ -5,10 +5,11 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_sinks.h>
 
+#include <memory>
 #include <string>
 #include <vector>
 
-#ifdef _WIN32
+#if PLATFORM_WINDOWS
 #include <spdlog/details/windows_include.h>
 #endif
 
@@ -93,7 +94,7 @@ public:
 
 void Log::Init()
 {
-#ifdef _WIN32
+#if PLATFORM_WINDOWS
     HANDLE hOut = ::GetStdHandle(STD_OUTPUT_HANDLE);
     if (hOut != nullptr && hOut != INVALID_HANDLE_VALUE)
     {

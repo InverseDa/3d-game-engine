@@ -20,6 +20,12 @@ namespace Limitless
             conf.IncludePaths.Add(@"[project.SourceRootPath]\include");
             conf.Defines.Add("SPDLOG_COMPILED_LIB");
             conf.ExportDefines.Add("SPDLOG_COMPILED_LIB");
+
+            if (target.Platform == Platform.mac)
+            {
+                conf.Defines.Add("SPDLOG_NO_EXCEPTIONS");
+                conf.ExportDefines.Add("SPDLOG_NO_EXCEPTIONS");
+            }
         }
     }
 }
