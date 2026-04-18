@@ -1,13 +1,19 @@
 #pragma once
 
 #include <iosfwd>
+#include <cassert>
+#include <cmath>
 #include <string>
 
 #if LE_USE_GLM
-#include "glm/glm.hpp"
+#include "glm.hpp"
 #endif
 
-#define FORCE_INLINE __forceinline
+#if defined(_MSC_VER)
+    #define FORCE_INLINE __forceinline
+#else
+    #define FORCE_INLINE inline __attribute__((always_inline))
+#endif
 
 // ************************************************************************
 // Numeric Types
@@ -89,6 +95,16 @@ namespace FMath
     inline float32 Sqrt(float32 Value)
     {
         return std::sqrt(Value);
+    }
+
+    inline float32 Sin(float32 Value)
+    {
+        return std::sin(Value);
+    }
+
+    inline float32 Cos(float32 Value)
+    {
+        return std::cos(Value);
     }
 }
 
@@ -249,7 +265,7 @@ namespace FMath
         }
 
         static TVector Cross(const TVector& A, const TVector& B) {
-            assert(N == 3, "Cross product is only defined for 3D vectors");
+            assert(N == 3);
             return TVector(
                 A.y * B.z - A.z * B.y,
                 A.z * B.x - A.x * B.z,
@@ -258,7 +274,7 @@ namespace FMath
         }
 
         static T Cross2D(const TVector& A, const TVector& B) {
-            assert(N == 2, "Cross2D product is only defined for 2D vectors");
+            assert(N == 2);
             return (A.x * B.y) - (A.y * B.x);
         }
     };
@@ -495,24 +511,32 @@ namespace FMath
         using TQuatData<T>::z;
         using TQuatData<T>::w;
 
-        TQuaternion() : x(0), y(0), z(0), w(1)
+        TQuaternion()
         {
+            this->x = 0;
+            this->y = 0;
+            this->z = 0;
+            this->w = 1;
         }
 
-        TQuaternion(T InX, T InY, T InZ, T InW) : x(InX), y(InY), z(InZ), w(InW)
+        TQuaternion(T InX, T InY, T InZ, T InW)
         {
+            this->x = InX;
+            this->y = InY;
+            this->z = InZ;
+            this->w = InW;
         }
 
         TQuaternion(const TVector<T, 3>& Axis, T AngleRad)
         {
             const T HalfAngle = AngleRad * 0.5f;
-            const T SinHalf = FMath::Sin(HalfAngle);
-            const T CosHalf = FMath::Cos(HalfAngle);
+            const T SinHalf = static_cast<T>(FMath::Sin(static_cast<float32>(HalfAngle)));
+            const T CosHalf = static_cast<T>(FMath::Cos(static_cast<float32>(HalfAngle)));
 
             this->x = Axis.x * SinHalf;
             this->y = Axis.y * SinHalf;
             this->z = Axis.z * SinHalf;
-            this->z = CosHalf;
+            this->w = CosHalf;
         }
 
         static TQuaternion Identity()
