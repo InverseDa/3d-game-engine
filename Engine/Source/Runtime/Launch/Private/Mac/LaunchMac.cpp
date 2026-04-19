@@ -13,8 +13,10 @@
 #include "Mac/MacWindow.h"
 #include "RALMinimal.h"
 #include "RFGMinimal.h"
+#include "Renderer/RendererMinimal.h"
 #include "ShaderRuntimeCompiler.h"
 #include "Vulkan/VulkanRAL.h"
+#include "World/WorldMinimal.h"
 
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogXBD);
 LE_DECLARE_LOG_CATEGORY(LogXBD);
@@ -313,45 +315,6 @@ static bool CreateOffscreenPassResources(
     return true;
 }
 
-static void TransitionTextureToShaderRead(
-    FRALCommandList* CommandList,
-    FRALTexture* Texture)
-{
-    FVulkanRALCommandList* VulkanCommandList = static_cast<FVulkanRALCommandList*>(CommandList);
-    FVulkanRALTexture* VulkanTexture = static_cast<FVulkanRALTexture*>(Texture);
-    if (VulkanCommandList == nullptr || VulkanTexture == nullptr || VulkanTexture->Image == VK_NULL_HANDLE)
-    {
-        return;
-    }
-
-    VkImageMemoryBarrier Barrier{};
-    Barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    Barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    Barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    Barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    Barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    Barrier.image = VulkanTexture->Image;
-    Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    Barrier.subresourceRange.baseMipLevel = 0;
-    Barrier.subresourceRange.levelCount = 1;
-    Barrier.subresourceRange.baseArrayLayer = 0;
-    Barrier.subresourceRange.layerCount = 1;
-
-    vkCmdPipelineBarrier(
-        VulkanCommandList->Handle,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        0,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        1,
-        &Barrier);
-}
-
 static FRALPipeline_Graphics* CreateTrianglePipeline(
     FRALDevice* Device,
     FRALShader* VertexShader,
@@ -413,170 +376,6 @@ static FRALPipeline_Graphics* CreateCompositePipeline(
     PipelineDesc.BindGroupLayouts.push_back(BindGroupLayout);
 
     return Device->CreateGraphicsPipeline(PipelineDesc);
-}
-
-static void RenderFrame(
-    FRALSwapchain* Swapchain,
-    FRALCommandList* CmdList,
-    FRALPipeline_Graphics* TrianglePipeline,
-    FRALPipeline_Graphics* CompositePipeline,
-    FRALBuffer* VertexBuffer,
-    const FOffscreenPassResources& OffscreenResources,
-    FRFGInstance& GraphInstance,
-    FRALDevice* Device)
-{
-    FRALTextureView* BackBufferView = Swapchain->GetCurrentBackBufferView();
-    if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
-    {
-        LE_LOG(LogXBD, Warn, "Skipping frame because the swapchain back buffer is not ready yet.");
-        return;
-    }
-
-    if (OffscreenResources.Texture == nullptr || OffscreenResources.TextureView == nullptr || OffscreenResources.BindGroup == nullptr)
-    {
-        LE_LOG(LogXBD, Warn, "Skipping frame because the offscreen resources are incomplete.");
-        return;
-    }
-
-    FRFGBuilder Builder = GraphInstance.CreateBuilder();
-    const FRFGResourceHandle BackBufferHandle = Builder.ImportTexture("BackBuffer", BackBufferView->GetTexture());
-    const FRFGResourceHandle SceneColorHandle = Builder.ImportTexture("SceneColor", OffscreenResources.Texture);
-
-    FRFGAccessDesc GraphicsWrite;
-    GraphicsWrite.Access = ERFGAccessType::Write;
-    GraphicsWrite.PipelineStage = ERFGPipelineStage::Graphics;
-
-    FRFGAccessDesc GraphicsRead;
-    GraphicsRead.Access = ERFGAccessType::Read;
-    GraphicsRead.PipelineStage = ERFGPipelineStage::Graphics;
-
-    const FRFGPassHandle OffscreenColorPass = Builder.AddPass(
-        "OffscreenColorPass",
-        "TriangleRaster",
-        {},
-        ERFGPassFlags::None,
-        ERFGQueueType::Graphics);
-    const FRFGPassHandle CompositePass = Builder.AddPass(
-        "CompositeToBackBufferPass",
-        "CompositeRaster",
-        {},
-        ERFGPassFlags::HasSideEffects,
-        ERFGQueueType::Graphics);
-
-    Builder.Write(OffscreenColorPass, SceneColorHandle, GraphicsWrite);
-    Builder.Read(CompositePass, SceneColorHandle, GraphicsRead);
-    Builder.Write(CompositePass, BackBufferHandle, GraphicsWrite);
-    Builder.MarkOutput(BackBufferHandle);
-
-    Builder.SetPassCallback(
-        OffscreenColorPass,
-        [TrianglePipeline, VertexBuffer, SceneColorView = OffscreenResources.TextureView](FRFGPassContext& Context)
-        {
-            FRALCommandList* GraphCmdList = Context.GetCommandList();
-            if (GraphCmdList == nullptr)
-            {
-                return;
-            }
-
-            GraphCmdList->SetGraphicsPipeline(TrianglePipeline);
-
-            FRALRenderPassDesc RenderPassDesc{};
-            RenderPassDesc.ColorAttachmentCount = 1;
-            RenderPassDesc.ColorAttachments[0].RenderTarget = SceneColorView;
-            RenderPassDesc.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
-            RenderPassDesc.ColorAttachments[0].StoreOp = EAttachmentStoreOp::Store;
-            RenderPassDesc.ColorAttachments[0].ClearColor[0] = 0.04f;
-            RenderPassDesc.ColorAttachments[0].ClearColor[1] = 0.08f;
-            RenderPassDesc.ColorAttachments[0].ClearColor[2] = 0.12f;
-            RenderPassDesc.ColorAttachments[0].ClearColor[3] = 1.0f;
-            RenderPassDesc.bHasDepthStencil = false;
-
-            GraphCmdList->BeginRenderPass(RenderPassDesc);
-
-            const FRALTextureDesc& TexDesc = SceneColorView->GetTexture()->GetDesc();
-            FRALViewport Viewport;
-            Viewport.X = 0.0f;
-            Viewport.Y = 0.0f;
-            Viewport.Width = static_cast<float>(TexDesc.Width);
-            Viewport.Height = static_cast<float>(TexDesc.Height);
-            Viewport.MinDepth = 0.0f;
-            Viewport.MaxDepth = 1.0f;
-            GraphCmdList->SetViewport(Viewport);
-
-            FRALScissorRect Scissor;
-            Scissor.X = 0;
-            Scissor.Y = 0;
-            Scissor.Width = TexDesc.Width;
-            Scissor.Height = TexDesc.Height;
-            GraphCmdList->SetScissorRect(Scissor);
-
-            GraphCmdList->SetVertexBuffer(0, VertexBuffer, 0);
-            GraphCmdList->Draw(3, 1, 0);
-            GraphCmdList->EndRenderPass();
-        });
-
-    Builder.SetPassCallback(
-        CompositePass,
-        [CompositePipeline, SceneColorTexture = OffscreenResources.Texture, CompositeBindGroup = OffscreenResources.BindGroup, BackBufferView](FRFGPassContext& Context)
-        {
-            FRALCommandList* GraphCmdList = Context.GetCommandList();
-            if (GraphCmdList == nullptr)
-            {
-                return;
-            }
-
-            TransitionTextureToShaderRead(GraphCmdList, SceneColorTexture);
-            GraphCmdList->SetGraphicsPipeline(CompositePipeline);
-            GraphCmdList->SetBindGroup(0, CompositeBindGroup);
-
-            FRALRenderPassDesc RenderPassDesc{};
-            RenderPassDesc.ColorAttachmentCount = 1;
-            RenderPassDesc.ColorAttachments[0].RenderTarget = BackBufferView;
-            RenderPassDesc.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
-            RenderPassDesc.ColorAttachments[0].StoreOp = EAttachmentStoreOp::Store;
-            RenderPassDesc.ColorAttachments[0].ClearColor[0] = 0.0f;
-            RenderPassDesc.ColorAttachments[0].ClearColor[1] = 0.0f;
-            RenderPassDesc.ColorAttachments[0].ClearColor[2] = 0.0f;
-            RenderPassDesc.ColorAttachments[0].ClearColor[3] = 1.0f;
-            RenderPassDesc.bHasDepthStencil = false;
-
-            GraphCmdList->BeginRenderPass(RenderPassDesc);
-
-            const FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
-            FRALViewport Viewport;
-            Viewport.X = 0.0f;
-            Viewport.Y = 0.0f;
-            Viewport.Width = static_cast<float>(TexDesc.Width);
-            Viewport.Height = static_cast<float>(TexDesc.Height);
-            Viewport.MinDepth = 0.0f;
-            Viewport.MaxDepth = 1.0f;
-            GraphCmdList->SetViewport(Viewport);
-
-            FRALScissorRect Scissor;
-            Scissor.X = 0;
-            Scissor.Y = 0;
-            Scissor.Width = TexDesc.Width;
-            Scissor.Height = TexDesc.Height;
-            GraphCmdList->SetScissorRect(Scissor);
-
-            GraphCmdList->Draw(3, 1, 0);
-            GraphCmdList->EndRenderPass();
-        });
-
-    const FRFGGraphSignature Signature = Builder.BuildSignature();
-    const FRFGCompileResult CompileResult = GraphInstance.Compile(Builder.GetRecordedGraph(), Signature);
-
-    FRFGExecutionContext ExecutionContext;
-    ExecutionContext.Device = Device;
-    ExecutionContext.GraphicsQueue = Device->GetGraphicsQueue();
-    ExecutionContext.CommandList = CmdList;
-
-    FRFGExecuteOptions ExecuteOptions;
-    ExecuteOptions.bSubmitImmediately = true;
-    ExecuteOptions.bWaitForCompletion = true;
-    GraphInstance.Execute(CompileResult, Builder.GetRecordedGraph(), ExecutionContext, ExecuteOptions);
-
-    Swapchain->Present();
 }
 
 static void GetBackBufferExtent(FRALSwapchain* Swapchain, uint32 FallbackWidth, uint32 FallbackHeight, uint32& OutWidth, uint32& OutHeight)
@@ -745,10 +544,8 @@ int32 GuardedMain()
 
     FRALBuffer* VertexBuffer = CreateTriangleVertexBuffer(Device);
     FRALCommandList* CmdList = Device->CreateCommandList(EQueueType::Graphics);
-    FRFGRuntime GraphRuntime;
-    GraphRuntime.Initialize(nullptr);
-    FRFGInstance GraphInstance;
-    GraphInstance.Initialize(&GraphRuntime);
+    FRenderer Renderer;
+    Renderer.Initialize();
     uint32 CachedWindowWidth = WindowWidth;
     uint32 CachedWindowHeight = WindowHeight;
 
@@ -787,23 +584,40 @@ int32 GuardedMain()
             }
         }
 
-        RenderFrame(
-            Swapchain,
-            CmdList,
-            TrianglePipeline,
-            CompositePipeline,
-            VertexBuffer,
-            OffscreenResources,
-            GraphInstance,
-            Device);
+        FWorld World;
+        FWorldMeshComponent MeshComponent;
+        MeshComponent.DebugName = "TriangleMesh";
+        MeshComponent.GraphicsPipeline = TrianglePipeline;
+        MeshComponent.VertexBuffer = VertexBuffer;
+        MeshComponent.VertexCount = 3;
+        MeshComponent.PassMask = ERenderMeshPassMask::SceneColor;
+        MeshComponent.SortKey = 0;
+        World.MeshComponents.push_back(MeshComponent);
+
+        FRenderScene RenderScene;
+        FWorldRenderSceneExtractor::ExtractRenderScene(World, RenderScene);
+
+        FRendererFrameContext FrameContext;
+        FrameContext.Device = Device;
+        FrameContext.Swapchain = Swapchain;
+        FrameContext.CommandList = CmdList;
+        FrameContext.ViewFamily.PrimarySwapchain = Swapchain;
+        FTriangleCompositePipelineDesc RenderPipelineDesc;
+        RenderPipelineDesc.Swapchain = Swapchain;
+        RenderPipelineDesc.CompositePipeline = CompositePipeline;
+        RenderPipelineDesc.SceneColorTexture = OffscreenResources.Texture;
+        RenderPipelineDesc.SceneColorView = OffscreenResources.TextureView;
+        RenderPipelineDesc.CompositeBindGroup = OffscreenResources.BindGroup;
+        FTriangleCompositePipeline RenderPipeline(RenderPipelineDesc);
+        FrameContext.Pipeline = &RenderPipeline;
+        Renderer.RenderFrame(FrameContext, &RenderScene);
     }
 
     Device->GetGraphicsQueue()->WaitIdle();
 
     delete CmdList;
     delete VertexBuffer;
-    GraphInstance.Shutdown();
-    GraphRuntime.Shutdown();
+    Renderer.Shutdown();
     delete CompositePipeline;
     delete TrianglePipeline;
     DestroyOffscreenPassResources(OffscreenResources);

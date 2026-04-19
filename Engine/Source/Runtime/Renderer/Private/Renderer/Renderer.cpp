@@ -1,0 +1,147 @@
+#include "Renderer/Renderer.h"
+
+#include "Renderer/RenderGraphBuilderBridge.h"
+#include "Renderer/RenderPass.h"
+#include "Renderer/RenderPipeline.h"
+#include "Renderer/RenderScene.h"
+#include "RAL/RALDevice.h"
+#include "RAL/RALQueue.h"
+#include "RAL/RALSwapchain.h"
+
+namespace
+{
+FRenderView BuildDefaultRenderView()
+{
+    FRenderView View;
+    View.ViewId = 0;
+    return View;
+}
+}
+
+FRenderer::FRenderer() = default;
+
+FRenderer::~FRenderer()
+{
+    Shutdown();
+}
+
+void FRenderer::Initialize()
+{
+    if (bInitialized)
+    {
+        return;
+    }
+
+    GraphRuntime.Initialize(&PassRegistry);
+    GraphInstance.Initialize(&GraphRuntime);
+    bInitialized = true;
+}
+
+void FRenderer::Shutdown()
+{
+    if (!bInitialized)
+    {
+        return;
+    }
+
+    GraphInstance.Shutdown();
+    GraphRuntime.Shutdown();
+    bInitialized = false;
+}
+
+bool FRenderer::IsInitialized() const
+{
+    return bInitialized;
+}
+
+void FRenderer::RenderFrame(const FRendererFrameContext& FrameContext, const FRenderScene* RenderScene)
+{
+    static const FRenderScene EmptyRenderScene;
+
+    if (!bInitialized)
+    {
+        return;
+    }
+
+    if (FrameContext.Device == nullptr || FrameContext.CommandList == nullptr || FrameContext.Pipeline == nullptr)
+    {
+        return;
+    }
+
+    const FRenderScene& EffectiveRenderScene = RenderScene != nullptr ? *RenderScene : EmptyRenderScene;
+    const FRenderView DefaultView = BuildDefaultRenderView();
+    const FRenderView& EffectiveView = !FrameContext.ViewFamily.Views.empty() ? FrameContext.ViewFamily.Views.front() : DefaultView;
+
+    FRenderPipelinePlan PipelinePlan;
+    FrameContext.Pipeline->BuildPasses(FrameContext, EffectiveRenderScene, EffectiveView, PipelinePlan);
+    if (PipelinePlan.Passes.empty())
+    {
+        return;
+    }
+
+    FRFGBuilder Builder = GraphInstance.CreateBuilder();
+    FRenderGraphBuilderBridge GraphBridge(Builder);
+
+    for (IRenderPass* Pass : PipelinePlan.Passes)
+    {
+        if (Pass == nullptr)
+        {
+            continue;
+        }
+
+        const FRFGPassHandle PassHandle = Builder.AddPass(
+            Pass->GetPassName(),
+            Pass->GetPassName(),
+            {},
+            ERFGPassFlags::None,
+            Pass->GetQueueType());
+
+        FRenderPassSetupContext SetupContext;
+        SetupContext.GraphBridge = &GraphBridge;
+        SetupContext.PassHandle = PassHandle;
+        SetupContext.FrameContext = &FrameContext;
+        SetupContext.RenderScene = &EffectiveRenderScene;
+        SetupContext.RenderView = &EffectiveView;
+        Pass->Setup(SetupContext);
+
+        Builder.SetPassCallback(
+            PassHandle,
+            [Pass, &FrameContext, &EffectiveRenderScene, &EffectiveView](FRFGPassContext& Context)
+            {
+                FRenderPassRecordContext RecordContext;
+                RecordContext.PassContext = &Context;
+                RecordContext.FrameContext = &FrameContext;
+                RecordContext.RenderScene = &EffectiveRenderScene;
+                RecordContext.RenderView = &EffectiveView;
+                Pass->Record(RecordContext);
+            });
+    }
+
+    const FRFGGraphSignature Signature = Builder.BuildSignature();
+    const FRFGCompileResult CompileResult = GraphInstance.Compile(Builder.GetRecordedGraph(), Signature);
+
+    FRFGExecutionContext ExecutionContext;
+    ExecutionContext.Device = FrameContext.Device;
+    ExecutionContext.GraphicsQueue = FrameContext.Device->GetGraphicsQueue();
+    ExecutionContext.CommandList = FrameContext.CommandList;
+
+    FRFGExecuteOptions ExecuteOptions;
+    ExecuteOptions.bSubmitImmediately = true;
+    ExecuteOptions.bWaitForCompletion = true;
+    GraphInstance.Execute(CompileResult, Builder.GetRecordedGraph(), ExecutionContext, ExecuteOptions);
+
+    if (FrameContext.bPresentAfterRender && FrameContext.Swapchain != nullptr)
+    {
+        FrameContext.Swapchain->Present();
+    }
+}
+
+FRFGInstance& FRenderer::GetGraphInstance()
+{
+    return GraphInstance;
+}
+
+const FRFGInstance& FRenderer::GetGraphInstance() const
+{
+    return GraphInstance;
+}

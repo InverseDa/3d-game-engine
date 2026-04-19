@@ -72,6 +72,8 @@ namespace Limitless
             conf.AddPublicDependency<LaunchProject>(target);
             conf.AddPublicDependency<RALProject>(target);
             conf.AddPublicDependency<RFGProject>(target, DependencySetting.DefaultWithoutLinking);
+            conf.AddPublicDependency<RendererProject>(target);
+            conf.AddPublicDependency<WorldProject>(target);
 
         }
     }

@@ -10,6 +10,8 @@ using Sharpmake;
 [module: Sharpmake.Include("../Source/Runtime/Launch/Launch.Build.cs")]
 [module: Sharpmake.Include("../Source/Runtime/RAL/RAL.Build.cs")]
 [module: Sharpmake.Include("../Source/Runtime/RFG/RFG.Build.cs")]
+[module: Sharpmake.Include("../Source/Runtime/Renderer/Renderer.Build.cs")]
+[module: Sharpmake.Include("../Source/Runtime/World/World.Build.cs")]
 [module: Sharpmake.Include("../Source/ThirdParty/Glm/Glm.Build.cs")]
 [module: Sharpmake.Include("../Source/ThirdParty/Spdlog/Spdlog.Build.cs")]
 [module: Sharpmake.Include("../Source/ThirdParty/Vulkan/Vulkan.Build.cs")]
