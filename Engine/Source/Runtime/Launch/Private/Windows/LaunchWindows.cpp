@@ -15,6 +15,8 @@
 #endif
 
 #include "RALMinimal.h"
+#include "RFGMinimal.h"
+#include "ShaderRuntimeCompiler.h"
 
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogXBD);
 LE_DECLARE_LOG_CATEGORY(LogXBD);
@@ -190,52 +192,92 @@ void RenderFrame(
     FRALCommandList* CmdList,
     FRALPipeline_Graphics* Pipeline,
     FRALBuffer* VertexBuffer,
+    FRFGInstance& GraphInstance,
     FRALDevice* Device)
 {
     FRALTextureView* BackBufferView = Swapchain->GetCurrentBackBufferView();
+    if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
+    {
+        LE_LOG(LogXBD, Warn, "Skipping frame because the swapchain back buffer is not ready yet.");
+        return;
+    }
 
-    CmdList->Begin();
-    CmdList->SetGraphicsPipeline(Pipeline);
+    FRFGBuilder Builder = GraphInstance.CreateBuilder();
+    const FRFGResourceHandle BackBufferHandle = Builder.ImportTexture("BackBuffer", BackBufferView->GetTexture());
 
-    FRALRenderPassDesc RenderPassDesc{};
-    RenderPassDesc.ColorAttachmentCount = 1;
-    RenderPassDesc.ColorAttachments[0].RenderTarget = BackBufferView;
-    RenderPassDesc.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
-    RenderPassDesc.ColorAttachments[0].StoreOp = EAttachmentStoreOp::Store;
-    RenderPassDesc.ColorAttachments[0].ClearColor[0] = 0.1f;
-    RenderPassDesc.ColorAttachments[0].ClearColor[1] = 0.1f;
-    RenderPassDesc.ColorAttachments[0].ClearColor[2] = 0.1f;
-    RenderPassDesc.ColorAttachments[0].ClearColor[3] = 1.0f;
-    RenderPassDesc.bHasDepthStencil = false;
+    FRFGAccessDesc BackBufferWrite;
+    BackBufferWrite.Access = ERFGAccessType::Write;
+    BackBufferWrite.PipelineStage = ERFGPipelineStage::Graphics;
 
-    CmdList->BeginRenderPass(RenderPassDesc);
+    const FRFGPassHandle TrianglePass = Builder.AddPass(
+        "TrianglePass",
+        "TriangleRaster",
+        {},
+        ERFGPassFlags::HasSideEffects,
+        ERFGQueueType::Graphics);
 
-    const FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
-    FRALViewport Viewport;
-    Viewport.X = 0.0f;
-    Viewport.Y = 0.0f;
-    Viewport.Width = static_cast<float>(TexDesc.Width);
-    Viewport.Height = static_cast<float>(TexDesc.Height);
-    Viewport.MinDepth = 0.0f;
-    Viewport.MaxDepth = 1.0f;
-    CmdList->SetViewport(Viewport);
+    Builder.Write(TrianglePass, BackBufferHandle, BackBufferWrite);
+    Builder.MarkOutput(BackBufferHandle);
 
-    FRALScissorRect Scissor;
-    Scissor.X = 0;
-    Scissor.Y = 0;
-    Scissor.Width = TexDesc.Width;
-    Scissor.Height = TexDesc.Height;
-    CmdList->SetScissorRect(Scissor);
+    Builder.SetPassCallback(
+        TrianglePass,
+        [BackBufferView, Pipeline, VertexBuffer](FRFGPassContext& Context)
+        {
+            FRALCommandList* GraphCmdList = Context.GetCommandList();
+            if (GraphCmdList == nullptr)
+            {
+                return;
+            }
 
-    CmdList->SetVertexBuffer(0, VertexBuffer, 0);
-    CmdList->Draw(3, 1, 0);
-    CmdList->EndRenderPass();
-    CmdList->End();
+            GraphCmdList->SetGraphicsPipeline(Pipeline);
 
-    FRALSubmitInfo SubmitInfo;
-    SubmitInfo.CmdList = CmdList;
-    Device->GetGraphicsQueue()->Submit(SubmitInfo);
-    Device->GetGraphicsQueue()->WaitIdle();
+            FRALRenderPassDesc RenderPassDesc{};
+            RenderPassDesc.ColorAttachmentCount = 1;
+            RenderPassDesc.ColorAttachments[0].RenderTarget = BackBufferView;
+            RenderPassDesc.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
+            RenderPassDesc.ColorAttachments[0].StoreOp = EAttachmentStoreOp::Store;
+            RenderPassDesc.ColorAttachments[0].ClearColor[0] = 0.1f;
+            RenderPassDesc.ColorAttachments[0].ClearColor[1] = 0.1f;
+            RenderPassDesc.ColorAttachments[0].ClearColor[2] = 0.1f;
+            RenderPassDesc.ColorAttachments[0].ClearColor[3] = 1.0f;
+            RenderPassDesc.bHasDepthStencil = false;
+
+            GraphCmdList->BeginRenderPass(RenderPassDesc);
+
+            const FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
+            FRALViewport Viewport;
+            Viewport.X = 0.0f;
+            Viewport.Y = 0.0f;
+            Viewport.Width = static_cast<float>(TexDesc.Width);
+            Viewport.Height = static_cast<float>(TexDesc.Height);
+            Viewport.MinDepth = 0.0f;
+            Viewport.MaxDepth = 1.0f;
+            GraphCmdList->SetViewport(Viewport);
+
+            FRALScissorRect Scissor;
+            Scissor.X = 0;
+            Scissor.Y = 0;
+            Scissor.Width = TexDesc.Width;
+            Scissor.Height = TexDesc.Height;
+            GraphCmdList->SetScissorRect(Scissor);
+
+            GraphCmdList->SetVertexBuffer(0, VertexBuffer, 0);
+            GraphCmdList->Draw(3, 1, 0);
+            GraphCmdList->EndRenderPass();
+        });
+
+    const FRFGGraphSignature Signature = Builder.BuildSignature();
+    const FRFGCompileResult CompileResult = GraphInstance.Compile(Builder.GetRecordedGraph(), Signature);
+
+    FRFGExecutionContext ExecutionContext;
+    ExecutionContext.Device = Device;
+    ExecutionContext.GraphicsQueue = Device->GetGraphicsQueue();
+    ExecutionContext.CommandList = CmdList;
+
+    FRFGExecuteOptions ExecuteOptions;
+    ExecuteOptions.bSubmitImmediately = true;
+    ExecuteOptions.bWaitForCompletion = true;
+    GraphInstance.Execute(CompileResult, Builder.GetRecordedGraph(), ExecutionContext, ExecuteOptions);
 
     Swapchain->Present();
 }
@@ -280,9 +322,10 @@ int32 GuardedMain()
     LE_LOG(LogXBD, Info, "Swapchain created");
 
     // Load shaders
-    auto VertBytecode = ReadShaderFile("Engine/Content/Shaders/triangle.vert.spv");
-    auto FragBytecode = ReadShaderFile("Engine/Content/Shaders/triangle.frag.spv");
-    if (!IsValidSpirv(VertBytecode, "triangle.vert.spv") || !IsValidSpirv(FragBytecode, "triangle.frag.spv"))
+    std::vector<char> VertBytecode;
+    std::vector<char> FragBytecode;
+    if (!Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/TriangleVS.lsf", ERuntimeShaderStage::Vertex, VertBytecode, "MainVS") ||
+        !Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/TrianglePS.lsf", ERuntimeShaderStage::Fragment, FragBytecode, "MainPS"))
     {
         delete Swapchain;
         delete Device;
@@ -292,9 +335,9 @@ int32 GuardedMain()
     }
 
     FRALShader* VertexShader = Device->CreateShaderFromFile(
-        EShaderStage::Vertex, VertBytecode.data(), VertBytecode.size());
+        EShaderStage::Vertex, VertBytecode.data(), VertBytecode.size(), "MainVS");
     FRALShader* PixelShader = Device->CreateShaderFromFile(
-        EShaderStage::Pixel, FragBytecode.data(), FragBytecode.size());
+        EShaderStage::Pixel, FragBytecode.data(), FragBytecode.size(), "MainPS");
     if (!VertexShader || !PixelShader)
     {
         LE_LOG(LogXBD, Error, "Failed to create shader modules.");
@@ -360,18 +403,24 @@ int32 GuardedMain()
 
     // Command list
     FRALCommandList* CmdList = Device->CreateCommandList(EQueueType::Graphics);
+    FRFGRuntime GraphRuntime;
+    GraphRuntime.Initialize(nullptr);
+    FRFGInstance GraphInstance;
+    GraphInstance.Initialize(&GraphRuntime);
 
     LE_LOG(LogXBD, Info, "Entering main loop...");
 
     // 主循环
     while (Window->ProcessMessages())
     {
-        RenderFrame(Swapchain, CmdList, Pipeline, VertexBuffer, Device);
+        RenderFrame(Swapchain, CmdList, Pipeline, VertexBuffer, GraphInstance, Device);
     }
 
     // 清理资源
     LE_LOG(LogXBD, Info, "Shutting down...");
     Device->GetGraphicsQueue()->WaitIdle();
+    GraphInstance.Shutdown();
+    GraphRuntime.Shutdown();
 
     delete CmdList;
     delete VertexBuffer;

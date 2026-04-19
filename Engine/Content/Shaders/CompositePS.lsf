@@ -1,0 +1,12 @@
+Texture2D SceneColorTexture : register(t0, space0);
+SamplerState SceneColorSampler : register(s1, space0);
+
+struct PSInput
+{
+    [[vk::location(0)]] float2 Uv : TEXCOORD0;
+};
+
+float4 MainPS(PSInput input) : SV_Target0
+{
+    return SceneColorTexture.Sample(SceneColorSampler, input.Uv);
+}

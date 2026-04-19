@@ -34,6 +34,7 @@ namespace Limitless
             conf.AddPublicDependency<CoreProject>(target);
             conf.AddPublicDependency<SpdlogProject>(target);
             conf.AddPublicDependency<RALProject>(target);
+            conf.AddPublicDependency<RFGProject>(target);
             if (target.Platform == Platform.mac)
             {
                 conf.XcodeSystemFrameworks.Add("AppKit", "QuartzCore");

@@ -690,7 +690,7 @@ FRALBindGroup* FVulkanRALDevice::CreateBindGroup(const FRALBindGroupDesc& Desc)
     return new FVulkanRALBindGroup(this, Desc);
 }
 
-FRALShader* FVulkanRALDevice::CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size)
+FRALShader* FVulkanRALDevice::CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size, const FString& EntryPoint)
 {
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || Data == nullptr || Size == 0 || (Size % 4) != 0)
     {
@@ -703,7 +703,7 @@ FRALShader* FVulkanRALDevice::CreateShaderFromFile(EShaderStage Stage, const voi
     Desc.Stage = Stage;
     Desc.ByteCode = Data;
     Desc.ByteCodeSize = Size;
-    Desc.EntryPoint = "main";
+    Desc.EntryPoint = EntryPoint;
 
     FVulkanRALShader* Shader = new FVulkanRALShader(this, Desc);
     if (Shader->Module == VK_NULL_HANDLE)
