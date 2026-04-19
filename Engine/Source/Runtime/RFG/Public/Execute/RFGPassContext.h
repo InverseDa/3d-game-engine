@@ -4,6 +4,9 @@
 #include "Core/RFGHandles.h"
 #include "Core/RFGTypes.h"
 
+#include <unordered_map>
+#include <vector>
+
 class FRALDevice;
 class FRALQueue;
 class FRALCommandList;
@@ -29,6 +32,13 @@ struct FRFGExecutionContext
     {
         return CommandList;
     }
+
+    void ResetTransientResources();
+
+    std::unordered_map<uint32, FRALTexture*> TextureResources;
+    std::unordered_map<uint32, FRALBuffer*> BufferResources;
+    std::vector<FRALTexture*> OwnedTextures;
+    std::vector<FRALBuffer*> OwnedBuffers;
 };
 
 class RFG_API FRFGPassContext
