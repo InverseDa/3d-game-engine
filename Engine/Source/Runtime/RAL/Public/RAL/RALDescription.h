@@ -82,6 +82,42 @@ struct FRALTextureViewDesc
 };
 
 // ***********************************************************************************************
+// ******************************** Resource Barriers ********************************************
+// ***********************************************************************************************
+
+struct FRALTextureBarrierDesc
+{
+    FRALTexture* Texture = nullptr;
+    ERALResourceState BeforeState = ERALResourceState::Unknown;
+    ERALResourceState AfterState = ERALResourceState::Unknown;
+    EShaderStage BeforeShaderStage = EShaderStage::None;
+    EShaderStage AfterShaderStage = EShaderStage::None;
+
+    uint32 BaseMipLevel = 0;
+    uint32 MipCount = 1;
+    uint32 BaseArrayLayer = 0;
+    uint32 LayerCount = 1;
+};
+
+struct FRALBufferBarrierDesc
+{
+    FRALBuffer* Buffer = nullptr;
+    ERALResourceState BeforeState = ERALResourceState::Unknown;
+    ERALResourceState AfterState = ERALResourceState::Unknown;
+    EShaderStage BeforeShaderStage = EShaderStage::None;
+    EShaderStage AfterShaderStage = EShaderStage::None;
+
+    uint64 Offset = 0;
+    uint64 Size = ~0ull;
+};
+
+struct FRALBarrierBatch
+{
+    std::vector<FRALTextureBarrierDesc> TextureBarriers;
+    std::vector<FRALBufferBarrierDesc> BufferBarriers;
+};
+
+// ***********************************************************************************************
 // ******************************* Vertex Input Layout *******************************************
 // ***********************************************************************************************
 

@@ -290,6 +290,7 @@ public:
 public:
     void Begin() override;
     void End() override;
+    void ResourceBarriers(const FRALBarrierBatch& Barriers) override;
 
 public:
     void BeginRenderPass(const FRALRenderPassDesc& Desc) override;

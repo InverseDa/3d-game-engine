@@ -41,6 +41,7 @@ public:
 
         FRFGAccessDesc BackBufferWrite;
         BackBufferWrite.Access = ERFGAccessType::Write;
+        BackBufferWrite.State = ERALResourceState::RenderTarget;
         BackBufferWrite.PipelineStage = ERFGPipelineStage::Graphics;
 
         const FRFGResourceHandle BackBufferHandle = Context.GraphBridge->ImportTexture("BackBuffer", BackBufferView->GetTexture());

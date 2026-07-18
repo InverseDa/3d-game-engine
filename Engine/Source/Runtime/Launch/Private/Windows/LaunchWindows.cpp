@@ -18,6 +18,7 @@
 #include "RFGMinimal.h"
 #include "Renderer/RendererMinimal.h"
 #include "ShaderRuntimeCompiler.h"
+#include "Vulkan/VulkanRAL.h"
 #include "World/WorldMinimal.h"
 
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogXBD);
@@ -29,6 +30,134 @@ struct FSimpleVertex
     FVector3f Position;
     FVector3f Color;
 };
+
+struct FOffscreenPassResources
+{
+    FRALTexture* Texture = nullptr;
+    FRALTextureView* TextureView = nullptr;
+    FRALSampler* Sampler = nullptr;
+    FRALBindGroupLayout* BindGroupLayout = nullptr;
+    FRALBindGroup* BindGroup = nullptr;
+};
+
+static void DestroyOffscreenPassResources(FOffscreenPassResources& Resources)
+{
+    delete Resources.BindGroup;
+    delete Resources.BindGroupLayout;
+    delete Resources.Sampler;
+    delete Resources.TextureView;
+    delete Resources.Texture;
+
+    Resources.BindGroup = nullptr;
+    Resources.BindGroupLayout = nullptr;
+    Resources.Sampler = nullptr;
+    Resources.TextureView = nullptr;
+    Resources.Texture = nullptr;
+}
+
+static bool CreateOffscreenPassResources(
+    FRALDevice* Device,
+    uint32 Width,
+    uint32 Height,
+    FOffscreenPassResources& Resources)
+{
+    DestroyOffscreenPassResources(Resources);
+
+    FRALTextureDesc TextureDesc;
+    TextureDesc.Name = "RFGSceneColor";
+    TextureDesc.Width = Width;
+    TextureDesc.Height = Height;
+    TextureDesc.Depth = 1;
+    TextureDesc.MipLevels = 1;
+    TextureDesc.ArrayLayers = 1;
+    TextureDesc.Format = EPixelFormat::B8G8R8A8_SRGB;
+    TextureDesc.bIsRenderTarget = true;
+    TextureDesc.bIsShaderResource = true;
+
+    Resources.Texture = Device->CreateTexture(TextureDesc);
+    if (Resources.Texture == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create offscreen texture.");
+        return false;
+    }
+
+    FRALTextureViewDesc TextureViewDesc;
+    TextureViewDesc.Texture = Resources.Texture;
+    TextureViewDesc.Format = TextureDesc.Format;
+    TextureViewDesc.MipSlice = 0;
+    TextureViewDesc.ArraySlice = 0;
+    TextureViewDesc.MipLevels = 1;
+    TextureViewDesc.ArrayLayers = 1;
+    Resources.TextureView = new FVulkanRALTextureView(
+        static_cast<FVulkanRALDevice*>(Device),
+        TextureViewDesc);
+    if (Resources.TextureView == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create offscreen texture view.");
+        DestroyOffscreenPassResources(Resources);
+        return false;
+    }
+
+    FRALSamplerDesc SamplerDesc;
+    SamplerDesc.Name = "RFGSceneColorSampler";
+    SamplerDesc.AddressU = ESamplerAddressMode::ClampToEdge;
+    SamplerDesc.AddressV = ESamplerAddressMode::ClampToEdge;
+    SamplerDesc.AddressW = ESamplerAddressMode::ClampToEdge;
+    Resources.Sampler = Device->CreateSampler(SamplerDesc);
+    if (Resources.Sampler == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create offscreen sampler.");
+        DestroyOffscreenPassResources(Resources);
+        return false;
+    }
+
+    FRALBindGroupLayoutDesc BindGroupLayoutDesc;
+    BindGroupLayoutDesc.Name = "CompositeSceneColorLayout";
+    BindGroupLayoutDesc.SetIndex = 0;
+
+    FRALBindGroupLayoutItem LayoutItem;
+    LayoutItem.Binding = 0;
+    LayoutItem.Count = 1;
+    LayoutItem.Type = ERALBindGroupItemType::SampledImage;
+    LayoutItem.StageFlags = EShaderStage::Pixel;
+    BindGroupLayoutDesc.Bindings.push_back(LayoutItem);
+
+    LayoutItem.Binding = 1;
+    LayoutItem.Type = ERALBindGroupItemType::Sampler;
+    BindGroupLayoutDesc.Bindings.push_back(LayoutItem);
+
+    Resources.BindGroupLayout = Device->CreateBindGroupLayout(BindGroupLayoutDesc);
+    if (Resources.BindGroupLayout == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create composite bind group layout.");
+        DestroyOffscreenPassResources(Resources);
+        return false;
+    }
+
+    FRALBindGroupDesc BindGroupDesc;
+    BindGroupDesc.Name = "CompositeSceneColorBindGroup";
+    BindGroupDesc.Layout = Resources.BindGroupLayout;
+
+    FRALBindGroupItem BindGroupItem;
+    BindGroupItem.Binding = 0;
+    BindGroupItem.TextureView = Resources.TextureView;
+    BindGroupDesc.Items.push_back(BindGroupItem);
+
+    BindGroupItem = {};
+    BindGroupItem.Binding = 1;
+    BindGroupItem.Sampler = Resources.Sampler;
+    BindGroupDesc.Items.push_back(BindGroupItem);
+
+    Resources.BindGroup = Device->CreateBindGroup(BindGroupDesc);
+    if (Resources.BindGroup == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create composite bind group.");
+        DestroyOffscreenPassResources(Resources);
+        return false;
+    }
+
+    return true;
+}
 
 static bool TryReadShaderFile(const std::string& CandidatePath, std::vector<char>& OutBuffer)
 {
@@ -188,10 +317,124 @@ FRALBuffer* CreateTriangleVertexBuffer(FRALDevice* Device)
     return Buffer;
 }
 
+static FRALPipeline_Graphics* CreateTrianglePipeline(
+    FRALDevice* Device,
+    FRALShader* VertexShader,
+    FRALShader* PixelShader,
+    EPixelFormat RenderTargetFormat)
+{
+    FRALPipelineDesc_Graphics PipelineDesc;
+    PipelineDesc.Name = "TrianglePipeline";
+    PipelineDesc.VertexShader = VertexShader;
+    PipelineDesc.PixelShader = PixelShader;
+
+    FRALVertexInputBinding Binding;
+    Binding.Binding = 0;
+    Binding.Stride = sizeof(FSimpleVertex);
+    Binding.bPerInstance = false;
+    PipelineDesc.VertexBindings.push_back(Binding);
+
+    FRALVertexInputAttribute PosAttr;
+    PosAttr.Location = 0;
+    PosAttr.Binding = 0;
+    PosAttr.Format = EPixelFormat::R32G32B32_FLOAT;
+    PosAttr.Offset = offsetof(FSimpleVertex, Position);
+    PipelineDesc.VertexAttributes.push_back(PosAttr);
+
+    FRALVertexInputAttribute ColorAttr;
+    ColorAttr.Location = 1;
+    ColorAttr.Binding = 0;
+    ColorAttr.Format = EPixelFormat::R32G32B32_FLOAT;
+    ColorAttr.Offset = offsetof(FSimpleVertex, Color);
+    PipelineDesc.VertexAttributes.push_back(ColorAttr);
+
+    PipelineDesc.RenderTargetCount = 1;
+    PipelineDesc.RenderTargetFormats[0] = RenderTargetFormat;
+    PipelineDesc.DepthStencilFormat = EPixelFormat::Unknown;
+    PipelineDesc.RasterizerState.CullMode = ECullMode::None;
+    PipelineDesc.RasterizerState.FillMode = EFillMode::Solid;
+    PipelineDesc.BlendState.bEnable = false;
+
+    return Device->CreateGraphicsPipeline(PipelineDesc);
+}
+
+static FRALPipeline_Graphics* CreateCompositePipeline(
+    FRALDevice* Device,
+    FRALShader* VertexShader,
+    FRALShader* PixelShader,
+    FRALBindGroupLayout* BindGroupLayout,
+    EPixelFormat RenderTargetFormat)
+{
+    FRALPipelineDesc_Graphics PipelineDesc;
+    PipelineDesc.Name = "CompositePipeline";
+    PipelineDesc.VertexShader = VertexShader;
+    PipelineDesc.PixelShader = PixelShader;
+    PipelineDesc.RenderTargetCount = 1;
+    PipelineDesc.RenderTargetFormats[0] = RenderTargetFormat;
+    PipelineDesc.DepthStencilFormat = EPixelFormat::Unknown;
+    PipelineDesc.RasterizerState.CullMode = ECullMode::None;
+    PipelineDesc.RasterizerState.FillMode = EFillMode::Solid;
+    PipelineDesc.BlendState.bEnable = false;
+    PipelineDesc.BindGroupLayouts.push_back(BindGroupLayout);
+
+    return Device->CreateGraphicsPipeline(PipelineDesc);
+}
+
+static void GetBackBufferExtent(
+    FRALSwapchain* Swapchain,
+    uint32 FallbackWidth,
+    uint32 FallbackHeight,
+    uint32& OutWidth,
+    uint32& OutHeight)
+{
+    OutWidth = FallbackWidth;
+    OutHeight = FallbackHeight;
+
+    if (Swapchain == nullptr)
+    {
+        return;
+    }
+
+    FRALTextureView* BackBufferView = Swapchain->GetCurrentBackBufferView();
+    if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
+    {
+        return;
+    }
+
+    const FRALTextureDesc& BackBufferDesc = BackBufferView->GetTexture()->GetDesc();
+    OutWidth = BackBufferDesc.Width;
+    OutHeight = BackBufferDesc.Height;
+}
+
+static bool SyncSwapchainToWindowSize(
+    FPlatformWindow* Window,
+    FRALSwapchain* Swapchain,
+    uint32& InOutWidth,
+    uint32& InOutHeight)
+{
+    uint32 CurrentWindowWidth = 0;
+    uint32 CurrentWindowHeight = 0;
+    Window->GetSize(CurrentWindowWidth, CurrentWindowHeight);
+    if (CurrentWindowWidth == 0 || CurrentWindowHeight == 0)
+    {
+        return false;
+    }
+
+    if (CurrentWindowWidth != InOutWidth || CurrentWindowHeight != InOutHeight)
+    {
+        LE_LOG(LogXBD, Info, "Window resized to {}x{}. Recreating swapchain.", CurrentWindowWidth, CurrentWindowHeight);
+        Swapchain->Resize(CurrentWindowWidth, CurrentWindowHeight);
+        InOutWidth = CurrentWindowWidth;
+        InOutHeight = CurrentWindowHeight;
+    }
+
+    return true;
+}
+
 int32 GuardedMain()
 {
     LE_INIT()
-    LE_LOG(LogXBD, Info, "=== Limitless Engine P1: Triangle Demo ===")
+    LE_LOG(LogXBD, Info, "=== Limitless Engine P1: RFG Composite Triangle Demo ===")
 
 #if !PLATFORM_WINDOWS
     LE_LOG(LogXBD, Error, "Launch module is not implemented for this platform yet.");
@@ -201,7 +444,7 @@ int32 GuardedMain()
     // 创建窗口（使用平台抽象）
     const uint32 WindowWidth = 1280;
     const uint32 WindowHeight = 720;
-    FPlatformWindow* Window = new FWindowsWindow(WindowWidth, WindowHeight, "Limitless Engine - Triangle Demo");
+    FPlatformWindow* Window = new FWindowsWindow(WindowWidth, WindowHeight, "Limitless Engine - RFG Composite Triangle Demo");
     if (!Window) {
         LE_LOG(LogXBD, Error, "Failed to create window");
         return -1;
@@ -225,13 +468,24 @@ int32 GuardedMain()
     SwapchainDesc.BackBufferFormat = EPixelFormat::B8G8R8A8_SRGB;
     SwapchainDesc.bEnableVsync = true;
     FRALSwapchain* Swapchain = Device->CreateSwapchain(SwapchainDesc);
+    if (!Swapchain)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create swapchain");
+        delete Device;
+        delete Window;
+        LE_SHUTDOWN()
+        return -1;
+    }
     LE_LOG(LogXBD, Info, "Swapchain created");
 
-    // Load shaders
-    std::vector<char> VertBytecode;
-    std::vector<char> FragBytecode;
-    if (!Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/TriangleVS.lsf", ERuntimeShaderStage::Vertex, VertBytecode, "MainVS") ||
-        !Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/TrianglePS.lsf", ERuntimeShaderStage::Fragment, FragBytecode, "MainPS"))
+    std::vector<char> TriangleVertBytecode;
+    std::vector<char> TriangleFragBytecode;
+    std::vector<char> CompositeVertBytecode;
+    std::vector<char> CompositeFragBytecode;
+    if (!Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/TriangleVS.lsf", ERuntimeShaderStage::Vertex, TriangleVertBytecode, "MainVS") ||
+        !Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/TrianglePS.lsf", ERuntimeShaderStage::Fragment, TriangleFragBytecode, "MainPS") ||
+        !Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositeVS.lsf", ERuntimeShaderStage::Vertex, CompositeVertBytecode, "MainVS") ||
+        !Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositePS.lsf", ERuntimeShaderStage::Fragment, CompositeFragBytecode, "MainPS"))
     {
         delete Swapchain;
         delete Device;
@@ -240,15 +494,21 @@ int32 GuardedMain()
         return -1;
     }
 
-    FRALShader* VertexShader = Device->CreateShaderFromFile(
-        EShaderStage::Vertex, VertBytecode.data(), VertBytecode.size(), "MainVS");
-    FRALShader* PixelShader = Device->CreateShaderFromFile(
-        EShaderStage::Pixel, FragBytecode.data(), FragBytecode.size(), "MainPS");
-    if (!VertexShader || !PixelShader)
+    FRALShader* TriangleVertexShader = Device->CreateShaderFromFile(
+        EShaderStage::Vertex, TriangleVertBytecode.data(), TriangleVertBytecode.size(), "MainVS");
+    FRALShader* TrianglePixelShader = Device->CreateShaderFromFile(
+        EShaderStage::Pixel, TriangleFragBytecode.data(), TriangleFragBytecode.size(), "MainPS");
+    FRALShader* CompositeVertexShader = Device->CreateShaderFromFile(
+        EShaderStage::Vertex, CompositeVertBytecode.data(), CompositeVertBytecode.size(), "MainVS");
+    FRALShader* CompositePixelShader = Device->CreateShaderFromFile(
+        EShaderStage::Pixel, CompositeFragBytecode.data(), CompositeFragBytecode.size(), "MainPS");
+    if (!TriangleVertexShader || !TrianglePixelShader || !CompositeVertexShader || !CompositePixelShader)
     {
         LE_LOG(LogXBD, Error, "Failed to create shader modules.");
-        delete PixelShader;
-        delete VertexShader;
+        delete CompositePixelShader;
+        delete CompositeVertexShader;
+        delete TrianglePixelShader;
+        delete TriangleVertexShader;
         delete Swapchain;
         delete Device;
         delete Window;
@@ -256,53 +516,52 @@ int32 GuardedMain()
         return -1;
     }
 
-    // Pipeline
-    FRALPipelineDesc_Graphics PipelineDesc;
-    PipelineDesc.Name = "TrianglePipeline";
-    PipelineDesc.VertexShader = VertexShader;
-    PipelineDesc.PixelShader = PixelShader;
+    uint32 InitialRenderWidth = WindowWidth;
+    uint32 InitialRenderHeight = WindowHeight;
+    GetBackBufferExtent(Swapchain, WindowWidth, WindowHeight, InitialRenderWidth, InitialRenderHeight);
 
-    // Vertex input layout
-    FRALVertexInputBinding Binding;
-    Binding.Binding = 0;
-    Binding.Stride = sizeof(FSimpleVertex);
-    Binding.bPerInstance = false;
-    PipelineDesc.VertexBindings.push_back(Binding);
-
-    FRALVertexInputAttribute PosAttr;
-    PosAttr.Location = 0;
-    PosAttr.Binding = 0;
-    PosAttr.Format = EPixelFormat::R32G32B32_FLOAT;
-    PosAttr.Offset = offsetof(FSimpleVertex, Position);
-    PipelineDesc.VertexAttributes.push_back(PosAttr);
-
-    FRALVertexInputAttribute ColorAttr;
-    ColorAttr.Location = 1;
-    ColorAttr.Binding = 0;
-    ColorAttr.Format = EPixelFormat::R32G32B32_FLOAT;
-    ColorAttr.Offset = offsetof(FSimpleVertex, Color);
-    PipelineDesc.VertexAttributes.push_back(ColorAttr);
-
-    PipelineDesc.RenderTargetCount = 1;
-    PipelineDesc.RenderTargetFormats[0] = EPixelFormat::B8G8R8A8_SRGB;
-    PipelineDesc.DepthStencilFormat = EPixelFormat::Unknown;
-    PipelineDesc.RasterizerState.CullMode = ECullMode::None;
-    PipelineDesc.RasterizerState.FillMode = EFillMode::Solid;
-    PipelineDesc.BlendState.bEnable = false;
-
-    FRALPipeline_Graphics* Pipeline = Device->CreateGraphicsPipeline(PipelineDesc);
-    if (!Pipeline)
+    FOffscreenPassResources OffscreenResources;
+    if (!CreateOffscreenPassResources(Device, InitialRenderWidth, InitialRenderHeight, OffscreenResources))
     {
-        LE_LOG(LogXBD, Error, "Failed to create graphics pipeline.");
-        delete PixelShader;
-        delete VertexShader;
+        delete CompositePixelShader;
+        delete CompositeVertexShader;
+        delete TrianglePixelShader;
+        delete TriangleVertexShader;
         delete Swapchain;
         delete Device;
         delete Window;
         LE_SHUTDOWN()
         return -1;
     }
-    LE_LOG(LogXBD, Info, "Graphics pipeline created");
+
+    FRALPipeline_Graphics* TrianglePipeline = CreateTrianglePipeline(
+        Device,
+        TriangleVertexShader,
+        TrianglePixelShader,
+        EPixelFormat::B8G8R8A8_SRGB);
+    FRALPipeline_Graphics* CompositePipeline = CreateCompositePipeline(
+        Device,
+        CompositeVertexShader,
+        CompositePixelShader,
+        OffscreenResources.BindGroupLayout,
+        EPixelFormat::B8G8R8A8_SRGB);
+    if (!TrianglePipeline || !CompositePipeline)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create composite demo pipelines.");
+        delete CompositePipeline;
+        delete TrianglePipeline;
+        DestroyOffscreenPassResources(OffscreenResources);
+        delete CompositePixelShader;
+        delete CompositeVertexShader;
+        delete TrianglePixelShader;
+        delete TriangleVertexShader;
+        delete Swapchain;
+        delete Device;
+        delete Window;
+        LE_SHUTDOWN()
+        return -1;
+    }
+    LE_LOG(LogXBD, Info, "Composite demo pipelines created");
 
     // Vertex buffer
     FRALBuffer* VertexBuffer = CreateTriangleVertexBuffer(Device);
@@ -311,19 +570,55 @@ int32 GuardedMain()
     FRALCommandList* CmdList = Device->CreateCommandList(EQueueType::Graphics);
     FRenderer Renderer;
     Renderer.Initialize();
+    uint32 CachedWindowWidth = WindowWidth;
+    uint32 CachedWindowHeight = WindowHeight;
 
-    LE_LOG(LogXBD, Info, "Entering main loop...");
+    LE_LOG(LogXBD, Info, "Entering composite main loop...");
 
     // 主循环
     while (Window->ProcessMessages())
     {
+        if (Window->IsMinimized() || !SyncSwapchainToWindowSize(Window, Swapchain, CachedWindowWidth, CachedWindowHeight))
+        {
+            Sleep(16);
+            continue;
+        }
+
+        uint32 TargetRenderWidth = CachedWindowWidth;
+        uint32 TargetRenderHeight = CachedWindowHeight;
+        GetBackBufferExtent(Swapchain, CachedWindowWidth, CachedWindowHeight, TargetRenderWidth, TargetRenderHeight);
+
+        if (OffscreenResources.Texture == nullptr ||
+            OffscreenResources.Texture->GetDesc().Width != TargetRenderWidth ||
+            OffscreenResources.Texture->GetDesc().Height != TargetRenderHeight)
+        {
+            Device->GetGraphicsQueue()->WaitIdle();
+            if (!CreateOffscreenPassResources(Device, TargetRenderWidth, TargetRenderHeight, OffscreenResources))
+            {
+                break;
+            }
+
+            delete CompositePipeline;
+            CompositePipeline = CreateCompositePipeline(
+                Device,
+                CompositeVertexShader,
+                CompositePixelShader,
+                OffscreenResources.BindGroupLayout,
+                EPixelFormat::B8G8R8A8_SRGB);
+            if (CompositePipeline == nullptr)
+            {
+                LE_LOG(LogXBD, Error, "Failed to recreate composite pipeline after resize.");
+                break;
+            }
+        }
+
         FWorld World;
         FWorldMeshComponent MeshComponent;
         MeshComponent.DebugName = "TriangleMesh";
-        MeshComponent.GraphicsPipeline = Pipeline;
+        MeshComponent.GraphicsPipeline = TrianglePipeline;
         MeshComponent.VertexBuffer = VertexBuffer;
         MeshComponent.VertexCount = 3;
-        MeshComponent.PassMask = ERenderMeshPassMask::BackBuffer;
+        MeshComponent.PassMask = ERenderMeshPassMask::SceneColor;
         MeshComponent.SortKey = 0;
         World.MeshComponents.push_back(MeshComponent);
 
@@ -335,9 +630,13 @@ int32 GuardedMain()
         FrameContext.Swapchain = Swapchain;
         FrameContext.CommandList = CmdList;
         FrameContext.ViewFamily.PrimarySwapchain = Swapchain;
-        FTriangleBackBufferPipelineDesc RenderPipelineDesc;
+        FTriangleCompositePipelineDesc RenderPipelineDesc;
         RenderPipelineDesc.Swapchain = Swapchain;
-        FTriangleBackBufferPipeline RenderPipeline(RenderPipelineDesc);
+        RenderPipelineDesc.CompositePipeline = CompositePipeline;
+        RenderPipelineDesc.SceneColorTexture = OffscreenResources.Texture;
+        RenderPipelineDesc.SceneColorView = OffscreenResources.TextureView;
+        RenderPipelineDesc.CompositeBindGroup = OffscreenResources.BindGroup;
+        FTriangleCompositePipeline RenderPipeline(RenderPipelineDesc);
         FrameContext.Pipeline = &RenderPipeline;
         Renderer.RenderFrame(FrameContext, &RenderScene);
     }
@@ -349,9 +648,13 @@ int32 GuardedMain()
 
     delete CmdList;
     delete VertexBuffer;
-    delete Pipeline;
-    delete PixelShader;
-    delete VertexShader;
+    delete CompositePipeline;
+    delete TrianglePipeline;
+    DestroyOffscreenPassResources(OffscreenResources);
+    delete CompositePixelShader;
+    delete CompositeVertexShader;
+    delete TrianglePixelShader;
+    delete TriangleVertexShader;
     delete Swapchain;
     delete Device;
     delete Window;

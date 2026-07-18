@@ -1,6 +1,113 @@
 ﻿#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
 
+namespace
+{
+struct FVulkanResourceStateMapping
+{
+    VkPipelineStageFlags PipelineStages = 0;
+    VkAccessFlags AccessMask = 0;
+    VkImageLayout ImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+};
+
+VkPipelineStageFlags ToVkShaderPipelineStages(EShaderStage ShaderStage)
+{
+    VkPipelineStageFlags Result = 0;
+    if (EnumHasAnyFlags(ShaderStage, EShaderStage::Vertex)) Result |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+    if (EnumHasAnyFlags(ShaderStage, EShaderStage::Pixel)) Result |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    if (EnumHasAnyFlags(ShaderStage, EShaderStage::Compute)) Result |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    if (EnumHasAnyFlags(ShaderStage, EShaderStage::Geometry)) Result |= VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
+    if (EnumHasAnyFlags(ShaderStage, EShaderStage::Hull)) Result |= VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT;
+    if (EnumHasAnyFlags(ShaderStage, EShaderStage::Domain)) Result |= VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
+    return Result != 0 ? Result : VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+}
+
+bool MapResourceState(ERALResourceState State, EShaderStage ShaderStage, bool bIsTexture, FVulkanResourceStateMapping& Out)
+{
+    switch (State)
+    {
+    case ERALResourceState::Undefined:
+        Out.PipelineStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        Out.ImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        return true;
+    case ERALResourceState::RenderTarget:
+        if (!bIsTexture) return false;
+        Out.PipelineStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        Out.AccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        Out.ImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        return true;
+    case ERALResourceState::DepthStencilWrite:
+        if (!bIsTexture) return false;
+        Out.PipelineStages = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        Out.AccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        Out.ImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        return true;
+    case ERALResourceState::DepthStencilRead:
+        if (!bIsTexture) return false;
+        Out.PipelineStages = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        Out.AccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+        Out.ImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        return true;
+    case ERALResourceState::ShaderResource:
+        Out.PipelineStages = ToVkShaderPipelineStages(ShaderStage);
+        Out.AccessMask = VK_ACCESS_SHADER_READ_BIT;
+        Out.ImageLayout = bIsTexture ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+        return true;
+    case ERALResourceState::UnorderedAccess:
+        Out.PipelineStages = ToVkShaderPipelineStages(ShaderStage);
+        Out.AccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        Out.ImageLayout = bIsTexture ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED;
+        return true;
+    case ERALResourceState::CopySource:
+        Out.PipelineStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        Out.AccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        Out.ImageLayout = bIsTexture ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+        return true;
+    case ERALResourceState::CopyDestination:
+        Out.PipelineStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        Out.AccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        Out.ImageLayout = bIsTexture ? VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+        return true;
+    case ERALResourceState::VertexBuffer:
+        if (bIsTexture) return false;
+        Out.PipelineStages = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+        Out.AccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+        return true;
+    case ERALResourceState::IndexBuffer:
+        if (bIsTexture) return false;
+        Out.PipelineStages = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+        Out.AccessMask = VK_ACCESS_INDEX_READ_BIT;
+        return true;
+    case ERALResourceState::ConstantBuffer:
+        if (bIsTexture) return false;
+        Out.PipelineStages = ToVkShaderPipelineStages(ShaderStage);
+        Out.AccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+        return true;
+    case ERALResourceState::IndirectArgument:
+        if (bIsTexture) return false;
+        Out.PipelineStages = VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+        Out.AccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+        return true;
+    case ERALResourceState::Present:
+        if (!bIsTexture) return false;
+        Out.PipelineStages = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        Out.ImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        return true;
+    case ERALResourceState::Unknown:
+    default:
+        return false;
+    }
+}
+
+VkImageAspectFlags GetTextureAspectMask(const FRALTextureDesc& Desc)
+{
+    if (!Desc.bIsDepthStencil) return VK_IMAGE_ASPECT_COLOR_BIT;
+    return Desc.Format == EPixelFormat::D24_UNORM_S8_UINT
+        ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+        : VK_IMAGE_ASPECT_DEPTH_BIT;
+}
+}
+
 FVulkanRALCommandList::FVulkanRALCommandList(FVulkanRALDevice* InDevice, EQueueType Type)
     : Device(InDevice)
 {
@@ -101,6 +208,113 @@ void FVulkanRALCommandList::End()
     {
         LE_LOG(LogRAL, Error, "vkEndCommandBuffer failed. VkResult={}", static_cast<int32>(Result));
     }
+}
+
+void FVulkanRALCommandList::ResourceBarriers(const FRALBarrierBatch& Barriers)
+{
+    if (this->Handle == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "ResourceBarriers skipped: command buffer handle is null.");
+        return;
+    }
+
+    std::vector<VkImageMemoryBarrier> ImageBarriers;
+    std::vector<VkBufferMemoryBarrier> BufferBarriers;
+    ImageBarriers.reserve(Barriers.TextureBarriers.size());
+    BufferBarriers.reserve(Barriers.BufferBarriers.size());
+
+    VkPipelineStageFlags SourceStages = 0;
+    VkPipelineStageFlags DestinationStages = 0;
+
+    for (const FRALTextureBarrierDesc& Desc : Barriers.TextureBarriers)
+    {
+        FVulkanRALTexture* Texture = static_cast<FVulkanRALTexture*>(Desc.Texture);
+        if (Texture == nullptr || Texture->Image == VK_NULL_HANDLE)
+        {
+            LE_LOG(LogRAL, Error, "Texture barrier skipped: texture is null or invalid.");
+            continue;
+        }
+
+        FVulkanResourceStateMapping Before;
+        FVulkanResourceStateMapping After;
+        if (!MapResourceState(Desc.BeforeState, Desc.BeforeShaderStage, true, Before) ||
+            !MapResourceState(Desc.AfterState, Desc.AfterShaderStage, true, After))
+        {
+            LE_LOG(LogRAL, Error, "Texture barrier skipped: unknown or incompatible state. Before={}, After={}.",
+                static_cast<uint32>(Desc.BeforeState), static_cast<uint32>(Desc.AfterState));
+            continue;
+        }
+
+        VkImageMemoryBarrier Barrier{};
+        Barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        Barrier.srcAccessMask = Before.AccessMask;
+        Barrier.dstAccessMask = After.AccessMask;
+        Barrier.oldLayout = Before.ImageLayout;
+        Barrier.newLayout = After.ImageLayout;
+        Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        Barrier.image = Texture->Image;
+        Barrier.subresourceRange.aspectMask = GetTextureAspectMask(Texture->GetDesc());
+        Barrier.subresourceRange.baseMipLevel = Desc.BaseMipLevel;
+        Barrier.subresourceRange.levelCount = Desc.MipCount;
+        Barrier.subresourceRange.baseArrayLayer = Desc.BaseArrayLayer;
+        Barrier.subresourceRange.layerCount = Desc.LayerCount;
+
+        SourceStages |= Before.PipelineStages;
+        DestinationStages |= After.PipelineStages;
+        ImageBarriers.push_back(Barrier);
+    }
+
+    for (const FRALBufferBarrierDesc& Desc : Barriers.BufferBarriers)
+    {
+        FVulkanRALBuffer* Buffer = static_cast<FVulkanRALBuffer*>(Desc.Buffer);
+        if (Buffer == nullptr || Buffer->Buffer == VK_NULL_HANDLE)
+        {
+            LE_LOG(LogRAL, Error, "Buffer barrier skipped: buffer is null or invalid.");
+            continue;
+        }
+
+        FVulkanResourceStateMapping Before;
+        FVulkanResourceStateMapping After;
+        if (!MapResourceState(Desc.BeforeState, Desc.BeforeShaderStage, false, Before) ||
+            !MapResourceState(Desc.AfterState, Desc.AfterShaderStage, false, After))
+        {
+            LE_LOG(LogRAL, Error, "Buffer barrier skipped: unknown or incompatible state. Before={}, After={}.",
+                static_cast<uint32>(Desc.BeforeState), static_cast<uint32>(Desc.AfterState));
+            continue;
+        }
+
+        VkBufferMemoryBarrier Barrier{};
+        Barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        Barrier.srcAccessMask = Before.AccessMask;
+        Barrier.dstAccessMask = After.AccessMask;
+        Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        Barrier.buffer = Buffer->Buffer;
+        Barrier.offset = Desc.Offset;
+        Barrier.size = Desc.Size == ~0ull ? VK_WHOLE_SIZE : Desc.Size;
+
+        SourceStages |= Before.PipelineStages;
+        DestinationStages |= After.PipelineStages;
+        BufferBarriers.push_back(Barrier);
+    }
+
+    if (ImageBarriers.empty() && BufferBarriers.empty())
+    {
+        return;
+    }
+
+    vkCmdPipelineBarrier(
+        this->Handle,
+        SourceStages,
+        DestinationStages,
+        0,
+        0,
+        nullptr,
+        static_cast<uint32>(BufferBarriers.size()),
+        BufferBarriers.data(),
+        static_cast<uint32>(ImageBarriers.size()),
+        ImageBarriers.data());
 }
 
 void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)

@@ -242,6 +242,7 @@ FRFGGraphSignature FRFGBuilder::BuildSignature() const
         {
             HashValue(Hash, ResourceAccess.Resource.Id);
             HashValue(Hash, static_cast<uint32>(ResourceAccess.Access.Access));
+            HashValue(Hash, static_cast<uint32>(ResourceAccess.Access.State));
             HashValue(Hash, static_cast<uint32>(ResourceAccess.Access.ShaderStage));
             HashValue(Hash, static_cast<uint32>(ResourceAccess.Access.PipelineStage));
             HashValue(Hash, ResourceAccess.Access.BaseMipLevel);

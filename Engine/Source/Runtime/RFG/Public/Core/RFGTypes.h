@@ -113,6 +113,9 @@ struct FRFGResourceDesc
 struct FRFGAccessDesc
 {
     ERFGAccessType Access = ERFGAccessType::Read;
+    // Read/Write is used for dependency analysis. State describes the concrete
+    // RAL usage/layout required while the pass executes.
+    ERALResourceState State = ERALResourceState::Unknown;
     EShaderStage ShaderStage = EShaderStage::AllStage;
     ERFGPipelineStage PipelineStage = ERFGPipelineStage::Graphics;
 

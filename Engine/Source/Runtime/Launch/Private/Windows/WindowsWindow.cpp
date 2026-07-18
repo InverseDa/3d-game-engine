@@ -86,6 +86,13 @@ LRESULT CALLBACK FWindowsWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
             return 0;
         case WM_DESTROY:
             return 0;
+        case WM_SIZE:
+            if (Window)
+            {
+                Window->Width = static_cast<uint32>(LOWORD(lParam));
+                Window->Height = static_cast<uint32>(HIWORD(lParam));
+            }
+            return 0;
         default:
             return DefWindowProc(hwnd, msg, wParam, lParam);
     }

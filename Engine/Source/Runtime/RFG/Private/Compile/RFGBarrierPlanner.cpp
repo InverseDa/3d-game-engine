@@ -19,6 +19,8 @@ bool AccessHasWrite(ERFGAccessType AccessType)
 
 struct FLastResourceState
 {
+    ERALResourceState ResourceState = ERALResourceState::Unknown;
+    EShaderStage ShaderStage = EShaderStage::None;
     ERFGPipelineStage Stage = ERFGPipelineStage::None;
     ERFGAccessType Access = ERFGAccessType::None;
     ERFGQueueType Queue = ERFGQueueType::Graphics;
@@ -88,23 +90,33 @@ void FRFGBarrierPlanner::BuildBarriers(const FRFGRecordedGraph& RecordedGraph, F
             const bool bNeedsBarrier =
                 LastState.bInitialized &&
                 (LastState.Queue != CompiledPass.Queue ||
-                 LastState.Stage != ResourceAccess.Access.PipelineStage ||
-                 LastState.Access != ResourceAccess.Access.Access) &&
-                (AccessHasWrite(LastState.Access) || AccessHasWrite(ResourceAccess.Access.Access));
+                 LastState.ResourceState != ResourceAccess.Access.State ||
+                 AccessHasWrite(LastState.Access) ||
+                 AccessHasWrite(ResourceAccess.Access.Access));
 
             if (bNeedsBarrier)
             {
                 FRFGBarrierTransition Transition;
                 Transition.Resource = ResourceAccess.Resource;
+                Transition.BeforeState = LastState.ResourceState;
+                Transition.AfterState = ResourceAccess.Access.State;
+                Transition.BeforeShaderStage = LastState.ShaderStage;
+                Transition.AfterShaderStage = ResourceAccess.Access.ShaderStage;
                 Transition.BeforeStage = LastState.Stage;
                 Transition.AfterStage = ResourceAccess.Access.PipelineStage;
                 Transition.BeforeAccess = LastState.Access;
                 Transition.AfterAccess = ResourceAccess.Access.Access;
+                Transition.BaseMipLevel = ResourceAccess.Access.BaseMipLevel;
+                Transition.MipCount = ResourceAccess.Access.MipCount;
+                Transition.BaseArrayLayer = ResourceAccess.Access.BaseArrayLayer;
+                Transition.LayerCount = ResourceAccess.Access.LayerCount;
                 Transition.SrcQueue = LastState.Queue;
                 Transition.DstQueue = CompiledPass.Queue;
                 CompiledPass.PreBarriers.push_back(Transition);
             }
 
+            LastState.ResourceState = ResourceAccess.Access.State;
+            LastState.ShaderStage = ResourceAccess.Access.ShaderStage;
             LastState.Stage = ResourceAccess.Access.PipelineStage;
             LastState.Access = ResourceAccess.Access.Access;
             LastState.Queue = CompiledPass.Queue;

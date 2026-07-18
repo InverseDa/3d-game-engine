@@ -4,8 +4,66 @@
 #include "Record/RFGRecordedGraph.h"
 
 #include <sstream>
+#include <unordered_set>
 
 LE_DECLARE_LOG_CATEGORY(LogRFG);
+
+namespace
+{
+bool ValidateBarrierDeclarations(const FRFGRecordedGraph& RecordedGraph, const FRFGCompiledPlan& CompiledPlan)
+{
+    bool bValid = true;
+
+    for (const FRFGCompiledPass& CompiledPass : CompiledPlan.GetPasses())
+    {
+        const FRFGPassNode& PassNode = RecordedGraph.GetPassNode(CompiledPass.Handle);
+        std::unordered_set<uint32> AccessedResourceIds;
+
+        for (const FRFGPassResourceAccess& ResourceAccess : PassNode.ResourceAccesses)
+        {
+            if (!AccessedResourceIds.insert(ResourceAccess.Resource.Id).second)
+            {
+                LE_LOG(LogRFG, Error,
+                    "RFG compile failed: pass '{}' declares resource {} more than once. Pass-internal transitions are not supported.",
+                    PassNode.Name.GetData(),
+                    ResourceAccess.Resource.Id);
+                bValid = false;
+            }
+
+            if (ResourceAccess.Access.State == ERALResourceState::Unknown)
+            {
+                LE_LOG(LogRFG, Error,
+                    "RFG compile failed: pass '{}' uses resource {} without an explicit RAL resource state.",
+                    PassNode.Name.GetData(),
+                    ResourceAccess.Resource.Id);
+                bValid = false;
+            }
+
+            const FRFGResourceNode& ResourceNode = RecordedGraph.GetResourceNode(ResourceAccess.Resource);
+            if (ResourceNode.Desc.Type == ERFGResourceType::Texture)
+            {
+                const FRFGTextureDesc& TextureDesc = ResourceNode.Desc.Texture;
+                const bool bUsesWholeTexture =
+                    ResourceAccess.Access.BaseMipLevel == 0 &&
+                    ResourceAccess.Access.MipCount == TextureDesc.MipLevels &&
+                    ResourceAccess.Access.BaseArrayLayer == 0 &&
+                    ResourceAccess.Access.LayerCount == TextureDesc.ArrayLayers;
+
+                if (!bUsesWholeTexture)
+                {
+                    LE_LOG(LogRFG, Error,
+                        "RFG compile failed: pass '{}' uses a partial subresource range for resource {}. Current barrier tracking is whole-resource only.",
+                        PassNode.Name.GetData(),
+                        ResourceAccess.Resource.Id);
+                    bValid = false;
+                }
+            }
+        }
+    }
+
+    return bValid;
+}
+}
 
 FRFGCompileResult FRFGCompiler::Compile(const FRFGRecordedGraph& RecordedGraph, const FRFGGraphSignature& Signature) const
 {
@@ -18,6 +76,12 @@ FRFGCompileResult FRFGCompiler::Compile(const FRFGRecordedGraph& RecordedGraph, 
     if (CompileOptions.bEnablePassCulling)
     {
         Culler.CullPasses(RecordedGraph, *Result.Plan);
+    }
+
+    if (!ValidateBarrierDeclarations(RecordedGraph, *Result.Plan))
+    {
+        Result.Plan.reset();
+        return Result;
     }
 
     BarrierPlanner.BuildResourceLifetimes(RecordedGraph, *Result.Plan);

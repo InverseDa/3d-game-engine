@@ -90,6 +90,28 @@ enum class EResourceUsage : uint8
     Readback,   // GPU write -> CPU read, usually used for readback buffer
 };
 
+// Backend-independent resource usage state used by explicit barriers.
+// Unknown means the caller has not provided enough information to emit a
+// transition; it is deliberately different from Undefined, which permits the
+// previous contents of a texture to be discarded.
+enum class ERALResourceState : uint8
+{
+    Unknown = 0,
+    Undefined,
+    RenderTarget,
+    DepthStencilWrite,
+    DepthStencilRead,
+    ShaderResource,
+    UnorderedAccess,
+    CopySource,
+    CopyDestination,
+    VertexBuffer,
+    IndexBuffer,
+    ConstantBuffer,
+    IndirectArgument,
+    Present,
+};
+
 enum class ECullMode : uint8
 {
     None,

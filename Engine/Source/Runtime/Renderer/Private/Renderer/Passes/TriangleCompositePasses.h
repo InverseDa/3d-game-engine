@@ -9,50 +9,40 @@
 #include "RAL/RALBindGroup.h"
 #include "RAL/RALSwapchain.h"
 #include "Execute/RFGPassContext.h"
-#include "Vulkan/VulkanRAL.h"
 
 #include <algorithm>
 #include <vector>
 
 namespace RendererDemoPasses
 {
-inline void TransitionTextureToShaderRead(
-    FRALCommandList* CommandList,
-    FRALTexture* Texture)
+inline bool HasSceneColorMesh(const FRenderScene* RenderScene)
 {
-    FVulkanRALCommandList* VulkanCommandList = static_cast<FVulkanRALCommandList*>(CommandList);
-    FVulkanRALTexture* VulkanTexture = static_cast<FVulkanRALTexture*>(Texture);
-    if (VulkanCommandList == nullptr || VulkanTexture == nullptr || VulkanTexture->Image == VK_NULL_HANDLE)
+    if (RenderScene == nullptr)
     {
-        return;
+        return false;
     }
 
-    VkImageMemoryBarrier Barrier{};
-    Barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    Barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    Barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    Barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    Barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    Barrier.image = VulkanTexture->Image;
-    Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    Barrier.subresourceRange.baseMipLevel = 0;
-    Barrier.subresourceRange.levelCount = 1;
-    Barrier.subresourceRange.baseArrayLayer = 0;
-    Barrier.subresourceRange.layerCount = 1;
+    return std::find_if(
+        RenderScene->Meshes.begin(),
+        RenderScene->Meshes.end(),
+        [](const FRenderMeshProxy& Mesh)
+        {
+            return HasRenderMeshPass(Mesh.PassMask, ERenderMeshPassMask::SceneColor) &&
+                Mesh.GraphicsPipeline != nullptr &&
+                Mesh.VertexBuffer != nullptr &&
+                Mesh.VertexCount > 0;
+        }) != RenderScene->Meshes.end();
+}
 
-    vkCmdPipelineBarrier(
-        VulkanCommandList->Handle,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        0,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        1,
-        &Barrier);
+inline bool IsCompositeConfigurationValid(
+    const FTriangleCompositePipelineDesc& Desc,
+    const FRenderScene* RenderScene)
+{
+    return Desc.CompositePipeline != nullptr &&
+        Desc.SceneColorTexture != nullptr &&
+        Desc.SceneColorView != nullptr &&
+        Desc.CompositeBindGroup != nullptr &&
+        HasSceneColorMesh(RenderScene);
 }
 }
 
@@ -77,13 +67,14 @@ public:
 
     void Setup(FRenderPassSetupContext& Context) override
     {
-        if (Desc.SceneColorTexture == nullptr || Desc.SceneColorView == nullptr || Desc.CompositeBindGroup == nullptr)
+        if (!RendererDemoPasses::IsCompositeConfigurationValid(Desc, Context.RenderScene))
         {
             return;
         }
 
         FRFGAccessDesc GraphicsWrite;
         GraphicsWrite.Access = ERFGAccessType::Write;
+        GraphicsWrite.State = ERALResourceState::RenderTarget;
         GraphicsWrite.PipelineStage = ERFGPipelineStage::Graphics;
 
         const FRFGResourceHandle SceneColorHandle = Context.GraphBridge->ImportTexture("SceneColor", Desc.SceneColorTexture);
@@ -92,7 +83,7 @@ public:
 
     void Record(FRenderPassRecordContext& Context) override
     {
-        if (Context.RenderScene == nullptr || Context.RenderScene->Meshes.empty())
+        if (!RendererDemoPasses::IsCompositeConfigurationValid(Desc, Context.RenderScene))
         {
             return;
         }
@@ -199,17 +190,21 @@ public:
     void Setup(FRenderPassSetupContext& Context) override
     {
         FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
-        if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr || Desc.SceneColorTexture == nullptr)
+        if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr ||
+            !RendererDemoPasses::IsCompositeConfigurationValid(Desc, Context.RenderScene))
         {
             return;
         }
 
         FRFGAccessDesc GraphicsWrite;
         GraphicsWrite.Access = ERFGAccessType::Write;
+        GraphicsWrite.State = ERALResourceState::RenderTarget;
         GraphicsWrite.PipelineStage = ERFGPipelineStage::Graphics;
 
         FRFGAccessDesc GraphicsRead;
         GraphicsRead.Access = ERFGAccessType::Read;
+        GraphicsRead.State = ERALResourceState::ShaderResource;
+        GraphicsRead.ShaderStage = EShaderStage::Pixel;
         GraphicsRead.PipelineStage = ERFGPipelineStage::Graphics;
 
         const FRFGResourceHandle BackBufferHandle = Context.GraphBridge->ImportTexture("BackBuffer", BackBufferView->GetTexture());
@@ -222,7 +217,8 @@ public:
     void Record(FRenderPassRecordContext& Context) override
     {
         FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
-        if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
+        if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr ||
+            !RendererDemoPasses::IsCompositeConfigurationValid(Desc, Context.RenderScene))
         {
             return;
         }
@@ -233,7 +229,6 @@ public:
             return;
         }
 
-        RendererDemoPasses::TransitionTextureToShaderRead(GraphCmdList, Desc.SceneColorTexture);
         GraphCmdList->SetGraphicsPipeline(Desc.CompositePipeline);
         GraphCmdList->SetBindGroup(0, Desc.CompositeBindGroup);
 

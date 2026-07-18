@@ -39,6 +39,8 @@ public:
     virtual void Begin() = 0;
     virtual void End() = 0;
 
+    virtual void ResourceBarriers(const FRALBarrierBatch& Barriers) = 0;
+
 public:
     virtual void BeginRenderPass(const FRALRenderPassDesc& Desc) = 0;
     virtual void EndRenderPass() = 0;

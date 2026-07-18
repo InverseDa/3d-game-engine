@@ -16,10 +16,18 @@ struct FRFGDependencyEdge
 struct FRFGBarrierTransition
 {
     FRFGResourceHandle Resource;
+    ERALResourceState BeforeState = ERALResourceState::Unknown;
+    ERALResourceState AfterState  = ERALResourceState::Unknown;
+    EShaderStage BeforeShaderStage = EShaderStage::None;
+    EShaderStage AfterShaderStage  = EShaderStage::None;
     ERFGPipelineStage BeforeStage = ERFGPipelineStage::None;
     ERFGPipelineStage AfterStage  = ERFGPipelineStage::None;
     ERFGAccessType BeforeAccess   = ERFGAccessType::None;
     ERFGAccessType AfterAccess    = ERFGAccessType::None;
+    uint32 BaseMipLevel = 0;
+    uint32 MipCount = 1;
+    uint32 BaseArrayLayer = 0;
+    uint32 LayerCount = 1;
     // SrcQueue == DstQueue: 普通 Pipeline Barrier
     // SrcQueue != DstQueue: Queue Family Ownership Transfer (Release + Acquire)
     ERFGQueueType SrcQueue = ERFGQueueType::Graphics;
