@@ -99,7 +99,7 @@ Game Loop / Editor
 
 ## 4. 依赖关系
 
-依据 `World.Build.cs`：
+依据 `Build.ts`：
 
 ```csharp
 conf.AddPublicDependency<CoreProject>(target);      // FString、基础类型

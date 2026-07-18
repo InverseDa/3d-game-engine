@@ -111,7 +111,7 @@ int main(int argc, char** argv)
 
 ## 5. 平台源码排除机制（`LaunchPlatformRules`）
 
-`Launch.Build.cs` 内嵌 `LaunchPlatformRules` 类，由 `Sharpmake` 在配置阶段调用：
+`Build.ts` 通过 `LaunchBuild.Configure` 声明平台排除规则：
 
 ```csharp
 public static void ApplyPlatformSourceExcludes(...)
@@ -149,7 +149,7 @@ public static void ApplyPlatformSourceExcludes(...)
 
 ## 7. 依赖关系
 
-`Launch.Build.cs` 显式声明的模块依赖：
+`Build.ts` 显式声明的模块依赖：
 
 ```
 Launch
@@ -220,7 +220,7 @@ EngineLoop.Exit();
 
 | 文件 | 说明 |
 |------|------|
-| `Launch.Build.cs` | Sharpmake 构建脚本，定义依赖与平台排除规则。 |
+| `Build.ts` | LimitlessBuilder 模块配置，定义依赖与平台排除规则。 |
 | `Private/Launch.cpp` | 统一入口（WinMain / main）。 |
 | `Private/Windows/LaunchWindows.cpp` | Win64 版 `GuardedMain()`（Triangle Demo）。 |
 | `Private/Windows/WindowsWindow.cpp` | Win32 窗口实现。 |

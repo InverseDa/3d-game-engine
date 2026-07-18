@@ -304,7 +304,7 @@ RFG 模块所有公共类型均以 `FRFG` 为前缀，核心示例如下：
 
 ## 5. 依赖关系
 
-根据 `RFG.Build.cs`：
+根据 `Build.ts`：
 
 ```csharp
 conf.AddPublicDependency<CoreProject>(target);

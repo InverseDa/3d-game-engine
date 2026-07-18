@@ -184,6 +184,17 @@ inline const char* ToGlslangStage(ERuntimeShaderStage Stage)
 
 inline std::string GetCompilerExecutable()
 {
+#if PLATFORM_WINDOWS
+    if (const char* VulkanSdk = std::getenv("VULKAN_SDK"))
+    {
+        std::string Candidate = JoinPath(VulkanSdk, "Bin");
+        Candidate = JoinPath(Candidate, "glslangValidator.exe");
+        if (std::filesystem::exists(Candidate))
+        {
+            return Candidate;
+        }
+    }
+#endif
 #if PLATFORM_MAC
     const char* MacCandidates[] = {
         "/opt/homebrew/bin/glslangValidator",
@@ -243,8 +254,13 @@ inline bool CompileHlslToSpirv(
     const std::filesystem::path LogPath = TempDir / ("shader_" + std::to_string(SourceHash) + ".log");
 
     std::ostringstream Command;
+    // NOTE: the compiler executable is intentionally NOT quoted. When std::system
+    // hands the command to `cmd.exe /c`, a leading quote triggers cmd.exe's
+    // quote-stripping heuristic (it strips the first and last quote of the whole
+    // line when more than two quotes are present), which corrupts the command.
+    // The resolved VULKAN_SDK path contains no spaces, so quoting is unnecessary.
     Command
-        << Quote(GetCompilerExecutable())
+        << GetCompilerExecutable()
         << " -V -D"
         << " -S " << StageArg
         << " -e " << EntryPoint

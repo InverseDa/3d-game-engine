@@ -1,0 +1,17 @@
+{
+  "name": "@limitless/builder",
+  "version": "0.1.0",
+  "description": "Limitless Engine build system",
+  "type": "module",
+  "bin": {
+    "limitless-builder": "./Source/Cli/CommandLine.ts"
+  },
+  "scripts": {
+    "list:modules": "node --experimental-strip-types Source/Cli/CommandLine.ts list modules",
+    "list:targets": "node --experimental-strip-types Source/Cli/CommandLine.ts list targets",
+    "help": "node --experimental-strip-types Source/Cli/CommandLine.ts help"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

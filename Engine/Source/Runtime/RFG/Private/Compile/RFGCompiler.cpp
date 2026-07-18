@@ -43,7 +43,11 @@ FRFGCompileResult FRFGCompiler::Compile(const FRFGRecordedGraph& RecordedGraph, 
         Result.Plan->GetPasses().size(),
         RecordedGraph.GetResourceNodes().size());
     LE_LOG(LogRFG, Info, "RFG pass order: {}", PassOrderStream.str());
-    LE_LOG(LogRFG, Trace, "{}", FRFGGraphExporter::ExportToString(RecordedGraph, Result.Plan.get()).GetData());
+    // TODO(rfg): FRFGGraphExporter::ExportToString is declared but not implemented yet.
+    // Replace with a lightweight trace summary until the exporter is fully wired up.
+    LE_LOG(LogRFG, Trace, "RFG graph summary: passes={}, resources={}",
+        RecordedGraph.GetPassNodes().size(),
+        RecordedGraph.GetResourceNodes().size());
 
     return Result;
 }

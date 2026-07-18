@@ -2,7 +2,7 @@
 
 ## 1. 模块职责与定位
 
-Core 是引擎最底层的模块，为所有上层模块提供基础类型、数学运算、日志记录等通用能力。该模块**不依赖任何其他引擎模块**，仅通过 `Core.Build.cs` 引入两个第三方库：
+Core 是引擎最底层的模块，为所有上层模块提供基础类型、数学运算、日志记录等通用能力。该模块**不依赖任何其他引擎模块**，仅通过 `Build.ts` 引入两个第三方库：
 
 - **spdlog**：日志后端
 - **glm**（可选，由 `LE_USE_GLM` 宏控制）：备用数学库
@@ -218,7 +218,7 @@ public:
 
 ## 附录：模块构建配置
 
-`Core.Build.cs`（Sharpmake）声明模块依赖：
+`Build.ts`（LimitlessBuilder）声明模块依赖：
 
 ```csharp
 public class CoreProject : ModuleRule

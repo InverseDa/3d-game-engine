@@ -2,13 +2,13 @@
 
 ## 1. 项目简介
 
-**Limitless Engine** 是一款开源 3D 游戏引擎，基于 **C++17** 与 **Vulkan** 构建，面向现代高性能游戏开发。引擎采用模块化 Runtime 架构，代码按职责划分为独立模块，通过 Sharpmake 元构建系统生成跨平台工程文件。
+**Limitless Engine** 是一款开源 3D 游戏引擎，基于 **C++17** 与 **Vulkan** 构建，面向现代高性能游戏开发。引擎采用模块化 Runtime 架构，代码按职责划分为独立模块，通过 LimitlessBuilder（LB）构建。
 
 | 属性 | 说明 |
 |------|------|
 | 语言标准 | C++17 |
 | 图形 API | Vulkan (跨平台) |
-| 构建系统 | Sharpmake + .NET 8 |
+| 构建系统 | LimitlessBuilder + Node + Ninja |
 | 目标平台 | Windows (win64) / macOS (mac, arm64) |
 | 构建类型 | Editor / Game |
 | 优化配置 | Debug / Release |
@@ -21,12 +21,8 @@ E:\Projects\3d-game-engine
 ├── docs/                       # 项目文档
 ├── Engine/
 │   ├── binaries/               # 构建输出 (Shader 缓存等)
-│   ├── Builder/                # Sharpmake 构建脚本
-│   │   ├── LimitlessBuilder.cs # 入口主脚本
-│   │   ├── Solution.cs         # Solution 规则
-│   │   ├── LimitlessProject.cs # 主可执行工程规则
-│   │   ├── Module.cs           # 模块基类 (ModuleRule / ThirdPartyModuleRule)
-│   │   └── ...
+│   ├── Builder/                # 构建工具
+│   │   └── LimitlessBuilder/   # TypeScript 构建系统
 │   ├── Content/                # 引擎内容资源
 │   └── Source/
 │       ├── Runtime/            # 引擎运行时模块 (核心)
@@ -34,10 +30,8 @@ E:\Projects\3d-game-engine
 │           ├── Glm/
 │           ├── Spdlog/
 │           └── Vulkan/
-├── External/                   # 外部工具链 (Sharpmake 子模块)
-├── GenerateProject.bat         # Windows 工程生成脚本
-├── GenerateProject.sh          # macOS/Linux 工程生成脚本
-├── GenerateIncludes.ps1        # 模块自动发现脚本
+├── External/                   # 外部依赖
+├── GenerateProject.bat         # Windows LB 工程生成入口
 ├── LICENSE
 └── README.md
 ```
@@ -59,9 +53,9 @@ E:\Projects\3d-game-engine
 
 ## 4. 构建系统说明
 
-### 4.1 Sharpmake 元构建
+### 4.1 LimitlessBuilder
 
-引擎使用 [Sharpmake](https://github.com/ubisoft/Sharpmake) 作为元构建系统。开发者不直接维护 `.sln` / `.vcxproj`，而是通过 C# 脚本描述工程规则，由 Sharpmake 生成对应 IDE 的工程文件。
+LB 递归加载模块目录内的 `Build.ts`，构建依赖图和 Ninja 编译动作。开发者不维护集中式模块 include 列表；`GenerateProject.bat` 可生成 Rider / Visual Studio 使用的 Makefile 工程。
 
 ### 4.2 支持的构建配置
 
@@ -73,9 +67,9 @@ E:\Projects\3d-game-engine
 | Optimization | `Debug`、`Release` |
 | TargetType | `Editor`、`Game` |
 
-生成的 Solution 文件名格式：
+生成的 Solution 文件：
 ```
-Limitless_[DevEnv]_[Platform].sln
+Solution/LimitlessEngine.sln
 ```
 
 配置名称格式：
@@ -100,21 +94,9 @@ GenerateProject.bat
 ```
 
 脚本执行流程：
-1. **自动发现模块** —— 调用 `GenerateIncludes.ps1` 扫描所有 `.Build.cs`。
-2. **验证工具链** —— 检查 Sharpmake 子模块与 .NET SDK。
-3. **编译 Sharpmake** —— `dotnet build Sharpmake.Application.csproj`。
-4. **执行生成** —— 运行 Sharpmake，以 `Engine/Builder/LimitlessBuilder.cs` 为入口生成 VS2022 工程。
-
-### macOS
-
-```bash
-./GenerateProject.sh
-```
-
-> 首次使用前请确保已初始化子模块：
-> ```bash
-> git submodule update --init --recursive
-> ```
+1. **发现模块** —— 扫描全部 `Build.ts`。
+2. **发现工具链** —— 解析 Node、Ninja、Visual Studio 与 Windows SDK。
+3. **生成工程** —— 由 LB 生成 `LimitlessEngine.sln` 与 `.vcxproj`。
 
 ## 6. 模块依赖拓扑图
 

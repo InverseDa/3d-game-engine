@@ -207,7 +207,7 @@ enum class ERenderPlatformProfile : uint8 {
 
 ## 7. 依赖关系
 
-`Renderer.Build.cs` 声明了以下公开依赖：
+`Build.ts` 声明了以下公开依赖：
 
 | 模块 | 用途 |
 |------|------|
