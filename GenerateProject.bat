@@ -10,4 +10,8 @@ if not exist "%LIMITLESS_BUILDER%" (
 )
 
 call "%LIMITLESS_BUILDER%" sln --platform Win64 --config Debug --type Game
-exit /b %errorlevel%
+set "LIMITLESS_EXIT_CODE=%errorlevel%"
+
+echo.
+pause
+exit /b %LIMITLESS_EXIT_CODE%

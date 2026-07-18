@@ -14,8 +14,12 @@ export class EnginePaths {
     public get BinariesDirectory(): string { return Path.join(this.EngineDirectory, "Binaries"); }
     public get BuilderDirectory(): string { return Path.join(this.EngineDirectory, "Builder"); }
     public get TargetsDirectory(): string { return Path.join(this.BuilderDirectory, "Targets"); }
-    public get TemporaryDirectory(): string { return Path.join(this.RootDirectory, "Temp"); }
+    // Ninja's generated build graph and object files are disposable build intermediates.
+    // Keep them with the other engine-generated artefacts, rather than at the project root.
+    public get TemporaryDirectory(): string { return Path.join(this.IntermediateDirectory, "Build"); }
     public get SolutionDirectory(): string { return Path.join(this.RootDirectory, "Solution"); }
+    public get IntermediateDirectory(): string { return Path.join(this.EngineDirectory, "Intermediate"); }
+    public get ProjectFilesDirectory(): string { return Path.join(this.IntermediateDirectory, "ProjectFiles"); }
 
     public BinaryOutputDirectory(Platform: string): string {
         return Path.join(this.BinariesDirectory, Platform);

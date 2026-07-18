@@ -436,8 +436,8 @@ FodyWeavers.xsd
 
 .claude/
 Engine/binaries/
-Engine/LimitlessEngine.vcxproj
-Engine/LimitlessEngine.vcxproj.filters
+Intermediate/
+LimitlessEngine.sln
 skills/
 solution/
 temp/

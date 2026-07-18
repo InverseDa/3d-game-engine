@@ -42,26 +42,27 @@ export class VcxprojGenerator {
     }
 
     async Generate(Modules: ResolvedModule[], Target: Target): Promise<string> {
-        const SolutionDir = this.Paths.SolutionDirectory;
-        await Fs.mkdir(SolutionDir, { recursive: true });
+        const ProjectFilesDir = this.Paths.ProjectFilesDirectory;
+        await Fs.mkdir(ProjectFilesDir, { recursive: true });
+        await this.RemoveObsoleteProjectFileLinks();
 
         const Files = this.CollectProjectFiles(Modules);
         const IntelliSense = await this.GetIntelliSenseConfiguration();
-        // Keep the generated project at the Engine root.  Rider uses the project
-        // file location as the physical tree root when it does not apply filters.
-        const VcxprojPath = Path.join(this.Paths.EngineDirectory, "LimitlessEngine.vcxproj");
+        const VcxprojPath = Path.join(ProjectFilesDir, "LimitlessEngine.vcxproj");
+        const CommonPropsPath = Path.join(ProjectFilesDir, "LimitlessEngineCommon.props");
+        await Fs.writeFile(CommonPropsPath, this.BuildCommonProps(), "utf-8");
         await Fs.writeFile(VcxprojPath, this.BuildVcxproj(Files, Modules, Target, IntelliSense), "utf-8");
 
-        const SlnPath = Path.join(SolutionDir, "LimitlessEngine.sln");
+        const SlnPath = Path.join(this.Paths.Root, "LimitlessEngine.sln");
         await Fs.writeFile(SlnPath, this.BuildSln(), "utf-8");
 
-        const FilterPath = Path.join(this.Paths.EngineDirectory, "LimitlessEngine.vcxproj.filters");
+        const FilterPath = Path.join(ProjectFilesDir, "LimitlessEngine.vcxproj.filters");
         await Fs.writeFile(FilterPath, this.BuildFilters(Files), "utf-8");
 
-        // LimitlessEngine.vcxproj used to live beside the solution. Remove these
-        // generated legacy copies so an IDE cannot open a stale project by mistake.
-        await Fs.rm(Path.join(SolutionDir, "LimitlessEngine.vcxproj"), { force: true });
-        await Fs.rm(Path.join(SolutionDir, "LimitlessEngine.vcxproj.filters"), { force: true });
+        // These generated files briefly lived at the Engine root. Keep generated
+        // IDE artefacts contained in Solution and remove the obsolete copies.
+        await Fs.rm(Path.join(this.Paths.EngineDirectory, "LimitlessEngine.vcxproj"), { force: true });
+        await Fs.rm(Path.join(this.Paths.EngineDirectory, "LimitlessEngine.vcxproj.filters"), { force: true });
 
         return SlnPath;
     }
@@ -74,9 +75,6 @@ export class VcxprojGenerator {
     ): string {
         const AllIncludes = new Set<string>();
         const AllDefines = new Set<string>();
-        const FileConfigurations = this.CollectFileIntelliSenseConfigurations(
-            Files, Modules, Target, IntelliSense,
-        );
 
         for (const Module of Modules) {
             const Root = Module.Instance.SourceRoot;
@@ -95,40 +93,34 @@ export class VcxprojGenerator {
         AllDefines.add("PLATFORM_WINDOWS=1");
         AllDefines.add(`WITH_EDITOR=${Target.TargetType === "Editor" ? "1" : "0"}`);
 
-        const CleanCmd = `del /Q "$(ProjectDir)Binaries\\Win64\\*.lib" "$(ProjectDir)Binaries\\Win64\\*.exe" 2>nul`;
+        const CleanCmd = `del /Q "$(ProjectDir)..\\..\\Binaries\\Win64\\*.lib" "$(ProjectDir)..\\..\\Binaries\\Win64\\*.exe" 2>nul`;
         const OutputName = Target.TargetType === "Editor" ? "LimitlessEditor" : "LimitlessGame";
-        const Output = `$(ProjectDir)Binaries\\Win64\\${OutputName}.exe`;
+        const Output = `$(ProjectDir)..\\..\\Binaries\\Win64\\${OutputName}.exe`;
         const IncludeStr = [...AllIncludes].filter((PathName) => FsSync.existsSync(PathName)).join(";");
         const DefineStr = [...AllDefines].join(";");
 
         const Lines: string[] = [];
         Lines.push(`<?xml version="1.0" encoding="utf-8"?>`);
-        Lines.push(`<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">`);
+        Lines.push(`<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">`);
         Lines.push(`  <ItemGroup Label="ProjectConfigurations">`);
         for (const Configuration of ["Debug", "Release"]) {
-            Lines.push(`    <ProjectConfiguration Include="${Configuration}|Win64">`);
+            Lines.push(`    <ProjectConfiguration Include="${Configuration}|x64">`);
             Lines.push(`      <Configuration>${Configuration}</Configuration>`);
-            Lines.push(`      <Platform>Win64</Platform>`);
+            Lines.push(`      <Platform>x64</Platform>`);
             Lines.push(`    </ProjectConfiguration>`);
         }
         Lines.push(`  </ItemGroup>`);
         Lines.push(`  <PropertyGroup Label="Globals">`);
-        Lines.push(`    <VCProjectVersion>17.0</VCProjectVersion>`);
         Lines.push(`    <ProjectGuid>${PROJECT_GUID}</ProjectGuid>`);
-        Lines.push(`    <Keyword>MakeFileProj</Keyword>`);
-        Lines.push(`    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>`);
-        Lines.push(`    <DefaultPlatformToolset>v143</DefaultPlatformToolset>`);
+        Lines.push(`    <RootNamespace>LimitlessEngine</RootNamespace>`);
         Lines.push(`  </PropertyGroup>`);
-        Lines.push(`  <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.Default.props" />`);
-        Lines.push(`  <PropertyGroup Label="Configuration">`);
-        Lines.push(`    <ConfigurationType>Makefile</ConfigurationType>`);
-        Lines.push(`    <PlatformToolset>v143</PlatformToolset>`);
-        Lines.push(`  </PropertyGroup>`);
-        Lines.push(`  <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.props" />`);
+        Lines.push(`  <Import Project="LimitlessEngineCommon.props" />`);
+        Lines.push(`  <ImportGroup Label="ExtensionSettings" />`);
+        Lines.push(`  <PropertyGroup Label="UserMacros" />`);
 
         for (const Configuration of ["Debug", "Release"]) {
-            const BuildCmd = `$(ProjectDir)Builder\\LimitlessBuilder.bat build --platform Win64 --config ${Configuration} --type ${Target.TargetType}`;
-            Lines.push(`  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='${Configuration}|Win64'">`);
+            const BuildCmd = `$(ProjectDir)..\\..\\Builder\\LimitlessBuilder.bat build --platform Win64 --config ${Configuration} --type ${Target.TargetType}`;
+            Lines.push(`  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='${Configuration}|x64'">`);
             Lines.push(`    <NMakeBuildCommandLine>${BuildCmd}</NMakeBuildCommandLine>`);
             Lines.push(`    <NMakeReBuildCommandLine>${BuildCmd}</NMakeReBuildCommandLine>`);
             Lines.push(`    <NMakeCleanCommandLine>${CleanCmd}</NMakeCleanCommandLine>`);
@@ -136,13 +128,13 @@ export class VcxprojGenerator {
             Lines.push(`    <TargetName>${OutputName}</TargetName>`);
             Lines.push(`    <TargetExt>.exe</TargetExt>`);
             Lines.push(`    <LocalDebuggerCommand>$(NMakeOutput)</LocalDebuggerCommand>`);
-            Lines.push(`    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>`);
+            Lines.push(`    <LocalDebuggerWorkingDirectory>$(ProjectDir)..\\..</LocalDebuggerWorkingDirectory>`);
             Lines.push(`    <LocalDebuggerCommandArguments></LocalDebuggerCommandArguments>`);
             Lines.push(`    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>`);
             Lines.push(`    <NMakeIncludeSearchPath>${XmlEscape(IncludeStr)}</NMakeIncludeSearchPath>`);
             Lines.push(`    <NMakePreprocessorDefinitions>${XmlEscape(DefineStr)}</NMakePreprocessorDefinitions>`);
             Lines.push(`  </PropertyGroup>`);
-            Lines.push(`  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='${Configuration}|Win64'">`);
+            Lines.push(`  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='${Configuration}|x64'">`);
             Lines.push(`    <ClCompile>`);
             Lines.push(`      <AdditionalIncludeDirectories>${XmlEscape(IncludeStr)};%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>`);
             Lines.push(`      <PreprocessorDefinitions>${XmlEscape(DefineStr)};%(PreprocessorDefinitions)</PreprocessorDefinitions>`);
@@ -151,12 +143,49 @@ export class VcxprojGenerator {
             Lines.push(`  </ItemDefinitionGroup>`);
         }
 
-        this.AppendProjectItems(Lines, "ClCompile", Files.Sources, FileConfigurations);
-        this.AppendProjectItems(Lines, "ClInclude", Files.Headers, FileConfigurations);
+        this.AppendProjectItems(Lines, "ClCompile", Files.Sources);
+        this.AppendProjectItems(Lines, "ClInclude", Files.Headers);
         this.AppendProjectItems(Lines, "None", Files.Other);
         Lines.push(`  <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.targets" />`);
         Lines.push(`</Project>`);
         return Lines.join("\r\n");
+    }
+
+    private BuildCommonProps(): string {
+        return [
+            `<?xml version="1.0" encoding="utf-8"?>`,
+            `<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">`,
+            `  <PropertyGroup Label="Globals">`,
+            `    <Keyword>MakeFileProj</Keyword>`,
+            `    <PlatformToolset>v143</PlatformToolset>`,
+            `    <DefaultPlatformToolset>v143</DefaultPlatformToolset>`,
+            `    <MinimumVisualStudioVersion>17.0</MinimumVisualStudioVersion>`,
+            `    <VCProjectVersion>17.0</VCProjectVersion>`,
+            `    <NMakeUseOemCodePage>true</NMakeUseOemCodePage>`,
+            `    <TargetRuntime>Native</TargetRuntime>`,
+            `  </PropertyGroup>`,
+            `  <PropertyGroup Label="Configuration">`,
+            `    <ConfigurationType>Makefile</ConfigurationType>`,
+            `    <PlatformToolset>v143</PlatformToolset>`,
+            `  </PropertyGroup>`,
+            `  <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.Default.props" />`,
+            `  <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.props" />`,
+            `  <PropertyGroup>`,
+            `    <OutDir>..\\Build\\Unused\\</OutDir>`,
+            `    <IntDir>..\\Build\\Unused\\</IntDir>`,
+            `    <IncludePath />`,
+            `    <ReferencePath />`,
+            `    <LibraryPath />`,
+            `    <LibraryWPath />`,
+            `    <SourcePath />`,
+            `    <ExcludePath />`,
+            `  </PropertyGroup>`,
+            `  <ImportGroup Label="PropertySheets">`,
+            `    <Import Project="$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />`,
+            `  </ImportGroup>`,
+            `</Project>`,
+            ``,
+        ].join("\r\n");
     }
 
     private BuildSln(): string {
@@ -165,7 +194,7 @@ export class VcxprojGenerator {
         Lines.push("# Visual Studio Version 17");
         Lines.push(`Project("${SOLUTION_FOLDER_GUID}") = "Engine", "Engine", "${ENGINE_FOLDER_GUID}"`);
         Lines.push("EndProject");
-        Lines.push(`Project("${SLN_GUID}") = "LimitlessEngine", "..\\Engine\\LimitlessEngine.vcxproj", "${PROJECT_GUID}"`);
+        Lines.push(`Project("${SLN_GUID}") = "LimitlessEngine", "Engine\\Intermediate\\ProjectFiles\\LimitlessEngine.vcxproj", "${PROJECT_GUID}"`);
         Lines.push("EndProject");
         Lines.push("Global");
         Lines.push("\tGlobalSection(SolutionConfigurationPlatforms) = preSolution");
@@ -173,10 +202,10 @@ export class VcxprojGenerator {
         Lines.push("\t\tRelease|Win64 = Release|Win64");
         Lines.push("\tEndGlobalSection");
         Lines.push("\tGlobalSection(ProjectConfigurationPlatforms) = postSolution");
-        Lines.push(`\t\t${PROJECT_GUID}.Debug|Win64.ActiveCfg = Debug|Win64`);
-        Lines.push(`\t\t${PROJECT_GUID}.Debug|Win64.Build.0 = Debug|Win64`);
-        Lines.push(`\t\t${PROJECT_GUID}.Release|Win64.ActiveCfg = Release|Win64`);
-        Lines.push(`\t\t${PROJECT_GUID}.Release|Win64.Build.0 = Release|Win64`);
+        Lines.push(`\t\t${PROJECT_GUID}.Debug|Win64.ActiveCfg = Debug|x64`);
+        Lines.push(`\t\t${PROJECT_GUID}.Debug|Win64.Build.0 = Debug|x64`);
+        Lines.push(`\t\t${PROJECT_GUID}.Release|Win64.ActiveCfg = Release|x64`);
+        Lines.push(`\t\t${PROJECT_GUID}.Release|Win64.Build.0 = Release|x64`);
         Lines.push("\tEndGlobalSection");
         Lines.push("\tGlobalSection(NestedProjects) = preSolution");
         Lines.push(`\t\t${PROJECT_GUID} = ${ENGINE_FOLDER_GUID}`);
@@ -191,17 +220,27 @@ export class VcxprojGenerator {
     private BuildFilters(Files: ProjectFiles): string {
         const Lines: string[] = [];
         Lines.push(`<?xml version="1.0" encoding="utf-8"?>`);
-        Lines.push(`<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">`);
+        Lines.push(`<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">`);
         Lines.push(`  <ItemGroup>`);
-        for (const Filter of this.GetFilters(Files)) {
-            Lines.push(`    <Filter Include="${XmlEscape(Filter)}">`);
-            Lines.push(`      <UniqueIdentifier>{${this.HashGuid(Filter)}}</UniqueIdentifier>`);
-            Lines.push(`    </Filter>`);
+        const EmittedFilters = new Set<string>();
+        for (const [ItemType, Items] of [["ClCompile", Files.Sources], ["ClInclude", Files.Headers], ["None", Files.Other]] as const) {
+            for (const File of [...Items].sort()) {
+                const Filter = this.GetFilter(File);
+                const Segments = Filter.split("\\").filter(Boolean);
+                for (let Index = 1; Index <= Segments.length; Index++) {
+                    const CurrentFilter = Segments.slice(0, Index).join("\\");
+                    if (EmittedFilters.has(CurrentFilter)) continue;
+                    EmittedFilters.add(CurrentFilter);
+                    Lines.push(`    <Filter Include="${XmlEscape(CurrentFilter)}">`);
+                    Lines.push(`      <UniqueIdentifier>{${this.HashGuid(CurrentFilter)}}</UniqueIdentifier>`);
+                    Lines.push(`    </Filter>`);
+                }
+                Lines.push(`    <${ItemType} Include="${XmlEscape(this.ToProjectRelativePath(File))}">`);
+                Lines.push(`      <Filter>${XmlEscape(Filter)}</Filter>`);
+                Lines.push(`    </${ItemType}>`);
+            }
         }
         Lines.push(`  </ItemGroup>`);
-        this.AppendFilterItems(Lines, "ClCompile", Files.Sources);
-        this.AppendFilterItems(Lines, "ClInclude", Files.Headers);
-        this.AppendFilterItems(Lines, "None", Files.Other);
         Lines.push(`</Project>`);
         return Lines.join("\r\n");
     }
@@ -366,7 +405,23 @@ export class VcxprojGenerator {
     }
 
     private ToProjectRelativePath(FilePath: string): string {
-        return Path.relative(this.Paths.EngineDirectory, FilePath).replace(/[\\/]+/g, "\\");
+        return Path.relative(this.Paths.ProjectFilesDirectory, FilePath).replace(/[\\/]+/g, "\\");
+    }
+
+    private async RemoveObsoleteProjectFileLinks(): Promise<void> {
+        for (const DirectoryName of ["Builder", "Content", "Source"]) {
+            const LinkPath = Path.join(this.Paths.ProjectFilesDirectory, DirectoryName);
+            let Stat: FsSync.Stats;
+            try {
+                Stat = FsSync.lstatSync(LinkPath);
+            } catch {
+                continue;
+            }
+            if (!Stat.isSymbolicLink()) {
+                throw new Error(`Refusing to remove "${LinkPath}": it is not a generated directory link.`);
+            }
+            await Fs.unlink(LinkPath);
+        }
     }
 
     private CollectFiles(Directory: string, Extensions: string[], Result: Set<string>): void {
