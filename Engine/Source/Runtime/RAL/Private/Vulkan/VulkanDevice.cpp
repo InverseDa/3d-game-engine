@@ -755,6 +755,24 @@ FRALTexture* FVulkanRALDevice::CreateTexture(const FRALTextureDesc& Desc)
     return new FVulkanRALTexture(this, Desc);
 }
 
+FRALTextureView* FVulkanRALDevice::CreateTextureView(const FRALTextureViewDesc& Desc)
+{
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || Desc.Texture == nullptr)
+    {
+        LE_LOG(LogRAL, Error, "CreateTextureView failed: invalid input. LogicalDeviceValid={}, TextureValid={}", this->VkContext.LogicalDevice != VK_NULL_HANDLE, Desc.Texture != nullptr);
+        return nullptr;
+    }
+
+    FVulkanRALTextureView* TextureView = new FVulkanRALTextureView(this, Desc);
+    if (TextureView->View == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateTextureView failed: Vulkan image view creation returned null.");
+        delete TextureView;
+        return nullptr;
+    }
+    return TextureView;
+}
+
 FRALCommandList* FVulkanRALDevice::CreateCommandList(EQueueType Type)
 {
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)

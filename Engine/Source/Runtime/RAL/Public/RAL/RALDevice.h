@@ -9,6 +9,7 @@ class FRALBuffer;
 class FRALShader;
 class FRALSampler;
 class FRALTexture;
+class FRALTextureView;
 class FRALCommandList;
 class FRALSwapchain;
 class FRALPipeline_Graphics;
@@ -26,6 +27,7 @@ public:
 public:
     virtual FRALBuffer* CreateBuffer(const FRALBufferDesc& Desc) = 0;
     virtual FRALTexture* CreateTexture(const FRALTextureDesc& Desc) = 0;
+    virtual FRALTextureView* CreateTextureView(const FRALTextureViewDesc& Desc) = 0;
     virtual FRALShader* CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size, const FString& EntryPoint = "main") = 0;
     virtual FRALPipeline_Graphics* CreateGraphicsPipeline(const FRALPipelineDesc_Graphics& Desc) = 0;
     virtual FRALCommandList* CreateCommandList(EQueueType Type = EQueueType::Graphics) = 0;

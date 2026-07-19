@@ -1,10 +1,18 @@
 #include "Compile/RFGPlanCache.h"
 
+#include "Compile/RFGCompiledPlan.h"
+
 std::shared_ptr<const FRFGCompiledPlan> FRFGPlanCache::Find(const FRFGGraphSignature& Signature) const
 {
     const auto It = CachedPlans.find(Signature.Value);
     if (It != CachedPlans.end())
     {
+        if (It->second == nullptr || It->second->GetSignature().Value != Signature.Value)
+        {
+            ++Stats.MissCount;
+            return nullptr;
+        }
+
         ++Stats.HitCount;
         return It->second;
     }
@@ -15,7 +23,7 @@ std::shared_ptr<const FRFGCompiledPlan> FRFGPlanCache::Find(const FRFGGraphSigna
 
 void FRFGPlanCache::Store(const FRFGGraphSignature& Signature, const std::shared_ptr<const FRFGCompiledPlan>& Plan)
 {
-    if (Plan == nullptr)
+    if (Signature.Value == 0 || Plan == nullptr || Plan->GetSignature().Value != Signature.Value)
     {
         return;
     }

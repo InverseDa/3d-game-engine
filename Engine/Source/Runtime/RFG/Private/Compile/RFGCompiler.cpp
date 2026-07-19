@@ -68,34 +68,35 @@ bool ValidateBarrierDeclarations(const FRFGRecordedGraph& RecordedGraph, const F
 FRFGCompileResult FRFGCompiler::Compile(const FRFGRecordedGraph& RecordedGraph, const FRFGGraphSignature& Signature) const
 {
     FRFGCompileResult Result;
-    Result.Plan = std::make_shared<FRFGCompiledPlan>();
-    Result.Plan->GetMutableSignature() = Signature;
+    std::shared_ptr<FRFGCompiledPlan> MutablePlan = std::make_shared<FRFGCompiledPlan>();
 
-    DependencyAnalyzer.BuildDependencies(RecordedGraph, *Result.Plan);
+    DependencyAnalyzer.BuildDependencies(RecordedGraph, *MutablePlan);
 
     if (CompileOptions.bEnablePassCulling)
     {
-        Culler.CullPasses(RecordedGraph, *Result.Plan);
+        Culler.CullPasses(RecordedGraph, *MutablePlan);
     }
 
-    if (!ValidateBarrierDeclarations(RecordedGraph, *Result.Plan))
+    if (!ValidateBarrierDeclarations(RecordedGraph, *MutablePlan))
     {
-        Result.Plan.reset();
         return Result;
     }
 
-    BarrierPlanner.BuildResourceLifetimes(RecordedGraph, *Result.Plan);
-    BarrierPlanner.BuildBarriers(RecordedGraph, *Result.Plan);
+    BarrierPlanner.BuildResourceLifetimes(RecordedGraph, *MutablePlan);
+    BarrierPlanner.BuildBarriers(RecordedGraph, *MutablePlan);
+    // Dependency analysis clears its output before rebuilding it. Assign the
+    // graph identity only after all mutable compilation phases have completed.
+    MutablePlan->GetMutableSignature() = Signature;
 
     std::ostringstream PassOrderStream;
-    for (uint32 PassIndex = 0; PassIndex < Result.Plan->GetPasses().size(); ++PassIndex)
+    for (uint32 PassIndex = 0; PassIndex < MutablePlan->GetPasses().size(); ++PassIndex)
     {
         if (PassIndex > 0)
         {
             PassOrderStream << " -> ";
         }
 
-        const FRFGCompiledPass& Pass = Result.Plan->GetPasses()[PassIndex];
+        const FRFGCompiledPass& Pass = MutablePlan->GetPasses()[PassIndex];
         PassOrderStream << Pass.Name.GetData() << "[L" << Pass.DependencyLevel << ",Q" << static_cast<uint32>(Pass.Queue) << "]";
     }
 
@@ -104,7 +105,7 @@ FRFGCompileResult FRFGCompiler::Compile(const FRFGRecordedGraph& RecordedGraph, 
         Info,
         "RFG compile completed. Signature={}, Passes={}, Resources={}",
         Signature.Value,
-        Result.Plan->GetPasses().size(),
+        MutablePlan->GetPasses().size(),
         RecordedGraph.GetResourceNodes().size());
     LE_LOG(LogRFG, Info, "RFG pass order: {}", PassOrderStream.str());
     // TODO(rfg): FRFGGraphExporter::ExportToString is declared but not implemented yet.
@@ -113,6 +114,7 @@ FRFGCompileResult FRFGCompiler::Compile(const FRFGRecordedGraph& RecordedGraph, 
         RecordedGraph.GetPassNodes().size(),
         RecordedGraph.GetResourceNodes().size());
 
+    Result.Plan = std::move(MutablePlan);
     return Result;
 }
 

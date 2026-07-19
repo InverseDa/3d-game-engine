@@ -18,7 +18,6 @@
 #include "RFGMinimal.h"
 #include "Renderer/RendererMinimal.h"
 #include "ShaderRuntimeCompiler.h"
-#include "Vulkan/VulkanRAL.h"
 #include "World/WorldMinimal.h"
 
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogXBD);
@@ -88,9 +87,7 @@ static bool CreateOffscreenPassResources(
     TextureViewDesc.ArraySlice = 0;
     TextureViewDesc.MipLevels = 1;
     TextureViewDesc.ArrayLayers = 1;
-    Resources.TextureView = new FVulkanRALTextureView(
-        static_cast<FVulkanRALDevice*>(Device),
-        TextureViewDesc);
+    Resources.TextureView = Device->CreateTextureView(TextureViewDesc);
     if (Resources.TextureView == nullptr)
     {
         LE_LOG(LogXBD, Error, "Failed to create offscreen texture view.");

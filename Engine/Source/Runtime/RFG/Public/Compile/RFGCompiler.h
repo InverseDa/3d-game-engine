@@ -13,7 +13,7 @@ class FRFGRecordedGraph;
 
 struct FRFGCompileResult
 {
-    std::shared_ptr<FRFGCompiledPlan> Plan;
+    std::shared_ptr<const FRFGCompiledPlan> Plan;
     bool bFromCache = false;
 };
 

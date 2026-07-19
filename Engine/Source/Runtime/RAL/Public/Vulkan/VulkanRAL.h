@@ -149,6 +149,7 @@ public:
 public:
     FRALBuffer* CreateBuffer(const FRALBufferDesc& Desc) override;
     FRALTexture* CreateTexture(const FRALTextureDesc& Desc) override;
+    FRALTextureView* CreateTextureView(const FRALTextureViewDesc& Desc) override;
     FRALShader* CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size, const FString& EntryPoint = "main") override;
     FRALPipeline_Graphics* CreateGraphicsPipeline(const FRALPipelineDesc_Graphics& Desc) override;
     FRALCommandList* CreateCommandList(EQueueType Type = EQueueType::Graphics) override;

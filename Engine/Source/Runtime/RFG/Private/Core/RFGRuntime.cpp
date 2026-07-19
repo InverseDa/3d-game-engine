@@ -59,7 +59,7 @@ FRFGCompileResult FRFGRuntime::Compile(const FRFGRecordedGraph& RecordedGraph, c
         if (std::shared_ptr<const FRFGCompiledPlan> CachedPlan = PlanCache->Find(Signature))
         {
             FRFGCompileResult Result;
-            Result.Plan = std::const_pointer_cast<FRFGCompiledPlan>(CachedPlan);
+            Result.Plan = std::move(CachedPlan);
             Result.bFromCache = true;
             return Result;
         }
@@ -83,7 +83,7 @@ void FRFGRuntime::StoreCompiledPlan(
     const FRFGGraphSignature& Signature,
     const std::shared_ptr<const FRFGCompiledPlan>& CompiledPlan)
 {
-    if (PlanCache != nullptr && CompiledPlan != nullptr)
+    if (PlanCache != nullptr && CompiledPlan != nullptr && Signature.Value != 0)
     {
         PlanCache->Store(Signature, CompiledPlan);
     }
@@ -91,6 +91,20 @@ void FRFGRuntime::StoreCompiledPlan(
 
 void FRFGRuntime::SetCompileOptions(const FRFGCompileOptions& InCompileOptions)
 {
+    const bool bOptionsChanged =
+        CompileOptions.bEnablePassCulling != InCompileOptions.bEnablePassCulling ||
+        CompileOptions.bEnableBarrierElision != InCompileOptions.bEnableBarrierElision ||
+        CompileOptions.bEnableStateMerging != InCompileOptions.bEnableStateMerging ||
+        CompileOptions.bEnablePlanCache != InCompileOptions.bEnablePlanCache ||
+        CompileOptions.bDeterministicSort != InCompileOptions.bDeterministicSort;
+
+    if (bOptionsChanged && PlanCache != nullptr)
+    {
+        // Compile options affect plan contents but are intentionally not part
+        // of the graph signature, so cached plans must not survive a change.
+        PlanCache->Clear();
+    }
+
     CompileOptions = InCompileOptions;
 
     if (Compiler != nullptr)
