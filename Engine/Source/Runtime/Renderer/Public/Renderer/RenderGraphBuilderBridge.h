@@ -15,8 +15,8 @@ public:
     ~FRenderGraphBuilderBridge();
 
 public:
-    FRFGResourceHandle ImportTexture(const FString& ResourceName, FRALTexture* Texture);
-    FRFGResourceHandle ImportBuffer(const FString& ResourceName, FRALBuffer* Buffer);
+    FRFGResourceHandle ImportTexture(const FString& ResourceName, FRALTexture* Texture, ERALResourceState InitialState);
+    FRFGResourceHandle ImportBuffer(const FString& ResourceName, FRALBuffer* Buffer, ERALResourceState InitialState);
     void Read(FRFGPassHandle PassHandle, FRFGResourceHandle ResourceHandle, const FRFGAccessDesc& AccessDesc = {});
     void Write(FRFGPassHandle PassHandle, FRFGResourceHandle ResourceHandle, const FRFGAccessDesc& AccessDesc = {});
     void MarkOutput(FRFGResourceHandle ResourceHandle);

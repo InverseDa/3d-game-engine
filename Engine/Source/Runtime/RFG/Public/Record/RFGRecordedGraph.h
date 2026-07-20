@@ -40,6 +40,7 @@ struct FRFGResourceNode
     FString Name;
     FRFGResourceDesc Desc;
     ERFGResourceFlags Flags = ERFGResourceFlags::None;
+    ERALResourceState InitialState = ERALResourceState::Undefined;
 
     FRALTexture* ImportedTexture = nullptr;
     FRALBuffer* ImportedBuffer = nullptr;

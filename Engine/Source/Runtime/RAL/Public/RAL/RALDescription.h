@@ -171,8 +171,18 @@ struct FRALDepthStencilAttachmentDesc
     uint8 ClearStencil = 0;
 };
 
+struct FRALRenderAreaDesc
+{
+    int32 X = 0;
+    int32 Y = 0;
+    uint32 Width = 0;   // 0 means derive the extent from the attachments.
+    uint32 Height = 0;  // 0 means derive the extent from the attachments.
+};
+
 struct FRALRenderPassDesc
 {
+    FRALRenderAreaDesc RenderArea;
+
     FRALColorAttachmentDesc ColorAttachments[8];    // Max support 8 MRT
     uint32 ColorAttachmentCount = 0;
 

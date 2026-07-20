@@ -106,6 +106,27 @@ VkImageAspectFlags GetTextureAspectMask(const FRALTextureDesc& Desc)
         ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
         : VK_IMAGE_ASPECT_DEPTH_BIT;
 }
+
+VkAttachmentLoadOp ToVkAttachmentLoadOp(EAttachmentLoadOp Op)
+{
+    switch (Op)
+    {
+    case EAttachmentLoadOp::Load: return VK_ATTACHMENT_LOAD_OP_LOAD;
+    case EAttachmentLoadOp::Clear: return VK_ATTACHMENT_LOAD_OP_CLEAR;
+    case EAttachmentLoadOp::DontCare: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    default: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    }
+}
+
+VkAttachmentStoreOp ToVkAttachmentStoreOp(EAttachmentStoreOp Op)
+{
+    switch (Op)
+    {
+    case EAttachmentStoreOp::Store: return VK_ATTACHMENT_STORE_OP_STORE;
+    case EAttachmentStoreOp::DontCare: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    default: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    }
+}
 }
 
 FVulkanRALCommandList::FVulkanRALCommandList(FVulkanRALDevice* InDevice, EQueueType Type)
@@ -156,17 +177,9 @@ FVulkanRALCommandList::~FVulkanRALCommandList()
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
-        this->FramebufferCache.clear();
         this->Pool = VK_NULL_HANDLE;
         return;
     }
-
-    // 销毁缓存的 Framebuffer
-    for (auto& Pair : this->FramebufferCache)
-    {
-        vkDestroyFramebuffer(this->Device->VkContext.LogicalDevice, Pair.second, nullptr);
-    }
-    this->FramebufferCache.clear();
 
     // Command buffers are automatically freed when pool is destroyed
     if (this->Pool != VK_NULL_HANDLE)
@@ -319,44 +332,81 @@ void FVulkanRALCommandList::ResourceBarriers(const FRALBarrierBatch& Barriers)
 
 void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
 {
-    if (this->CurrentPipeline == nullptr || this->CurrentPipeline->RenderPass == VK_NULL_HANDLE)
+    if (this->Handle == VK_NULL_HANDLE || this->Device == nullptr || !this->Device->VkContext.bDynamicRenderingEnabled ||
+        this->Device->VkContext.CmdBeginRendering == nullptr)
     {
-        LE_LOG(LogRAL, Warn, "BeginRenderPass skipped: pipeline or render pass is invalid.");
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: dynamic rendering is unavailable.");
+        return;
+    }
+    if (this->bInsideRendering)
+    {
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: a rendering scope is already active.");
+        return;
+    }
+    if (this->CurrentPipeline == nullptr || this->CurrentPipeline->Pipeline == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: graphics pipeline is invalid.");
+        return;
+    }
+    if (Desc.ColorAttachmentCount == 0 || Desc.ColorAttachmentCount > 8 || Desc.bHasDepthStencil)
+    {
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: this stage requires 1-8 color attachments and does not yet support depth/stencil. Colors={}, HasDepthStencil={}.", Desc.ColorAttachmentCount, Desc.bHasDepthStencil);
+        return;
+    }
+    const FRALPipelineDesc_Graphics& PipelineDesc = this->CurrentPipeline->GetDesc();
+    if (PipelineDesc.RenderTargetCount != Desc.ColorAttachmentCount)
+    {
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: attachment count does not match pipeline. Pass={}, Pipeline={}.", Desc.ColorAttachmentCount, PipelineDesc.RenderTargetCount);
         return;
     }
 
-    VkRenderPass RenderPass = this->CurrentPipeline->RenderPass;
-    VkFramebuffer Framebuffer = this->InternalGetFramebuffer(Desc, RenderPass, true);
-    if (Framebuffer == VK_NULL_HANDLE)
-    {
-        LE_LOG(LogRAL, Error, "BeginRenderPass failed: framebuffer creation failed.");
-        return;
-    }
-
-    // 获取渲染区域尺寸
-    uint32 Width = 0, Height = 0;
-    if (Desc.ColorAttachmentCount > 0)
-    {
-        FVulkanRALTextureView* View = static_cast<FVulkanRALTextureView*>(
-            Desc.ColorAttachments[0].RenderTarget);
-        if (View == nullptr || View->Owner == nullptr)
-        {
-            LE_LOG(LogRAL, Error, "BeginRenderPass failed: first color attachment is invalid.");
-            return;
-        }
-        const FRALTextureDesc& TexDesc = View->Owner->GetDesc();
-        Width = TexDesc.Width;
-        Height = TexDesc.Height;
-    }
-
+    std::vector<VkRenderingAttachmentInfo> ColorAttachments;
+    ColorAttachments.reserve(Desc.ColorAttachmentCount);
+    uint32 AttachmentWidth = 0;
+    uint32 AttachmentHeight = 0;
     this->PendingPresentTransitionImages.clear();
     for (uint32 i = 0; i < Desc.ColorAttachmentCount; ++i)
     {
         FVulkanRALTextureView* View = static_cast<FVulkanRALTextureView*>(Desc.ColorAttachments[i].RenderTarget);
-        if (View == nullptr || View->Owner == nullptr)
+        if (View == nullptr || View->Owner == nullptr || View->View == VK_NULL_HANDLE)
         {
-            continue;
+            LE_LOG(LogRAL, Error, "BeginRenderPass failed: color attachment {} is invalid.", i);
+            return;
         }
+        const FRALTextureDesc& TextureDesc = View->Owner->GetDesc();
+        const EPixelFormat ViewFormat = View->GetDesc().Format != EPixelFormat::Unknown ? View->GetDesc().Format : TextureDesc.Format;
+        if (ViewFormat != PipelineDesc.RenderTargetFormats[i])
+        {
+            LE_LOG(LogRAL, Error, "BeginRenderPass failed: color attachment {} format does not match pipeline. View={}, Pipeline={}.", i, static_cast<uint32>(ViewFormat), static_cast<uint32>(PipelineDesc.RenderTargetFormats[i]));
+            return;
+        }
+
+        const uint32 MipSlice = View->GetDesc().MipSlice;
+        const uint32 ViewWidth = std::max(1u, TextureDesc.Width >> MipSlice);
+        const uint32 ViewHeight = std::max(1u, TextureDesc.Height >> MipSlice);
+        if (i == 0)
+        {
+            AttachmentWidth = ViewWidth;
+            AttachmentHeight = ViewHeight;
+        }
+        else if (AttachmentWidth != ViewWidth || AttachmentHeight != ViewHeight)
+        {
+            LE_LOG(LogRAL, Error, "BeginRenderPass failed: MRT attachment extents do not match at index {}.", i);
+            return;
+        }
+
+        VkRenderingAttachmentInfo AttachmentInfo{};
+        AttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        AttachmentInfo.imageView = View->View;
+        AttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        AttachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+        AttachmentInfo.loadOp = ToVkAttachmentLoadOp(Desc.ColorAttachments[i].LoadOp);
+        AttachmentInfo.storeOp = ToVkAttachmentStoreOp(Desc.ColorAttachments[i].StoreOp);
+        for (uint32 Component = 0; Component < 4; ++Component)
+        {
+            AttachmentInfo.clearValue.color.float32[Component] = Desc.ColorAttachments[i].ClearColor[Component];
+        }
+        ColorAttachments.push_back(AttachmentInfo);
 
         // Swapchain-wrapped images are externally owned and do not have VkDeviceMemory allocated here.
         if (View->Owner->Image != VK_NULL_HANDLE && View->Owner->Memory == VK_NULL_HANDLE)
@@ -377,20 +427,37 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         }
     }
 
-    VkClearValue ColorClear;
-    ColorClear.color = { 0.f, 0.f, 0.f, 1.f };
-
-    VkRenderPassBeginInfo Info{};
+    if (Desc.RenderArea.X < 0 || Desc.RenderArea.Y < 0 ||
+        static_cast<uint32>(Desc.RenderArea.X) >= AttachmentWidth ||
+        static_cast<uint32>(Desc.RenderArea.Y) >= AttachmentHeight)
     {
-        Info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        Info.renderPass = RenderPass;
-        Info.framebuffer = Framebuffer;
-        Info.renderArea.offset = { 0, 0 };
-        Info.renderArea.extent = { Width, Height };
-        Info.clearValueCount = 1;
-        Info.pClearValues = &ColorClear;
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: render area origin is outside attachment bounds.");
+        this->PendingPresentTransitionImages.clear();
+        return;
     }
-    vkCmdBeginRenderPass(this->Handle, &Info, VK_SUBPASS_CONTENTS_INLINE);
+
+    const uint32 RenderWidth = Desc.RenderArea.Width != 0 ? Desc.RenderArea.Width : AttachmentWidth - static_cast<uint32>(Desc.RenderArea.X);
+    const uint32 RenderHeight = Desc.RenderArea.Height != 0 ? Desc.RenderArea.Height : AttachmentHeight - static_cast<uint32>(Desc.RenderArea.Y);
+    if (RenderWidth == 0 || RenderHeight == 0 ||
+        static_cast<uint64>(Desc.RenderArea.X) + RenderWidth > AttachmentWidth ||
+        static_cast<uint64>(Desc.RenderArea.Y) + RenderHeight > AttachmentHeight)
+    {
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: render area is outside attachment bounds.");
+        this->PendingPresentTransitionImages.clear();
+        return;
+    }
+
+    VkRenderingInfo Info{};
+    {
+        Info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        Info.renderArea.offset = { Desc.RenderArea.X, Desc.RenderArea.Y };
+        Info.renderArea.extent = { RenderWidth, RenderHeight };
+        Info.layerCount = 1;
+        Info.colorAttachmentCount = static_cast<uint32>(ColorAttachments.size());
+        Info.pColorAttachments = ColorAttachments.data();
+    }
+    this->Device->VkContext.CmdBeginRendering(this->Handle, &Info);
+    this->bInsideRendering = true;
 }
 
 void FVulkanRALCommandList::DrawIndexed(uint32 IndexCount, uint32 InstanceCount, uint32 FirstIndex, int32 VertexOffset, uint32 FirstInstance)
@@ -464,13 +531,15 @@ void FVulkanRALCommandList::SetBindGroup(uint32 SetIndex, FRALBindGroup* BindGro
 
 void FVulkanRALCommandList::EndRenderPass()
 {
-    if (this->Handle == VK_NULL_HANDLE)
+    if (this->Handle == VK_NULL_HANDLE || this->Device == nullptr ||
+        this->Device->VkContext.CmdEndRendering == nullptr || !this->bInsideRendering)
     {
-        LE_LOG(LogRAL, Error, "EndRenderPass failed: command buffer handle is null.");
+        LE_LOG(LogRAL, Error, "EndRenderPass failed: no valid dynamic rendering scope is active.");
         return;
     }
 
-    vkCmdEndRenderPass(this->Handle);
+    this->Device->VkContext.CmdEndRendering(this->Handle);
+    this->bInsideRendering = false;
 
     for (VkImage Image : this->PendingPresentTransitionImages)
     {
@@ -566,87 +635,4 @@ void FVulkanRALCommandList::SetPushConstants(EShaderStage Stage, const void* Dat
 
     vkCmdPushConstants(this->Handle, this->CurrentPipeline->PipelineLayout, StageFlags, 0, Size, Data);
 }
-
-VkFramebuffer FVulkanRALCommandList::InternalGetFramebuffer(
-    const FRALRenderPassDesc& Desc,
-    VkRenderPass Pass,
-    bool bIsCreate)
-{
-    // 1. 收集图像视图和尺寸
-    std::vector<VkImageView> Attachments;
-    uint32 Width = 0, Height = 0;
-
-    for (uint32 i = 0; i < Desc.ColorAttachmentCount; ++i)
-    {
-        FVulkanRALTextureView* View = static_cast<FVulkanRALTextureView*>(
-            Desc.ColorAttachments[i].RenderTarget);
-        if (View == nullptr || View->Owner == nullptr || View->View == VK_NULL_HANDLE)
-        {
-            LE_LOG(LogRAL, Error, "Framebuffer creation failed: color attachment {} is invalid.", i);
-            return VK_NULL_HANDLE;
-        }
-        Attachments.push_back(View->View);
-
-        if (i == 0) {
-            const FRALTextureDesc& TexDesc = View->Owner->GetDesc();
-            Width = TexDesc.Width;
-            Height = TexDesc.Height;
-        }
-    }
-
-    if (Desc.bHasDepthStencil)
-    {
-        FVulkanRALTextureView* DepthView = static_cast<FVulkanRALTextureView*>(
-            Desc.DepthStencilAttachment.DepthStencilTarget);
-        if (DepthView == nullptr)
-        {
-            LE_LOG(LogRAL, Error, "Framebuffer creation failed: depth view is null.");
-            return VK_NULL_HANDLE;
-        }
-        if (DepthView->View == VK_NULL_HANDLE)
-        {
-            LE_LOG(LogRAL, Error, "Framebuffer creation failed: depth image view handle is null.");
-            return VK_NULL_HANDLE;
-        }
-        Attachments.push_back(DepthView->View);
-    }
-
-    // 2. 生成缓存哈希
-    uint64 Hash = reinterpret_cast<uint64>(Pass);
-    for (VkImageView View : Attachments) {
-        Hash ^= reinterpret_cast<uint64>(View) + 0x9e3779b9 + (Hash << 6) + (Hash >> 2);
-    }
-
-    // 3. 检查缓存
-    auto It = this->FramebufferCache.find(Hash);
-    if (It != this->FramebufferCache.end()) {
-        return It->second;
-    }
-
-    if (!bIsCreate) {
-        return VK_NULL_HANDLE;
-    }
-
-    // 4. 创建 Framebuffer
-    VkFramebufferCreateInfo FbInfo{};
-    FbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    FbInfo.renderPass = Pass;
-    FbInfo.attachmentCount = static_cast<uint32>(Attachments.size());
-    FbInfo.pAttachments = Attachments.data();
-    FbInfo.width = Width;
-    FbInfo.height = Height;
-    FbInfo.layers = 1;
-
-    VkFramebuffer Framebuffer = VK_NULL_HANDLE;
-    const VkResult Result = vkCreateFramebuffer(this->Device->VkContext.LogicalDevice, &FbInfo, nullptr, &Framebuffer);
-    if (Result != VK_SUCCESS)
-    {
-        LE_LOG(LogRAL, Error, "vkCreateFramebuffer failed. VkResult={}", static_cast<int32>(Result));
-        return VK_NULL_HANDLE;
-    }
-
-    this->FramebufferCache[Hash] = Framebuffer;
-    return Framebuffer;
-}
-
 

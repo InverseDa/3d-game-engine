@@ -427,6 +427,7 @@ void FVulkanRALSwapchain::InternalCreateImageViews()
         FRALTextureViewDesc ViewDesc;
         {
             ViewDesc.Texture = Texture;
+            ViewDesc.Format = TextureDesc.Format;
         }
         FVulkanRALTextureView* View = new FVulkanRALTextureView(this->Device, Texture, ViewHandle, ViewDesc);
         this->BackBufferViews[i] = View;

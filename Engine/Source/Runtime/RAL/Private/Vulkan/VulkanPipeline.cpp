@@ -60,102 +60,6 @@ static VkPolygonMode ToVkPolygonMode(EFillMode Mode)
     return Mode == EFillMode::Wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
 }
 
-static VkRenderPass CreateMinimalRenderPass(FVulkanRALDevice* Device, const FRALPipelineDesc_Graphics& Desc)
-{
-    if (Device == nullptr || Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
-    {
-        LE_LOG(LogRAL, Error, "CreateMinimalRenderPass failed: invalid device.");
-        return VK_NULL_HANDLE;
-    }
-
-    std::vector<VkAttachmentDescription> Attachments;
-    std::vector<VkAttachmentReference> ColorRefs;
-
-    for (uint32 i = 0; i < Desc.RenderTargetCount; ++i)
-    {
-        VkAttachmentDescription ColorAttachment{};
-        {
-            const VkFormat VkRtFormat = ToVkFormat(Desc.RenderTargetFormats[i]);
-            if (VkRtFormat == VK_FORMAT_UNDEFINED)
-            {
-                LE_LOG(LogRAL, Error, "CreateMinimalRenderPass failed: invalid color format at index {}.", i);
-                return VK_NULL_HANDLE;
-            }
-            ColorAttachment.format = VkRtFormat;
-            ColorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-            ColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            ColorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            ColorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            ColorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            ColorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            ColorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        }
-        VkAttachmentReference Ref{};
-        {
-            Ref.attachment = static_cast<uint32>(Attachments.size());
-            Ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        }
-        Attachments.push_back(ColorAttachment);
-        ColorRefs.push_back(Ref);
-    }
-
-    VkAttachmentReference DepthRef{};
-    bool bHasDepth = Desc.DepthStencilFormat != EPixelFormat::Unknown;
-    if (bHasDepth)
-    {
-        VkAttachmentDescription Depth{};
-        {
-            const VkFormat VkDepthFormat = ToVkFormat(Desc.DepthStencilFormat);
-            if (VkDepthFormat == VK_FORMAT_UNDEFINED)
-            {
-                LE_LOG(LogRAL, Error, "CreateMinimalRenderPass failed: invalid depth format.");
-                return VK_NULL_HANDLE;
-            }
-            Depth.format = VkDepthFormat;
-            Depth.samples = VK_SAMPLE_COUNT_1_BIT;
-            Depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            Depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            Depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            Depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            Depth.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            Depth.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-            DepthRef.attachment = static_cast<uint32>(Attachments.size());
-            DepthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        }
-        Attachments.push_back(Depth);
-    }
-
-    VkSubpassDescription SubpassDesc{};
-    {
-        SubpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        SubpassDesc.colorAttachmentCount = static_cast<uint32>(ColorRefs.size());
-        SubpassDesc.pColorAttachments = ColorRefs.data();
-        if (bHasDepth)
-        {
-            SubpassDesc.pDepthStencilAttachment = &DepthRef;
-        }
-    }
-
-    VkRenderPassCreateInfo RenderPassInfo{};
-    {
-        RenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        RenderPassInfo.attachmentCount = static_cast<uint32>(Attachments.size());
-        RenderPassInfo.pAttachments = Attachments.data();
-        RenderPassInfo.subpassCount = 1;
-        RenderPassInfo.pSubpasses = &SubpassDesc;
-    }
-
-    VkRenderPass RenderPass = VK_NULL_HANDLE;
-    const VkResult Result = vkCreateRenderPass(Device->VkContext.LogicalDevice, &RenderPassInfo, nullptr, &RenderPass);
-    if (Result != VK_SUCCESS)
-    {
-        LE_LOG(LogRAL, Error, "vkCreateRenderPass failed. VkResult={}", static_cast<int32>(Result));
-        return VK_NULL_HANDLE;
-    }
-    return RenderPass;
-}
-
 FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDevice, const FRALPipelineDesc_Graphics& InDesc)
     : TVulkanResourceBase<FRALPipelineDesc_Graphics>(InDevice, InDesc)
 {
@@ -164,7 +68,6 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         LE_LOG(LogRAL, Error, "Pipeline creation failed: invalid device.");
         this->Pipeline = VK_NULL_HANDLE;
         this->PipelineLayout = VK_NULL_HANDLE;
-        this->RenderPass = VK_NULL_HANDLE;
         return;
     }
 
@@ -177,7 +80,6 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
             LE_LOG(LogRAL, Error, "Pipeline creation failed: bind group layout is null.");
             this->Pipeline = VK_NULL_HANDLE;
             this->PipelineLayout = VK_NULL_HANDLE;
-            this->RenderPass = VK_NULL_HANDLE;
             return;
         }
         FVulkanRALBindGroupLayout* VkLayout = static_cast<FVulkanRALBindGroupLayout*>(SetLayout);
@@ -198,11 +100,9 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         return;
     }
 
-    // TODO: kodak Currently create the minimal render pass
-    this->RenderPass = CreateMinimalRenderPass(this->Device, this->Desc);
-    if (this->RenderPass == VK_NULL_HANDLE)
+    if (!this->Device->VkContext.bDynamicRenderingEnabled)
     {
-        LE_LOG(LogRAL, Error, "Pipeline creation failed: render pass creation failed.");
+        LE_LOG(LogRAL, Error, "Pipeline creation failed: dynamic rendering is unavailable.");
         return;
     }
 
@@ -354,9 +254,35 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         DynamicState.pDynamicStates = Dynamics;
     }
 
+    std::vector<VkFormat> ColorAttachmentFormats;
+    ColorAttachmentFormats.reserve(this->Desc.RenderTargetCount);
+    for (uint32 i = 0; i < this->Desc.RenderTargetCount; ++i)
+    {
+        const VkFormat Format = ToVkFormat(this->Desc.RenderTargetFormats[i]);
+        if (Format == VK_FORMAT_UNDEFINED)
+        {
+            LE_LOG(LogRAL, Error, "Pipeline creation failed: invalid render target format at index {}.", i);
+            return;
+        }
+        ColorAttachmentFormats.push_back(Format);
+    }
+
+    const VkFormat DepthStencilFormat = ToVkFormat(this->Desc.DepthStencilFormat);
+    VkPipelineRenderingCreateInfo RenderingInfo{};
+    {
+        RenderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+        RenderingInfo.colorAttachmentCount = static_cast<uint32>(ColorAttachmentFormats.size());
+        RenderingInfo.pColorAttachmentFormats = ColorAttachmentFormats.data();
+        RenderingInfo.depthAttachmentFormat = DepthStencilFormat;
+        RenderingInfo.stencilAttachmentFormat = this->Desc.DepthStencilFormat == EPixelFormat::D24_UNORM_S8_UINT
+            ? DepthStencilFormat
+            : VK_FORMAT_UNDEFINED;
+    }
+
     VkGraphicsPipelineCreateInfo PipelineInfo{};
     {
         PipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        PipelineInfo.pNext = &RenderingInfo;
         PipelineInfo.stageCount = static_cast<uint32>(ShaderStages.size());
 
         PipelineInfo.pStages = ShaderStages.data();
@@ -370,8 +296,8 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         PipelineInfo.pDynamicState = &DynamicState;
 
         PipelineInfo.layout = this->PipelineLayout;
-        PipelineInfo.renderPass = this->RenderPass;
-        PipelineInfo.subpass = 0; // TODO: kodak
+        PipelineInfo.renderPass = VK_NULL_HANDLE;
+        PipelineInfo.subpass = 0;
     }
     Result = vkCreateGraphicsPipelines(this->Device->VkContext.LogicalDevice, VK_NULL_HANDLE, 1, &PipelineInfo, nullptr, &this->Pipeline);
     if (Result != VK_SUCCESS)
@@ -391,7 +317,6 @@ FVulkanRALPipeline_Graphics::~FVulkanRALPipeline_Graphics()
     {
         this->Pipeline = VK_NULL_HANDLE;
         this->PipelineLayout = VK_NULL_HANDLE;
-        this->RenderPass = VK_NULL_HANDLE;
         return;
     }
 
@@ -404,10 +329,5 @@ FVulkanRALPipeline_Graphics::~FVulkanRALPipeline_Graphics()
     {
         vkDestroyPipelineLayout(Device->VkContext.LogicalDevice, this->PipelineLayout, nullptr);
         this->PipelineLayout = VK_NULL_HANDLE;
-    }
-    if (this->RenderPass != VK_NULL_HANDLE)
-    {
-        vkDestroyRenderPass(Device->VkContext.LogicalDevice, this->RenderPass, nullptr);
-        this->RenderPass = VK_NULL_HANDLE;
     }
 }

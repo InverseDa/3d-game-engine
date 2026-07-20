@@ -76,12 +76,13 @@ FRFGResourceHandle FRFGBuilder::CreateBuffer(const FString& ResourceName, const 
     return Handle;
 }
 
-FRFGResourceHandle FRFGBuilder::ImportTexture(const FString& ResourceName, FRALTexture* ExternalTexture)
+FRFGResourceHandle FRFGBuilder::ImportTexture(const FString& ResourceName, FRALTexture* ExternalTexture, ERALResourceState InitialState)
 {
     FRFGResourceNode ResourceNode;
     ResourceNode.Name = ResourceName;
     ResourceNode.Desc.Type = ERFGResourceType::Texture;
     ResourceNode.Flags = ERFGResourceFlags::Imported | ERFGResourceFlags::External;
+    ResourceNode.InitialState = InitialState;
     ResourceNode.ImportedTexture = ExternalTexture;
     if (ExternalTexture != nullptr)
     {
@@ -104,12 +105,13 @@ FRFGResourceHandle FRFGBuilder::ImportTexture(const FString& ResourceName, FRALT
     return Handle;
 }
 
-FRFGResourceHandle FRFGBuilder::ImportBuffer(const FString& ResourceName, FRALBuffer* ExternalBuffer)
+FRFGResourceHandle FRFGBuilder::ImportBuffer(const FString& ResourceName, FRALBuffer* ExternalBuffer, ERALResourceState InitialState)
 {
     FRFGResourceNode ResourceNode;
     ResourceNode.Name = ResourceName;
     ResourceNode.Desc.Type = ERFGResourceType::Buffer;
     ResourceNode.Flags = ERFGResourceFlags::Imported | ERFGResourceFlags::External;
+    ResourceNode.InitialState = InitialState;
     ResourceNode.ImportedBuffer = ExternalBuffer;
     if (ExternalBuffer != nullptr)
     {
@@ -225,6 +227,7 @@ FRFGGraphSignature FRFGBuilder::BuildSignature() const
 
         const bool bIsOutput = RecordedGraph.IsOutputResource(ResourceNode.Handle);
         HashValue(Hash, bIsOutput);
+        HashValue(Hash, static_cast<uint32>(ResourceNode.InitialState));
     }
 
     for (const FRFGPassHandle PassHandle : RecordedGraph.GetPassOrder())

@@ -27,8 +27,8 @@ public:
 public:
     FRFGResourceHandle CreateTexture(const FString& ResourceName, const FRFGTextureDesc& Desc);
     FRFGResourceHandle CreateBuffer(const FString& ResourceName, const FRFGBufferDesc& Desc);
-    FRFGResourceHandle ImportTexture(const FString& ResourceName, FRALTexture* ExternalTexture);
-    FRFGResourceHandle ImportBuffer(const FString& ResourceName, FRALBuffer* ExternalBuffer);
+    FRFGResourceHandle ImportTexture(const FString& ResourceName, FRALTexture* ExternalTexture, ERALResourceState InitialState);
+    FRFGResourceHandle ImportBuffer(const FString& ResourceName, FRALBuffer* ExternalBuffer, ERALResourceState InitialState);
 
 public:
     FRFGPassHandle AddPass(

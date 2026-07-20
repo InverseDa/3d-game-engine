@@ -44,7 +44,7 @@ public:
         BackBufferWrite.State = ERALResourceState::RenderTarget;
         BackBufferWrite.PipelineStage = ERFGPipelineStage::Graphics;
 
-        const FRFGResourceHandle BackBufferHandle = Context.GraphBridge->ImportTexture("BackBuffer", BackBufferView->GetTexture());
+        const FRFGResourceHandle BackBufferHandle = Context.GraphBridge->ImportTexture("BackBuffer", BackBufferView->GetTexture(), ERALResourceState::Undefined);
         Context.GraphBridge->Write(Context.PassHandle, BackBufferHandle, BackBufferWrite);
         Context.GraphBridge->MarkOutput(BackBufferHandle);
     }
@@ -100,7 +100,10 @@ public:
 
         GraphCmdList->SetGraphicsPipeline(MeshesToDraw.front()->GraphicsPipeline);
 
+        const FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
         FRALRenderPassDesc RenderPassDesc{};
+        RenderPassDesc.RenderArea.Width = TexDesc.Width;
+        RenderPassDesc.RenderArea.Height = TexDesc.Height;
         RenderPassDesc.ColorAttachmentCount = 1;
         RenderPassDesc.ColorAttachments[0].RenderTarget = BackBufferView;
         RenderPassDesc.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
@@ -112,7 +115,6 @@ public:
         RenderPassDesc.bHasDepthStencil = false;
         GraphCmdList->BeginRenderPass(RenderPassDesc);
 
-        const FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
         FRALViewport Viewport;
         Viewport.X = 0.0f;
         Viewport.Y = 0.0f;

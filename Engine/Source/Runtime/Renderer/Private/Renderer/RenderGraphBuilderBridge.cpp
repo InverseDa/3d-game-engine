@@ -7,7 +7,7 @@ FRenderGraphBuilderBridge::FRenderGraphBuilderBridge(FRFGBuilder& InBuilder)
 
 FRenderGraphBuilderBridge::~FRenderGraphBuilderBridge() = default;
 
-FRFGResourceHandle FRenderGraphBuilderBridge::ImportTexture(const FString& ResourceName, FRALTexture* Texture)
+FRFGResourceHandle FRenderGraphBuilderBridge::ImportTexture(const FString& ResourceName, FRALTexture* Texture, ERALResourceState InitialState)
 {
     if (Texture == nullptr)
     {
@@ -20,12 +20,12 @@ FRFGResourceHandle FRenderGraphBuilderBridge::ImportTexture(const FString& Resou
         return Found->second;
     }
 
-    const FRFGResourceHandle Handle = Builder->ImportTexture(ResourceName, Texture);
+    const FRFGResourceHandle Handle = Builder->ImportTexture(ResourceName, Texture, InitialState);
     ImportedTextures.emplace(Texture, Handle);
     return Handle;
 }
 
-FRFGResourceHandle FRenderGraphBuilderBridge::ImportBuffer(const FString& ResourceName, FRALBuffer* Buffer)
+FRFGResourceHandle FRenderGraphBuilderBridge::ImportBuffer(const FString& ResourceName, FRALBuffer* Buffer, ERALResourceState InitialState)
 {
     if (Buffer == nullptr)
     {
@@ -38,7 +38,7 @@ FRFGResourceHandle FRenderGraphBuilderBridge::ImportBuffer(const FString& Resour
         return Found->second;
     }
 
-    const FRFGResourceHandle Handle = Builder->ImportBuffer(ResourceName, Buffer);
+    const FRFGResourceHandle Handle = Builder->ImportBuffer(ResourceName, Buffer, InitialState);
     ImportedBuffers.emplace(Buffer, Handle);
     return Handle;
 }

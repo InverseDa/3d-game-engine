@@ -77,7 +77,7 @@ public:
         GraphicsWrite.State = ERALResourceState::RenderTarget;
         GraphicsWrite.PipelineStage = ERFGPipelineStage::Graphics;
 
-        const FRFGResourceHandle SceneColorHandle = Context.GraphBridge->ImportTexture("SceneColor", Desc.SceneColorTexture);
+        const FRFGResourceHandle SceneColorHandle = Context.GraphBridge->ImportTexture("SceneColor", Desc.SceneColorTexture, ERALResourceState::Undefined);
         Context.GraphBridge->Write(Context.PassHandle, SceneColorHandle, GraphicsWrite);
     }
 
@@ -126,7 +126,10 @@ public:
 
         GraphCmdList->SetGraphicsPipeline(MeshesToDraw.front()->GraphicsPipeline);
 
+        const FRALTextureDesc& TexDesc = Desc.SceneColorView->GetTexture()->GetDesc();
         FRALRenderPassDesc RenderPassDesc{};
+        RenderPassDesc.RenderArea.Width = TexDesc.Width;
+        RenderPassDesc.RenderArea.Height = TexDesc.Height;
         RenderPassDesc.ColorAttachmentCount = 1;
         RenderPassDesc.ColorAttachments[0].RenderTarget = Desc.SceneColorView;
         RenderPassDesc.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
@@ -138,7 +141,6 @@ public:
         RenderPassDesc.bHasDepthStencil = false;
         GraphCmdList->BeginRenderPass(RenderPassDesc);
 
-        const FRALTextureDesc& TexDesc = Desc.SceneColorView->GetTexture()->GetDesc();
         FRALViewport Viewport;
         Viewport.X = 0.0f;
         Viewport.Y = 0.0f;
@@ -207,8 +209,8 @@ public:
         GraphicsRead.ShaderStage = EShaderStage::Pixel;
         GraphicsRead.PipelineStage = ERFGPipelineStage::Graphics;
 
-        const FRFGResourceHandle BackBufferHandle = Context.GraphBridge->ImportTexture("BackBuffer", BackBufferView->GetTexture());
-        const FRFGResourceHandle SceneColorHandle = Context.GraphBridge->ImportTexture("SceneColor", Desc.SceneColorTexture);
+        const FRFGResourceHandle BackBufferHandle = Context.GraphBridge->ImportTexture("BackBuffer", BackBufferView->GetTexture(), ERALResourceState::Undefined);
+        const FRFGResourceHandle SceneColorHandle = Context.GraphBridge->ImportTexture("SceneColor", Desc.SceneColorTexture, ERALResourceState::Undefined);
         Context.GraphBridge->Read(Context.PassHandle, SceneColorHandle, GraphicsRead);
         Context.GraphBridge->Write(Context.PassHandle, BackBufferHandle, GraphicsWrite);
         Context.GraphBridge->MarkOutput(BackBufferHandle);
@@ -232,7 +234,10 @@ public:
         GraphCmdList->SetGraphicsPipeline(Desc.CompositePipeline);
         GraphCmdList->SetBindGroup(0, Desc.CompositeBindGroup);
 
+        const FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
         FRALRenderPassDesc RenderPassDesc{};
+        RenderPassDesc.RenderArea.Width = TexDesc.Width;
+        RenderPassDesc.RenderArea.Height = TexDesc.Height;
         RenderPassDesc.ColorAttachmentCount = 1;
         RenderPassDesc.ColorAttachments[0].RenderTarget = BackBufferView;
         RenderPassDesc.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
@@ -244,7 +249,6 @@ public:
         RenderPassDesc.bHasDepthStencil = false;
         GraphCmdList->BeginRenderPass(RenderPassDesc);
 
-        const FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
         FRALViewport Viewport;
         Viewport.X = 0.0f;
         Viewport.Y = 0.0f;

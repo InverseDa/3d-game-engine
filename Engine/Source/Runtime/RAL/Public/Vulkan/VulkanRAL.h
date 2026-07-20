@@ -29,8 +29,6 @@
     #include <vulkan/vulkan_metal.h>
 #endif
 
-#include <unordered_map>
-
 #if PLATFORM_WINDOWS
 #define VK_USE_PLATFORM_WIN32_KHR 1
 #endif
@@ -117,6 +115,8 @@ protected:
 struct FVulkanRALContext
 {
 public:
+    uint32 InstanceApiVersion = VK_API_VERSION_1_0;
+
     VkInstance Instance = VK_NULL_HANDLE;
     VkDevice LogicalDevice = VK_NULL_HANDLE;
     VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
@@ -126,6 +126,13 @@ public:
 
 public:
     uint32 GraphicsFamilyIndex = -1;
+
+public:
+    // ====== Dynamic Rendering
+    bool bDynamicRenderingEnabled = false;
+    bool bDynamicRenderingUsesKHR = false;
+    PFN_vkCmdBeginRendering CmdBeginRendering = nullptr;
+    PFN_vkCmdEndRendering CmdEndRendering = nullptr;
 
 public:
     // ====== Bindless
@@ -323,11 +330,8 @@ private:
 
 private:
     FVulkanRALPipeline_Graphics* CurrentPipeline = nullptr;
-    std::unordered_map<uint64, VkFramebuffer> FramebufferCache;
+    bool bInsideRendering = false;
     std::vector<VkImage> PendingPresentTransitionImages;
-
-private:
-    VkFramebuffer InternalGetFramebuffer(const FRALRenderPassDesc& Desc, VkRenderPass Pass, bool bIsCreate = false);
 };
 
 // ***********************************************************************************************
@@ -410,7 +414,6 @@ public:
 
 public:
     VkPipeline Pipeline = VK_NULL_HANDLE;
-    VkRenderPass RenderPass = VK_NULL_HANDLE;
     VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
 };
 

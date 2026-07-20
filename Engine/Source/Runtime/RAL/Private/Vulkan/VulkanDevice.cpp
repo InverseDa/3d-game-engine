@@ -228,6 +228,19 @@ FVulkanRALDevice::~FVulkanRALDevice()
 
 void FVulkanRALDevice::InternalCreateInstance()
 {
+    uint32 LoaderApiVersion = VK_API_VERSION_1_0;
+    const auto EnumerateInstanceVersion = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
+    if (EnumerateInstanceVersion != nullptr)
+    {
+        uint32 ReportedApiVersion = VK_API_VERSION_1_0;
+        if (EnumerateInstanceVersion(&ReportedApiVersion) == VK_SUCCESS)
+        {
+            LoaderApiVersion = ReportedApiVersion;
+        }
+    }
+
+    const uint32 RequestedApiVersion = LoaderApiVersion >= VK_API_VERSION_1_3 ? VK_API_VERSION_1_3 : VK_API_VERSION_1_2;
+
     VkApplicationInfo AppInfo{};
     {
         AppInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -235,8 +248,9 @@ void FVulkanRALDevice::InternalCreateInstance()
         AppInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0); // TODO: kodak
         AppInfo.pEngineName = "Limitless RAL"; // TODO: kodak
         AppInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0); // TODO: kodak
-        AppInfo.apiVersion = VK_API_VERSION_1_2;
+        AppInfo.apiVersion = RequestedApiVersion;
     }
+    this->VkContext.InstanceApiVersion = RequestedApiVersion;
 
     VkInstanceCreateInfo CreateInfo{};
     {
@@ -276,10 +290,12 @@ void FVulkanRALDevice::InternalCreateInstance()
     {
         LE_LOG(LogRAL, Error, "vkCreateInstance failed. VkResult={}", static_cast<int32>(Result));
         this->VkContext.Instance = VK_NULL_HANDLE;
+        this->VkContext.InstanceApiVersion = VK_API_VERSION_1_0;
         return;
     }
 
-    LE_LOG(LogRAL, Info, "Vulkan instance created. ApiVersion={}.{}.{}", 
+    LE_LOG(LogRAL, Info, "Vulkan instance created. LoaderApiVersion={}.{}.{}, RequestedApiVersion={}.{}.{}",
+        VK_VERSION_MAJOR(LoaderApiVersion), VK_VERSION_MINOR(LoaderApiVersion), VK_VERSION_PATCH(LoaderApiVersion),
         VK_VERSION_MAJOR(AppInfo.apiVersion), VK_VERSION_MINOR(AppInfo.apiVersion), VK_VERSION_PATCH(AppInfo.apiVersion));
 }
 
@@ -451,10 +467,13 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
     }
 
     VkPhysicalDeviceFeatures2 SupportedFeatures{};
+    VkPhysicalDeviceDynamicRenderingFeatures SupportedDynamicRenderingFeatures{};
     VkPhysicalDeviceDescriptorIndexingFeatures SupportedIndexingFeatures{};
     {
         SupportedFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        SupportedFeatures.pNext = &SupportedIndexingFeatures;
+        SupportedFeatures.pNext = &SupportedDynamicRenderingFeatures;
+        SupportedDynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+        SupportedDynamicRenderingFeatures.pNext = &SupportedIndexingFeatures;
         SupportedIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
         vkGetPhysicalDeviceFeatures2(this->VkContext.PhysicalDevice, &SupportedFeatures);
     }
@@ -468,6 +487,30 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
         VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion) > 1 ||
         (VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion) == 1 &&
          VK_VERSION_MINOR(PhysicalDeviceProperties.apiVersion) >= 2);
+
+    const bool bSupportsDynamicRenderingCore = this->VkContext.InstanceApiVersion >= VK_API_VERSION_1_3 && PhysicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
+    const bool bSupportsDynamicRenderingKHR = !bSupportsDynamicRenderingCore && HasDeviceExtension(this->VkContext.PhysicalDevice, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    const bool bCanEnableDynamicRendering = SupportedDynamicRenderingFeatures.dynamicRendering == VK_TRUE && (bSupportsDynamicRenderingCore || bSupportsDynamicRenderingKHR);
+
+    if (!bCanEnableDynamicRendering)
+    {
+        LE_LOG(LogRAL, Error,
+            "Dynamic rendering is required but unsupported. InstanceApi={}.{}.{}, DeviceApi={}.{}.{}, Feature={}, Core={}, KHR={}",
+            VK_VERSION_MAJOR(this->VkContext.InstanceApiVersion),
+            VK_VERSION_MINOR(this->VkContext.InstanceApiVersion),
+            VK_VERSION_PATCH(this->VkContext.InstanceApiVersion),
+            VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion),
+            VK_VERSION_MINOR(PhysicalDeviceProperties.apiVersion),
+            VK_VERSION_PATCH(PhysicalDeviceProperties.apiVersion),
+            SupportedDynamicRenderingFeatures.dynamicRendering == VK_TRUE,
+            bSupportsDynamicRenderingCore,
+            bSupportsDynamicRenderingKHR);
+        this->VkContext.LogicalDevice = VK_NULL_HANDLE;
+        this->VkContext.bBindlessSupported = false;
+        this->VkContext.bDynamicRenderingEnabled = false;
+        this->VkContext.bDynamicRenderingUsesKHR = false;
+        return;
+    }
 
     bool bSupportsDescriptorIndexingExt = false;
     if (!bSupportsDescriptorIndexingCore)
@@ -493,15 +536,22 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
         }
     }
 
+    VkPhysicalDeviceDynamicRenderingFeatures EnabledDynamicRenderingFeatures{};
+    {
+        EnabledDynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+        EnabledDynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+        EnabledDynamicRenderingFeatures.pNext = bCanEnableBindless ? &EnabledIndexingFeatures : nullptr;
+    }
+
     VkPhysicalDeviceFeatures2 DeviceFeatures{};
     {
         DeviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        DeviceFeatures.pNext = bCanEnableBindless ? &EnabledIndexingFeatures : nullptr;
+        DeviceFeatures.pNext = &EnabledDynamicRenderingFeatures;
         DeviceFeatures.features.samplerAnisotropy = SupportedFeatures.features.samplerAnisotropy;
     }
 
     std::vector<const char*> EnabledDeviceExtensions;
-    EnabledDeviceExtensions.reserve(RAL::Vulkan::DeviceExtensionCount + 1);
+    EnabledDeviceExtensions.reserve(RAL::Vulkan::DeviceExtensionCount + 3);
     for (uint32 i = 0; i < RAL::Vulkan::DeviceExtensionCount; ++i)
     {
         EnabledDeviceExtensions.push_back(RAL::Vulkan::DeviceExtensions[i]);
@@ -509,6 +559,10 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
     if (bCanEnableBindless && !bSupportsDescriptorIndexingCore)
     {
         EnabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+    }
+    if (bSupportsDynamicRenderingKHR)
+    {
+        EnabledDeviceExtensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
     }
 #if PLATFORM_MAC
     if (bSupportsPortabilitySubset)
@@ -532,12 +586,45 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
         LE_LOG(LogRAL, Error, "vkCreateDevice failed. VkResult={}", static_cast<int32>(Result));
         this->VkContext.LogicalDevice = VK_NULL_HANDLE;
         this->VkContext.bBindlessSupported = false;
+        this->VkContext.bDynamicRenderingEnabled = false;
+        this->VkContext.bDynamicRenderingUsesKHR = false;
+        return;
+    }
+
+    this->VkContext.bDynamicRenderingUsesKHR = bSupportsDynamicRenderingKHR;
+    const char* BeginRenderingProcName = bSupportsDynamicRenderingKHR ? "vkCmdBeginRenderingKHR" : "vkCmdBeginRendering";
+    const char* EndRenderingProcName = bSupportsDynamicRenderingKHR ? "vkCmdEndRenderingKHR" : "vkCmdEndRendering";
+    this->VkContext.CmdBeginRendering = reinterpret_cast<PFN_vkCmdBeginRendering>(
+        vkGetDeviceProcAddr(this->VkContext.LogicalDevice, BeginRenderingProcName));
+    this->VkContext.CmdEndRendering = reinterpret_cast<PFN_vkCmdEndRendering>(
+        vkGetDeviceProcAddr(this->VkContext.LogicalDevice, EndRenderingProcName));
+    if (this->VkContext.CmdBeginRendering == nullptr || this->VkContext.CmdEndRendering == nullptr)
+    {
+        LE_LOG(LogRAL, Error,
+            "Dynamic rendering command loading failed. Path={}, BeginProc={}, EndProc={}",
+            bSupportsDynamicRenderingKHR ? "KHR" : "Core",
+            this->VkContext.CmdBeginRendering != nullptr,
+            this->VkContext.CmdEndRendering != nullptr);
+        vkDestroyDevice(this->VkContext.LogicalDevice, nullptr);
+        this->VkContext.LogicalDevice = VK_NULL_HANDLE;
+        this->VkContext.bBindlessSupported = false;
+        this->VkContext.bDynamicRenderingEnabled = false;
+        this->VkContext.bDynamicRenderingUsesKHR = false;
+        this->VkContext.CmdBeginRendering = nullptr;
+        this->VkContext.CmdEndRendering = nullptr;
         return;
     }
 
     this->VkContext.bBindlessSupported = bCanEnableBindless;
-    LE_LOG(LogRAL, Info, "Logical device created. BindlessSupported={} (coreIndexing={}, extIndexing={}, portabilitySubset={})",
-        this->VkContext.bBindlessSupported, bSupportsDescriptorIndexingCore, bSupportsDescriptorIndexingExt, bSupportsPortabilitySubset);
+    this->VkContext.bDynamicRenderingEnabled = true;
+    LE_LOG(LogRAL, Info,
+        "Logical device created. DynamicRendering={} (path={}), BindlessSupported={} (coreIndexing={}, extIndexing={}, portabilitySubset={})",
+        this->VkContext.bDynamicRenderingEnabled,
+        this->VkContext.bDynamicRenderingUsesKHR ? "KHR" : "Core",
+        this->VkContext.bBindlessSupported,
+        bSupportsDescriptorIndexingCore,
+        bSupportsDescriptorIndexingExt,
+        bSupportsPortabilitySubset);
 }
 
 FRALSwapchain* FVulkanRALDevice::InternalCreateSwapchain(const FRALSwapchainDesc& InDesc)
@@ -725,7 +812,7 @@ FRALPipeline_Graphics* FVulkanRALDevice::CreateGraphicsPipeline(const FRALPipeli
     }
 
     FVulkanRALPipeline_Graphics* Pipeline = new FVulkanRALPipeline_Graphics(this, Desc);
-    if (Pipeline->Pipeline == VK_NULL_HANDLE || Pipeline->PipelineLayout == VK_NULL_HANDLE || Pipeline->RenderPass == VK_NULL_HANDLE)
+    if (Pipeline->Pipeline == VK_NULL_HANDLE || Pipeline->PipelineLayout == VK_NULL_HANDLE)
     {
         LE_LOG(LogRAL, Error, "CreateGraphicsPipeline failed: invalid Vulkan pipeline handles.");
         delete Pipeline;

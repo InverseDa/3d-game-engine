@@ -87,18 +87,21 @@ void FRFGBarrierPlanner::BuildBarriers(const FRFGRecordedGraph& RecordedGraph, F
         for (const FRFGPassResourceAccess& ResourceAccess : PassNode.ResourceAccesses)
         {
             FLastResourceState& LastState = LastStates[ResourceAccess.Resource.Id];
+            const FRFGResourceNode& ResourceNode = RecordedGraph.GetResourceNode(ResourceAccess.Resource);
+            const ERALResourceState BeforeState = LastState.bInitialized ? LastState.ResourceState : ResourceNode.InitialState;
             const bool bNeedsBarrier =
-                LastState.bInitialized &&
-                (LastState.Queue != CompiledPass.Queue ||
-                 LastState.ResourceState != ResourceAccess.Access.State ||
+                (!LastState.bInitialized && ResourceAccess.Access.State != ERALResourceState::Undefined) ||
+                (LastState.bInitialized &&
+                 (LastState.Queue != CompiledPass.Queue ||
+                 BeforeState != ResourceAccess.Access.State ||
                  AccessHasWrite(LastState.Access) ||
-                 AccessHasWrite(ResourceAccess.Access.Access));
+                 AccessHasWrite(ResourceAccess.Access.Access)));
 
             if (bNeedsBarrier)
             {
                 FRFGBarrierTransition Transition;
                 Transition.Resource = ResourceAccess.Resource;
-                Transition.BeforeState = LastState.ResourceState;
+                Transition.BeforeState = BeforeState;
                 Transition.AfterState = ResourceAccess.Access.State;
                 Transition.BeforeShaderStage = LastState.ShaderStage;
                 Transition.AfterShaderStage = ResourceAccess.Access.ShaderStage;
