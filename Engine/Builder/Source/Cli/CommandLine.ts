@@ -8,6 +8,7 @@ import { ModuleLoader, TargetLoader } from "../Discovery/ModuleLoader.ts";
 import { DependencyGraph } from "../Graph/DependencyGraph.ts";
 import { EnginePaths, FindProjectRoot, ToPosixPath } from "../Project/EnginePaths.ts";
 import { VcxprojGenerator } from "../Project/VcxprojGenerator.ts";
+import { XcodeProjectGenerator } from "../Project/XcodeProjectGenerator.ts";
 import { MSVCToolchain } from "../Toolchain/MSVCToolchain.ts";
 import type { IToolchain } from "../Toolchain/IToolchain.ts";
 import { Logger } from "../Utilities/Logger.ts";
@@ -101,6 +102,7 @@ Commands:
     generate [options]        Generate build.ninja + compile_commands.json
     build [options]           Generate and run ninja
     sln [options]             Generate Visual Studio .sln + .vcxproj
+    xcode [options]           Generate a native Xcode project for macOS
     help                      Show this help message
 
 Options:
@@ -114,6 +116,7 @@ Examples:
     limitless-builder list modules
     limitless-builder generate --platform Win64 --config Debug --type Game
     limitless-builder build --platform Win64 --config Debug --type Game
+    limitless-builder xcode --platform Mac --config Debug --type Game
 `);
 }
 
@@ -232,6 +235,25 @@ async function GenerateSolution(Paths: EnginePaths, Flags: Record<string, string
     Logger.Dim("    Open in Visual Studio and press F7 to build.");
 }
 
+async function GenerateXcodeProject(Paths: EnginePaths, Flags: Record<string, string>): Promise<void> {
+    const Target = ParseTarget(Flags);
+    Logger.Info(`Target: ${Target.Platform} / ${Target.Optimization} / ${Target.TargetType}`);
+    if (Target.Platform !== Platform.Mac) {
+        throw new Error(`Xcode project generation requires --platform Mac.`);
+    }
+
+    const Modules = await new ModuleLoader(Paths.SourceDirectory).DiscoverModules();
+    if (Modules.length === 0) {
+        throw new Error("No modules found.");
+    }
+    const Graph = new DependencyGraph(Modules, Target);
+    const ProjectPath = await new XcodeProjectGenerator(Paths).Generate(Graph.Build(), Target);
+    console.log("");
+    Logger.Success("Generated Xcode project:");
+    Logger.Dim(`    ${ToPosixPath(ProjectPath)}`);
+    Logger.Dim("    Open it in Xcode or run xcodebuild -project LimitlessEngine.xcodeproj -scheme LimitlessEngine.");
+}
+
 async function Main(): Promise<void> {
     const Arguments = ParseArguments(process.argv);
     const Paths = new EnginePaths(FindProjectRoot(process.cwd()));
@@ -253,6 +275,9 @@ async function Main(): Promise<void> {
             break;
         case "sln":
             await GenerateSolution(Paths, Arguments.Flags);
+            break;
+        case "xcode":
+            await GenerateXcodeProject(Paths, Arguments.Flags);
             break;
         case "help":
         case "--help":

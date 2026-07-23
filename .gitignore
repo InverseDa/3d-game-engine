@@ -438,6 +438,7 @@ FodyWeavers.xsd
 Engine/binaries/
 Intermediate/
 LimitlessEngine.sln
+LimitlessEngine.xcodeproj/
 skills/
 solution/
 temp/

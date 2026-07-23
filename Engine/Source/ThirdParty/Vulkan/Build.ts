@@ -31,10 +31,18 @@ export default class VulkanBuild extends ModuleBuild {
 
         if (Target.Platform === "Mac") {
             const Sdk = process.env.VULKAN_SDK;
-            const LibraryPath = Sdk ? Path.join(Sdk, "lib") : "";
-            if (LibraryPath && Fs.existsSync(LibraryPath)) {
-                Configuration.LibraryPaths.push(LibraryPath);
-                Configuration.LibraryFiles.push("vulkan");
+            const CandidateLibraryPaths = [
+                Sdk ? Path.join(Sdk, "lib") : "",
+                "/opt/homebrew/opt/vulkan-loader/lib",
+                "/opt/homebrew/lib",
+                "/usr/local/lib",
+            ];
+            for (const LibraryPath of CandidateLibraryPaths) {
+                if (LibraryPath && Fs.existsSync(Path.join(LibraryPath, "libvulkan.dylib"))) {
+                    Configuration.LibraryPaths.push(LibraryPath);
+                    Configuration.LibraryFiles.push("vulkan");
+                    break;
+                }
             }
         }
     }

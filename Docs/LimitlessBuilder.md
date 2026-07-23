@@ -414,7 +414,7 @@ export function deriveApiMacro(
 | 配置文件 | `.Build.cs` / `.Target.cs` | `Build.ts` / `.target.ts` |
 | 加载机制 | Roslyn 反射 | ES Module 动态 import |
 | 后端 | vcxproj (IDE) + 直接 spawn (CLI) | ninja (当前) + ActionGraph (未来) |
-| IDE 工程 | 生成 vcxproj + xcodeproj | 不生成，只产 compile_commands.json |
+| IDE 工程 | 生成 vcxproj + xcodeproj | 生成轻量 VS 工程和原生 Xcode 工程 |
 | 增量编译 | 自管 `.lastbuildinfo` 哈希 | ninja mtime (当前) + 自管 SQLite (未来) |
 | Unity Build | ✅ 内置 | ❌ 后期 |
 | PCH | ✅ 自动管理 | ❌ 后期 |
@@ -467,6 +467,7 @@ export function deriveApiMacro(
 - [ ] 实现 Mac 平台规则（`arm64`、`AppKit/QuartzCore` framework）
 - [ ] 实现 `.mm` / `.m` 文件编译支持
 - [ ] 平台源文件排除（`MacWindow.mm` vs `WindowsWindow.cpp`）
+- [x] 从 `Build.ts` 生成原生 Xcode 工程
 
 **验收**：在 macOS 上用 LimitlessBuilder 编译出 `LimitlessGame` 可执行文件。
 
@@ -483,7 +484,7 @@ export function deriveApiMacro(
 |------|------|------|
 | 配置文件语言 | TypeScript | 用户偏好；与项目其他工具链统一；类型系统够用 |
 | 后端 | ninja (Strategy 接口预留) | 快速拿到 UBT CLI 级性能，不被 ninja 绑死 |
-| IDE 工程 | 不生成 | 用户已选 VSCode/CLion；省一半工作量 |
+| IDE 工程 | 按平台生成 | 保留 LB 的模块配置为单一事实来源，同时支持 VS/Xcode 开发体验 |
 | 配置文件后缀 | `Build.ts` / `.target.ts` | 直观，与 Sharpmake 的 `.Build.cs` 一一对应 |
 | 分发方式 | 单一编译产物 (bun/pkg) | 开发者无需装 Node |
 | 增量编译 | 先用 ninja 内置，后期自管 SQLite | 不过度设计 |
