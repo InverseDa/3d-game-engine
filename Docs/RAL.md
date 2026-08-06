@@ -125,7 +125,7 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
   - 固定状态：`BlendState`、`DepthStencilState`、`RasterizerState`。
   - BindGroup 布局：`BindGroupLayouts` 数组。
   - Render Target 格式：最多 8 个 `RenderTargetFormats` + `DepthStencilFormat`。
-- **Vulkan 实现**：`FVulkanRALPipeline_Graphics` 创建 `VkPipelineLayout`、`VkRenderPass`（内部极简 Render Pass，目前 LoadOp 固定为 Clear，StoreOp 固定为 Store）与 `VkPipeline`。动态状态仅包含 Viewport 与 Scissor。
+- **Vulkan 实现**：`FVulkanRALPipeline_Graphics` 创建 `VkPipelineLayout` 与基于 Dynamic Rendering 的 `VkPipeline`，管线描述可声明 0–8 个颜色附件以及可选的 `D32_FLOAT` / `D24_UNORM_S8_UINT` 深度模板附件。动态状态仅包含 Viewport 与 Scissor。
 
 ### 4.5 BindGroup / BindGroupLayout（FRALBindGroup / FRALBindGroupLayout）
 
@@ -188,7 +188,7 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 | 阶段/命令 | 说明 |
 |----------|------|
 | `Begin()` / `End()` | 开始/结束命令记录。 |
-| `BeginRenderPass()` / `EndRenderPass()` | Render Pass 范围；Begin 依赖当前已绑定的 Pipeline 中的 `VkRenderPass`。 |
+| `BeginRenderPass()` / `EndRenderPass()` | Dynamic Rendering 范围；Begin 校验当前 Pipeline 与颜色/深度模板附件的数量、格式和尺寸。 |
 | `SetGraphicsPipeline()` | 绑定图形管线。 |
 | `SetViewport()` / `SetScissorRect()` | 动态设置视口与裁剪矩形。 |
 | `SetVertexBuffer()` / `SetIndexBuffer()` | 绑定顶点/索引缓冲；索引格式支持 `R32_UINT` 与 `R16_UINT`。 |
@@ -196,7 +196,7 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 | `SetPushConstants()` | 设置 Push Constant 数据。 |
 | `Draw()` / `DrawIndexed()` | 绘制调用。 |
 
-- **Vulkan 实现**：`FVulkanRALCommandList` 管理 `VkCommandPool` + `VkCommandBuffer`（Primary，单次提交）。`BeginRenderPass` 内部根据附件自动创建/缓存 `VkFramebuffer`（基于 RenderPass 与附件视图指针的哈希缓存）。`EndRenderPass` 会自动为 Swapchain 图像插入 `COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR` 的 Pipeline Barrier。
+- **Vulkan 实现**：`FVulkanRALCommandList` 管理 `VkCommandPool` + `VkCommandBuffer`（Primary，单次提交）。`BeginRenderPass` 组装 `VkRenderingInfo`，支持 single-RT、最多 8 路 MRT、depth-only 以及 color + depth/stencil；`D24_UNORM_S8_UINT` 的 depth/stencil 共用同一附件描述。Dynamic Rendering 不负责资源状态转换，调用方必须在 Begin 前通过 RAL/RFG barrier 将颜色附件转换到 `RenderTarget`、将当前可写深度模板附件转换到 `DepthStencilWrite`。`EndRenderPass` 会自动为 Swapchain 图像插入 `COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR` 的 Pipeline Barrier。
 
 ---
 
@@ -255,9 +255,13 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 2. **无多线程命令录制**：`FRALCommandList` 未暴露线程安全或 Secondary Command Buffer 支持，当前所有录制均发生在主线程。
 3. **Validation 硬编码开关**：`LE_RAL_ENABLE_VALIDATION` 宏在 `RALTypes.h` 中硬编码为 `1`，无法通过运行时配置关闭。
 4. **单一 Graphics Queue**：当前仅创建并使用一个 Graphics Queue，无独立的 Compute/Transfer Queue 实现（`EQueueType` 参数被忽略）。
-5. **Render Pass 极简**：`FVulkanRALPipeline_Graphics` 内部创建的 `VkRenderPass` 固定为单 Subpass、Clear LoadOp、Store StoreOp，未暴露 Render Pass 复用或 Subpass 依赖配置。
+5. **Dynamic Rendering 范围有限**：已覆盖 0–8 个颜色附件与 `D32_FLOAT` / `D24_UNORM_S8_UINT`，但尚未支持 Resolve、MSAA、分层渲染、独立 stencil 状态或只读 depth/stencil 的完整管线策略。
 6. **BlendState 未完整实现**：`FRALBlendStateDesc` 仅包含 `bEnable` 布尔值，无独立颜色/Alpha 混合因子与操作配置。
 7. **Bindless 分配策略占位**：`FVulkanRALDevice::AllocateBindlessIndex()` 使用简单的静态递增计数器，无空闲索引回收，存在溢出风险。
-8. **Framebuffer 缓存无上限**：`FVulkanRALCommandList` 的 `FramebufferCache` 只增不减，长时间运行可能导致句柄累积。
+8. **资源状态由调用方负责**：Dynamic Rendering 不隐式转换 image layout；缺少 RAL barrier 或 RFG `DepthStencilWrite` 声明会触发 Vulkan Validation 错误。
 9. **Swapchain 同步简化**：`Present()` 未等待 `RenderFinished` 信号量，依赖调用方在提交后执行 `Queue->WaitIdle()`，无法充分利用 GPU 并行性。
 10. **Buffer 共享模式固定**：`FVulkanRALBuffer` 创建时 `sharingMode` 固定为 `VK_SHARING_MODE_EXCLUSIVE`，未处理跨 Queue Family 共享场景。
+
+## 10. P0 冻结状态
+
+RFG/RAL P0 已于 2026-08-06 完成 single-RT、dual-MRT、depth/stencil 与 offscreen-composite 验证。验收矩阵、复现方式和 Vulkan Validation 结果见 [RenderFoundationP0.md](RenderFoundationP0.md)。冻结后不在 P0 上继续添加渲染能力；后续帧同步、资源回收和真实 BasePass 分别进入 Roadmap 的后续阶段。

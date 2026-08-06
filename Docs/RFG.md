@@ -399,3 +399,7 @@ Instance.Execute(Result, Builder.GetRecordedGraph(), ExecCtx);
 - **Resource Aliasing Allocator**：在 `PrepareResources` 中引入基于 `FRFGCompiledResourceLife` 的内存别名分配器，复用 `FRALDevice` 的 Heap/Pool 接口。
 - **子资源屏障细化**：当前 `FRFGBarrierTransition` 已携带 `BaseMipLevel` / `MipCount` / `BaseArrayLayer` / `LayerCount`，但 `BuildBarriers` 尚未按子资源拆分，未来可扩展为细粒度 Mip/Slice 级屏障。
 - **自动根签名/描述符推导**：结合 RAL 的 PipelineState，从 `FRFGPassNode::ResourceAccesses` 自动生成 DescriptorSet / RootSignature 绑定。
+
+## 9. P0 冻结状态
+
+RFG/RAL P0 已于 2026-08-06 关闭并冻结。当前执行路径已通过 single-RT、dual-MRT、depth/stencil 与 offscreen-composite 的 Vulkan Validation 验收；深度模板写入必须在 Pass 资源声明中使用 `ERALResourceState::DepthStencilWrite`，由 BarrierPlanner 在 Dynamic Rendering 开始前生成显式转换。验收记录与复现步骤见 [RenderFoundationP0.md](RenderFoundationP0.md)。

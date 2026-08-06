@@ -268,6 +268,14 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
     }
 
     const VkFormat DepthStencilFormat = ToVkFormat(this->Desc.DepthStencilFormat);
+    if (this->Desc.DepthStencilFormat != EPixelFormat::Unknown &&
+        this->Desc.DepthStencilFormat != EPixelFormat::D32_FLOAT &&
+        this->Desc.DepthStencilFormat != EPixelFormat::D24_UNORM_S8_UINT)
+    {
+        LE_LOG(LogRAL, Error, "Pipeline creation failed: invalid depth/stencil format={}.", static_cast<uint32>(this->Desc.DepthStencilFormat));
+        return;
+    }
+
     VkPipelineRenderingCreateInfo RenderingInfo{};
     {
         RenderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;

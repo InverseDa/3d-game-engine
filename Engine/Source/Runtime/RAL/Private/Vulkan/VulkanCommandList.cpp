@@ -107,6 +107,11 @@ VkImageAspectFlags GetTextureAspectMask(const FRALTextureDesc& Desc)
         : VK_IMAGE_ASPECT_DEPTH_BIT;
 }
 
+bool IsDepthStencilFormat(EPixelFormat Format)
+{
+    return Format == EPixelFormat::D32_FLOAT || Format == EPixelFormat::D24_UNORM_S8_UINT;
+}
+
 VkAttachmentLoadOp ToVkAttachmentLoadOp(EAttachmentLoadOp Op)
 {
     switch (Op)
@@ -348,15 +353,24 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         LE_LOG(LogRAL, Error, "BeginRenderPass failed: graphics pipeline is invalid.");
         return;
     }
-    if (Desc.ColorAttachmentCount == 0 || Desc.ColorAttachmentCount > 8 || Desc.bHasDepthStencil)
+    if (Desc.ColorAttachmentCount > 8 || (Desc.ColorAttachmentCount == 0 && !Desc.bHasDepthStencil))
     {
-        LE_LOG(LogRAL, Error, "BeginRenderPass failed: this stage requires 1-8 color attachments and does not yet support depth/stencil. Colors={}, HasDepthStencil={}.", Desc.ColorAttachmentCount, Desc.bHasDepthStencil);
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: rendering requires at least one color or depth/stencil attachment. Colors={}, HasDepthStencil={}.",
+            Desc.ColorAttachmentCount, Desc.bHasDepthStencil);
         return;
     }
     const FRALPipelineDesc_Graphics& PipelineDesc = this->CurrentPipeline->GetDesc();
     if (PipelineDesc.RenderTargetCount != Desc.ColorAttachmentCount)
     {
-        LE_LOG(LogRAL, Error, "BeginRenderPass failed: attachment count does not match pipeline. Pass={}, Pipeline={}.", Desc.ColorAttachmentCount, PipelineDesc.RenderTargetCount);
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: attachment count does not match pipeline. Pass={}, Pipeline={}.",
+            Desc.ColorAttachmentCount, PipelineDesc.RenderTargetCount);
+        return;
+    }
+    const bool bPipelineHasDepthStencil = PipelineDesc.DepthStencilFormat != EPixelFormat::Unknown;
+    if (bPipelineHasDepthStencil != Desc.bHasDepthStencil)
+    {
+        LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment presence does not match pipeline. Pass={}, Pipeline={}.",
+            Desc.bHasDepthStencil, bPipelineHasDepthStencil);
         return;
     }
 
@@ -377,7 +391,8 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         const EPixelFormat ViewFormat = View->GetDesc().Format != EPixelFormat::Unknown ? View->GetDesc().Format : TextureDesc.Format;
         if (ViewFormat != PipelineDesc.RenderTargetFormats[i])
         {
-            LE_LOG(LogRAL, Error, "BeginRenderPass failed: color attachment {} format does not match pipeline. View={}, Pipeline={}.", i, static_cast<uint32>(ViewFormat), static_cast<uint32>(PipelineDesc.RenderTargetFormats[i]));
+            LE_LOG(LogRAL, Error, "BeginRenderPass failed: color attachment {} format does not match pipeline. View={}, Pipeline={}.",
+                i, static_cast<uint32>(ViewFormat), static_cast<uint32>(PipelineDesc.RenderTargetFormats[i]));
             return;
         }
 
@@ -427,6 +442,59 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         }
     }
 
+    VkRenderingAttachmentInfo DepthStencilAttachment{};
+    if (Desc.bHasDepthStencil)
+    {
+        FVulkanRALTextureView* View = static_cast<FVulkanRALTextureView*>(Desc.DepthStencilAttachment.DepthStencilTarget);
+        if (View == nullptr || View->Owner == nullptr || View->View == VK_NULL_HANDLE)
+        {
+            LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment is invalid.");
+            this->PendingPresentTransitionImages.clear();
+            return;
+        }
+
+        const FRALTextureDesc& TextureDesc = View->Owner->GetDesc();
+        const EPixelFormat ViewFormat = View->GetDesc().Format != EPixelFormat::Unknown ? View->GetDesc().Format : TextureDesc.Format;
+        if (!TextureDesc.bIsDepthStencil || !IsDepthStencilFormat(ViewFormat))
+        {
+            LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment does not use a supported depth/stencil format. Format={}.",
+                static_cast<uint32>(ViewFormat));
+            this->PendingPresentTransitionImages.clear();
+            return;
+        }
+        if (ViewFormat != PipelineDesc.DepthStencilFormat)
+        {
+            LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment format does not match pipeline. View={}, Pipeline={}.",
+                static_cast<uint32>(ViewFormat), static_cast<uint32>(PipelineDesc.DepthStencilFormat));
+            this->PendingPresentTransitionImages.clear();
+            return;
+        }
+
+        const uint32 MipSlice = View->GetDesc().MipSlice;
+        const uint32 ViewWidth = std::max(1u, TextureDesc.Width >> MipSlice);
+        const uint32 ViewHeight = std::max(1u, TextureDesc.Height >> MipSlice);
+        if (AttachmentWidth == 0 && AttachmentHeight == 0)
+        {
+            AttachmentWidth = ViewWidth;
+            AttachmentHeight = ViewHeight;
+        }
+        else if (AttachmentWidth != ViewWidth || AttachmentHeight != ViewHeight)
+        {
+            LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment extent does not match color attachments.");
+            this->PendingPresentTransitionImages.clear();
+            return;
+        }
+
+        DepthStencilAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        DepthStencilAttachment.imageView = View->View;
+        DepthStencilAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        DepthStencilAttachment.resolveMode = VK_RESOLVE_MODE_NONE;
+        DepthStencilAttachment.loadOp = ToVkAttachmentLoadOp(Desc.DepthStencilAttachment.LoadOp);
+        DepthStencilAttachment.storeOp = ToVkAttachmentStoreOp(Desc.DepthStencilAttachment.StoreOp);
+        DepthStencilAttachment.clearValue.depthStencil.depth = Desc.DepthStencilAttachment.ClearDepth;
+        DepthStencilAttachment.clearValue.depthStencil.stencil = Desc.DepthStencilAttachment.ClearStencil;
+    }
+
     if (Desc.RenderArea.X < 0 || Desc.RenderArea.Y < 0 ||
         static_cast<uint32>(Desc.RenderArea.X) >= AttachmentWidth ||
         static_cast<uint32>(Desc.RenderArea.Y) >= AttachmentHeight)
@@ -454,7 +522,11 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         Info.renderArea.extent = { RenderWidth, RenderHeight };
         Info.layerCount = 1;
         Info.colorAttachmentCount = static_cast<uint32>(ColorAttachments.size());
-        Info.pColorAttachments = ColorAttachments.data();
+        Info.pColorAttachments = ColorAttachments.empty() ? nullptr : ColorAttachments.data();
+        Info.pDepthAttachment = Desc.bHasDepthStencil ? &DepthStencilAttachment : nullptr;
+        Info.pStencilAttachment = Desc.bHasDepthStencil && PipelineDesc.DepthStencilFormat == EPixelFormat::D24_UNORM_S8_UINT
+            ? &DepthStencilAttachment
+            : nullptr;
     }
     this->Device->VkContext.CmdBeginRendering(this->Handle, &Info);
     this->bInsideRendering = true;
@@ -635,4 +707,3 @@ void FVulkanRALCommandList::SetPushConstants(EShaderStage Stage, const void* Dat
 
     vkCmdPushConstants(this->Handle, this->CurrentPipeline->PipelineLayout, StageFlags, 0, Size, Data);
 }
-
