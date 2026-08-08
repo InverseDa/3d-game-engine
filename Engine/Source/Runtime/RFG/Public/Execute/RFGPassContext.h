@@ -15,6 +15,7 @@ class FRALTexture;
 class FRALBuffer;
 class FRFGRecordedGraph;
 class FRFGCompiledPlan;
+class IRFGDeferredReleaseSink;
 
 struct FRFGExecutionContext
 {
@@ -35,6 +36,7 @@ struct FRFGExecutionContext
     }
 
     void ResetTransientResources();
+    bool TransferTransientResources(IRFGDeferredReleaseSink& DeferredReleaseSink) noexcept;
 
     LE::HashMap<uint32, LE::FRALTexture*> TextureResources;
     LE::HashMap<uint32, LE::FRALBuffer*> BufferResources;

@@ -6,13 +6,29 @@
 #include "Renderer/RenderScene.h"
 #include "RAL/RALDevice.h"
 #include "RAL/RALQueue.h"
-#include "RAL/RALSwapchain.h"
 
 namespace LE
 {
 
 namespace
 {
+class FRFGFrameSlotReleaseSink final : public IRFGDeferredReleaseSink
+{
+public:
+    explicit FRFGFrameSlotReleaseSink(FRenderFrameScope& InFrameScope) noexcept
+        : FrameScope(InFrameScope)
+    {
+    }
+
+    bool DeferRelease(FRALResource* const Resource) noexcept override
+    {
+        return FrameScope.DeferRelease(Resource);
+    }
+
+private:
+    FRenderFrameScope& FrameScope;
+};
+
 FRenderView BuildDefaultRenderView()
 {
     FRenderView View;
@@ -57,18 +73,21 @@ bool FRenderer::IsInitialized() const
     return bInitialized;
 }
 
-void FRenderer::RenderFrame(const FRendererFrameContext& FrameContext, const FRenderScene* RenderScene)
+ERenderFrameRecordResult FRenderer::RenderFrame(
+    const FRendererFrameContext& FrameContext,
+    const FRenderScene* RenderScene)
 {
     static const FRenderScene EmptyRenderScene;
 
     if (!bInitialized)
     {
-        return;
+        return ERenderFrameRecordResult::InvalidArguments;
     }
 
-    if (FrameContext.Device == nullptr || FrameContext.CommandList == nullptr || FrameContext.Pipeline == nullptr)
+    if (FrameContext.Device == nullptr || FrameContext.CommandList == nullptr ||
+        FrameContext.FrameScope == nullptr || FrameContext.Pipeline == nullptr)
     {
-        return;
+        return ERenderFrameRecordResult::InvalidArguments;
     }
 
     const FRenderScene& EffectiveRenderScene = RenderScene != nullptr ? *RenderScene : EmptyRenderScene;
@@ -79,7 +98,7 @@ void FRenderer::RenderFrame(const FRendererFrameContext& FrameContext, const FRe
     FrameContext.Pipeline->BuildPasses(FrameContext, EffectiveRenderScene, EffectiveView, PipelinePlan);
     if (PipelinePlan.Passes.IsEmpty())
     {
-        return;
+        return ERenderFrameRecordResult::InvalidArguments;
     }
 
     LE::FRFGBuilder Builder = GraphInstance.CreateBuilder();
@@ -129,14 +148,19 @@ void FRenderer::RenderFrame(const FRendererFrameContext& FrameContext, const FRe
     ExecutionContext.CommandList = FrameContext.CommandList;
 
     LE::FRFGExecuteOptions ExecuteOptions;
-    ExecuteOptions.bSubmitImmediately = true;
-    ExecuteOptions.bWaitForCompletion = true;
-    GraphInstance.Execute(CompileResult, Builder.GetRecordedGraph(), ExecutionContext, ExecuteOptions);
-
-    if (FrameContext.bPresentAfterRender && FrameContext.Swapchain != nullptr)
+    ExecuteOptions.bSubmitImmediately = false;
+    ExecuteOptions.bWaitForCompletion = false;
+    FRFGFrameSlotReleaseSink DeferredReleaseSink(*FrameContext.FrameScope);
+    ExecuteOptions.DeferredReleaseSink = &DeferredReleaseSink;
+    const ERALQueueSubmitResult RecordResult = GraphInstance.Execute(
+        CompileResult, Builder.GetRecordedGraph(), ExecutionContext, ExecuteOptions);
+    if (RecordResult == ERALQueueSubmitResult::Success)
     {
-        FrameContext.Swapchain->Present();
+        return ERenderFrameRecordResult::Success;
     }
+    return RecordResult == ERALQueueSubmitResult::InvalidArguments
+        ? ERenderFrameRecordResult::InvalidArguments
+        : ERenderFrameRecordResult::Error;
 }
 
 LE::FRFGInstance& FRenderer::GetGraphInstance()

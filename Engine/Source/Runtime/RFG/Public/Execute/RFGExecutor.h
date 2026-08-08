@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Execute/RFGDeferredReleaseSink.h"
 
 namespace LE
 {
@@ -8,11 +9,16 @@ namespace LE
 class FRFGRecordedGraph;
 class FRFGCompiledPlan;
 struct FRFGExecutionContext;
+struct FRALSubmitInfo;
+enum class ERALQueueSubmitResult : uint8;
 
 struct FRFGExecuteOptions
 {
     bool bSubmitImmediately = true;
     bool bWaitForCompletion = false;
+    const FRALSubmitInfo* SubmitInfo = nullptr;
+    /** Borrowed only for the duration of Execute; RFG never retains or deletes it. */
+    IRFGDeferredReleaseSink* DeferredReleaseSink = nullptr;
 };
 
 class RFG_API FRFGExecutor
@@ -22,7 +28,7 @@ public:
     ~FRFGExecutor() = default;
 
 public:
-    void Execute(
+    ERALQueueSubmitResult Execute(
         const FRFGCompiledPlan& CompiledPlan,
         const FRFGRecordedGraph& RecordedGraph,
         FRFGExecutionContext& ExecutionContext,

@@ -5,6 +5,7 @@
 #include "RenderScene.h"
 #include "RenderView.h"
 #include "RendererFrameContext.h"
+#include "RenderFrameScheduler.h"
 #include "RenderPass.h"
 #include "RenderPipeline.h"
 #include "DemoRenderPipelines.h"

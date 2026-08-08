@@ -7,7 +7,7 @@
 #include "RAL/RALCommandList.h"
 #include "RAL/RALDescription.h"
 #include "RAL/RALBindGroup.h"
-#include "RAL/RALSwapchain.h"
+#include "RAL/RALTexture.h"
 #include "Execute/RFGPassContext.h"
 
 #include <algorithm>
@@ -193,7 +193,7 @@ public:
 
     void Setup(FRenderPassSetupContext& Context) override
     {
-        LE::FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
+        LE::FRALTextureView* BackBufferView = Desc.BackBufferView;
         if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr ||
             !RendererDemoPasses::IsCompositeConfigurationValid(Desc, Context.RenderScene))
         {
@@ -220,7 +220,7 @@ public:
 
     void Record(FRenderPassRecordContext& Context) override
     {
-        LE::FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
+        LE::FRALTextureView* BackBufferView = Desc.BackBufferView;
         if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr ||
             !RendererDemoPasses::IsCompositeConfigurationValid(Desc, Context.RenderScene))
         {

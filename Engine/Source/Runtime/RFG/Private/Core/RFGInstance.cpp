@@ -1,6 +1,7 @@
 #include "Core/RFGInstance.h"
 
 #include "Core/RFGRuntime.h"
+#include "RAL/RALQueue.h"
 
 namespace LE
 {
@@ -60,7 +61,7 @@ FRFGCompileResult FRFGInstance::Compile(const FRFGRecordedGraph& RecordedGraph, 
     return Runtime != nullptr ? Runtime->Compile(RecordedGraph, Signature) : FRFGCompileResult{};
 }
 
-void FRFGInstance::Execute(
+ERALQueueSubmitResult FRFGInstance::Execute(
     const FRFGCompileResult& CompileResult,
     const FRFGRecordedGraph& RecordedGraph,
     FRFGExecutionContext& ExecutionContext,
@@ -68,10 +69,10 @@ void FRFGInstance::Execute(
 {
     if (Executor == nullptr || !CompileResult.Plan)
     {
-        return;
+        return ERALQueueSubmitResult::InvalidArguments;
     }
 
-    Executor->Execute(*CompileResult.Plan, RecordedGraph, ExecutionContext, ExecuteOptions);
+    return Executor->Execute(*CompileResult.Plan, RecordedGraph, ExecutionContext, ExecuteOptions);
 }
 
 void FRFGInstance::SetCompileOptions(const FRFGCompileOptions& InCompileOptions)

@@ -37,17 +37,28 @@ void FVulkanRALQueue::WaitIdle()
     }
 }
 
-void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
+ERALQueueSubmitResult FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
 {
+    if (!SubmitInfo.IsStructurallyValid())
+    {
+        LE_LOG(LogRAL, Error, "Submit rejected structurally invalid submit info.");
+        return ERALQueueSubmitResult::InvalidArguments;
+    }
     if (this->Handle == VK_NULL_HANDLE)
     {
-        return;
+        LE_LOG(LogRAL, Error, "Submit failed: queue handle is null.");
+        return ERALQueueSubmitResult::Error;
     }
 
     VkCommandBuffer CmdBufferHandle = VK_NULL_HANDLE;
     if (SubmitInfo.CmdList)
     {
         CmdBufferHandle = static_cast<FVulkanRALCommandList*>(SubmitInfo.CmdList)->Handle;
+        if (CmdBufferHandle == VK_NULL_HANDLE)
+        {
+            LE_LOG(LogRAL, Error, "Submit rejected a command list with a null Vulkan handle.");
+            return ERALQueueSubmitResult::InvalidArguments;
+        }
     }
 
     LE::Array<VkSemaphore> WaitSemaphores;
@@ -56,14 +67,14 @@ void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
     {
         if (Semaphore == nullptr)
         {
-            LE_LOG(LogRAL, Warn, "Submit ignored a null wait semaphore.");
-            continue;
+            LE_LOG(LogRAL, Error, "Submit rejected a null wait semaphore.");
+            return ERALQueueSubmitResult::InvalidArguments;
         }
         VkSemaphore Handle = static_cast<FVulkanRALSemaphore*>(Semaphore)->Handle;
         if (Handle == VK_NULL_HANDLE)
         {
-            LE_LOG(LogRAL, Warn, "Submit ignored a wait semaphore with null Vulkan handle.");
-            continue;
+            LE_LOG(LogRAL, Error, "Submit rejected a wait semaphore with a null Vulkan handle.");
+            return ERALQueueSubmitResult::InvalidArguments;
         }
         WaitSemaphores.PushBack(Handle);
         WaitStages.PushBack(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
@@ -73,14 +84,14 @@ void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
     {
         if (Semaphore == nullptr)
         {
-            LE_LOG(LogRAL, Warn, "Submit ignored a null signal semaphore.");
-            continue;
+            LE_LOG(LogRAL, Error, "Submit rejected a null signal semaphore.");
+            return ERALQueueSubmitResult::InvalidArguments;
         }
         VkSemaphore Handle = static_cast<FVulkanRALSemaphore*>(Semaphore)->Handle;
         if (Handle == VK_NULL_HANDLE)
         {
-            LE_LOG(LogRAL, Warn, "Submit ignored a signal semaphore with null Vulkan handle.");
-            continue;
+            LE_LOG(LogRAL, Error, "Submit rejected a signal semaphore with a null Vulkan handle.");
+            return ERALQueueSubmitResult::InvalidArguments;
         }
         SignalSemaphores.PushBack(Handle);
     }
@@ -89,6 +100,11 @@ void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
     if (SubmitInfo.FenceToSignal)
     {
         FenceHandle = static_cast<FVulkanRALFence*>(SubmitInfo.FenceToSignal)->Handle;
+        if (FenceHandle == VK_NULL_HANDLE)
+        {
+            LE_LOG(LogRAL, Error, "Submit rejected a fence with a null Vulkan handle.");
+            return ERALQueueSubmitResult::InvalidArguments;
+        }
     }
 
     VkSubmitInfo Info{};
@@ -109,15 +125,17 @@ void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
 
     if (Info.commandBufferCount == 0 && Info.waitSemaphoreCount == 0 && Info.signalSemaphoreCount == 0 && FenceHandle == VK_NULL_HANDLE)
     {
-        LE_LOG(LogRAL, Warn, "Submit skipped: empty submit info.");
-        return;
+        LE_LOG(LogRAL, Error, "Submit rejected empty submit info.");
+        return ERALQueueSubmitResult::InvalidArguments;
     }
 
     const VkResult Result = vkQueueSubmit(this->Handle, 1, &Info, FenceHandle);
     if (Result != VK_SUCCESS)
     {
         LE_LOG(LogRAL, Error, "vkQueueSubmit failed. VkResult={}", static_cast<int32>(Result));
+        return ERALQueueSubmitResult::Error;
     }
+    return ERALQueueSubmitResult::Success;
 }
 
 } // namespace LE

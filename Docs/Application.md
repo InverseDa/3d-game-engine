@@ -90,13 +90,19 @@ Elapsed。
 - `Demo.Window`：真实 Startup 创建 Platform window；负责消息泵和关闭请求；Shutdown 释放
   window 和 event queue。
 - `Demo.Render`：依赖 `Demo.Window`；真实 Startup 创建 RAL/swapchain/shader/pipeline/
-  renderer 资源；Update 负责 minimize、resize 与资源重建；Render 继续执行 World scene
-  extraction 和 `Renderer::RenderFrame`。
-- `Demo.Render::Shutdown` 保留当前 `WaitIdle` 和资源逆序清理；正常帧同步重构属于 Phase 3。
+  renderer 与两槽 `FRenderFrameScheduler`。每槽拥有 allocator、command list、acquire/
+  render-finished semaphore、initially-signaled fence 和 deferred releases。Update 负责 minimize
+  与显式 resize/retry；Render 驱动两槽 Acquire/record/Submit/Present 并处理
+  Suboptimal/OutOfDate/Error。
+- 正常成功帧不再调用 `WaitIdle`。resize 先等待实际 InFlight 槽，swapchain 底层重建和
+  terminal shutdown 仍允许 exceptional idle。Renderer 将 RFG-owned texture/buffer transient
+  的 ownership 转交给当前 frame slot；它们只在该槽 fence 完成后、allocator reset 前回收。
+  imported resources 始终保持外部所有权。
 - 所有 RAL 对象通过 `RAL::DestroyResource` 回到 RAL 模块走 virtual destructor；上层 DLL
   不直接 delete backend 分配的对象。
 
 自动化 C++ 测试覆盖确定性 branched DAG、深拷贝 descriptor、invalid/duplicate/missing/
 cycle 零启动、失败 module partial cleanup、严格 rollback/逆序关闭、重复调用状态、
 EngineLoop 与 module/application 的相对顺序、各阶段短路、失败后零额外 Tick/clock、
-frame/time 契约、倒退时钟和 null RAL destroy contract。
+  frame/time 契约、倒退时钟、null RAL destroy contract，以及显式帧同步的状态分支、调用顺序、
+  精确 wait/signal/fence 传递和 RFG transient 的 frame-slot 回收顺序。

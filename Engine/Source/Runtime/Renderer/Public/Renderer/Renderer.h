@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "RFGMinimal.h"
+#include "RenderFrameScheduler.h"
 #include "RendererFrameContext.h"
 
 namespace LE
@@ -21,7 +22,9 @@ public:
     bool IsInitialized() const;
 
 public:
-    void RenderFrame(const FRendererFrameContext& FrameContext, const FRenderScene* RenderScene = nullptr);
+    ERenderFrameRecordResult RenderFrame(
+        const FRendererFrameContext& FrameContext,
+        const FRenderScene* RenderScene = nullptr);
 
 public:
     LE::FRFGInstance& GetGraphInstance();

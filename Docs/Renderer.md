@@ -118,7 +118,7 @@ class IRenderPipeline {
 |------|------|
 | `Initialize()` | 初始化 `FRFGPassRegistry`、`FRFGRuntime`、`FRFGInstance` |
 | `Shutdown()` | 逆序关闭 |
-| `RenderFrame(FrameContext, RenderScene)` | 每帧主入口：构建管线计划 → 创建 RFG Builder → 遍历 Pass Setup/Record → 编译并执行图 → Present |
+| `RenderFrame(FrameContext, RenderScene)` | 每帧录制入口：构建管线计划 → 创建 RFG Builder → 遍历 Pass Setup/Record → 编译图；将 RFG-owned transient 转交当前 frame scope，不负责 Acquire、Submit 或 Present |
 | `GetGraphInstance()` | 暴露底层 `FRFGInstance`，供外部直接操作 |
 
 当前 `RenderFrame` 仅处理 `ViewFamily.Views` 的第一个视图（`front()`），多视图支持尚未实现。
@@ -173,7 +173,7 @@ Pipeline.AddPass(&PassB);
 | `FTriangleCompositePipeline` | `TriangleCompositePipeline` | 2 | 先绘制到 Offscreen `SceneColor` 纹理，再通过全屏 Composite Pass 采样并输出到 BackBuffer |
 
 #### `FTriangleBackBufferPass`
-- Setup：导入 Swapchain BackBuffer，标记 Write + Output。
+- Setup：导入上层显式 Acquire 返回的 BackBuffer view，标记 Write + Output。
 - Record：筛选 `PassMask` 含 `BackBuffer` 的网格，按 `SortKey` 排序，设置 Viewport/Scissor，绑定图形管线并绘制。
 
 #### `FOffscreenTrianglePass`
@@ -217,6 +217,24 @@ enum class ERenderPlatformProfile : uint8 {
 
 Renderer 自身被更高层模块（如 Game、Editor）依赖，作为渲染调用的统一入口。
 
+### 7.1 两槽帧调度
+
+`FRenderFrameScheduler` 固定维护两个 frame slot。每槽独占 command allocator/list、acquire
+semaphore、render-finished semaphore、initially-signaled completion fence 与 deferred
+release 队列。槽复用顺序为 fence wait → creator-side deferred release → allocator reset →
+Acquire；同步 record callback 返回后，由 scheduler 自己执行 fence reset、精确 SubmitInfo
+提交和 Present，调用方不能伪造 InFlight 状态。
+
+`FRenderFrameScope` 是 callback 期间的 borrowed view，并提供 generation-checked
+`DeferRelease` ownership sink；callback 返回后不可再向旧槽投递。正常成功帧不调用
+`WaitIdle`。resize/shutdown 会等待实际 InFlight 槽；submit 失败留下的 unsignaled fence 不会
+被等待，terminal shutdown 才使用 exceptional queue idle。
+
+`FRenderer::RenderFrame` 只负责构建和录制 RFG，不再提交或 Present。Renderer 在调用栈内用
+backend-neutral borrowed `IRFGDeferredReleaseSink` 适配当前 `FRenderFrameScope`；RFG-owned
+texture/buffer ownership 在录制完成后、提交前转入 exact frame slot。imported resources 不转移，
+sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
+
 ---
 
 ## 8. 当前限制
@@ -227,7 +245,7 @@ Renderer 自身被更高层模块（如 Game、Editor）依赖，作为渲染调
 4. **单视图限制**：`FRenderer::RenderFrame` 仅取 `ViewFamily.Views.front()`，多视口/分屏/Shadow Cascade 不支持。
 5. **平台特定代码侵入**：`TriangleCompositePasses.h` 中直接调用了 Vulkan API（`vkCmdPipelineBarrier`），破坏了 RAL 的抽象边界。
 6. **无后处理框架**：无 Bloom、Tone Mapping、AA 等后处理 Pass 的标准注册与组合机制。
-7. **同步模型粗糙**：`RenderFrame` 使用 `bSubmitImmediately = true` + `bWaitForCompletion = true` 的阻塞执行，未利用 CPU/GPU 并行。
+7. **Transient 暂无跨帧复用池**：RFG-owned transient 已绑定 exact frame slot 并在 fence 完成后安全销毁，但尚未实现跨帧 aliasing/复用池或显存预算策略。
 
 ---
 
@@ -254,7 +272,7 @@ Renderer 自身被更高层模块（如 Game、Editor）依赖，作为渲染调
 
 ### 9.5 多视图与并行
 - 支持 `FRenderViewFamily` 的多视图渲染（Split Screen、Shadow Maps、Reflection Probes）。
-- 将 `bWaitForCompletion` 改为基于 Fence/Semaphore 的帧间流水线，提升 CPU/GPU 重叠度。
+- 在其余调用方迁移到 `FRenderFrameScheduler` 后，淘汰 RFG 的 legacy immediate-submit / `WaitIdle` 兼容入口。
 
 ### 9.6 跨平台清理
 - 移除 Demo Pass 中的裸 Vulkan 调用，统一通过 RAL 的屏障/Transition API 表达资源状态变更。
@@ -272,6 +290,7 @@ Renderer 自身被更高层模块（如 Game、Editor）依赖，作为渲染调
 | `Public/Renderer/RenderPipeline.h` | `IRenderPipeline`、`FRenderPipelinePlan` |
 | `Public/Renderer/RenderGraphBuilderBridge.h` | `FRenderGraphBuilderBridge` |
 | `Public/Renderer/RendererFrameContext.h` | `FRendererFrameContext` |
+| `Public/Renderer/RenderFrameScheduler.h` | 两槽帧调度、borrowed frame scope 与 deferred-release sink |
 | `Public/Renderer/PlatformRenderProfile.h` | `ERenderPlatformProfile` |
 | `Public/Renderer/ShadingPath.h` | `EShadingPath` |
 | `Public/Renderer/SimpleRenderPass.h` | `FSimpleRenderPass` |
@@ -279,6 +298,7 @@ Renderer 自身被更高层模块（如 Game、Editor）依赖，作为渲染调
 | `Public/Renderer/DemoRenderPipelines.h` | `FTriangleBackBufferPipeline`、`FTriangleCompositePipeline` |
 | `Public/Renderer/RendererMinimal.h` | 模块统一头文件（聚合包含） |
 | `Private/Renderer/Renderer.cpp` | `FRenderer` 实现 |
+| `Private/Renderer/RenderFrameScheduler.cpp` | 两槽 Acquire/record/Submit/Present 状态机 |
 | `Private/Renderer/RenderGraphBuilderBridge.cpp` | `FRenderGraphBuilderBridge` 实现 |
 | `Private/Renderer/Pipelines/DemoRenderPipelines.cpp` | Demo 管线实现 |
 | `Private/Renderer/Passes/TriangleBackBufferPass.h` | BackBuffer 绘制 Pass |

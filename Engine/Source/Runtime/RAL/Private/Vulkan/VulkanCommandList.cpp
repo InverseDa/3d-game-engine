@@ -137,28 +137,73 @@ VkAttachmentStoreOp ToVkAttachmentStoreOp(EAttachmentStoreOp Op)
 }
 }
 
-FVulkanRALCommandList::FVulkanRALCommandList(FVulkanRALDevice* InDevice, EQueueType Type)
+FVulkanRALCommandAllocator::FVulkanRALCommandAllocator(FVulkanRALDevice* InDevice, const EQueueType InType)
     : Device(InDevice)
+    , Type(InType)
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
-        LE_LOG(LogRAL, Error, "CommandList creation failed: invalid device.");
+        LE_LOG(LogRAL, Error, "Command allocator creation failed: invalid device.");
         this->Pool = VK_NULL_HANDLE;
-        this->Handle = VK_NULL_HANDLE;
+        return;
+    }
+
+    if (this->Type != EQueueType::Graphics)
+    {
+        LE_LOG(LogRAL, Error, "Command allocator creation failed: only the graphics queue is available.");
         return;
     }
 
     VkCommandPoolCreateInfo PoolInfo{};
     {
         PoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        PoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        PoolInfo.queueFamilyIndex = this->Device->VkContext.GraphicsFamilyIndex; // assume graphics
+        PoolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        PoolInfo.queueFamilyIndex = this->Device->VkContext.GraphicsFamilyIndex;
     }
-    VkResult Result = vkCreateCommandPool(this->Device->VkContext.LogicalDevice, &PoolInfo, nullptr, &this->Pool);
+    const VkResult Result = vkCreateCommandPool(this->Device->VkContext.LogicalDevice, &PoolInfo, nullptr, &this->Pool);
     if (Result != VK_SUCCESS)
     {
         LE_LOG(LogRAL, Error, "vkCreateCommandPool failed. VkResult={}", static_cast<int32>(Result));
         this->Pool = VK_NULL_HANDLE;
+    }
+}
+
+FVulkanRALCommandAllocator::~FVulkanRALCommandAllocator()
+{
+    if (this->Device != nullptr && this->Device->VkContext.LogicalDevice != VK_NULL_HANDLE &&
+        this->Pool != VK_NULL_HANDLE)
+    {
+        vkDestroyCommandPool(this->Device->VkContext.LogicalDevice, this->Pool, nullptr);
+    }
+    this->Pool = VK_NULL_HANDLE;
+}
+
+bool FVulkanRALCommandAllocator::Reset()
+{
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE ||
+        this->Pool == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "Command allocator reset failed: invalid device or pool.");
+        return false;
+    }
+
+    const VkResult Result = vkResetCommandPool(this->Device->VkContext.LogicalDevice, this->Pool, 0);
+    if (Result != VK_SUCCESS)
+    {
+        LE_LOG(LogRAL, Error, "vkResetCommandPool failed. VkResult={}", static_cast<int32>(Result));
+        return false;
+    }
+    return true;
+}
+
+FVulkanRALCommandList::FVulkanRALCommandList(FVulkanRALCommandAllocator* InAllocator)
+    : Device(InAllocator != nullptr ? InAllocator->Device : nullptr)
+    , Allocator(InAllocator)
+{
+    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE ||
+        this->Allocator == nullptr || this->Allocator->Pool == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CommandList creation failed: invalid device or allocator.");
         this->Handle = VK_NULL_HANDLE;
         return;
     }
@@ -166,35 +211,26 @@ FVulkanRALCommandList::FVulkanRALCommandList(FVulkanRALDevice* InDevice, EQueueT
     VkCommandBufferAllocateInfo AllocateInfo{};
     {
         AllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        AllocateInfo.commandPool = this->Pool;
+        AllocateInfo.commandPool = this->Allocator->Pool;
         AllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         AllocateInfo.commandBufferCount = 1;
     }
-    Result = vkAllocateCommandBuffers(this->Device->VkContext.LogicalDevice, &AllocateInfo, &this->Handle);
+    const VkResult Result = vkAllocateCommandBuffers(this->Device->VkContext.LogicalDevice, &AllocateInfo, &this->Handle);
     if (Result != VK_SUCCESS)
     {
         LE_LOG(LogRAL, Error, "vkAllocateCommandBuffers failed. VkResult={}", static_cast<int32>(Result));
-        vkDestroyCommandPool(this->Device->VkContext.LogicalDevice, this->Pool, nullptr);
-        this->Pool = VK_NULL_HANDLE;
         this->Handle = VK_NULL_HANDLE;
-        return;
     }
 }
 
 FVulkanRALCommandList::~FVulkanRALCommandList()
 {
-    if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    if (this->Device != nullptr && this->Device->VkContext.LogicalDevice != VK_NULL_HANDLE &&
+        this->Allocator != nullptr && this->Allocator->Pool != VK_NULL_HANDLE && this->Handle != VK_NULL_HANDLE)
     {
-        this->Pool = VK_NULL_HANDLE;
-        return;
+        vkFreeCommandBuffers(this->Device->VkContext.LogicalDevice, this->Allocator->Pool, 1, &this->Handle);
     }
-
-    // Command buffers are automatically freed when pool is destroyed
-    if (this->Pool != VK_NULL_HANDLE)
-    {
-        vkDestroyCommandPool(this->Device->VkContext.LogicalDevice, this->Pool, nullptr);
-        this->Pool = VK_NULL_HANDLE;
-    }
+    this->Handle = VK_NULL_HANDLE;
 }
 
 void FVulkanRALCommandList::Begin()

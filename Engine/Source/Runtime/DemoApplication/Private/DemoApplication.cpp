@@ -269,7 +269,8 @@ static bool SyncSwapchainToWindowSize(
     FPlatformWindow* Window,
     LE::FRALSwapchain* Swapchain,
     uint32& InOutWidth,
-    uint32& InOutHeight)
+    uint32& InOutHeight,
+    const bool bForceRecreate)
 {
     uint32 CurrentWindowWidth = 0;
     uint32 CurrentWindowHeight = 0;
@@ -281,10 +282,13 @@ static bool SyncSwapchainToWindowSize(
         return false;
     }
 
-    if (CurrentWindowWidth != InOutWidth || CurrentWindowHeight != InOutHeight)
+    if (bForceRecreate || CurrentWindowWidth != InOutWidth || CurrentWindowHeight != InOutHeight)
     {
-        LE_LOG(LogXBD, Info, "Window resized to {}x{}. Recreating swapchain.", CurrentWindowWidth, CurrentWindowHeight);
-        Swapchain->Resize(CurrentWindowWidth, CurrentWindowHeight);
+        LE_LOG(LogXBD, Info, "Explicitly recreating swapchain at {}x{}.", CurrentWindowWidth, CurrentWindowHeight);
+        if (!Swapchain->Resize(CurrentWindowWidth, CurrentWindowHeight))
+        {
+            return false;
+        }
         InOutWidth = CurrentWindowWidth;
         InOutHeight = CurrentWindowHeight;
     }
@@ -460,10 +464,9 @@ public:
         }
 
         VertexBuffer = CreateTriangleVertexBuffer(Device);
-        CommandList = Device->CreateCommandList(LE::EQueueType::Graphics);
-        if (VertexBuffer == nullptr || CommandList == nullptr)
+        if (VertexBuffer == nullptr || !FrameScheduler.Initialize(Device))
         {
-            LE_LOG(LogXBD, Error, "Failed to create demo command resources.");
+            LE_LOG(LogXBD, Error, "Failed to create demo frame scheduler resources.");
             return false;
         }
 
@@ -484,18 +487,13 @@ public:
         bShutdown = true;
 
         LE_LOG(LogXBD, Info, "Shutting down demo render runtime...");
-        if (Device != nullptr && Device->GetGraphicsQueue() != nullptr)
-        {
-            Device->GetGraphicsQueue()->WaitIdle();
-        }
+        FrameScheduler.Shutdown();
         if (bRendererInitialized)
         {
             Renderer.Shutdown();
             bRendererInitialized = false;
         }
 
-        RAL::DestroyResource(CommandList);
-        CommandList = nullptr;
         RAL::DestroyResource(VertexBuffer);
         VertexBuffer = nullptr;
         RAL::DestroyResource(CompositePipeline);
@@ -521,12 +519,18 @@ public:
     {
         FPlatformWindow* const Window = WindowModule.GetWindow();
         bCanRender = !Window->IsMinimized() &&
-            SyncSwapchainToWindowSize(Window, Swapchain, CachedWindowWidth, CachedWindowHeight);
+            SyncSwapchainToWindowSize(
+                Window,
+                Swapchain,
+                CachedWindowWidth,
+                CachedWindowHeight,
+                bSwapchainRecreateRequested);
         if (!bCanRender)
         {
             FPlatformTime::SleepForMilliseconds(16);
             return EApplicationTickResult::Continue;
         }
+        bSwapchainRecreateRequested = false;
 
         uint32 TargetRenderWidth = CachedWindowWidth;
         uint32 TargetRenderHeight = CachedWindowHeight;
@@ -538,7 +542,7 @@ public:
             return EApplicationTickResult::Continue;
         }
 
-        Device->GetGraphicsQueue()->WaitIdle();
+        FrameScheduler.WaitForAllFrames();
         if (!CreateOffscreenPassResources(Device, TargetRenderWidth, TargetRenderHeight, OffscreenResources))
         {
             return EApplicationTickResult::Exit;
@@ -566,33 +570,54 @@ public:
             return EApplicationTickResult::Continue;
         }
 
-        LE::FWorld World;
-        LE::FWorldMeshComponent MeshComponent;
-        MeshComponent.DebugName = "TriangleMesh";
-        MeshComponent.GraphicsPipeline = TrianglePipeline;
-        MeshComponent.VertexBuffer = VertexBuffer;
-        MeshComponent.VertexCount = 3;
-        MeshComponent.PassMask = LE::ERenderMeshPassMask::SceneColor;
-        MeshComponent.SortKey = 0;
-        World.MeshComponents.PushBack(MeshComponent);
+        auto RecordFrame = [this](LE::FRenderFrameScope& ScheduledFrame)
+        {
+            LE::FWorld World;
+            LE::FWorldMeshComponent MeshComponent;
+            MeshComponent.DebugName = "TriangleMesh";
+            MeshComponent.GraphicsPipeline = TrianglePipeline;
+            MeshComponent.VertexBuffer = VertexBuffer;
+            MeshComponent.VertexCount = 3;
+            MeshComponent.PassMask = LE::ERenderMeshPassMask::SceneColor;
+            MeshComponent.SortKey = 0;
+            World.MeshComponents.PushBack(MeshComponent);
 
-        LE::FRenderScene RenderScene;
-        LE::FWorldRenderSceneExtractor::ExtractRenderScene(World, RenderScene);
+            LE::FRenderScene RenderScene;
+            LE::FWorldRenderSceneExtractor::ExtractRenderScene(World, RenderScene);
 
-        LE::FRendererFrameContext FrameContext;
-        FrameContext.Device = Device;
-        FrameContext.Swapchain = Swapchain;
-        FrameContext.CommandList = CommandList;
-        FrameContext.ViewFamily.PrimarySwapchain = Swapchain;
-        LE::FTriangleCompositePipelineDesc RenderPipelineDesc;
-        RenderPipelineDesc.Swapchain = Swapchain;
-        RenderPipelineDesc.CompositePipeline = CompositePipeline;
-        RenderPipelineDesc.SceneColorTexture = OffscreenResources.Texture;
-        RenderPipelineDesc.SceneColorView = OffscreenResources.TextureView;
-        RenderPipelineDesc.CompositeBindGroup = OffscreenResources.BindGroup;
-        LE::FTriangleCompositePipeline RenderPipeline(RenderPipelineDesc);
-        FrameContext.Pipeline = &RenderPipeline;
-        Renderer.RenderFrame(FrameContext, &RenderScene);
+            LE::FRendererFrameContext FrameContext;
+            FrameContext.FrameIndex = ScheduledFrame.GetFrameIndex();
+            FrameContext.Device = Device;
+            FrameContext.Swapchain = Swapchain;
+            FrameContext.CommandList = ScheduledFrame.GetCommandList();
+            FrameContext.FrameScope = &ScheduledFrame;
+            FrameContext.ViewFamily.PrimarySwapchain = Swapchain;
+            LE::FTriangleCompositePipelineDesc RenderPipelineDesc;
+            RenderPipelineDesc.BackBufferView = ScheduledFrame.GetBackBufferView();
+            RenderPipelineDesc.CompositePipeline = CompositePipeline;
+            RenderPipelineDesc.SceneColorTexture = OffscreenResources.Texture;
+            RenderPipelineDesc.SceneColorView = OffscreenResources.TextureView;
+            RenderPipelineDesc.CompositeBindGroup = OffscreenResources.BindGroup;
+            LE::FTriangleCompositePipeline RenderPipeline(RenderPipelineDesc);
+            FrameContext.Pipeline = &RenderPipeline;
+            return Renderer.RenderFrame(FrameContext, &RenderScene);
+        };
+
+        const FRenderFrameResult FrameResult = FrameScheduler.ExecuteFrame(Swapchain, RecordFrame);
+        if (FrameResult.Action == ERenderFrameAction::RecreateSwapchain)
+        {
+            bSwapchainRecreateRequested = true;
+            return EApplicationTickResult::Continue;
+        }
+        if (FrameResult.Action == ERenderFrameAction::Exit)
+        {
+            LE_LOG(LogXBD, Error,
+                "Explicit frame failed. Acquire={}, Submit={}, Present={}.",
+                static_cast<uint32>(FrameResult.AcquireStatus),
+                static_cast<uint32>(FrameResult.SubmitResult),
+                static_cast<uint32>(FrameResult.PresentStatus));
+            return EApplicationTickResult::Exit;
+        }
         return EApplicationTickResult::Continue;
     }
 
@@ -620,12 +645,13 @@ private:
     FRALPipeline_Graphics* TrianglePipeline = nullptr;
     FRALPipeline_Graphics* CompositePipeline = nullptr;
     FRALBuffer* VertexBuffer = nullptr;
-    FRALCommandList* CommandList = nullptr;
+    FRenderFrameScheduler FrameScheduler;
     FOffscreenPassResources OffscreenResources;
     FRenderer Renderer;
     uint32 CachedWindowWidth = DefaultWindowWidth;
     uint32 CachedWindowHeight = DefaultWindowHeight;
     bool bCanRender = false;
+    bool bSwapchainRecreateRequested = false;
     bool bRendererInitialized = false;
     bool bShutdown = false;
 };

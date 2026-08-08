@@ -870,14 +870,79 @@ FRALTextureView* FVulkanRALDevice::CreateTextureView(const FRALTextureViewDesc& 
     return TextureView;
 }
 
-FRALCommandList* FVulkanRALDevice::CreateCommandList(EQueueType Type)
+FRALCommandAllocator* FVulkanRALDevice::CreateCommandAllocator(const EQueueType Type)
 {
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
-        LE_LOG(LogRAL, Error, "CreateCommandList failed: logical device is null.");
+        LE_LOG(LogRAL, Error, "CreateCommandAllocator failed: logical device is null.");
         return nullptr;
     }
-	return new FVulkanRALCommandList(this, Type);
+
+    FVulkanRALCommandAllocator* const Allocator = new FVulkanRALCommandAllocator(this, Type);
+    if (Allocator->Pool == VK_NULL_HANDLE)
+    {
+        delete Allocator;
+        return nullptr;
+    }
+    return Allocator;
+}
+
+FRALCommandList* FVulkanRALDevice::CreateCommandList(FRALCommandAllocator* const Allocator)
+{
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || Allocator == nullptr)
+    {
+        LE_LOG(LogRAL, Error, "CreateCommandList failed: invalid device or allocator.");
+        return nullptr;
+    }
+
+    FVulkanRALCommandAllocator* const VulkanAllocator = static_cast<FVulkanRALCommandAllocator*>(Allocator);
+    if (VulkanAllocator->Device != this || VulkanAllocator->Pool == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateCommandList failed: allocator belongs to another or invalid device.");
+        return nullptr;
+    }
+
+    FVulkanRALCommandList* const CommandList = new FVulkanRALCommandList(VulkanAllocator);
+    if (CommandList->Handle == VK_NULL_HANDLE)
+    {
+        delete CommandList;
+        return nullptr;
+    }
+    return CommandList;
+}
+
+FRALSemaphore* FVulkanRALDevice::CreateBinarySemaphore()
+{
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateBinarySemaphore failed: logical device is null.");
+        return nullptr;
+    }
+
+    FVulkanRALSemaphore* const Semaphore = new FVulkanRALSemaphore(this);
+    if (Semaphore->Handle == VK_NULL_HANDLE)
+    {
+        delete Semaphore;
+        return nullptr;
+    }
+    return Semaphore;
+}
+
+FRALFence* FVulkanRALDevice::CreateFence(const bool bInitiallySignaled)
+{
+    if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
+    {
+        LE_LOG(LogRAL, Error, "CreateFence failed: logical device is null.");
+        return nullptr;
+    }
+
+    FVulkanRALFence* const Fence = new FVulkanRALFence(this, bInitiallySignaled);
+    if (Fence->Handle == VK_NULL_HANDLE)
+    {
+        delete Fence;
+        return nullptr;
+    }
+    return Fence;
 }
 
 FRALSwapchain* FVulkanRALDevice::CreateSwapchain(const FRALSwapchainDesc& Desc)

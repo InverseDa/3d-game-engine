@@ -13,6 +13,6 @@ export default class BuilderTestsBuild extends ModuleBuild {
         Configuration.Output = Target.TargetType === TargetType.Test
             ? OutputType.Exe
             : OutputType.None;
-        Configuration.PublicDependencies.push("Application", "Core", "Platform", "RAL");
+        Configuration.PublicDependencies.push("Application", "Core", "Platform", "RAL", "Renderer");
     }
 }

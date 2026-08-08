@@ -1,7 +1,9 @@
 #include "Execute/RFGPassContext.h"
 
 #include "Compile/RFGCompiledPlan.h"
+#include "Execute/RFGDeferredReleaseSink.h"
 #include "RAL/RALBuffer.h"
+#include "RAL/RALDevice.h"
 #include "RAL/RALTexture.h"
 #include "Record/RFGRecordedGraph.h"
 
@@ -12,18 +14,57 @@ void FRFGExecutionContext::ResetTransientResources()
 {
     for (LE::FRALTexture* Texture : OwnedTextures)
     {
-        delete Texture;
+        RAL::DestroyResource(Texture);
     }
 
     for (LE::FRALBuffer* Buffer : OwnedBuffers)
     {
-        delete Buffer;
+        RAL::DestroyResource(Buffer);
     }
 
     TextureResources.Clear();
     BufferResources.Clear();
     OwnedTextures.Clear();
     OwnedBuffers.Clear();
+}
+
+bool FRFGExecutionContext::TransferTransientResources(
+    IRFGDeferredReleaseSink& DeferredReleaseSink) noexcept
+{
+    bool bAcceptedAll = true;
+    for (LE::FRALTexture*& Texture : OwnedTextures)
+    {
+        if (Texture != nullptr && DeferredReleaseSink.DeferRelease(Texture))
+        {
+            Texture = nullptr;
+        }
+        else if (Texture != nullptr)
+        {
+            bAcceptedAll = false;
+            break;
+        }
+    }
+
+    if (bAcceptedAll)
+    {
+        for (LE::FRALBuffer*& Buffer : OwnedBuffers)
+        {
+            if (Buffer != nullptr && DeferredReleaseSink.DeferRelease(Buffer))
+            {
+                Buffer = nullptr;
+            }
+            else if (Buffer != nullptr)
+            {
+                bAcceptedAll = false;
+                break;
+            }
+        }
+    }
+
+    // Null entries were transferred and are now owned by the sink. Any
+    // non-null entries remain RFG-owned and are destroyed here.
+    ResetTransientResources();
+    return bAcceptedAll;
 }
 
 void FRFGPassContext::SetExecutionContext(FRFGExecutionContext* InExecutionContext)

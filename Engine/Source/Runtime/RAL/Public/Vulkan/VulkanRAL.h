@@ -4,6 +4,7 @@
 #include "RAL/RALDevice.h"
 #include "RAL/RALSwapchain.h"
 #include "RAL/RALBindGroup.h"
+#include "RAL/RALCommandAllocator.h"
 #include "RAL/RALCommandList.h"
 #include "RAL/RALSampler.h"
 #include "RAL/RALShader.h"
@@ -162,7 +163,10 @@ public:
     FRALTextureView* CreateTextureView(const FRALTextureViewDesc& Desc) override;
     FRALShader* CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size, const LE::String& EntryPoint = "main") override;
     FRALPipeline_Graphics* CreateGraphicsPipeline(const FRALPipelineDesc_Graphics& Desc) override;
-    FRALCommandList* CreateCommandList(EQueueType Type = EQueueType::Graphics) override;
+    FRALCommandAllocator* CreateCommandAllocator(EQueueType Type = EQueueType::Graphics) override;
+    FRALCommandList* CreateCommandList(FRALCommandAllocator* Allocator) override;
+    FRALSemaphore* CreateBinarySemaphore() override;
+    FRALFence* CreateFence(bool bInitiallySignaled = false) override;
     FRALSwapchain* CreateSwapchain(const FRALSwapchainDesc& Desc) override;
     FRALBindGroup* CreateBindGroup(const FRALBindGroupDesc& Desc) override;
     FRALBindGroupLayout* CreateBindGroupLayout(const FRALBindGroupLayoutDesc& Desc) override;
@@ -196,9 +200,10 @@ public:
     ~FVulkanRALSwapchain() override;
 
 public:
+    FRALAcquireResult AcquireNextImage(FRALSemaphore* SignalSemaphore, uint64 Timeout) override;
     FRALTextureView* GetCurrentBackBufferView() const override;
-    void Present() override;
-    void Resize(uint32 Width, uint32 Height) override;
+    ERALSwapchainStatus Present(FRALSemaphore* WaitSemaphore) override;
+    bool Resize(uint32 Width, uint32 Height) override;
 
 public:
     VkSwapchainKHR SwapchainHandle = VK_NULL_HANDLE;
@@ -216,9 +221,7 @@ private:
     FVulkanRALDevice* Device = nullptr;
     FRALSwapchainDesc Desc;
 
-private:
-    VkSemaphore ImageAvailableSemaphore = VK_NULL_HANDLE;
-    VkSemaphore RenderFinishedSemaphore = VK_NULL_HANDLE;
+    bool bImageAcquired = false;
 
 private:
     void InternalCreateSurface();
@@ -228,8 +231,6 @@ private:
 protected:
     void InternalDestroySwapchainResources();
 
-protected:
-    void AcquireNextImage();
 };
 
 // ***********************************************************************************************
@@ -277,7 +278,7 @@ public:
     FVulkanRALQueue(FVulkanRALDevice* InDevice, uint32 FamilyIndex, uint32 QueueIndex);
 
 public:
-    void Submit(const FRALSubmitInfo& SubmitInfo) override;
+    ERALQueueSubmitResult Submit(const FRALSubmitInfo& SubmitInfo) override;
     void WaitIdle() override;
     EQueueType GetType() const override { return EQueueType::Graphics; }
 
@@ -292,10 +293,25 @@ private:
 // ********************************** Regular Math Calc ******************************************
 // ***********************************************************************************************
 
+class FVulkanRALCommandAllocator : public FRALCommandAllocator
+{
+public:
+    FVulkanRALCommandAllocator(FVulkanRALDevice* InDevice, EQueueType InType);
+    ~FVulkanRALCommandAllocator() override;
+
+public:
+    bool Reset() override;
+
+public:
+    FVulkanRALDevice* Device = nullptr;
+    EQueueType Type = EQueueType::Graphics;
+    VkCommandPool Pool = VK_NULL_HANDLE;
+};
+
 class FVulkanRALCommandList : public FRALCommandList
 {
 public:
-    FVulkanRALCommandList(FVulkanRALDevice* InDevice, EQueueType Type);
+    explicit FVulkanRALCommandList(FVulkanRALCommandAllocator* InAllocator);
     ~FVulkanRALCommandList() override;
 
 public:
@@ -329,7 +345,7 @@ public:
 
 private:
     FVulkanRALDevice* Device = nullptr;
-    VkCommandPool Pool = VK_NULL_HANDLE;
+    FVulkanRALCommandAllocator* Allocator = nullptr;
 
 private:
     FVulkanRALPipeline_Graphics* CurrentPipeline = nullptr;

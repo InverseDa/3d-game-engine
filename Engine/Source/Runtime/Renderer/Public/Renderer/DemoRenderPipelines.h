@@ -9,18 +9,17 @@ namespace LE
 class FRALBuffer;
 class FRALBindGroup;
 class FRALPipeline_Graphics;
-class FRALSwapchain;
 class FRALTexture;
 class FRALTextureView;
 
 struct FTriangleBackBufferPipelineDesc
 {
-    LE::FRALSwapchain* Swapchain = nullptr;
+    LE::FRALTextureView* BackBufferView = nullptr;
 };
 
 struct FTriangleCompositePipelineDesc
 {
-    LE::FRALSwapchain* Swapchain = nullptr;
+    LE::FRALTextureView* BackBufferView = nullptr;
     LE::FRALPipeline_Graphics* CompositePipeline = nullptr;
     LE::FRALTexture* SceneColorTexture = nullptr;
     LE::FRALTextureView* SceneColorView = nullptr;

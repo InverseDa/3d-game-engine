@@ -146,11 +146,12 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 ### 4.7 Swapchain（FRALSwapchain）
 
 - **接口**：
-  - `GetCurrentBackBufferView()`：获取当前帧的后备缓冲 `FRALTextureView`。
-  - `Present()`：提交呈现。
-  - `Resize(uint32 Width, uint32 Height)`：窗口尺寸变化时重建 Swapchain。
+  - `AcquireNextImage(SignalSemaphore, Timeout)`：使用 caller-owned binary semaphore 显式取得后备缓冲，返回 `Success / Suboptimal / OutOfDate / Error` 与本帧 view。
+  - `GetCurrentBackBufferView()`：仅在成功（含 Suboptimal）Acquire 与随后的 Present/Resize 之间返回当前 view，其余时间返回 null。
+  - `Present(WaitSemaphore)`：等待 caller-owned render-finished semaphore 并返回同一组 backend-neutral 状态；每次调用都会消费当前 acquired 状态。
+  - `Resize(uint32 Width, uint32 Height)`：由上层显式重建 Swapchain，清除 acquired 状态且不自动 Acquire。
 - **描述符（FRALSwapchainDesc）**：`FPlatformSurface`（含 surface type 与 opaque 平台句柄）、尺寸、BackBufferFormat、`bEnableVsync`。
-- **Vulkan 实现**：`FVulkanRALSwapchain` 管理 `VkSurfaceKHR`、`VkSwapchainKHR`、后备 `VkImage` 与对应的 `FVulkanRALTextureView`。内部使用双信号量（ImageAvailable / RenderFinished）协调 Acquire/Present。`Present` 当前在提交后直接调用，无显式等待 `RenderFinished` 信号量（依赖上层 `Queue->WaitIdle()` 同步）。
+- **Vulkan 实现**：`FVulkanRALSwapchain` 只管理 `VkSurfaceKHR`、`VkSwapchainKHR`、后备 `VkImage` 与对应的 `FVulkanRALTextureView`。它不拥有逐帧 semaphore，不在构造、Resize 或 Present 后自动 Acquire，也不在 OutOfDate/Suboptimal 时偷偷重建。Vulkan 的 `VK_SUCCESS / VK_SUBOPTIMAL_KHR / VK_ERROR_OUT_OF_DATE_KHR / 其他错误` 被直接映射到公共状态，由上层决定继续本帧、重建或退出。
 
 ---
 
@@ -166,6 +167,7 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 | `CreateBuffer()` / `CreateTexture()` / `CreateShaderFromFile()` | 创建基础资源。 |
 | `CreateGraphicsPipeline()` | 创建图形管线。 |
 | `CreateCommandList()` | 创建命令列表，参数 `EQueueType` 目前仅用于标识，实际均使用 Graphics Queue Family。 |
+| `CreateBinarySemaphore()` / `CreateFence()` | 创建 caller-owned 帧同步对象；Fence 可指定 initially signaled。 |
 | `CreateSwapchain()` | 创建窗口 Swapchain。 |
 | `CreateBindGroup()` / `CreateBindGroupLayout()` | 创建资源绑定组。 |
 | `CreateSampler()` | 创建采样器。 |
@@ -180,11 +182,16 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 
 - **类型（EQueueType）**：`Graphics`（渲染+计算+传输）、`Compute`、`Transfer`。
 - **接口**：
-  - `Submit(const FRALSubmitInfo&)`：提交命令列表，可附带 Wait/Signal 信号量与 Signal Fence。
+  - `Submit(const FRALSubmitInfo&)`：提交命令列表，可附带 Wait/Signal 信号量与 Signal Fence，返回 `Success / InvalidArguments / Error`。
   - `WaitIdle()`：阻塞等待队列空闲。
-- **Vulkan 实现**：`FVulkanRALQueue` 封装 `VkQueue`，`Submit` 将 `FRALCommandList` 映射为 `VkCommandBuffer` 并组装 `VkSubmitInfo`。Wait Stage 固定为 `VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT`。
+- **Vulkan 实现**：`FVulkanRALQueue` 封装 `VkQueue`，`Submit` 将 `FRALCommandList` 映射为 `VkCommandBuffer` 并组装 `VkSubmitInfo`。Wait Stage 固定为 `VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT`；null/无效同步项不再被静默过滤，而是返回 `InvalidArguments`。
 
-### 5.3 CommandList（FRALCommandList）
+### 5.3 CommandAllocator 与 CommandList
+
+`FRALCommandAllocator` 拥有后端命令内存；`Reset()` 只能在由它分配的全部 command list
+完成 GPU 执行后调用。设备通过 `CreateCommandAllocator(EQueueType)` 创建 allocator，再以
+`CreateCommandList(FRALCommandAllocator*)` 创建非 owning 关联的 command list。销毁顺序
+必须是 command list 在前、allocator 在后，且两者均经 `RAL::DestroyResource()`。
 
 命令列表采用显式 Begin/End 模式：
 
@@ -199,7 +206,7 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 | `SetPushConstants()` | 设置 Push Constant 数据。 |
 | `Draw()` / `DrawIndexed()` | 绘制调用。 |
 
-- **Vulkan 实现**：`FVulkanRALCommandList` 管理 `VkCommandPool` + `VkCommandBuffer`（Primary，单次提交）。`BeginRenderPass` 组装 `VkRenderingInfo`，支持 single-RT、最多 8 路 MRT、depth-only 以及 color + depth/stencil；`D24_UNORM_S8_UINT` 的 depth/stencil 共用同一附件描述。Dynamic Rendering 不负责资源状态转换，调用方必须在 Begin 前通过 RAL/RFG barrier 将颜色附件转换到 `RenderTarget`、将当前可写深度模板附件转换到 `DepthStencilWrite`。`EndRenderPass` 会自动为 Swapchain 图像插入 `COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR` 的 Pipeline Barrier。
+- **Vulkan 实现**：`FVulkanRALCommandAllocator` 独占 `VkCommandPool`，`Reset()` 映射为 `vkResetCommandPool`；`FVulkanRALCommandList` 仅持有从该 pool 分配的 Primary `VkCommandBuffer` 与非 owning allocator 引用。`BeginRenderPass` 组装 `VkRenderingInfo`，支持 single-RT、最多 8 路 MRT、depth-only 以及 color + depth/stencil；`D24_UNORM_S8_UINT` 的 depth/stencil 共用同一附件描述。Dynamic Rendering 不负责资源状态转换，调用方必须在 Begin 前通过 RAL/RFG barrier 将颜色附件转换到 `RenderTarget`、将当前可写深度模板附件转换到 `DepthStencilWrite`。`EndRenderPass` 会自动为 Swapchain 图像插入 `COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR` 的 Pipeline Barrier。
 
 ---
 
@@ -262,7 +269,7 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 6. **BlendState 未完整实现**：`FRALBlendStateDesc` 仅包含 `bEnable` 布尔值，无独立颜色/Alpha 混合因子与操作配置。
 7. **Bindless 分配策略占位**：`FVulkanRALDevice::AllocateBindlessIndex()` 使用简单的静态递增计数器，无空闲索引回收，存在溢出风险。
 8. **资源状态由调用方负责**：Dynamic Rendering 不隐式转换 image layout；缺少 RAL barrier 或 RFG `DepthStencilWrite` 声明会触发 Vulkan Validation 错误。
-9. **Swapchain 同步简化**：`Present()` 未等待 `RenderFinished` 信号量，依赖调用方在提交后执行 `Queue->WaitIdle()`，无法充分利用 GPU 并行性。
+9. **RFG transient 异步 ownership**：record-only/异步执行中的 RFG-owned transient 必须转交给 borrowed `IRFGDeferredReleaseSink`；Renderer 将其适配到当前 frame slot，并在对应 fence 完成后回收。缺少或拒绝 sink 时不会提交，未转移资源由 RFG 精确清理；imported resources 不参与 ownership 转移。
 10. **Buffer 共享模式固定**：`FVulkanRALBuffer` 创建时 `sharingMode` 固定为 `VK_SHARING_MODE_EXCLUSIVE`，未处理跨 Queue Family 共享场景。
 
 ## 10. P0 冻结状态

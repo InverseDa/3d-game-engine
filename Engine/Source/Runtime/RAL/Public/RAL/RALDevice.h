@@ -14,10 +14,13 @@ class FRALSampler;
 class FRALTexture;
 class FRALTextureView;
 class FRALCommandList;
+class FRALCommandAllocator;
 class FRALSwapchain;
 class FRALPipeline_Graphics;
 class FRALBindGroup;
 class FRALBindGroupLayout;
+class FRALSemaphore;
+class FRALFence;
 
 class RAL_API FRALDevice : public FRALResource
 {
@@ -33,7 +36,11 @@ public:
     virtual FRALTextureView* CreateTextureView(const FRALTextureViewDesc& Desc) = 0;
     virtual FRALShader* CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size, const LE::String& EntryPoint = "main") = 0;
     virtual FRALPipeline_Graphics* CreateGraphicsPipeline(const FRALPipelineDesc_Graphics& Desc) = 0;
-    virtual FRALCommandList* CreateCommandList(EQueueType Type = EQueueType::Graphics) = 0;
+    virtual FRALCommandAllocator* CreateCommandAllocator(EQueueType Type = EQueueType::Graphics) = 0;
+    /** The allocator remains alive until after the returned command list is destroyed. */
+    virtual FRALCommandList* CreateCommandList(FRALCommandAllocator* Allocator) = 0;
+    virtual FRALSemaphore* CreateBinarySemaphore() = 0;
+    virtual FRALFence* CreateFence(bool bInitiallySignaled = false) = 0;
     virtual FRALSwapchain* CreateSwapchain(const FRALSwapchainDesc& Desc) = 0;
     virtual FRALBindGroup* CreateBindGroup(const FRALBindGroupDesc& Desc) = 0;
     virtual FRALBindGroupLayout* CreateBindGroupLayout(const FRALBindGroupLayoutDesc& Desc) = 0;

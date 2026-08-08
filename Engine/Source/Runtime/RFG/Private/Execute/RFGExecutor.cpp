@@ -7,6 +7,7 @@
 #include "RAL/RALDescription.h"
 #include "RAL/RALDevice.h"
 #include "RAL/RALQueue.h"
+#include "RAL/RALSyncPrimitives.h"
 #include "RAL/RALTexture.h"
 #include "Record/RFGPassRegistry.h"
 #include "Record/RFGRecordedGraph.h"
@@ -179,19 +180,63 @@ void ApplyBarriers(
 }
 }
 
-void FRFGExecutor::Execute(
+ERALQueueSubmitResult FRFGExecutor::Execute(
     const FRFGCompiledPlan& CompiledPlan,
     const FRFGRecordedGraph& RecordedGraph,
     FRFGExecutionContext& ExecutionContext,
     const FRFGExecuteOptions& ExecuteOptions) const
 {
+    ERALQueueSubmitResult SubmitResult = ERALQueueSubmitResult::Success;
     PrepareResources(RecordedGraph, ExecutionContext);
 
-    LE::FRALCommandList* CommandList = ExecutionContext.CommandList;
-    if (CommandList != nullptr)
+    const bool bHasOwnedTransientResources =
+        !ExecutionContext.OwnedTextures.IsEmpty() || !ExecutionContext.OwnedBuffers.IsEmpty();
+    const bool bCompletesSynchronously =
+        ExecuteOptions.bSubmitImmediately && ExecuteOptions.bWaitForCompletion;
+    if (bHasOwnedTransientResources && !bCompletesSynchronously &&
+        ExecuteOptions.DeferredReleaseSink == nullptr)
     {
-        CommandList->Begin();
+        LE_LOG(LogRFGExecute, Error,
+            "Asynchronous RFG execution rejected: owned transients require a deferred-release sink.");
+        ExecutionContext.ResetTransientResources();
+        return ERALQueueSubmitResult::InvalidArguments;
     }
+
+    LE::FRALCommandList* const CommandList = ExecutionContext.CommandList;
+    LE::FRALQueue* const SubmitQueue = ExecutionContext.GraphicsQueue;
+    if (CommandList == nullptr)
+    {
+        LE_LOG(LogRFGExecute, Error, "RFG execution requires a command list.");
+        ExecutionContext.ResetTransientResources();
+        return ERALQueueSubmitResult::InvalidArguments;
+    }
+
+    LE::FRALSubmitInfo SubmitInfo;
+    if (ExecuteOptions.bSubmitImmediately)
+    {
+        if (SubmitQueue == nullptr)
+        {
+            LE_LOG(LogRFGExecute, Error, "Immediate RFG execution requires a submit queue.");
+            ExecutionContext.ResetTransientResources();
+            return ERALQueueSubmitResult::InvalidArguments;
+        }
+        SubmitInfo = ExecuteOptions.SubmitInfo != nullptr
+            ? *ExecuteOptions.SubmitInfo
+            : LE::FRALSubmitInfo{};
+        if (ExecuteOptions.SubmitInfo == nullptr)
+        {
+            SubmitInfo.CmdList = CommandList;
+        }
+        if (SubmitInfo.CmdList != CommandList || !SubmitInfo.IsStructurallyValid())
+        {
+            LE_LOG(LogRFGExecute, Error,
+                "RFG submit info must be structurally valid and reference the execution command list.");
+            ExecutionContext.ResetTransientResources();
+            return ERALQueueSubmitResult::InvalidArguments;
+        }
+    }
+
+    CommandList->Begin();
 
     FRFGPassContext PassContext;
     PassContext.SetExecutionContext(&ExecutionContext);
@@ -218,25 +263,38 @@ void FRFGExecutor::Execute(
         ApplyBarriers(Passes[PassIndex].PostBarriers, RecordedGraph, ExecutionContext, PassCommandList);
     }
 
-    if (CommandList != nullptr)
+    CommandList->End();
+
+    if (bHasOwnedTransientResources && !bCompletesSynchronously &&
+        !ExecutionContext.TransferTransientResources(*ExecuteOptions.DeferredReleaseSink))
     {
-        CommandList->End();
+        LE_LOG(LogRFGExecute, Error,
+            "Asynchronous RFG execution rejected: deferred-release sink refused an owned transient.");
+        return ERALQueueSubmitResult::InvalidArguments;
     }
 
-    LE::FRALQueue* SubmitQueue = ExecutionContext.GraphicsQueue;
-    if (ExecuteOptions.bSubmitImmediately && SubmitQueue != nullptr && CommandList != nullptr)
+    if (ExecuteOptions.bSubmitImmediately)
     {
-        LE::FRALSubmitInfo SubmitInfo;
-        SubmitInfo.CmdList = CommandList;
-        SubmitQueue->Submit(SubmitInfo);
+        // The caller waits before acquiring. Reset immediately before the
+        // submission that will signal the fence, after recording has ended.
+        if (SubmitInfo.FenceToSignal != nullptr)
+        {
+            SubmitInfo.FenceToSignal->Reset();
+        }
+        SubmitResult = SubmitQueue->Submit(SubmitInfo);
     }
 
-    if (ExecuteOptions.bWaitForCompletion && SubmitQueue != nullptr)
+    if (ExecuteOptions.bSubmitImmediately && ExecuteOptions.bWaitForCompletion &&
+        SubmitResult == ERALQueueSubmitResult::Success)
     {
         SubmitQueue->WaitIdle();
     }
 
+    // Synchronous executions still own their transients until queue completion.
+    // Asynchronous executions transferred them before submission and only clear
+    // empty resolution state here.
     ExecutionContext.ResetTransientResources();
+    return SubmitResult;
 }
 
 } // namespace LE

@@ -14,6 +14,7 @@
 #include "RAL/RALSampler.h"
 #include "RAL/RALSyncPrimitives.h"
 #include "RAL/RALSwapchain.h"
+#include "RAL/RALCommandAllocator.h"
 #include "RAL/RALCommandList.h"
 #include "RAL/RALDevice.h"
 #include "RAL/RALTypes.h"
