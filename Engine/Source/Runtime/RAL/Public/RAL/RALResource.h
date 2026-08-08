@@ -2,6 +2,9 @@
 
 #include "CoreMinimal.h"
 
+namespace LE
+{
+
 class RAL_API FRALResource : public FNonCopyable
 {
 public:
@@ -11,3 +14,5 @@ public:
 public:
     virtual uint32 GetBindlessIndex() const { return 0xFFFFFFFF; }
 };
+
+} // namespace LE

@@ -4,6 +4,9 @@
 #include "Platform/Platform.h"
 #include <Windows.h>
 
+namespace LE
+{
+
 class FWindowsWindow : public FPlatformWindow
 {
 public:
@@ -12,7 +15,7 @@ public:
 
 public:
     void* GetNativeHandle() const override { return static_cast<void*>(Hwnd); }
-    FRALSurfaceDesc GetSurfaceDesc() const override;
+    LE::FRALSurfaceDesc GetSurfaceDesc() const override;
     bool ProcessMessages() override;
     void GetSize(uint32& OutWidth, uint32& OutHeight) const override;
     bool IsMinimized() const override;
@@ -26,3 +29,5 @@ private:
 private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 };
+
+} // namespace LE

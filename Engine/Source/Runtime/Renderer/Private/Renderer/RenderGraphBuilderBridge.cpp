@@ -1,69 +1,76 @@
 #include "Renderer/RenderGraphBuilderBridge.h"
 
-FRenderGraphBuilderBridge::FRenderGraphBuilderBridge(FRFGBuilder& InBuilder)
+namespace LE
+{
+
+FRenderGraphBuilderBridge::FRenderGraphBuilderBridge(LE::FRFGBuilder& InBuilder)
     : Builder(&InBuilder)
 {
 }
 
 FRenderGraphBuilderBridge::~FRenderGraphBuilderBridge() = default;
 
-FRFGResourceHandle FRenderGraphBuilderBridge::ImportTexture(const FString& ResourceName, FRALTexture* Texture, ERALResourceState InitialState)
+LE::FRFGResourceHandle FRenderGraphBuilderBridge::ImportTexture(const LE::String& ResourceName, LE::FRALTexture* Texture, LE::ERALResourceState InitialState)
 {
     if (Texture == nullptr)
     {
-        return FRFGResourceHandle();
+        return LE::FRFGResourceHandle();
     }
 
-    const auto Found = ImportedTextures.find(Texture);
-    if (Found != ImportedTextures.end())
+    const LE::FRFGResourceHandle* const Found = ImportedTextures.Find(Texture);
+    if (Found != nullptr)
     {
-        return Found->second;
+        return *Found;
     }
 
-    const FRFGResourceHandle Handle = Builder->ImportTexture(ResourceName, Texture, InitialState);
-    ImportedTextures.emplace(Texture, Handle);
+    const LE::FRFGResourceHandle Handle = Builder->ImportTexture(ResourceName, Texture, InitialState);
+    const LE::FRALTexture* const TextureKey = Texture;
+    ImportedTextures.Insert(TextureKey, Handle);
     return Handle;
 }
 
-FRFGResourceHandle FRenderGraphBuilderBridge::ImportBuffer(const FString& ResourceName, FRALBuffer* Buffer, ERALResourceState InitialState)
+LE::FRFGResourceHandle FRenderGraphBuilderBridge::ImportBuffer(const LE::String& ResourceName, LE::FRALBuffer* Buffer, LE::ERALResourceState InitialState)
 {
     if (Buffer == nullptr)
     {
-        return FRFGResourceHandle();
+        return LE::FRFGResourceHandle();
     }
 
-    const auto Found = ImportedBuffers.find(Buffer);
-    if (Found != ImportedBuffers.end())
+    const LE::FRFGResourceHandle* const Found = ImportedBuffers.Find(Buffer);
+    if (Found != nullptr)
     {
-        return Found->second;
+        return *Found;
     }
 
-    const FRFGResourceHandle Handle = Builder->ImportBuffer(ResourceName, Buffer, InitialState);
-    ImportedBuffers.emplace(Buffer, Handle);
+    const LE::FRFGResourceHandle Handle = Builder->ImportBuffer(ResourceName, Buffer, InitialState);
+    const LE::FRALBuffer* const BufferKey = Buffer;
+    ImportedBuffers.Insert(BufferKey, Handle);
     return Handle;
 }
 
-void FRenderGraphBuilderBridge::Read(FRFGPassHandle PassHandle, FRFGResourceHandle ResourceHandle, const FRFGAccessDesc& AccessDesc)
+void FRenderGraphBuilderBridge::Read(LE::FRFGPassHandle PassHandle, LE::FRFGResourceHandle ResourceHandle, const LE::FRFGAccessDesc& AccessDesc)
 {
     Builder->Read(PassHandle, ResourceHandle, AccessDesc);
 }
 
-void FRenderGraphBuilderBridge::Write(FRFGPassHandle PassHandle, FRFGResourceHandle ResourceHandle, const FRFGAccessDesc& AccessDesc)
+void FRenderGraphBuilderBridge::Write(LE::FRFGPassHandle PassHandle, LE::FRFGResourceHandle ResourceHandle, const LE::FRFGAccessDesc& AccessDesc)
 {
     Builder->Write(PassHandle, ResourceHandle, AccessDesc);
 }
 
-void FRenderGraphBuilderBridge::MarkOutput(FRFGResourceHandle ResourceHandle)
+void FRenderGraphBuilderBridge::MarkOutput(LE::FRFGResourceHandle ResourceHandle)
 {
     Builder->MarkOutput(ResourceHandle);
 }
 
-FRFGBuilder& FRenderGraphBuilderBridge::GetGraphBuilder()
+LE::FRFGBuilder& FRenderGraphBuilderBridge::GetGraphBuilder()
 {
     return *Builder;
 }
 
-const FRFGBuilder& FRenderGraphBuilderBridge::GetGraphBuilder() const
+const LE::FRFGBuilder& FRenderGraphBuilderBridge::GetGraphBuilder() const
 {
     return *Builder;
 }
+
+} // namespace LE

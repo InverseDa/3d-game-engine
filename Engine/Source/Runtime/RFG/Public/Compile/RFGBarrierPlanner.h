@@ -2,6 +2,9 @@
 
 #include "CoreMinimal.h"
 
+namespace LE
+{
+
 class FRFGRecordedGraph;
 class FRFGCompiledPlan;
 
@@ -15,3 +18,5 @@ public:
     void BuildResourceLifetimes(const FRFGRecordedGraph& RecordedGraph, FRFGCompiledPlan& InOutPlan) const;
     void BuildBarriers(const FRFGRecordedGraph& RecordedGraph, FRFGCompiledPlan& InOutPlan) const;
 };
+
+} // namespace LE

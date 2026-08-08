@@ -2,6 +2,9 @@
 
 #include "CoreMinimal.h"
 
+namespace LE
+{
+
 class FRFGRecordedGraph;
 class FRFGCompiledPlan;
 
@@ -14,3 +17,5 @@ public:
 public:
     void CullPasses(const FRFGRecordedGraph& RecordedGraph, FRFGCompiledPlan& InOutPlan) const;
 };
+
+} // namespace LE

@@ -1,16 +1,19 @@
 #include "Compile/RFGCompiledPlan.h"
 
+namespace LE
+{
+
 const FRFGGraphSignature& FRFGCompiledPlan::GetSignature() const
 {
     return Signature;
 }
 
-const std::vector<FRFGCompiledPass>& FRFGCompiledPlan::GetPasses() const
+const LE::Array<FRFGCompiledPass>& FRFGCompiledPlan::GetPasses() const
 {
     return CompiledPasses;
 }
 
-const std::vector<FRFGCompiledResourceLife>& FRFGCompiledPlan::GetResourceLifetimes() const
+const LE::Array<FRFGCompiledResourceLife>& FRFGCompiledPlan::GetResourceLifetimes() const
 {
     return ResourceLifetimes;
 }
@@ -20,12 +23,12 @@ FRFGGraphSignature& FRFGCompiledPlan::GetMutableSignature()
     return Signature;
 }
 
-std::vector<FRFGCompiledPass>& FRFGCompiledPlan::GetMutablePasses()
+LE::Array<FRFGCompiledPass>& FRFGCompiledPlan::GetMutablePasses()
 {
     return CompiledPasses;
 }
 
-std::vector<FRFGCompiledResourceLife>& FRFGCompiledPlan::GetMutableResourceLifetimes()
+LE::Array<FRFGCompiledResourceLife>& FRFGCompiledPlan::GetMutableResourceLifetimes()
 {
     return ResourceLifetimes;
 }
@@ -33,6 +36,8 @@ std::vector<FRFGCompiledResourceLife>& FRFGCompiledPlan::GetMutableResourceLifet
 void FRFGCompiledPlan::Clear()
 {
     Signature = {};
-    CompiledPasses.clear();
-    ResourceLifetimes.clear();
+    CompiledPasses.Clear();
+    ResourceLifetimes.Clear();
 }
+
+} // namespace LE

@@ -2,14 +2,18 @@ import * as Path from "node:path";
 import * as Fs from "node:fs/promises";
 import type { ModuleConfiguration } from "../Configuration/Types.ts";
 
-const SourceExtensions = [".cpp", ".cc", ".c", ".mm", ".m"];
+const SourceExtensions = new Set([".cpp", ".cc", ".c", ".mm", ".m"]);
+
+export function IsCompilableSource(FilePath: string): boolean {
+    return SourceExtensions.has(Path.extname(FilePath).toLowerCase());
+}
 
 export class SourceScanner {
     async Scan(SourceRoot: string, Conf: ModuleConfiguration): Promise<string[]> {
         const Files = await this.Walk(SourceRoot);
         return Files.filter((F) => {
             const Ext = Path.extname(F).toLowerCase();
-            if (!SourceExtensions.includes(Ext)) return false;
+            if (!SourceExtensions.has(Ext)) return false;
             const Rel = Path.relative(SourceRoot, F).replace(/\\/g, "/");
             for (const Exclude of Conf.SourceFilesExclude) {
                 if (Rel === Exclude.replace(/\\/g, "/")) return false;

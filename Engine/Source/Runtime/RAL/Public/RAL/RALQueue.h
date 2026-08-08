@@ -4,6 +4,9 @@
 #include "RALResource.h"
 #include "RALSyncPrimitives.h"
 
+namespace LE
+{
+
 class FRALCommandList;
 
 enum class EQueueType : uint8
@@ -17,8 +20,8 @@ struct FRALSubmitInfo
 {
     FRALCommandList* CmdList = nullptr;
 
-    std::vector<FRALSemaphore*> WaitSemaphores;
-    std::vector<FRALSemaphore*> SignalSemaphores;
+    LE::Array<FRALSemaphore*> WaitSemaphores;
+    LE::Array<FRALSemaphore*> SignalSemaphores;
 
     FRALFence* FenceToSignal = nullptr;
 };
@@ -33,3 +36,5 @@ public:
     virtual void WaitIdle() = 0;
     virtual EQueueType GetType() const = 0;
 };
+
+} // namespace LE

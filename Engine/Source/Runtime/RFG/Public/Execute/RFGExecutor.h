@@ -2,6 +2,9 @@
 
 #include "CoreMinimal.h"
 
+namespace LE
+{
+
 class FRFGRecordedGraph;
 class FRFGCompiledPlan;
 struct FRFGExecutionContext;
@@ -25,3 +28,5 @@ public:
         FRFGExecutionContext& ExecutionContext,
         const FRFGExecuteOptions& ExecuteOptions = {}) const;
 };
+
+} // namespace LE

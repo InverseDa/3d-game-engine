@@ -1,7 +1,8 @@
 import * as Path from "node:path";
 import * as Fs from "node:fs/promises";
 import * as FsSync from "node:fs";
-import type { Target } from "../Configuration/Types.ts";
+import { ResolveTarget } from "../Configuration/Target.ts";
+import type { ResolvedTarget, Target } from "../Configuration/Types.ts";
 import type { ResolvedModule, DependencyGraph } from "../Graph/DependencyGraph.ts";
 import type { IToolchain } from "../Toolchain/IToolchain.ts";
 import type { EnginePaths } from "./EnginePaths.ts";
@@ -41,7 +42,7 @@ export class VcxprojGenerator {
         this.Toolchain = Toolchain;
     }
 
-    async Generate(Modules: ResolvedModule[], Target: Target): Promise<string> {
+    async Generate(Modules: ResolvedModule[], BuildTarget: ResolvedTarget): Promise<string> {
         const ProjectFilesDir = this.Paths.ProjectFilesDirectory;
         await Fs.mkdir(ProjectFilesDir, { recursive: true });
         await this.RemoveObsoleteProjectFileLinks();
@@ -51,7 +52,7 @@ export class VcxprojGenerator {
         const VcxprojPath = Path.join(ProjectFilesDir, "LimitlessEngine.vcxproj");
         const CommonPropsPath = Path.join(ProjectFilesDir, "LimitlessEngineCommon.props");
         await Fs.writeFile(CommonPropsPath, this.BuildCommonProps(), "utf-8");
-        await Fs.writeFile(VcxprojPath, this.BuildVcxproj(Files, Modules, Target, IntelliSense), "utf-8");
+        await Fs.writeFile(VcxprojPath, this.BuildVcxproj(Files, Modules, BuildTarget, IntelliSense), "utf-8");
 
         const SlnPath = Path.join(this.Paths.Root, "LimitlessEngine.sln");
         await Fs.writeFile(SlnPath, this.BuildSln(), "utf-8");
@@ -70,7 +71,7 @@ export class VcxprojGenerator {
     private BuildVcxproj(
         Files: ProjectFiles,
         Modules: ResolvedModule[],
-        Target: Target,
+        BuildTarget: ResolvedTarget,
         IntelliSense: IntelliSenseConfiguration,
     ): string {
         const AllIncludes = new Set<string>();
@@ -91,11 +92,10 @@ export class VcxprojGenerator {
             AllIncludes.add(IncludePath);
         }
         AllDefines.add("PLATFORM_WINDOWS=1");
+        const Target = BuildTarget.Target;
         AllDefines.add(`WITH_EDITOR=${Target.TargetType === "Editor" ? "1" : "0"}`);
 
         const CleanCmd = `del /Q "$(ProjectDir)..\\..\\Binaries\\Win64\\*.lib" "$(ProjectDir)..\\..\\Binaries\\Win64\\*.exe" 2>nul`;
-        const OutputName = Target.TargetType === "Editor" ? "LimitlessEditor" : "LimitlessGame";
-        const Output = `$(ProjectDir)..\\..\\Binaries\\Win64\\${OutputName}.exe`;
         const IncludeStr = [...AllIncludes].filter((PathName) => FsSync.existsSync(PathName)).join(";");
         const DefineStr = [...AllDefines].join(";");
 
@@ -118,14 +118,19 @@ export class VcxprojGenerator {
         Lines.push(`  <ImportGroup Label="ExtensionSettings" />`);
         Lines.push(`  <PropertyGroup Label="UserMacros" />`);
 
-        for (const Configuration of ["Debug", "Release"]) {
-            const BuildCmd = `$(ProjectDir)..\\..\\Builder\\LimitlessBuilder.bat build --platform Win64 --config ${Configuration} --type ${Target.TargetType}`;
+        for (const Configuration of ["Debug", "Release"] as const) {
+            const ConfigurationTarget = Target.Optimization === Configuration
+                ? BuildTarget
+                : ResolveTarget(BuildTarget.Descriptor, { ...Target, Optimization: Configuration });
+            const OutputName = ConfigurationTarget.OutputName;
+            const Output = `$(ProjectDir)..\\..\\Binaries\\Win64\\${OutputName}.exe`;
+            const BuildCmd = `$(ProjectDir)..\\..\\Builder\\LimitlessBuilder.bat build --target "${BuildTarget.Descriptor.Name}" --platform Win64 --config ${Configuration} --type ${Target.TargetType}`;
             Lines.push(`  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='${Configuration}|x64'">`);
-            Lines.push(`    <NMakeBuildCommandLine>${BuildCmd}</NMakeBuildCommandLine>`);
-            Lines.push(`    <NMakeReBuildCommandLine>${BuildCmd}</NMakeReBuildCommandLine>`);
+            Lines.push(`    <NMakeBuildCommandLine>${XmlEscape(BuildCmd)}</NMakeBuildCommandLine>`);
+            Lines.push(`    <NMakeReBuildCommandLine>${XmlEscape(BuildCmd)}</NMakeReBuildCommandLine>`);
             Lines.push(`    <NMakeCleanCommandLine>${CleanCmd}</NMakeCleanCommandLine>`);
-            Lines.push(`    <NMakeOutput>${Output}</NMakeOutput>`);
-            Lines.push(`    <TargetName>${OutputName}</TargetName>`);
+            Lines.push(`    <NMakeOutput>${XmlEscape(Output)}</NMakeOutput>`);
+            Lines.push(`    <TargetName>${XmlEscape(OutputName)}</TargetName>`);
             Lines.push(`    <TargetExt>.exe</TargetExt>`);
             Lines.push(`    <LocalDebuggerCommand>$(NMakeOutput)</LocalDebuggerCommand>`);
             Lines.push(`    <LocalDebuggerWorkingDirectory>$(ProjectDir)..\\..</LocalDebuggerWorkingDirectory>`);

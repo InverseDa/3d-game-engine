@@ -4,7 +4,9 @@
 #include "RAL/RALTypes.h"
 #include "Core/RFGHandles.h"
 
-#include <functional>
+
+namespace LE
+{
 
 class FRFGPassContext;
 
@@ -82,7 +84,7 @@ inline bool EnumHasAnyFlags(ERFGResourceFlags Value, ERFGResourceFlags Flags)
     return (static_cast<uint32>(Value) & static_cast<uint32>(Flags)) != 0;
 }
 
-using FRFGPassCallback = std::function<void(FRFGPassContext&)>;
+using FRFGPassCallback = LE::Function<void(FRFGPassContext&)>;
 
 struct FRFGTextureDesc
 {
@@ -91,7 +93,7 @@ struct FRFGTextureDesc
     uint32 Depth = 1;
     uint32 MipLevels = 1;
     uint32 ArrayLayers = 1;
-    EPixelFormat Format = EPixelFormat::Unknown;
+    LE::EPixelFormat Format = LE::EPixelFormat::Unknown;
     uint32 UsageMask = 0;
 };
 
@@ -99,7 +101,7 @@ struct FRFGBufferDesc
 {
     uint64 Size = 0;
     uint64 Stride = 0;
-    EResourceUsage Usage = EResourceUsage::Local;
+    LE::EResourceUsage Usage = LE::EResourceUsage::Local;
     uint32 UsageMask = 0;
 };
 
@@ -115,8 +117,8 @@ struct FRFGAccessDesc
     ERFGAccessType Access = ERFGAccessType::Read;
     // Read/Write is used for dependency analysis. State describes the concrete
     // RAL usage/layout required while the pass executes.
-    ERALResourceState State = ERALResourceState::Unknown;
-    EShaderStage ShaderStage = EShaderStage::AllStage;
+    LE::ERALResourceState State = LE::ERALResourceState::Unknown;
+    LE::EShaderStage ShaderStage = LE::EShaderStage::AllStage;
     ERFGPipelineStage PipelineStage = ERFGPipelineStage::Graphics;
 
     uint32 BaseMipLevel = 0;
@@ -151,3 +153,5 @@ struct FRFGSourceLocation
     const char* File = "";
     uint32 Line = 0;
 };
+
+} // namespace LE

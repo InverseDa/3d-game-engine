@@ -1,6 +1,9 @@
-﻿#pragma once
+#pragma once
 #include "RALDescription.h"
 #include "RALResource.h"
+
+namespace LE
+{
 
 class RAL_API FRALBindGroupLayout : public FRALResource
 {
@@ -16,3 +19,4 @@ public:
     virtual const FRALBindGroupDesc& GetDesc() const = 0;
 };
 
+} // namespace LE

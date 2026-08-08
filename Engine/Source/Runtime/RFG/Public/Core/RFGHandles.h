@@ -2,7 +2,8 @@
 
 #include "CoreMinimal.h"
 
-#include <functional>
+namespace LE
+{
 
 struct FRFGPassHandle
 {
@@ -34,23 +35,20 @@ struct FRFGResourceHandle
     }
 };
 
-namespace std
+struct FRFGPassHandleHash
 {
-    template<>
-    struct hash<FRFGPassHandle>
+    std::size_t operator()(const FRFGPassHandle& Handle) const noexcept
     {
-        size_t operator()(const FRFGPassHandle& Handle) const noexcept
-        {
-            return hash<uint32>()(Handle.Id);
-        }
-    };
+        return LE::DefaultHash<uint32>{}(Handle.Id);
+    }
+};
 
-    template<>
-    struct hash<FRFGResourceHandle>
+struct FRFGResourceHandleHash
+{
+    std::size_t operator()(const FRFGResourceHandle& Handle) const noexcept
     {
-        size_t operator()(const FRFGResourceHandle& Handle) const noexcept
-        {
-            return hash<uint32>()(Handle.Id);
-        }
-    };
-}
+        return LE::DefaultHash<uint32>{}(Handle.Id);
+    }
+};
+
+} // namespace LE

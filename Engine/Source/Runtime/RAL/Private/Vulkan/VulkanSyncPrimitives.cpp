@@ -1,5 +1,8 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
+
+namespace LE
+{
 
 FVulkanRALSemaphore::FVulkanRALSemaphore(FVulkanRALDevice* InDevice)
     : Device(InDevice)
@@ -118,3 +121,5 @@ bool FVulkanRALFence::IsSignaled()
     }
     return vkGetFenceStatus(this->Device->VkContext.LogicalDevice, this->Handle) == VK_SUCCESS;
 }
+
+} // namespace LE

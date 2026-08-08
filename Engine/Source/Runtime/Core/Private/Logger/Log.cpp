@@ -15,7 +15,7 @@
 
 namespace LE {
 
-std::shared_ptr<spdlog::logger> s_CoreLogger;
+spdlog::logger* s_CoreLogger = nullptr;
 std::vector<spdlog::sink_ptr> s_Sinks;
 
 class LevelTagFormatter final : public spdlog::custom_flag_formatter
@@ -125,8 +125,9 @@ void Log::Init()
 
     s_Sinks = { consoleSink, fileSink };
 
-    s_CoreLogger = std::make_shared<spdlog::logger>("CORE", begin(s_Sinks), end(s_Sinks));
-    spdlog::register_logger(s_CoreLogger);
+    std::shared_ptr<spdlog::logger> CoreLogger = std::make_shared<spdlog::logger>("CORE", begin(s_Sinks), end(s_Sinks));
+    spdlog::register_logger(CoreLogger);
+    s_CoreLogger = CoreLogger.get();
     s_CoreLogger->set_level(spdlog::level::trace);
     s_CoreLogger->flush_on(spdlog::level::trace);
 
@@ -139,22 +140,25 @@ void Log::Init()
     });
 }
 
-std::shared_ptr<spdlog::logger>& Log::GetCoreLogger()
+spdlog::logger* Log::GetCoreLogger()
 {
     return s_CoreLogger;
 }
 
-std::shared_ptr<spdlog::logger> Log::GetLoggerOrCreate(const std::string& name)
+spdlog::logger* Log::GetLoggerOrCreate(const StringView Name)
 {
+    // spdlog owns its registry keys and requires std::string-compatible input;
+    // keep that ownership at this exact third-party boundary.
+    const std::string name(Name.Data() == nullptr ? "" : Name.Data(), Name.Size());
     auto logger = spdlog::get(name);
     if (logger) {
-        return logger;
+        return logger.get();
     }
 
     logger = std::make_shared<spdlog::logger>(name, begin(s_Sinks), end(s_Sinks));
     spdlog::register_logger(logger);
     logger->set_level(spdlog::level::trace);
     logger->flush_on(spdlog::level::trace);
-    return logger;
+    return logger.get();
 }
 }

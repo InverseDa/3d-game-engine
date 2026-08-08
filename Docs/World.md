@@ -102,14 +102,14 @@ Game Loop / Editor
 依据 `Build.ts`：
 
 ```csharp
-conf.AddPublicDependency<CoreProject>(target);      // FString、基础类型
+conf.AddPublicDependency<CoreProject>(target);      // LE::String、基础类型
 conf.AddPublicDependency<RALProject>(target);       // FRALBuffer、FRALPipeline_Graphics
 conf.AddPublicDependency<RendererProject>(target);  // FRenderScene、ERenderMeshPassMask
 ```
 
 | 依赖模块 | 用途 |
 |----------|------|
-| **Core** | 使用 `FString`（`DebugName`）、`uint32`/`uint64` 等基础类型。 |
+| **Core** | 使用 `LE::String`（`DebugName`）、`LE::uint32`/`LE::uint64` 等基础类型。 |
 | **RAL** | 直接持有 RAL 渲染资源指针（`FRALBuffer*`、`FRALPipeline_Graphics*`），说明 World 层已穿透至底层图形抽象。 |
 | **Renderer** | 依赖 `FRenderScene`、`FRenderMeshProxy`、`ERenderMeshPassMask` 完成提取。 |
 

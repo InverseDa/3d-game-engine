@@ -3,7 +3,9 @@
 #include "CoreMinimal.h"
 #include "ShadingPath.h"
 
-#include <vector>
+
+namespace LE
+{
 
 class IRenderPass;
 struct FRendererFrameContext;
@@ -12,11 +14,11 @@ struct FRenderView;
 
 struct FRenderPipelinePlan
 {
-    std::vector<IRenderPass*> Passes;
+    LE::Array<IRenderPass*> Passes;
 
     void Reset()
     {
-        Passes.clear();
+        Passes.Clear();
     }
 };
 
@@ -36,3 +38,5 @@ public:
         const FRenderView& RenderView,
         FRenderPipelinePlan& OutPlan) = 0;
 };
+
+} // namespace LE

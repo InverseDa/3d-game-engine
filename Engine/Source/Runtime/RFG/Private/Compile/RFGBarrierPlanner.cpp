@@ -3,7 +3,8 @@
 #include "Compile/RFGCompiledPlan.h"
 #include "Record/RFGRecordedGraph.h"
 
-#include <unordered_map>
+namespace LE
+{
 
 namespace
 {
@@ -19,8 +20,8 @@ bool AccessHasWrite(ERFGAccessType AccessType)
 
 struct FLastResourceState
 {
-    ERALResourceState ResourceState = ERALResourceState::Unknown;
-    EShaderStage ShaderStage = EShaderStage::None;
+    LE::ERALResourceState ResourceState = LE::ERALResourceState::Unknown;
+    LE::EShaderStage ShaderStage = LE::EShaderStage::None;
     ERFGPipelineStage Stage = ERFGPipelineStage::None;
     ERFGAccessType Access = ERFGAccessType::None;
     ERFGQueueType Queue = ERFGQueueType::Graphics;
@@ -30,19 +31,19 @@ struct FLastResourceState
 
 void FRFGBarrierPlanner::BuildResourceLifetimes(const FRFGRecordedGraph& RecordedGraph, FRFGCompiledPlan& InOutPlan) const
 {
-    std::vector<FRFGCompiledResourceLife>& ResourceLifetimes = InOutPlan.GetMutableResourceLifetimes();
-    ResourceLifetimes.clear();
+    LE::Array<FRFGCompiledResourceLife>& ResourceLifetimes = InOutPlan.GetMutableResourceLifetimes();
+    ResourceLifetimes.Clear();
 
-    std::unordered_map<uint32, uint32> LifetimeIndexByResourceId;
+    LE::HashMap<uint32, uint32> LifetimeIndexByResourceId;
 
-    const std::vector<FRFGCompiledPass>& Passes = InOutPlan.GetPasses();
-    for (uint32 PassIndex = 0; PassIndex < Passes.size(); ++PassIndex)
+    const LE::Array<FRFGCompiledPass>& Passes = InOutPlan.GetPasses();
+    for (uint32 PassIndex = 0; PassIndex < Passes.Size(); ++PassIndex)
     {
         const FRFGPassNode& PassNode = RecordedGraph.GetPassNode(Passes[PassIndex].Handle);
         for (const FRFGPassResourceAccess& ResourceAccess : PassNode.ResourceAccesses)
         {
-            const auto LifetimeIt = LifetimeIndexByResourceId.find(ResourceAccess.Resource.Id);
-            if (LifetimeIt == LifetimeIndexByResourceId.end())
+            uint32* const LifetimeIndex = LifetimeIndexByResourceId.Find(ResourceAccess.Resource.Id);
+            if (LifetimeIndex == nullptr)
             {
                 FRFGCompiledResourceLife ResourceLife;
                 ResourceLife.Resource = ResourceAccess.Resource;
@@ -54,12 +55,12 @@ void FRFGBarrierPlanner::BuildResourceLifetimes(const FRFGRecordedGraph& Recorde
                     ResourceNode.Flags,
                     ERFGResourceFlags::Imported | ERFGResourceFlags::External | ERFGResourceFlags::Persistent);
 
-                LifetimeIndexByResourceId.emplace(ResourceAccess.Resource.Id, static_cast<uint32>(ResourceLifetimes.size()));
-                ResourceLifetimes.push_back(ResourceLife);
+                LifetimeIndexByResourceId.Insert(ResourceAccess.Resource.Id, static_cast<uint32>(ResourceLifetimes.Size()));
+                ResourceLifetimes.PushBack(ResourceLife);
             }
             else
             {
-                FRFGCompiledResourceLife& ResourceLife = ResourceLifetimes[LifetimeIt->second];
+                FRFGCompiledResourceLife& ResourceLife = ResourceLifetimes[*LifetimeIndex];
                 if (PassIndex < ResourceLife.FirstPassIndex)
                 {
                     ResourceLife.FirstPassIndex = PassIndex;
@@ -75,22 +76,28 @@ void FRFGBarrierPlanner::BuildResourceLifetimes(const FRFGRecordedGraph& Recorde
 
 void FRFGBarrierPlanner::BuildBarriers(const FRFGRecordedGraph& RecordedGraph, FRFGCompiledPlan& InOutPlan) const
 {
-    std::unordered_map<uint32, FLastResourceState> LastStates;
+    LE::HashMap<uint32, FLastResourceState> LastStates;
 
-    std::vector<FRFGCompiledPass>& Passes = InOutPlan.GetMutablePasses();
+    LE::Array<FRFGCompiledPass>& Passes = InOutPlan.GetMutablePasses();
     for (FRFGCompiledPass& CompiledPass : Passes)
     {
-        CompiledPass.PreBarriers.clear();
-        CompiledPass.PostBarriers.clear();
+        CompiledPass.PreBarriers.Clear();
+        CompiledPass.PostBarriers.Clear();
 
         const FRFGPassNode& PassNode = RecordedGraph.GetPassNode(CompiledPass.Handle);
         for (const FRFGPassResourceAccess& ResourceAccess : PassNode.ResourceAccesses)
         {
-            FLastResourceState& LastState = LastStates[ResourceAccess.Resource.Id];
+            FLastResourceState* LastStatePointer = LastStates.Find(ResourceAccess.Resource.Id);
+            if (LastStatePointer == nullptr)
+            {
+                LastStates.Insert(ResourceAccess.Resource.Id, FLastResourceState{});
+                LastStatePointer = LastStates.Find(ResourceAccess.Resource.Id);
+            }
+            FLastResourceState& LastState = *LastStatePointer;
             const FRFGResourceNode& ResourceNode = RecordedGraph.GetResourceNode(ResourceAccess.Resource);
-            const ERALResourceState BeforeState = LastState.bInitialized ? LastState.ResourceState : ResourceNode.InitialState;
+            const LE::ERALResourceState BeforeState = LastState.bInitialized ? LastState.ResourceState : ResourceNode.InitialState;
             const bool bNeedsBarrier =
-                (!LastState.bInitialized && ResourceAccess.Access.State != ERALResourceState::Undefined) ||
+                (!LastState.bInitialized && ResourceAccess.Access.State != LE::ERALResourceState::Undefined) ||
                 (LastState.bInitialized &&
                  (LastState.Queue != CompiledPass.Queue ||
                  BeforeState != ResourceAccess.Access.State ||
@@ -115,7 +122,7 @@ void FRFGBarrierPlanner::BuildBarriers(const FRFGRecordedGraph& RecordedGraph, F
                 Transition.LayerCount = ResourceAccess.Access.LayerCount;
                 Transition.SrcQueue = LastState.Queue;
                 Transition.DstQueue = CompiledPass.Queue;
-                CompiledPass.PreBarriers.push_back(Transition);
+                CompiledPass.PreBarriers.PushBack(Transition);
             }
 
             LastState.ResourceState = ResourceAccess.Access.State;
@@ -127,3 +134,5 @@ void FRFGBarrierPlanner::BuildBarriers(const FRFGRecordedGraph& RecordedGraph, F
         }
     }
 }
+
+} // namespace LE

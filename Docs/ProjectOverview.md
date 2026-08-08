@@ -42,7 +42,7 @@ E:\Projects\3d-game-engine
 
 | 模块 | 全称 | 职责 | 源文件数 | 依赖 |
 |------|------|------|----------|------|
-| **Core** | Core | 基础类型、日志、宏定义、引擎通用工具 (`FNonCopyable`、数值类型等) | 5 | Glm, Spdlog |
+| **Core** | Core | 基础类型、自有数学值类型、日志与引擎通用工具 | 5 | Spdlog |
 | **RAL** | Render Abstraction Layer | 渲染抽象层，封装 Vulkan 底层对象 (Buffer、Texture、Pipeline、Swapchain、CommandList 等) | 27 | Core, Spdlog, Vulkan |
 | **RFG** | Render Frame Graph | 渲染帧图系统，负责 Pass 编排、资源屏障规划、依赖分析与执行调度 | 42 | Core, RAL |
 | **Renderer** | Renderer | 高层渲染器，定义 RenderPass / RenderPipeline / RenderView，对接 Frame Graph 与 RAL | 18 | Core, RAL, RFG |
@@ -101,10 +101,6 @@ GenerateProject.bat
 ## 6. 模块依赖拓扑图
 
 ```text
-                    +---------+
-                    |  Glm    |
-                    +----+----+
-                         |
                     +----v----+
                     | Spdlog  |
                     +----+----+
@@ -148,7 +144,7 @@ GenerateProject.bat
 
 | 模块 | 直接依赖 |
 |------|----------|
-| Core | Glm, Spdlog |
+| Core | Spdlog |
 | RAL | Core, Spdlog, Vulkan |
 | RFG | Core, RAL |
 | Renderer | Core, RAL, RFG |
@@ -158,14 +154,29 @@ GenerateProject.bat
 
 ## 7. 命名规范
 
+P0 的语言、namespace、Core 类型、ownership 与容器规范由
+[ADR-0001: P0 Modern C++ Language, Core Types, and Containers](ADR/0001-modern-cpp-core-types-and-containers.md)
+统一约束。当前代码仍处于迁移前/迁移中状态：最终根 namespace 直接为 `LE`，不提供
+`Limitless` alias；通用容器位于 `LE`，数学位于 `LE::Math`，领域 namespace 只在确有
+语义时保持浅层使用。
+
+已落地的 allocator、containers、String 契约见 [Core allocation and containers](CoreContainers.md)；
+跨 DLL creator-side destruction、`UniquePtr`/`SharedPtr`/`WeakPtr` 与 `Function` 规则见
+[Core ownership and callable utilities](CoreOwnership.md)。
+
 引擎采用 **Unreal Engine (UE) 风格** 命名规范，核心规则如下：
 
 | 前缀 | 含义 | 示例 |
 |------|------|------|
-| `F` | **Class** (普通类 / 结构体) | `FNonCopyable`、`FPlatformWindow`、`FRALBuffer` |
+| `F` | 普通 native/value/RAII 类型（非 tracing GC） | `FNonCopyable`、`FPlatformWindow`、`FRALBuffer` |
+| `L` | 未来 managed lifecycle / tracing GC 对象 | 暂不随意新增 |
 | `T` | **Template** (模板类 / 泛型) | `TVulkanResourceBase` |
 | `E` | **Enum** (枚举类型) | `ERALPlatform`、`EPixelFormat`、`EQueueType` |
 | `I` | Interface (接口，项目中暂未广泛使用) | — |
+
+其中 `F` 表示不参与未来 tracing GC 的普通 native/value/RAII 类型；`L` 保留给将来受
+managed lifecycle/GC 契约机械约束的对象。P0 保留既有类型、函数、成员、常量和布尔命名，
+基础设施迁移不夹带 cosmetic rename。
 
 ### 其他约定
 

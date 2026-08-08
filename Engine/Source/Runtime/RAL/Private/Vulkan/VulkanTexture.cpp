@@ -1,6 +1,9 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "RAL/RALTexture.h"
 #include "Vulkan/VulkanRAL.h"
+
+namespace LE
+{
 
 namespace
 {
@@ -260,3 +263,5 @@ FVulkanRALTextureView::~FVulkanRALTextureView()
         this->View = VK_NULL_HANDLE;
     }
 }
+
+} // namespace LE

@@ -11,7 +11,9 @@
 #include "Execute/RFGPassContext.h"
 
 #include <algorithm>
-#include <vector>
+
+namespace LE
+{
 
 namespace RendererDemoPasses
 {
@@ -49,7 +51,7 @@ inline bool IsCompositeConfigurationValid(
 class FOffscreenTrianglePass final : public IRenderPass
 {
 public:
-    explicit FOffscreenTrianglePass(const FTriangleCompositePipelineDesc& InDesc)
+    explicit FOffscreenTrianglePass(const FTriangleCompositePipelineDesc& InDesc) noexcept
         : Desc(InDesc)
     {
     }
@@ -60,9 +62,9 @@ public:
         return "OffscreenColorPass";
     }
 
-    ERFGQueueType GetQueueType() const override
+    LE::ERFGQueueType GetQueueType() const override
     {
-        return ERFGQueueType::Graphics;
+        return LE::ERFGQueueType::Graphics;
     }
 
     void Setup(FRenderPassSetupContext& Context) override
@@ -72,12 +74,12 @@ public:
             return;
         }
 
-        FRFGAccessDesc GraphicsWrite;
-        GraphicsWrite.Access = ERFGAccessType::Write;
-        GraphicsWrite.State = ERALResourceState::RenderTarget;
-        GraphicsWrite.PipelineStage = ERFGPipelineStage::Graphics;
+        LE::FRFGAccessDesc GraphicsWrite;
+        GraphicsWrite.Access = LE::ERFGAccessType::Write;
+        GraphicsWrite.State = LE::ERALResourceState::RenderTarget;
+        GraphicsWrite.PipelineStage = LE::ERFGPipelineStage::Graphics;
 
-        const FRFGResourceHandle SceneColorHandle = Context.GraphBridge->ImportTexture("SceneColor", Desc.SceneColorTexture, ERALResourceState::Undefined);
+        const LE::FRFGResourceHandle SceneColorHandle = Context.GraphBridge->ImportTexture("SceneColor", Desc.SceneColorTexture, LE::ERALResourceState::Undefined);
         Context.GraphBridge->Write(Context.PassHandle, SceneColorHandle, GraphicsWrite);
     }
 
@@ -88,8 +90,8 @@ public:
             return;
         }
 
-        std::vector<const FRenderMeshProxy*> MeshesToDraw;
-        MeshesToDraw.reserve(Context.RenderScene->Meshes.size());
+        LE::Array<const FRenderMeshProxy*> MeshesToDraw;
+        MeshesToDraw.Reserve(Context.RenderScene->Meshes.Size());
         for (const FRenderMeshProxy& Mesh : Context.RenderScene->Meshes)
         {
             if (!HasRenderMeshPass(Mesh.PassMask, ERenderMeshPassMask::SceneColor))
@@ -102,38 +104,38 @@ public:
                 continue;
             }
 
-            MeshesToDraw.push_back(&Mesh);
+            MeshesToDraw.PushBack(&Mesh);
         }
 
-        std::sort(
-            MeshesToDraw.begin(),
-            MeshesToDraw.end(),
+        if (MeshesToDraw.Size() > 1) std::sort(
+            MeshesToDraw.Data(),
+            MeshesToDraw.Data() + MeshesToDraw.Size(),
             [](const FRenderMeshProxy* Lhs, const FRenderMeshProxy* Rhs)
             {
                 return Lhs->SortKey < Rhs->SortKey;
             });
 
-        if (MeshesToDraw.empty())
+        if (MeshesToDraw.IsEmpty())
         {
             return;
         }
 
-        FRALCommandList* GraphCmdList = Context.PassContext->GetCommandList();
+        LE::FRALCommandList* GraphCmdList = Context.PassContext->GetCommandList();
         if (GraphCmdList == nullptr)
         {
             return;
         }
 
-        GraphCmdList->SetGraphicsPipeline(MeshesToDraw.front()->GraphicsPipeline);
+        GraphCmdList->SetGraphicsPipeline(MeshesToDraw.Front()->GraphicsPipeline);
 
-        const FRALTextureDesc& TexDesc = Desc.SceneColorView->GetTexture()->GetDesc();
-        FRALRenderPassDesc RenderPassDesc{};
+        const LE::FRALTextureDesc& TexDesc = Desc.SceneColorView->GetTexture()->GetDesc();
+        LE::FRALRenderPassDesc RenderPassDesc{};
         RenderPassDesc.RenderArea.Width = TexDesc.Width;
         RenderPassDesc.RenderArea.Height = TexDesc.Height;
         RenderPassDesc.ColorAttachmentCount = 1;
         RenderPassDesc.ColorAttachments[0].RenderTarget = Desc.SceneColorView;
-        RenderPassDesc.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
-        RenderPassDesc.ColorAttachments[0].StoreOp = EAttachmentStoreOp::Store;
+        RenderPassDesc.ColorAttachments[0].LoadOp = LE::EAttachmentLoadOp::Clear;
+        RenderPassDesc.ColorAttachments[0].StoreOp = LE::EAttachmentStoreOp::Store;
         RenderPassDesc.ColorAttachments[0].ClearColor[0] = 0.04f;
         RenderPassDesc.ColorAttachments[0].ClearColor[1] = 0.08f;
         RenderPassDesc.ColorAttachments[0].ClearColor[2] = 0.12f;
@@ -141,7 +143,7 @@ public:
         RenderPassDesc.bHasDepthStencil = false;
         GraphCmdList->BeginRenderPass(RenderPassDesc);
 
-        FRALViewport Viewport;
+        LE::FRALViewport Viewport;
         Viewport.X = 0.0f;
         Viewport.Y = 0.0f;
         Viewport.Width = static_cast<float>(TexDesc.Width);
@@ -150,7 +152,7 @@ public:
         Viewport.MaxDepth = 1.0f;
         GraphCmdList->SetViewport(Viewport);
 
-        FRALScissorRect Scissor;
+        LE::FRALScissorRect Scissor;
         Scissor.X = 0;
         Scissor.Y = 0;
         Scissor.Width = TexDesc.Width;
@@ -173,7 +175,7 @@ private:
 class FCompositePass final : public IRenderPass
 {
 public:
-    explicit FCompositePass(const FTriangleCompositePipelineDesc& InDesc)
+    explicit FCompositePass(const FTriangleCompositePipelineDesc& InDesc) noexcept
         : Desc(InDesc)
     {
     }
@@ -184,33 +186,33 @@ public:
         return "CompositeToBackBufferPass";
     }
 
-    ERFGQueueType GetQueueType() const override
+    LE::ERFGQueueType GetQueueType() const override
     {
-        return ERFGQueueType::Graphics;
+        return LE::ERFGQueueType::Graphics;
     }
 
     void Setup(FRenderPassSetupContext& Context) override
     {
-        FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
+        LE::FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
         if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr ||
             !RendererDemoPasses::IsCompositeConfigurationValid(Desc, Context.RenderScene))
         {
             return;
         }
 
-        FRFGAccessDesc GraphicsWrite;
-        GraphicsWrite.Access = ERFGAccessType::Write;
-        GraphicsWrite.State = ERALResourceState::RenderTarget;
-        GraphicsWrite.PipelineStage = ERFGPipelineStage::Graphics;
+        LE::FRFGAccessDesc GraphicsWrite;
+        GraphicsWrite.Access = LE::ERFGAccessType::Write;
+        GraphicsWrite.State = LE::ERALResourceState::RenderTarget;
+        GraphicsWrite.PipelineStage = LE::ERFGPipelineStage::Graphics;
 
-        FRFGAccessDesc GraphicsRead;
-        GraphicsRead.Access = ERFGAccessType::Read;
-        GraphicsRead.State = ERALResourceState::ShaderResource;
-        GraphicsRead.ShaderStage = EShaderStage::Pixel;
-        GraphicsRead.PipelineStage = ERFGPipelineStage::Graphics;
+        LE::FRFGAccessDesc GraphicsRead;
+        GraphicsRead.Access = LE::ERFGAccessType::Read;
+        GraphicsRead.State = LE::ERALResourceState::ShaderResource;
+        GraphicsRead.ShaderStage = LE::EShaderStage::Pixel;
+        GraphicsRead.PipelineStage = LE::ERFGPipelineStage::Graphics;
 
-        const FRFGResourceHandle BackBufferHandle = Context.GraphBridge->ImportTexture("BackBuffer", BackBufferView->GetTexture(), ERALResourceState::Undefined);
-        const FRFGResourceHandle SceneColorHandle = Context.GraphBridge->ImportTexture("SceneColor", Desc.SceneColorTexture, ERALResourceState::Undefined);
+        const LE::FRFGResourceHandle BackBufferHandle = Context.GraphBridge->ImportTexture("BackBuffer", BackBufferView->GetTexture(), LE::ERALResourceState::Undefined);
+        const LE::FRFGResourceHandle SceneColorHandle = Context.GraphBridge->ImportTexture("SceneColor", Desc.SceneColorTexture, LE::ERALResourceState::Undefined);
         Context.GraphBridge->Read(Context.PassHandle, SceneColorHandle, GraphicsRead);
         Context.GraphBridge->Write(Context.PassHandle, BackBufferHandle, GraphicsWrite);
         Context.GraphBridge->MarkOutput(BackBufferHandle);
@@ -218,14 +220,14 @@ public:
 
     void Record(FRenderPassRecordContext& Context) override
     {
-        FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
+        LE::FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
         if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr ||
             !RendererDemoPasses::IsCompositeConfigurationValid(Desc, Context.RenderScene))
         {
             return;
         }
 
-        FRALCommandList* GraphCmdList = Context.PassContext->GetCommandList();
+        LE::FRALCommandList* GraphCmdList = Context.PassContext->GetCommandList();
         if (GraphCmdList == nullptr)
         {
             return;
@@ -234,14 +236,14 @@ public:
         GraphCmdList->SetGraphicsPipeline(Desc.CompositePipeline);
         GraphCmdList->SetBindGroup(0, Desc.CompositeBindGroup);
 
-        const FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
-        FRALRenderPassDesc RenderPassDesc{};
+        const LE::FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
+        LE::FRALRenderPassDesc RenderPassDesc{};
         RenderPassDesc.RenderArea.Width = TexDesc.Width;
         RenderPassDesc.RenderArea.Height = TexDesc.Height;
         RenderPassDesc.ColorAttachmentCount = 1;
         RenderPassDesc.ColorAttachments[0].RenderTarget = BackBufferView;
-        RenderPassDesc.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
-        RenderPassDesc.ColorAttachments[0].StoreOp = EAttachmentStoreOp::Store;
+        RenderPassDesc.ColorAttachments[0].LoadOp = LE::EAttachmentLoadOp::Clear;
+        RenderPassDesc.ColorAttachments[0].StoreOp = LE::EAttachmentStoreOp::Store;
         RenderPassDesc.ColorAttachments[0].ClearColor[0] = 0.0f;
         RenderPassDesc.ColorAttachments[0].ClearColor[1] = 0.0f;
         RenderPassDesc.ColorAttachments[0].ClearColor[2] = 0.0f;
@@ -249,7 +251,7 @@ public:
         RenderPassDesc.bHasDepthStencil = false;
         GraphCmdList->BeginRenderPass(RenderPassDesc);
 
-        FRALViewport Viewport;
+        LE::FRALViewport Viewport;
         Viewport.X = 0.0f;
         Viewport.Y = 0.0f;
         Viewport.Width = static_cast<float>(TexDesc.Width);
@@ -258,7 +260,7 @@ public:
         Viewport.MaxDepth = 1.0f;
         GraphCmdList->SetViewport(Viewport);
 
-        FRALScissorRect Scissor;
+        LE::FRALScissorRect Scissor;
         Scissor.X = 0;
         Scissor.Y = 0;
         Scissor.Width = TexDesc.Width;
@@ -272,3 +274,5 @@ public:
 private:
     FTriangleCompositePipelineDesc Desc;
 };
+
+} // namespace LE

@@ -1,4 +1,4 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 
 #include <algorithm>
 #include <limits>
@@ -15,6 +15,9 @@
 
 #include "Vulkan/VulkanRAL.h"
 
+namespace LE
+{
+
 namespace
 {
 VkFormat ToVkFormat(EPixelFormat Format)
@@ -28,7 +31,7 @@ VkFormat ToVkFormat(EPixelFormat Format)
     }
 }
 
-VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& AvailableFormats, EPixelFormat PreferredFormat)
+VkSurfaceFormatKHR ChooseSurfaceFormat(const LE::Array<VkSurfaceFormatKHR>& AvailableFormats, EPixelFormat PreferredFormat)
 {
     const VkFormat DesiredFormat = ToVkFormat(PreferredFormat);
     for (const VkSurfaceFormatKHR& SurfaceFormat : AvailableFormats)
@@ -47,12 +50,12 @@ VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& Av
         }
     }
 
-    return AvailableFormats.empty()
+    return AvailableFormats.IsEmpty()
         ? VkSurfaceFormatKHR{ VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }
         : AvailableFormats[0];
 }
 
-VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& AvailableModes, bool bEnableVsync)
+VkPresentModeKHR ChoosePresentMode(const LE::Array<VkPresentModeKHR>& AvailableModes, bool bEnableVsync)
 {
     if (bEnableVsync)
     {
@@ -124,7 +127,7 @@ FVulkanRALSwapchain::FVulkanRALSwapchain(FVulkanRALDevice* InDevice, const FRALS
 
     // Get the first frame picture
     this->AcquireNextImage();
-    LE_LOG(LogRAL, Info, "Vulkan swapchain created with {} images.", static_cast<uint32>(this->Images.size()));
+    LE_LOG(LogRAL, Info, "Vulkan swapchain created with {} images.", static_cast<uint32>(this->Images.Size()));
 }
 
 FVulkanRALSwapchain::~FVulkanRALSwapchain()
@@ -269,8 +272,9 @@ void FVulkanRALSwapchain::InternalCreateSwapchain()
         this->SwapchainHandle = VK_NULL_HANDLE;
         return;
     }
-    std::vector<VkSurfaceFormatKHR> SurfaceFormats(SurfaceFormatCount);
-    Result = vkGetPhysicalDeviceSurfaceFormatsKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &SurfaceFormatCount, SurfaceFormats.data());
+    LE::Array<VkSurfaceFormatKHR> SurfaceFormats;
+    SurfaceFormats.Resize(SurfaceFormatCount);
+    Result = vkGetPhysicalDeviceSurfaceFormatsKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &SurfaceFormatCount, SurfaceFormats.Data());
     if (Result != VK_SUCCESS)
     {
         LE_LOG(LogRAL, Error, "vkGetPhysicalDeviceSurfaceFormatsKHR(list) failed. VkResult={}", static_cast<int32>(Result));
@@ -287,8 +291,9 @@ void FVulkanRALSwapchain::InternalCreateSwapchain()
         this->SwapchainHandle = VK_NULL_HANDLE;
         return;
     }
-    std::vector<VkPresentModeKHR> PresentModes(PresentModeCount);
-    Result = vkGetPhysicalDeviceSurfacePresentModesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &PresentModeCount, PresentModes.data());
+    LE::Array<VkPresentModeKHR> PresentModes;
+    PresentModes.Resize(PresentModeCount);
+    Result = vkGetPhysicalDeviceSurfacePresentModesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &PresentModeCount, PresentModes.Data());
     if (Result != VK_SUCCESS)
     {
         LE_LOG(LogRAL, Error, "vkGetPhysicalDeviceSurfacePresentModesKHR(list) failed. VkResult={}", static_cast<int32>(Result));
@@ -369,19 +374,19 @@ void FVulkanRALSwapchain::InternalCreateImageViews()
         LE_LOG(LogRAL, Error, "Swapchain returned zero images.");
         return;
     }
-    this->Images.resize(ImageCount);
+    this->Images.Resize(ImageCount);
     {
-        const VkResult Result = vkGetSwapchainImagesKHR(this->Device->VkContext.LogicalDevice, this->SwapchainHandle, &ImageCount, this->Images.data());
+        const VkResult Result = vkGetSwapchainImagesKHR(this->Device->VkContext.LogicalDevice, this->SwapchainHandle, &ImageCount, this->Images.Data());
         if (Result != VK_SUCCESS)
         {
             LE_LOG(LogRAL, Error, "vkGetSwapchainImagesKHR(list) failed. VkResult={}", static_cast<int32>(Result));
-            this->Images.clear();
+            this->Images.Clear();
             return;
         }
     }
 
-    this->BackBufferViews.resize(ImageCount);
-    this->BackBufferTextures.resize(ImageCount);
+    this->BackBufferViews.Resize(ImageCount);
+    this->BackBufferTextures.Resize(ImageCount);
 
     for (uint32 i = 0; i < ImageCount; ++i)
     {
@@ -440,13 +445,13 @@ void FVulkanRALSwapchain::InternalDestroySwapchainResources()
     {
         delete View;
     }
-    BackBufferViews.clear();
+    BackBufferViews.Clear();
 
     for (auto* Texture : BackBufferTextures)
     {
         delete Texture;
     }
-    BackBufferTextures.clear();
+    BackBufferTextures.Clear();
 
     if (SwapchainHandle != VK_NULL_HANDLE)
     {
@@ -518,7 +523,7 @@ void FVulkanRALSwapchain::AcquireNextImage()
 
 FRALTextureView* FVulkanRALSwapchain::GetCurrentBackBufferView() const
 {
-    if (this->CurrentImageIndex < BackBufferViews.size())
+    if (this->CurrentImageIndex < BackBufferViews.Size())
     {
         return BackBufferViews[CurrentImageIndex];
     }
@@ -616,3 +621,5 @@ void FVulkanRALSwapchain::Present()
         this->AcquireNextImage();
     }
 }
+
+} // namespace LE

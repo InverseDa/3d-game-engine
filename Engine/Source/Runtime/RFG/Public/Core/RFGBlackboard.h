@@ -3,8 +3,9 @@
 #include "CoreMinimal.h"
 #include "Core/RFGHandles.h"
 
-#include <string>
-#include <unordered_map>
+
+namespace LE
+{
 
 class RFG_API FRFGBlackboard
 {
@@ -13,25 +14,27 @@ public:
     ~FRFGBlackboard() = default;
 
 public:
-    bool HasPassHandle(const FString& Key) const;
-    bool HasResourceHandle(const FString& Key) const;
-    bool HasUInt(const FString& Key) const;
+    bool HasPassHandle(const LE::String& Key) const;
+    bool HasResourceHandle(const LE::String& Key) const;
+    bool HasUInt(const LE::String& Key) const;
 
 public:
-    void SetPassHandle(const FString& Key, FRFGPassHandle Value);
-    void SetResourceHandle(const FString& Key, FRFGResourceHandle Value);
-    void SetUInt(const FString& Key, uint64 Value);
+    void SetPassHandle(const LE::String& Key, FRFGPassHandle Value);
+    void SetResourceHandle(const LE::String& Key, FRFGResourceHandle Value);
+    void SetUInt(const LE::String& Key, uint64 Value);
 
 public:
-    FRFGPassHandle GetPassHandle(const FString& Key) const;
-    FRFGResourceHandle GetResourceHandle(const FString& Key) const;
-    uint64 GetUInt(const FString& Key) const;
+    FRFGPassHandle GetPassHandle(const LE::String& Key) const;
+    FRFGResourceHandle GetResourceHandle(const LE::String& Key) const;
+    uint64 GetUInt(const LE::String& Key) const;
 
 public:
     void Clear();
 
 private:
-    std::unordered_map<std::string, FRFGPassHandle> PassEntries;
-    std::unordered_map<std::string, FRFGResourceHandle> ResourceEntries;
-    std::unordered_map<std::string, uint64> UIntEntries;
+    LE::HashMap<LE::String, FRFGPassHandle> PassEntries;
+    LE::HashMap<LE::String, FRFGResourceHandle> ResourceEntries;
+    LE::HashMap<LE::String, uint64> UIntEntries;
 };
+
+} // namespace LE

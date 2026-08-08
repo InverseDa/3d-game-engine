@@ -63,7 +63,7 @@ RFG 采用 **四阶段管线** 架构：
 #### 3.1.3 黑板（`RFGBlackboard.h` / `.cpp`）
 
 - 键值对存储容器，支持三类数据：`FRFGPassHandle`、`FRFGResourceHandle`、`uint64`。
-- 使用 `std::unordered_map<std::string, ...>` 实现，键由 `FString` 转为 `std::string`。
+- 使用 allocator-backed `LE::HashMap<LE::String, ...>`，支持 `LE::StringView` 查找。
 - 用途：在 `FRFGBuilder` 录制阶段按名称缓存句柄，便于跨 Pass 引用资源。
 
 #### 3.1.4 运行时（`RFGRuntime.h` / `.cpp`）
@@ -311,7 +311,7 @@ conf.AddPublicDependency<CoreProject>(target);
 conf.AddPublicDependency<RALProject>(target);
 ```
 
-- **Core**：使用 `CoreMinimal.h`、FString、`FNonCopyable`、日志宏（`LE_LOG` / `LE_DECLARE_LOG_CATEGORY`）等基础设施。
+- **Core**：使用 `CoreMinimal.h`、`LE::String`、`LE::FNonCopyable`、日志宏（`LE_LOG` / `LE_DECLARE_LOG_CATEGORY`）等基础设施。
 - **RAL（Render Abstraction Layer）**：
   - `FRALDevice`、`FRALQueue`、`FRALCommandList`
   - `FRALTexture`、`FRALBuffer` 及其描述符

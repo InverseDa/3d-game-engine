@@ -2,9 +2,15 @@ import * as ChildProcess from "node:child_process";
 import * as Fs from "node:fs";
 import * as Path from "node:path";
 import type { Target } from "../Configuration/Types.ts";
-import { Optimization } from "../Configuration/Types.ts";
+import { Optimization, TargetType } from "../Configuration/Types.ts";
 import { FindExecutable } from "./ExecutableLocator.ts";
 import type { IToolchain } from "./IToolchain.ts";
+
+export function GetMSVCExecutableSubsystem(Target: Target): "/SUBSYSTEM:WINDOWS" | "/SUBSYSTEM:CONSOLE" {
+    return Target.TargetType === TargetType.Program || Target.TargetType === TargetType.Test
+        ? "/SUBSYSTEM:CONSOLE"
+        : "/SUBSYSTEM:WINDOWS";
+}
 
 export class MSVCToolchain implements IToolchain {
     public readonly Name = "MSVC";
@@ -73,7 +79,7 @@ export class MSVCToolchain implements IToolchain {
         Target: Target,
         IsDll: boolean,
     ): string[] {
-        const Arguments = ["/nologo", IsDll ? "/DLL" : "/SUBSYSTEM:WINDOWS"];
+        const Arguments = ["/nologo", IsDll ? "/DLL" : GetMSVCExecutableSubsystem(Target)];
         if (Target.Optimization === Optimization.Debug) {
             Arguments.push("/DEBUG");
         }

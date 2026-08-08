@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "RAL/RALBuffer.h"
 #include "RAL/RALShader.h"

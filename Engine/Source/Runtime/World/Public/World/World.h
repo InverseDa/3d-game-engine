@@ -3,22 +3,23 @@
 #include "CoreMinimal.h"
 #include "Renderer/RenderScene.h"
 
-#include <vector>
+namespace LE
+{
 
 class FRALBuffer;
 class FRALPipeline_Graphics;
 
 struct FWorldPrimitive
 {
-    FString DebugName;
+    LE::String DebugName;
 };
 
 struct FWorldMeshComponent : public FWorldPrimitive
 {
-    FRALPipeline_Graphics* GraphicsPipeline = nullptr;
-    FRALBuffer* VertexBuffer = nullptr;
+    LE::FRALPipeline_Graphics* GraphicsPipeline = nullptr;
+    LE::FRALBuffer* VertexBuffer = nullptr;
     uint32 VertexCount = 0;
-    ERenderMeshPassMask PassMask = ERenderMeshPassMask::All;
+    LE::ERenderMeshPassMask PassMask = LE::ERenderMeshPassMask::All;
     uint64 SortKey = 0;
 };
 
@@ -27,9 +28,11 @@ class WORLD_API FWorld
 public:
     void Reset()
     {
-        MeshComponents.clear();
+        MeshComponents.Clear();
     }
 
 public:
-    std::vector<FWorldMeshComponent> MeshComponents;
+    LE::Array<FWorldMeshComponent> MeshComponents;
 };
+
+} // namespace LE

@@ -10,12 +10,14 @@
 #include "Execute/RFGPassContext.h"
 
 #include <algorithm>
-#include <vector>
+
+namespace LE
+{
 
 class FTriangleBackBufferPass final : public IRenderPass
 {
 public:
-    explicit FTriangleBackBufferPass(const FTriangleBackBufferPipelineDesc& InDesc)
+    explicit FTriangleBackBufferPass(const FTriangleBackBufferPipelineDesc& InDesc) noexcept
         : Desc(InDesc)
     {
     }
@@ -26,44 +28,44 @@ public:
         return "TrianglePass";
     }
 
-    ERFGQueueType GetQueueType() const override
+    LE::ERFGQueueType GetQueueType() const override
     {
-        return ERFGQueueType::Graphics;
+        return LE::ERFGQueueType::Graphics;
     }
 
     void Setup(FRenderPassSetupContext& Context) override
     {
-        FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
+        LE::FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
         if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
         {
             return;
         }
 
-        FRFGAccessDesc BackBufferWrite;
-        BackBufferWrite.Access = ERFGAccessType::Write;
-        BackBufferWrite.State = ERALResourceState::RenderTarget;
-        BackBufferWrite.PipelineStage = ERFGPipelineStage::Graphics;
+        LE::FRFGAccessDesc BackBufferWrite;
+        BackBufferWrite.Access = LE::ERFGAccessType::Write;
+        BackBufferWrite.State = LE::ERALResourceState::RenderTarget;
+        BackBufferWrite.PipelineStage = LE::ERFGPipelineStage::Graphics;
 
-        const FRFGResourceHandle BackBufferHandle = Context.GraphBridge->ImportTexture("BackBuffer", BackBufferView->GetTexture(), ERALResourceState::Undefined);
+        const LE::FRFGResourceHandle BackBufferHandle = Context.GraphBridge->ImportTexture("BackBuffer", BackBufferView->GetTexture(), LE::ERALResourceState::Undefined);
         Context.GraphBridge->Write(Context.PassHandle, BackBufferHandle, BackBufferWrite);
         Context.GraphBridge->MarkOutput(BackBufferHandle);
     }
 
     void Record(FRenderPassRecordContext& Context) override
     {
-        FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
+        LE::FRALTextureView* BackBufferView = Desc.Swapchain != nullptr ? Desc.Swapchain->GetCurrentBackBufferView() : nullptr;
         if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
         {
             return;
         }
 
-        if (Context.RenderScene == nullptr || Context.RenderScene->Meshes.empty())
+        if (Context.RenderScene == nullptr || Context.RenderScene->Meshes.IsEmpty())
         {
             return;
         }
 
-        std::vector<const FRenderMeshProxy*> MeshesToDraw;
-        MeshesToDraw.reserve(Context.RenderScene->Meshes.size());
+        LE::Array<const FRenderMeshProxy*> MeshesToDraw;
+        MeshesToDraw.Reserve(Context.RenderScene->Meshes.Size());
         for (const FRenderMeshProxy& Mesh : Context.RenderScene->Meshes)
         {
             if (!HasRenderMeshPass(Mesh.PassMask, ERenderMeshPassMask::BackBuffer))
@@ -76,38 +78,38 @@ public:
                 continue;
             }
 
-            MeshesToDraw.push_back(&Mesh);
+            MeshesToDraw.PushBack(&Mesh);
         }
 
-        std::sort(
-            MeshesToDraw.begin(),
-            MeshesToDraw.end(),
+        if (MeshesToDraw.Size() > 1) std::sort(
+            MeshesToDraw.Data(),
+            MeshesToDraw.Data() + MeshesToDraw.Size(),
             [](const FRenderMeshProxy* Lhs, const FRenderMeshProxy* Rhs)
             {
                 return Lhs->SortKey < Rhs->SortKey;
             });
 
-        if (MeshesToDraw.empty())
+        if (MeshesToDraw.IsEmpty())
         {
             return;
         }
 
-        FRALCommandList* GraphCmdList = Context.PassContext->GetCommandList();
+        LE::FRALCommandList* GraphCmdList = Context.PassContext->GetCommandList();
         if (GraphCmdList == nullptr)
         {
             return;
         }
 
-        GraphCmdList->SetGraphicsPipeline(MeshesToDraw.front()->GraphicsPipeline);
+        GraphCmdList->SetGraphicsPipeline(MeshesToDraw.Front()->GraphicsPipeline);
 
-        const FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
-        FRALRenderPassDesc RenderPassDesc{};
+        const LE::FRALTextureDesc& TexDesc = BackBufferView->GetTexture()->GetDesc();
+        LE::FRALRenderPassDesc RenderPassDesc{};
         RenderPassDesc.RenderArea.Width = TexDesc.Width;
         RenderPassDesc.RenderArea.Height = TexDesc.Height;
         RenderPassDesc.ColorAttachmentCount = 1;
         RenderPassDesc.ColorAttachments[0].RenderTarget = BackBufferView;
-        RenderPassDesc.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
-        RenderPassDesc.ColorAttachments[0].StoreOp = EAttachmentStoreOp::Store;
+        RenderPassDesc.ColorAttachments[0].LoadOp = LE::EAttachmentLoadOp::Clear;
+        RenderPassDesc.ColorAttachments[0].StoreOp = LE::EAttachmentStoreOp::Store;
         RenderPassDesc.ColorAttachments[0].ClearColor[0] = 0.1f;
         RenderPassDesc.ColorAttachments[0].ClearColor[1] = 0.1f;
         RenderPassDesc.ColorAttachments[0].ClearColor[2] = 0.1f;
@@ -115,7 +117,7 @@ public:
         RenderPassDesc.bHasDepthStencil = false;
         GraphCmdList->BeginRenderPass(RenderPassDesc);
 
-        FRALViewport Viewport;
+        LE::FRALViewport Viewport;
         Viewport.X = 0.0f;
         Viewport.Y = 0.0f;
         Viewport.Width = static_cast<float>(TexDesc.Width);
@@ -124,7 +126,7 @@ public:
         Viewport.MaxDepth = 1.0f;
         GraphCmdList->SetViewport(Viewport);
 
-        FRALScissorRect Scissor;
+        LE::FRALScissorRect Scissor;
         Scissor.X = 0;
         Scissor.Y = 0;
         Scissor.Width = TexDesc.Width;
@@ -143,3 +145,5 @@ public:
 private:
     FTriangleBackBufferPipelineDesc Desc;
 };
+
+} // namespace LE

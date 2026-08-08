@@ -243,7 +243,7 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 
 | 模块 | 依赖方式 | 说明 |
 |-----|---------|------|
-| **Core** | Public | 基础类型（`CoreMinimal.h`）、日志分类、`FString`、`FNonCopyable` 等。 |
+| **Core** | Public | 基础类型（`CoreMinimal.h`）、日志分类、`LE::String`、`LE::FNonCopyable` 等。 |
 | **Spdlog** | Public | 日志输出（`LE_LOG` 宏内部使用）。 |
 | **Vulkan** | Public | Vulkan 头文件与加载。 |
 

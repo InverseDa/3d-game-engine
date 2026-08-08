@@ -1,7 +1,6 @@
 #pragma once
 
-#include <memory>
-#include <string>
+#include "Containers/StringView.h"
 
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h> 
@@ -26,8 +25,10 @@ class CORE_API Log
 {
 public:
     static void Init();
-    static std::shared_ptr<spdlog::logger>& GetCoreLogger();
-    static std::shared_ptr<spdlog::logger>  GetLoggerOrCreate(const std::string& Name);
+    // Borrowed from spdlog's registry. The registry owns the logger until
+    // LE_SHUTDOWN/spdlog::shutdown; callers must not retain or use it after shutdown.
+    static spdlog::logger* GetCoreLogger();
+    static spdlog::logger* GetLoggerOrCreate(StringView Name);
 };
 
 inline spdlog::level::level_enum LogLevelToSpdlog(LogLevel Level) {
@@ -46,10 +47,10 @@ inline spdlog::level::level_enum LogLevelToSpdlog(LogLevel Level) {
     LE::Log::Init();
 
 #define LE_DECLARE_LOG_CATEGORY_EXTERN(CategoryName) \
-    extern std::shared_ptr<spdlog::logger> CategoryName
+    extern spdlog::logger* CategoryName
 
 #define LE_DECLARE_LOG_CATEGORY(CategoryName) \
-    std::shared_ptr<spdlog::logger> CategoryName = LE::Log::GetLoggerOrCreate(#CategoryName)
+    spdlog::logger* CategoryName = LE::Log::GetLoggerOrCreate(#CategoryName)
 
 #define LE_LOG(CategoryName, Level, ...) \
     if (CategoryName) { \

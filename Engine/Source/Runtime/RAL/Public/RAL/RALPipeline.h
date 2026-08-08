@@ -4,6 +4,9 @@
 #include "RALResource.h"
 #include "RALDescription.h"
 
+namespace LE
+{
+
 class RAL_API FRALPipeline_Graphics : public FRALResource
 {
 public:
@@ -12,3 +15,5 @@ public:
 public:
     virtual const FRALPipelineDesc_Graphics& GetDesc() const = 0;
 };
+
+} // namespace LE

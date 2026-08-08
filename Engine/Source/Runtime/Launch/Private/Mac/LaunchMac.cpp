@@ -5,9 +5,7 @@
 #include <fstream>
 #include <chrono>
 #include <cstring>
-#include <string>
 #include <thread>
-#include <vector>
 #include <mach-o/dyld.h>
 
 #include "Mac/MacWindow.h"
@@ -16,6 +14,9 @@
 #include "Renderer/RendererMinimal.h"
 #include "ShaderRuntimeCompiler.h"
 #include "World/WorldMinimal.h"
+
+namespace LE
+{
 
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogXBD);
 LE_DECLARE_LOG_CATEGORY(LogXBD);
@@ -28,22 +29,22 @@ constexpr uint32 GTextureUsageShaderResource = 1u << 3;
 
 struct FSimpleVertex
 {
-    FVector3f Position;
-    FVector3f Color;
+    LE::Math::Vector3f Position;
+    LE::Math::Vector3f Color;
 };
 
 struct FOffscreenPassResources
 {
-    FRALTexture* Texture = nullptr;
-    FRALTextureView* TextureView = nullptr;
-    FRALSampler* Sampler = nullptr;
-    FRALBindGroupLayout* BindGroupLayout = nullptr;
-    FRALBindGroup* BindGroup = nullptr;
+    LE::FRALTexture* Texture = nullptr;
+    LE::FRALTextureView* TextureView = nullptr;
+    LE::FRALSampler* Sampler = nullptr;
+    LE::FRALBindGroupLayout* BindGroupLayout = nullptr;
+    LE::FRALBindGroup* BindGroup = nullptr;
 };
 
-static bool TryReadShaderFile(const std::string& CandidatePath, std::vector<char>& OutBuffer)
+static bool TryReadShaderFile(const LE::String& CandidatePath, LE::Array<char>& OutBuffer)
 {
-    std::ifstream File(CandidatePath.c_str(), std::ios::ate | std::ios::binary);
+    std::ifstream File(CandidatePath.Data(), std::ios::ate | std::ios::binary);
     if (!File.is_open())
     {
         return false;
@@ -52,73 +53,80 @@ static bool TryReadShaderFile(const std::string& CandidatePath, std::vector<char
     const size_t FileSize = static_cast<size_t>(File.tellg());
     if (FileSize == 0)
     {
-        LE_LOG(LogXBD, Error, "Shader is empty: {}", CandidatePath);
-        OutBuffer.clear();
+        LE_LOG(LogXBD, Error, "Shader is empty: {}", CandidatePath.Data());
+        OutBuffer.Clear();
         return true;
     }
 
-    OutBuffer.resize(FileSize);
+    OutBuffer.Resize(FileSize);
     File.seekg(0);
-    File.read(OutBuffer.data(), FileSize);
+    File.read(OutBuffer.Data(), static_cast<std::streamsize>(FileSize));
     File.close();
 
-    LE_LOG(LogXBD, Info, "Loaded shader: {} ({} bytes)", CandidatePath, FileSize);
+    LE_LOG(LogXBD, Info, "Loaded shader: {} ({} bytes)", CandidatePath.Data(), FileSize);
     return true;
 }
 
-static std::string GetParentPath(const std::string& Path)
+static LE::String GetParentPath(const LE::String& Path)
 {
-    if (Path.empty())
+    if (Path.IsEmpty())
     {
-        return std::string();
+        return {};
     }
 
-    const size_t LastSeparator = Path.find_last_of("/\\");
-    if (LastSeparator == std::string::npos)
+    for (size_t Index = Path.Size(); Index > 0; --Index)
     {
-        return std::string();
+        const char Character = Path[Index - 1];
+        if (Character == '/' || Character == '\\')
+        {
+            return LE::String(Path.View().Substr(0, Index - 1));
+        }
     }
-
-    return Path.substr(0, LastSeparator);
+    return {};
 }
 
-static std::string JoinPath(const std::string& Left, const std::string& Right)
+static LE::String JoinPath(const LE::String& Left, const LE::StringView Right)
 {
-    if (Left.empty())
+    if (Left.IsEmpty())
     {
-        return Right;
+        return LE::String(Right);
     }
 
-    const char LastChar = Left[Left.size() - 1];
+    const char LastChar = Left[Left.Size() - 1];
+    LE::String Result(Left);
     if (LastChar == '/' || LastChar == '\\')
     {
-        return Left + Right;
+        Result.Append(Right);
+        return Result;
     }
 
-    return Left + "/" + Right;
+    Result.Append("/");
+    Result.Append(Right);
+    return Result;
 }
 
-static std::string GetExecutableDirectory()
+static LE::String GetExecutableDirectory()
 {
     uint32 BufferSize = 0;
     _NSGetExecutablePath(nullptr, &BufferSize);
     if (BufferSize == 0)
     {
-        return std::string();
+        return {};
     }
 
-    std::vector<char> Buffer(BufferSize);
-    if (_NSGetExecutablePath(Buffer.data(), &BufferSize) != 0)
+    LE::Array<char> Buffer;
+    Buffer.Resize(BufferSize);
+    if (_NSGetExecutablePath(Buffer.Data(), &BufferSize) != 0)
     {
-        return std::string();
+        return {};
     }
 
-    return GetParentPath(std::string(Buffer.data()));
+    return GetParentPath(LE::String(Buffer.Data()));
 }
 
-static std::vector<char> ReadShaderFile(const char* Filename)
+static LE::Array<char> ReadShaderFile(const char* Filename)
 {
-    std::vector<char> Buffer;
+    LE::Array<char> Buffer;
 
     const char* RelativePrefixes[] = {
         "",
@@ -134,19 +142,19 @@ static std::vector<char> ReadShaderFile(const char* Filename)
 
     for (const char* Prefix : RelativePrefixes)
     {
-        std::string Candidate = Prefix[0]
-            ? (std::string(Prefix) + "/" + Filename)
-            : std::string(Filename);
+        LE::String Candidate(Prefix);
+        if (Prefix[0]) { Candidate.Append("/"); }
+        Candidate.Append(Filename);
         if (TryReadShaderFile(Candidate, Buffer))
         {
             return Buffer;
         }
     }
 
-    std::string SearchBase = GetExecutableDirectory();
-    for (int32 i = 0; i < 10 && !SearchBase.empty(); ++i)
+    LE::String SearchBase = GetExecutableDirectory();
+    for (int32 i = 0; i < 10 && !SearchBase.IsEmpty(); ++i)
     {
-        const std::string Candidate = JoinPath(SearchBase, Filename);
+        const LE::String Candidate = JoinPath(SearchBase, Filename);
         if (TryReadShaderFile(Candidate, Buffer))
         {
             return Buffer;
@@ -158,38 +166,38 @@ static std::vector<char> ReadShaderFile(const char* Filename)
     return {};
 }
 
-static bool IsValidSpirv(const std::vector<char>& ByteCode, const char* ShaderLabel)
+static bool IsValidSpirv(const LE::Array<char>& ByteCode, const char* ShaderLabel)
 {
-    if (ByteCode.empty())
+    if (ByteCode.IsEmpty())
     {
         LE_LOG(LogXBD, Error, "Shader bytecode is empty: {}", ShaderLabel);
         return false;
     }
-    if ((ByteCode.size() % 4) != 0)
+    if ((ByteCode.Size() % 4) != 0)
     {
-        LE_LOG(LogXBD, Error, "Shader bytecode is not 4-byte aligned: {} (size={})", ShaderLabel, ByteCode.size());
+        LE_LOG(LogXBD, Error, "Shader bytecode is not 4-byte aligned: {} (size={})", ShaderLabel, ByteCode.Size());
         return false;
     }
     return true;
 }
 
-static FRALBuffer* CreateTriangleVertexBuffer(FRALDevice* Device)
+static LE::FRALBuffer* CreateTriangleVertexBuffer(LE::FRALDevice* Device)
 {
     FSimpleVertex Vertices[3] = {
-        { FVector3f( 0.0f,  0.5f, 0.0f), FVector3f(1.0f, 0.0f, 0.0f) },
-        { FVector3f( 0.5f, -0.5f, 0.0f), FVector3f(0.0f, 1.0f, 0.0f) },
-        { FVector3f(-0.5f, -0.5f, 0.0f), FVector3f(0.0f, 0.0f, 1.0f) },
+        { LE::Math::Vector3f( 0.0f,  0.5f, 0.0f), LE::Math::Vector3f(1.0f, 0.0f, 0.0f) },
+        { LE::Math::Vector3f( 0.5f, -0.5f, 0.0f), LE::Math::Vector3f(0.0f, 1.0f, 0.0f) },
+        { LE::Math::Vector3f(-0.5f, -0.5f, 0.0f), LE::Math::Vector3f(0.0f, 0.0f, 1.0f) },
     };
 
     const uint64 BufferSize = sizeof(Vertices);
 
-    FRALBufferDesc BufferDesc;
+    LE::FRALBufferDesc BufferDesc;
     BufferDesc.Name = "TriangleVertexBuffer";
     BufferDesc.Size = BufferSize;
-    BufferDesc.Usage = static_cast<uint32>(EResourceUsage::Upload);
-    BufferDesc.UsageFlag = static_cast<uint32>(EBufferUsageFlags::VertexBuffer);
+    BufferDesc.Usage = static_cast<uint32>(LE::EResourceUsage::Upload);
+    BufferDesc.UsageFlag = static_cast<uint32>(LE::EBufferUsageFlags::VertexBuffer);
 
-    FRALBuffer* Buffer = Device->CreateBuffer(BufferDesc);
+    LE::FRALBuffer* Buffer = Device->CreateBuffer(BufferDesc);
     void* MappedData = Buffer->Map(0, BufferSize);
     memcpy(MappedData, Vertices, BufferSize);
     Buffer->Unmap();
@@ -213,21 +221,21 @@ static void DestroyOffscreenPassResources(FOffscreenPassResources& Resources)
 }
 
 static bool CreateOffscreenPassResources(
-    FRALDevice* Device,
+    LE::FRALDevice* Device,
     uint32 Width,
     uint32 Height,
     FOffscreenPassResources& Resources)
 {
     DestroyOffscreenPassResources(Resources);
 
-    FRALTextureDesc TextureDesc;
+    LE::FRALTextureDesc TextureDesc;
     TextureDesc.Name = "RFGSceneColor";
     TextureDesc.Width = Width;
     TextureDesc.Height = Height;
     TextureDesc.Depth = 1;
     TextureDesc.MipLevels = 1;
     TextureDesc.ArrayLayers = 1;
-    TextureDesc.Format = EPixelFormat::B8G8R8A8_SRGB;
+    TextureDesc.Format = LE::EPixelFormat::B8G8R8A8_SRGB;
     TextureDesc.bIsRenderTarget = true;
     TextureDesc.bIsShaderResource = true;
 
@@ -239,7 +247,7 @@ static bool CreateOffscreenPassResources(
         return false;
     }
 
-    FRALTextureViewDesc TextureViewDesc;
+    LE::FRALTextureViewDesc TextureViewDesc;
     TextureViewDesc.Texture = Resources.Texture;
     TextureViewDesc.Format = TextureDesc.Format;
     TextureViewDesc.MipSlice = 0;
@@ -254,11 +262,11 @@ static bool CreateOffscreenPassResources(
         return false;
     }
 
-    FRALSamplerDesc SamplerDesc;
+    LE::FRALSamplerDesc SamplerDesc;
     SamplerDesc.Name = "RFGSceneColorSampler";
-    SamplerDesc.AddressU = ESamplerAddressMode::ClampToEdge;
-    SamplerDesc.AddressV = ESamplerAddressMode::ClampToEdge;
-    SamplerDesc.AddressW = ESamplerAddressMode::ClampToEdge;
+    SamplerDesc.AddressU = LE::ESamplerAddressMode::ClampToEdge;
+    SamplerDesc.AddressV = LE::ESamplerAddressMode::ClampToEdge;
+    SamplerDesc.AddressW = LE::ESamplerAddressMode::ClampToEdge;
     Resources.Sampler = Device->CreateSampler(SamplerDesc);
     if (Resources.Sampler == nullptr)
     {
@@ -267,19 +275,19 @@ static bool CreateOffscreenPassResources(
         return false;
     }
 
-    FRALBindGroupLayoutDesc BindGroupLayoutDesc;
+    LE::FRALBindGroupLayoutDesc BindGroupLayoutDesc;
     BindGroupLayoutDesc.Name = "CompositeSceneColorLayout";
     BindGroupLayoutDesc.SetIndex = 0;
-    FRALBindGroupLayoutItem LayoutItem;
+    LE::FRALBindGroupLayoutItem LayoutItem;
     LayoutItem.Binding = 0;
     LayoutItem.Count = 1;
-    LayoutItem.Type = ERALBindGroupItemType::SampledImage;
-    LayoutItem.StageFlags = EShaderStage::Pixel;
-    BindGroupLayoutDesc.Bindings.push_back(LayoutItem);
+    LayoutItem.Type = LE::ERALBindGroupItemType::SampledImage;
+    LayoutItem.StageFlags = LE::EShaderStage::Pixel;
+    BindGroupLayoutDesc.Bindings.PushBack(LayoutItem);
 
     LayoutItem.Binding = 1;
-    LayoutItem.Type = ERALBindGroupItemType::Sampler;
-    BindGroupLayoutDesc.Bindings.push_back(LayoutItem);
+    LayoutItem.Type = LE::ERALBindGroupItemType::Sampler;
+    BindGroupLayoutDesc.Bindings.PushBack(LayoutItem);
     Resources.BindGroupLayout = Device->CreateBindGroupLayout(BindGroupLayoutDesc);
     if (Resources.BindGroupLayout == nullptr)
     {
@@ -288,18 +296,18 @@ static bool CreateOffscreenPassResources(
         return false;
     }
 
-    FRALBindGroupDesc BindGroupDesc;
+    LE::FRALBindGroupDesc BindGroupDesc;
     BindGroupDesc.Name = "CompositeSceneColorBindGroup";
     BindGroupDesc.Layout = Resources.BindGroupLayout;
-    FRALBindGroupItem BindGroupItem;
+    LE::FRALBindGroupItem BindGroupItem;
     BindGroupItem.Binding = 0;
     BindGroupItem.TextureView = Resources.TextureView;
-    BindGroupDesc.Items.push_back(BindGroupItem);
+    BindGroupDesc.Items.PushBack(BindGroupItem);
 
     BindGroupItem = {};
     BindGroupItem.Binding = 1;
     BindGroupItem.Sampler = Resources.Sampler;
-    BindGroupDesc.Items.push_back(BindGroupItem);
+    BindGroupDesc.Items.PushBack(BindGroupItem);
     Resources.BindGroup = Device->CreateBindGroup(BindGroupDesc);
     if (Resources.BindGroup == nullptr)
     {
@@ -311,70 +319,70 @@ static bool CreateOffscreenPassResources(
     return true;
 }
 
-static FRALPipeline_Graphics* CreateTrianglePipeline(
-    FRALDevice* Device,
-    FRALShader* VertexShader,
-    FRALShader* PixelShader,
-    EPixelFormat RenderTargetFormat)
+static LE::FRALPipeline_Graphics* CreateTrianglePipeline(
+    LE::FRALDevice* Device,
+    LE::FRALShader* VertexShader,
+    LE::FRALShader* PixelShader,
+    LE::EPixelFormat RenderTargetFormat)
 {
-    FRALPipelineDesc_Graphics PipelineDesc;
+    LE::FRALPipelineDesc_Graphics PipelineDesc;
     PipelineDesc.Name = "TrianglePipeline";
     PipelineDesc.VertexShader = VertexShader;
     PipelineDesc.PixelShader = PixelShader;
 
-    FRALVertexInputBinding Binding;
+    LE::FRALVertexInputBinding Binding;
     Binding.Binding = 0;
     Binding.Stride = sizeof(FSimpleVertex);
     Binding.bPerInstance = false;
-    PipelineDesc.VertexBindings.push_back(Binding);
+    PipelineDesc.VertexBindings.PushBack(Binding);
 
-    FRALVertexInputAttribute PosAttr;
+    LE::FRALVertexInputAttribute PosAttr;
     PosAttr.Location = 0;
     PosAttr.Binding = 0;
-    PosAttr.Format = EPixelFormat::R32G32B32_FLOAT;
+    PosAttr.Format = LE::EPixelFormat::R32G32B32_FLOAT;
     PosAttr.Offset = offsetof(FSimpleVertex, Position);
-    PipelineDesc.VertexAttributes.push_back(PosAttr);
+    PipelineDesc.VertexAttributes.PushBack(PosAttr);
 
-    FRALVertexInputAttribute ColorAttr;
+    LE::FRALVertexInputAttribute ColorAttr;
     ColorAttr.Location = 1;
     ColorAttr.Binding = 0;
-    ColorAttr.Format = EPixelFormat::R32G32B32_FLOAT;
+    ColorAttr.Format = LE::EPixelFormat::R32G32B32_FLOAT;
     ColorAttr.Offset = offsetof(FSimpleVertex, Color);
-    PipelineDesc.VertexAttributes.push_back(ColorAttr);
+    PipelineDesc.VertexAttributes.PushBack(ColorAttr);
 
     PipelineDesc.RenderTargetCount = 1;
     PipelineDesc.RenderTargetFormats[0] = RenderTargetFormat;
-    PipelineDesc.DepthStencilFormat = EPixelFormat::Unknown;
-    PipelineDesc.RasterizerState.CullMode = ECullMode::None;
-    PipelineDesc.RasterizerState.FillMode = EFillMode::Solid;
+    PipelineDesc.DepthStencilFormat = LE::EPixelFormat::Unknown;
+    PipelineDesc.RasterizerState.CullMode = LE::ECullMode::None;
+    PipelineDesc.RasterizerState.FillMode = LE::EFillMode::Solid;
     PipelineDesc.BlendState.bEnable = false;
 
     return Device->CreateGraphicsPipeline(PipelineDesc);
 }
 
-static FRALPipeline_Graphics* CreateCompositePipeline(
-    FRALDevice* Device,
-    FRALShader* VertexShader,
-    FRALShader* PixelShader,
-    FRALBindGroupLayout* BindGroupLayout,
-    EPixelFormat RenderTargetFormat)
+static LE::FRALPipeline_Graphics* CreateCompositePipeline(
+    LE::FRALDevice* Device,
+    LE::FRALShader* VertexShader,
+    LE::FRALShader* PixelShader,
+    LE::FRALBindGroupLayout* BindGroupLayout,
+    LE::EPixelFormat RenderTargetFormat)
 {
-    FRALPipelineDesc_Graphics PipelineDesc;
+    LE::FRALPipelineDesc_Graphics PipelineDesc;
     PipelineDesc.Name = "CompositePipeline";
     PipelineDesc.VertexShader = VertexShader;
     PipelineDesc.PixelShader = PixelShader;
     PipelineDesc.RenderTargetCount = 1;
     PipelineDesc.RenderTargetFormats[0] = RenderTargetFormat;
-    PipelineDesc.DepthStencilFormat = EPixelFormat::Unknown;
-    PipelineDesc.RasterizerState.CullMode = ECullMode::None;
-    PipelineDesc.RasterizerState.FillMode = EFillMode::Solid;
+    PipelineDesc.DepthStencilFormat = LE::EPixelFormat::Unknown;
+    PipelineDesc.RasterizerState.CullMode = LE::ECullMode::None;
+    PipelineDesc.RasterizerState.FillMode = LE::EFillMode::Solid;
     PipelineDesc.BlendState.bEnable = false;
-    PipelineDesc.BindGroupLayouts.push_back(BindGroupLayout);
+    PipelineDesc.BindGroupLayouts.PushBack(BindGroupLayout);
 
     return Device->CreateGraphicsPipeline(PipelineDesc);
 }
 
-static void GetBackBufferExtent(FRALSwapchain* Swapchain, uint32 FallbackWidth, uint32 FallbackHeight, uint32& OutWidth, uint32& OutHeight)
+static void GetBackBufferExtent(LE::FRALSwapchain* Swapchain, uint32 FallbackWidth, uint32 FallbackHeight, uint32& OutWidth, uint32& OutHeight)
 {
     OutWidth = FallbackWidth;
     OutHeight = FallbackHeight;
@@ -384,18 +392,18 @@ static void GetBackBufferExtent(FRALSwapchain* Swapchain, uint32 FallbackWidth, 
         return;
     }
 
-    FRALTextureView* BackBufferView = Swapchain->GetCurrentBackBufferView();
+    LE::FRALTextureView* BackBufferView = Swapchain->GetCurrentBackBufferView();
     if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
     {
         return;
     }
 
-    const FRALTextureDesc& BackBufferDesc = BackBufferView->GetTexture()->GetDesc();
+    const LE::FRALTextureDesc& BackBufferDesc = BackBufferView->GetTexture()->GetDesc();
     OutWidth = BackBufferDesc.Width;
     OutHeight = BackBufferDesc.Height;
 }
 
-static bool SyncSwapchainToWindowSize(FPlatformWindow* Window, FRALSwapchain* Swapchain, uint32& InOutWidth, uint32& InOutHeight)
+static bool SyncSwapchainToWindowSize(FPlatformWindow* Window, LE::FRALSwapchain* Swapchain, uint32& InOutWidth, uint32& InOutHeight)
 {
     uint32 WindowWidth = 0;
     uint32 WindowHeight = 0;
@@ -431,7 +439,7 @@ int32 GuardedMain()
         return -1;
     }
 
-    FRALDevice* Device = RAL::CreateDevice();
+    LE::FRALDevice* Device = LE::RAL::CreateDevice();
     if (!Device)
     {
         LE_LOG(LogXBD, Error, "Failed to create RAL Device");
@@ -440,13 +448,13 @@ int32 GuardedMain()
         return -1;
     }
 
-    FRALSwapchainDesc SwapchainDesc;
+    LE::FRALSwapchainDesc SwapchainDesc;
     SwapchainDesc.Surface = Window->GetSurfaceDesc();
     SwapchainDesc.Width = WindowWidth;
     SwapchainDesc.Height = WindowHeight;
-    SwapchainDesc.BackBufferFormat = EPixelFormat::B8G8R8A8_SRGB;
+    SwapchainDesc.BackBufferFormat = LE::EPixelFormat::B8G8R8A8_SRGB;
     SwapchainDesc.bEnableVsync = true;
-    FRALSwapchain* Swapchain = Device->CreateSwapchain(SwapchainDesc);
+    LE::FRALSwapchain* Swapchain = Device->CreateSwapchain(SwapchainDesc);
     if (!Swapchain)
     {
         LE_LOG(LogXBD, Error, "Failed to create swapchain");
@@ -456,10 +464,10 @@ int32 GuardedMain()
         return -1;
     }
 
-    std::vector<char> TriangleVertBytecode;
-    std::vector<char> TriangleFragBytecode;
-    std::vector<char> CompositeVertBytecode;
-    std::vector<char> CompositeFragBytecode;
+    LE::Array<char> TriangleVertBytecode;
+    LE::Array<char> TriangleFragBytecode;
+    LE::Array<char> CompositeVertBytecode;
+    LE::Array<char> CompositeFragBytecode;
     if (!Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/TriangleVS.lsf", ERuntimeShaderStage::Vertex, TriangleVertBytecode, "MainVS") ||
         !Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/TrianglePS.lsf", ERuntimeShaderStage::Fragment, TriangleFragBytecode, "MainPS") ||
         !Launch::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositeVS.lsf", ERuntimeShaderStage::Vertex, CompositeVertBytecode, "MainVS") ||
@@ -472,14 +480,14 @@ int32 GuardedMain()
         return -1;
     }
 
-    FRALShader* TriangleVertexShader = Device->CreateShaderFromFile(
-        EShaderStage::Vertex, TriangleVertBytecode.data(), TriangleVertBytecode.size(), "MainVS");
-    FRALShader* TrianglePixelShader = Device->CreateShaderFromFile(
-        EShaderStage::Pixel, TriangleFragBytecode.data(), TriangleFragBytecode.size(), "MainPS");
-    FRALShader* CompositeVertexShader = Device->CreateShaderFromFile(
-        EShaderStage::Vertex, CompositeVertBytecode.data(), CompositeVertBytecode.size(), "MainVS");
-    FRALShader* CompositePixelShader = Device->CreateShaderFromFile(
-        EShaderStage::Pixel, CompositeFragBytecode.data(), CompositeFragBytecode.size(), "MainPS");
+    LE::FRALShader* TriangleVertexShader = Device->CreateShaderFromFile(
+        LE::EShaderStage::Vertex, TriangleVertBytecode.Data(), TriangleVertBytecode.Size(), "MainVS");
+    LE::FRALShader* TrianglePixelShader = Device->CreateShaderFromFile(
+        LE::EShaderStage::Pixel, TriangleFragBytecode.Data(), TriangleFragBytecode.Size(), "MainPS");
+    LE::FRALShader* CompositeVertexShader = Device->CreateShaderFromFile(
+        LE::EShaderStage::Vertex, CompositeVertBytecode.Data(), CompositeVertBytecode.Size(), "MainVS");
+    LE::FRALShader* CompositePixelShader = Device->CreateShaderFromFile(
+        LE::EShaderStage::Pixel, CompositeFragBytecode.Data(), CompositeFragBytecode.Size(), "MainPS");
     if (!TriangleVertexShader || !TrianglePixelShader || !CompositeVertexShader || !CompositePixelShader)
     {
         delete CompositePixelShader;
@@ -511,17 +519,17 @@ int32 GuardedMain()
         return -1;
     }
 
-    FRALPipeline_Graphics* TrianglePipeline = CreateTrianglePipeline(
+    LE::FRALPipeline_Graphics* TrianglePipeline = CreateTrianglePipeline(
         Device,
         TriangleVertexShader,
         TrianglePixelShader,
-        EPixelFormat::B8G8R8A8_SRGB);
-    FRALPipeline_Graphics* CompositePipeline = CreateCompositePipeline(
+        LE::EPixelFormat::B8G8R8A8_SRGB);
+    LE::FRALPipeline_Graphics* CompositePipeline = CreateCompositePipeline(
         Device,
         CompositeVertexShader,
         CompositePixelShader,
         OffscreenResources.BindGroupLayout,
-        EPixelFormat::B8G8R8A8_SRGB);
+        LE::EPixelFormat::B8G8R8A8_SRGB);
     if (!TrianglePipeline || !CompositePipeline)
     {
         delete CompositePipeline;
@@ -538,9 +546,9 @@ int32 GuardedMain()
         return -1;
     }
 
-    FRALBuffer* VertexBuffer = CreateTriangleVertexBuffer(Device);
-    FRALCommandList* CmdList = Device->CreateCommandList(EQueueType::Graphics);
-    FRenderer Renderer;
+    LE::FRALBuffer* VertexBuffer = CreateTriangleVertexBuffer(Device);
+    LE::FRALCommandList* CmdList = Device->CreateCommandList(LE::EQueueType::Graphics);
+    LE::FRenderer Renderer;
     Renderer.Initialize();
     uint32 CachedWindowWidth = WindowWidth;
     uint32 CachedWindowHeight = WindowHeight;
@@ -572,7 +580,7 @@ int32 GuardedMain()
                 CompositeVertexShader,
                 CompositePixelShader,
                 OffscreenResources.BindGroupLayout,
-                EPixelFormat::B8G8R8A8_SRGB);
+                LE::EPixelFormat::B8G8R8A8_SRGB);
             if (CompositePipeline == nullptr)
             {
                 LE_LOG(LogXBD, Error, "Failed to recreate composite pipeline after resize.");
@@ -580,31 +588,31 @@ int32 GuardedMain()
             }
         }
 
-        FWorld World;
-        FWorldMeshComponent MeshComponent;
+        LE::FWorld World;
+        LE::FWorldMeshComponent MeshComponent;
         MeshComponent.DebugName = "TriangleMesh";
         MeshComponent.GraphicsPipeline = TrianglePipeline;
         MeshComponent.VertexBuffer = VertexBuffer;
         MeshComponent.VertexCount = 3;
-        MeshComponent.PassMask = ERenderMeshPassMask::SceneColor;
+        MeshComponent.PassMask = LE::ERenderMeshPassMask::SceneColor;
         MeshComponent.SortKey = 0;
-        World.MeshComponents.push_back(MeshComponent);
+        World.MeshComponents.PushBack(MeshComponent);
 
-        FRenderScene RenderScene;
-        FWorldRenderSceneExtractor::ExtractRenderScene(World, RenderScene);
+        LE::FRenderScene RenderScene;
+        LE::FWorldRenderSceneExtractor::ExtractRenderScene(World, RenderScene);
 
-        FRendererFrameContext FrameContext;
+        LE::FRendererFrameContext FrameContext;
         FrameContext.Device = Device;
         FrameContext.Swapchain = Swapchain;
         FrameContext.CommandList = CmdList;
         FrameContext.ViewFamily.PrimarySwapchain = Swapchain;
-        FTriangleCompositePipelineDesc RenderPipelineDesc;
+        LE::FTriangleCompositePipelineDesc RenderPipelineDesc;
         RenderPipelineDesc.Swapchain = Swapchain;
         RenderPipelineDesc.CompositePipeline = CompositePipeline;
         RenderPipelineDesc.SceneColorTexture = OffscreenResources.Texture;
         RenderPipelineDesc.SceneColorView = OffscreenResources.TextureView;
         RenderPipelineDesc.CompositeBindGroup = OffscreenResources.BindGroup;
-        FTriangleCompositePipeline RenderPipeline(RenderPipelineDesc);
+        LE::FTriangleCompositePipeline RenderPipeline(RenderPipelineDesc);
         FrameContext.Pipeline = &RenderPipeline;
         Renderer.RenderFrame(FrameContext, &RenderScene);
     }
@@ -628,5 +636,7 @@ int32 GuardedMain()
     LE_SHUTDOWN()
     return 0;
 }
+
+} // namespace LE
 
 #endif

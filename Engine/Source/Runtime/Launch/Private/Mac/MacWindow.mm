@@ -2,18 +2,15 @@
 
 #if PLATFORM_MAC
 
-// Carbon headers pulled in by AppKit define a global FVector that conflicts with the engine alias.
-#define FVector AppleCarbonFVector
 #import <AppKit/AppKit.h>
 #import <QuartzCore/CAMetalLayer.h>
-#undef FVector
 
 #include "Mac/MacWindow.h"
 
 @interface FMacWindowDelegate : NSObject<NSWindowDelegate>
 {
 @public
-    FMacWindow* Owner;
+    LE::FMacWindow* Owner;
 }
 @end
 
@@ -37,7 +34,9 @@
     }
 
     const NSRect ContentFrame = [[Window contentView] bounds];
-    Owner->NotifyResized(static_cast<uint32>(ContentFrame.size.width), static_cast<uint32>(ContentFrame.size.height));
+    Owner->NotifyResized(
+        static_cast<LE::uint32>(ContentFrame.size.width),
+        static_cast<LE::uint32>(ContentFrame.size.height));
 }
 
 - (BOOL)windowShouldClose:(NSWindow*)Sender
@@ -51,6 +50,9 @@
 }
 
 @end
+
+namespace LE
+{
 
 namespace
 {
@@ -144,10 +146,10 @@ void* FMacWindow::GetNativeHandle() const
     return this->WindowHandle;
 }
 
-FRALSurfaceDesc FMacWindow::GetSurfaceDesc() const
+LE::FRALSurfaceDesc FMacWindow::GetSurfaceDesc() const
 {
-    FRALSurfaceDesc SurfaceDesc;
-    SurfaceDesc.Type = ERALSurfaceType::MetalLayer;
+    LE::FRALSurfaceDesc SurfaceDesc;
+    SurfaceDesc.Type = LE::ERALSurfaceType::MetalLayer;
     SurfaceDesc.WindowHandle = this->WindowHandle;
     SurfaceDesc.ViewHandle = this->ViewHandle;
     SurfaceDesc.LayerHandle = this->LayerHandle;
@@ -217,5 +219,7 @@ void FMacWindow::UpdateDrawableSize() const
     [MetalLayer setContentsScale:Scale];
     [MetalLayer setDrawableSize:CGSizeMake(Bounds.size.width * Scale, Bounds.size.height * Scale)];
 }
+
+} // namespace LE
 
 #endif

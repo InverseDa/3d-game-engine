@@ -6,6 +6,9 @@
 #include "Authoring/RFGValidationReport.h"
 #include "Core/RFGTypes.h"
 
+namespace LE
+{
+
 class FRFGInstance;
 
 struct FRFGTemplateInstantiateOptions
@@ -34,3 +37,5 @@ public:
         FRFGInstance& Instance,
         const FRFGTemplateInstantiateOptions& Options = {}) const;
 };
+
+} // namespace LE

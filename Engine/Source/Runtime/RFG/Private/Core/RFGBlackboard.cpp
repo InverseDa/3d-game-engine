@@ -1,64 +1,61 @@
 #include "Core/RFGBlackboard.h"
 
-namespace
+namespace LE
 {
-std::string MakeKey(const FString& Key)
+
+bool FRFGBlackboard::HasPassHandle(const LE::String& Key) const
 {
-    return std::string(Key.GetData());
-}
+    return PassEntries.Contains(Key.View());
 }
 
-bool FRFGBlackboard::HasPassHandle(const FString& Key) const
+bool FRFGBlackboard::HasResourceHandle(const LE::String& Key) const
 {
-    return PassEntries.find(MakeKey(Key)) != PassEntries.end();
+    return ResourceEntries.Contains(Key.View());
 }
 
-bool FRFGBlackboard::HasResourceHandle(const FString& Key) const
+bool FRFGBlackboard::HasUInt(const LE::String& Key) const
 {
-    return ResourceEntries.find(MakeKey(Key)) != ResourceEntries.end();
+    return UIntEntries.Contains(Key.View());
 }
 
-bool FRFGBlackboard::HasUInt(const FString& Key) const
+void FRFGBlackboard::SetPassHandle(const LE::String& Key, FRFGPassHandle Value)
 {
-    return UIntEntries.find(MakeKey(Key)) != UIntEntries.end();
+    PassEntries.InsertOrAssign(Key, Value);
 }
 
-void FRFGBlackboard::SetPassHandle(const FString& Key, FRFGPassHandle Value)
+void FRFGBlackboard::SetResourceHandle(const LE::String& Key, FRFGResourceHandle Value)
 {
-    PassEntries[MakeKey(Key)] = Value;
+    ResourceEntries.InsertOrAssign(Key, Value);
 }
 
-void FRFGBlackboard::SetResourceHandle(const FString& Key, FRFGResourceHandle Value)
+void FRFGBlackboard::SetUInt(const LE::String& Key, uint64 Value)
 {
-    ResourceEntries[MakeKey(Key)] = Value;
+    UIntEntries.InsertOrAssign(Key, Value);
 }
 
-void FRFGBlackboard::SetUInt(const FString& Key, uint64 Value)
+FRFGPassHandle FRFGBlackboard::GetPassHandle(const LE::String& Key) const
 {
-    UIntEntries[MakeKey(Key)] = Value;
+    const FRFGPassHandle* const Found = PassEntries.Find(Key.View());
+    return Found != nullptr ? *Found : FRFGPassHandle{};
 }
 
-FRFGPassHandle FRFGBlackboard::GetPassHandle(const FString& Key) const
+FRFGResourceHandle FRFGBlackboard::GetResourceHandle(const LE::String& Key) const
 {
-    const auto It = PassEntries.find(MakeKey(Key));
-    return It != PassEntries.end() ? It->second : FRFGPassHandle{};
+    const FRFGResourceHandle* const Found = ResourceEntries.Find(Key.View());
+    return Found != nullptr ? *Found : FRFGResourceHandle{};
 }
 
-FRFGResourceHandle FRFGBlackboard::GetResourceHandle(const FString& Key) const
+uint64 FRFGBlackboard::GetUInt(const LE::String& Key) const
 {
-    const auto It = ResourceEntries.find(MakeKey(Key));
-    return It != ResourceEntries.end() ? It->second : FRFGResourceHandle{};
-}
-
-uint64 FRFGBlackboard::GetUInt(const FString& Key) const
-{
-    const auto It = UIntEntries.find(MakeKey(Key));
-    return It != UIntEntries.end() ? It->second : 0;
+    const uint64* const Found = UIntEntries.Find(Key.View());
+    return Found != nullptr ? *Found : 0;
 }
 
 void FRFGBlackboard::Clear()
 {
-    PassEntries.clear();
-    ResourceEntries.clear();
-    UIntEntries.clear();
+    PassEntries.Clear();
+    ResourceEntries.Clear();
+    UIntEntries.Clear();
 }
+
+} // namespace LE

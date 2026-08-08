@@ -6,6 +6,9 @@
 #include "Record/RFGPassRegistry.h"
 #include "Record/RFGRecordedGraph.h"
 
+namespace LE
+{
+
 class FRALTexture;
 class FRALBuffer;
 
@@ -25,15 +28,15 @@ public:
     IRFGPassRegistry* GetPassRegistry() const;
 
 public:
-    FRFGResourceHandle CreateTexture(const FString& ResourceName, const FRFGTextureDesc& Desc);
-    FRFGResourceHandle CreateBuffer(const FString& ResourceName, const FRFGBufferDesc& Desc);
-    FRFGResourceHandle ImportTexture(const FString& ResourceName, FRALTexture* ExternalTexture, ERALResourceState InitialState);
-    FRFGResourceHandle ImportBuffer(const FString& ResourceName, FRALBuffer* ExternalBuffer, ERALResourceState InitialState);
+    FRFGResourceHandle CreateTexture(const LE::String& ResourceName, const FRFGTextureDesc& Desc);
+    FRFGResourceHandle CreateBuffer(const LE::String& ResourceName, const FRFGBufferDesc& Desc);
+    FRFGResourceHandle ImportTexture(const LE::String& ResourceName, LE::FRALTexture* ExternalTexture, LE::ERALResourceState InitialState);
+    FRFGResourceHandle ImportBuffer(const LE::String& ResourceName, LE::FRALBuffer* ExternalBuffer, LE::ERALResourceState InitialState);
 
 public:
     FRFGPassHandle AddPass(
-        const FString& PassName,
-        const FString& PassTypeName,
+        const LE::String& PassName,
+        const LE::String& PassTypeName,
         const FRFGPassParameterBlock& ParameterBlock = {},
         ERFGPassFlags Flags = ERFGPassFlags::None,
         ERFGQueueType QueueType = ERFGQueueType::Graphics,
@@ -66,3 +69,5 @@ private:
     FRFGRecordedGraph RecordedGraph;
     FRFGBlackboard Blackboard;
 };
+
+} // namespace LE

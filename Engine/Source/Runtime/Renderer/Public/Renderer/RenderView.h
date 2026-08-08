@@ -5,7 +5,9 @@
 #include "ShadingPath.h"
 #include "RAL/RALCommandList.h"
 
-#include <vector>
+
+namespace LE
+{
 
 class FRALSwapchain;
 class FRALTextureView;
@@ -13,7 +15,7 @@ class FRALTextureView;
 struct FRenderView
 {
     uint32 ViewId = 0;
-    FRALViewport Viewport;
+    LE::FRALViewport Viewport;
     ERenderPlatformProfile Profile = ERenderPlatformProfile::Desktop;
     EShadingPath ShadingPath = EShadingPath::Deferred;
     bool bIsEditorView = false;
@@ -21,14 +23,16 @@ struct FRenderView
 
 struct FRenderTargetBinding
 {
-    FRALTextureView* BackBuffer = nullptr;
-    FRALTextureView* SceneColor = nullptr;
-    FRALTextureView* DepthStencil = nullptr;
+    LE::FRALTextureView* BackBuffer = nullptr;
+    LE::FRALTextureView* SceneColor = nullptr;
+    LE::FRALTextureView* DepthStencil = nullptr;
 };
 
 struct FRenderViewFamily
 {
-    std::vector<FRenderView> Views;
-    FRALSwapchain* PrimarySwapchain = nullptr;
+    LE::Array<FRenderView> Views;
+    LE::FRALSwapchain* PrimarySwapchain = nullptr;
     FRenderTargetBinding RenderTargets;
 };
+
+} // namespace LE

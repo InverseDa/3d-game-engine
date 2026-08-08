@@ -4,6 +4,9 @@
 #include "RALResource.h"
 #include "RALDescription.h"
 
+namespace LE
+{
+
 class RAL_API FRALBuffer : public FRALResource
 {
 public:
@@ -16,3 +19,5 @@ public:
 public:
     virtual const FRALBufferDesc& GetDesc() const = 0;
 };
+
+} // namespace LE

@@ -3,12 +3,14 @@
 #include "CoreMinimal.h"
 #include "Core/RFGTypes.h"
 
-#include <vector>
+
+namespace LE
+{
 
 struct FRFGTemplateResource
 {
     uint32 ResourceId = 0xFFFFFFFFu;
-    FString Name;
+    LE::String Name;
     FRFGResourceDesc Desc;
     ERFGResourceFlags Flags = ERFGResourceFlags::None;
 };
@@ -16,14 +18,14 @@ struct FRFGTemplateResource
 struct FRFGTemplateNode
 {
     uint32 NodeId = 0xFFFFFFFFu;
-    FString Name;
-    FString PassTypeName;
+    LE::String Name;
+    LE::String PassTypeName;
     ERFGQueueType Queue = ERFGQueueType::Graphics;
     ERFGPassFlags Flags = ERFGPassFlags::None;
     FRFGPassParameterBlock DefaultParameters;
 
-    std::vector<uint32> ReadResources;
-    std::vector<uint32> WriteResources;
+    LE::Array<uint32> ReadResources;
+    LE::Array<uint32> WriteResources;
 };
 
 struct FRFGTemplateEdge
@@ -43,21 +45,23 @@ public:
     void SetVersion(uint32 InVersion);
 
 public:
-    const std::vector<FRFGTemplateResource>& GetResources() const;
-    const std::vector<FRFGTemplateNode>& GetNodes() const;
-    const std::vector<FRFGTemplateEdge>& GetEdges() const;
+    const LE::Array<FRFGTemplateResource>& GetResources() const;
+    const LE::Array<FRFGTemplateNode>& GetNodes() const;
+    const LE::Array<FRFGTemplateEdge>& GetEdges() const;
 
 public:
-    std::vector<FRFGTemplateResource>& GetMutableResources();
-    std::vector<FRFGTemplateNode>& GetMutableNodes();
-    std::vector<FRFGTemplateEdge>& GetMutableEdges();
+    LE::Array<FRFGTemplateResource>& GetMutableResources();
+    LE::Array<FRFGTemplateNode>& GetMutableNodes();
+    LE::Array<FRFGTemplateEdge>& GetMutableEdges();
 
 public:
     void Clear();
 
 private:
     uint32 Version = 1;
-    std::vector<FRFGTemplateResource> Resources;
-    std::vector<FRFGTemplateNode> Nodes;
-    std::vector<FRFGTemplateEdge> Edges;
+    LE::Array<FRFGTemplateResource> Resources;
+    LE::Array<FRFGTemplateNode> Nodes;
+    LE::Array<FRFGTemplateEdge> Edges;
 };
+
+} // namespace LE

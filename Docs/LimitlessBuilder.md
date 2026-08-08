@@ -70,7 +70,7 @@ export default class CoreBuild extends ModuleBuild {
     public readonly Name = "Core";
 
     public Configure(_Target: Target, Configuration: ModuleConfiguration): void {
-        Configuration.PublicDependencies.push("Glm", "Spdlog");
+        Configuration.PublicDependencies.push("Spdlog");
     }
 }
 ```
@@ -139,17 +139,57 @@ export default defineTarget({
 });
 ```
 
-### 4.4 路径变量
+### 4.4 自定义动作
+
+生成代码、shader 编译等步骤通过 `ModuleConfiguration.CustomActions` 声明，不能放入
+`CustomProperties`：
+
+```typescript
+Configuration.CustomActions.push({
+    Id: "GenerateBindings",              // 模块内稳定 ID
+    Inputs: ["[module.SourceRoot]/Api.idl"],
+    ImplicitInputs: ["[module.SourceRoot]/Generator.config"],
+    Outputs: [
+        "[module.Generated]/Api.generated.cpp",
+        "[module.Generated]/Api.generated.h",
+    ],
+    Command: [process.execPath, "tools/generate.mjs", "[module.SourceRoot]/Api.idl"],
+    WorkingDirectory: "[engine.Root]",
+    DependsOn: ["PrepareSchema"],         // 短 ID 指向同模块 custom action
+    Description: "GEN Api bindings",
+    RunBeforeCompile: true,
+});
+```
+
+IR ID 为 `<Module>::custom::<Id>`；`DependsOn` 也可写完整 IR ID 以引用其它模块的动作。
+`DependsOn` 是动作排序关系，在 Ninja 中为 order-only（`||`），不会因依赖产物 mtime
+变化而让 consumer 变脏。需要 timestamp 传播时，同时把 producer output 放进
+`ImplicitInputs`（`|`）。`RunBeforeCompile` 会自动把该动作加入本模块所有 compile 的
+`DependsOn`，并把它的 outputs 加入 compile 的 `ImplicitInputs`，适合首次生成头文件。
+
+custom output 中的 `.cpp/.cc/.c/.mm/.m` 即使生成前不存在也会成为 compile action；
+其它扩展名不会被误编译。`Output.None` 模块仍会生成 custom action。动作 ID、output
+producer 和依赖环在完整 action graph 上统一校验，不依赖声明数组的先后顺序。
+
+### 4.5 路径变量
 
 保留 Sharpmake 风格的路径变量，但用 TS 模板字符串替代方括号语法：
 
 | 变量 | 含义 |
 |------|------|
-| `[module.SourceRoot]` | 当前模块 `Build.ts` 所在目录 |
+| `[module.SourceRoot]` | 当前模块源码根目录 |
+| `[project.SourceRootPath]` | 兼容旧配置的当前模块源码根目录 |
 | `[engine.Root]` | 项目根目录 |
 | `[engine.Source]` | `Engine/Source` |
 | `[engine.Binaries]` | `Engine/Binaries/<Platform>` |
-| `[engine.Temp]` | `Temp/<Platform>/<Config>` |
+| `[engine.Temp]` | `Engine/Intermediate/Build/<Platform>/<Config>` |
+| `[engine.Generated]` | `<engine.Temp>/Generated` |
+| `[module.Generated]` | `<engine.Generated>/<ModuleName>` |
+
+路径字段允许相对路径（相对模块根）并在 IR 中规范化为绝对路径。custom outputs 只允许
+落在当前配置的 temp/generated 或当前平台 binaries 根内，`..` 逃逸会被拒绝。Command
+是 argv token 数组而不是 shell 字符串；路径变量会展开，但 `/flag` 等普通 token 不会被
+当成路径改写。
 
 ## 5. IR（中间表示）
 
@@ -157,31 +197,30 @@ export default defineTarget({
 
 ```typescript
 interface BuildAction {
-  id: string;                          // 唯一 ID（用于依赖引用）
-  type: ActionType;                    // Compile | Link | Archive | Custom
-  inputs: string[];                    // 输入文件绝对路径
-  outputs: string[];                   // 输出文件绝对路径
-  command: string[];                   // 完整命令行（含编译器路径）
-  workingDirectory: string;
-  dependsOn: string[];                 // 依赖的其它 action id
-  description: string;                 // 给 ninja 进度条显示用
-  implicitInputs?: string[];           // 隐式依赖（如生成的头文件）
+  Id: string;                          // 唯一 ID（用于依赖引用）
+  Type: ActionType;                    // Compile | Link | Archive | Custom
+  Inputs: string[];                    // 输入文件绝对路径
+  Outputs: string[];                   // 一个或多个输出文件绝对路径
+  Command: string[];                   // executable + argv tokens
+  WorkingDirectory: string;
+  DependsOn: string[];                 // 依赖的其它 action id
+  Description: string;                 // 给 ninja 进度条显示用
+  ImplicitInputs?: string[];           // timestamp 依赖（如生成的头文件）
 }
 
 type ActionType = "compile" | "link" | "archive" | "custom";
 
 interface BuildResult {
-  actions: BuildAction[];              // 拓扑排序后的动作列表
-  compileCommandsPath: string;         // compile_commands.json 输出路径
-  hashDatabasePath: string;            // .buildcache 路径
+  Actions: BuildAction[];              // 校验并稳定拓扑排序后的动作列表
+  CompileCommandsPath: string;         // compile_commands.json 输出路径
 }
 ```
 
 IR Builder 的职责：
 1. 遍历依赖图，为每个模块的每个 `.cpp` 生成一个 `compile` action
 2. 根据模块 `Output` 类型生成 `link`（DLL/EXE）或 `archive`（Lib）action
-3. 处理 PCH（每个模块一个 PCH action，编译时被所有 .cpp 隐式依赖）
-4. 处理自定义构建步骤（如 shader 编译）
+3. 处理 typed custom actions 及其 generated-file compile 集成
+4. 对完整 action graph 校验 ID、producer、依赖和 cycle
 
 ## 6. IBackend 接口
 
@@ -223,6 +262,11 @@ rule link
   command = $link /nologo /OUT:$out $in $libs
   description = LINK $out
 
+rule custom
+  command = $Cmd
+  description = $Desc
+  restat = 1
+
 build Temp/Win64/Debug/Core/Core.obj: cc Engine/Source/Runtime/Core/Private/Core.cpp
   flags = /std:c++17 /utf-8 /DDEBUG=1 ...
   cl = "C:/Program Files/.../cl.exe"
@@ -231,6 +275,15 @@ build Temp/Win64/Debug/Core/Core.obj: cc Engine/Source/Runtime/Core/Private/Core
 build Engine/Binaries/Win64/Core.dll: link Temp/Win64/Debug/Core/Core.obj ...
   libs = vulkan-1.lib ...
 ```
+
+每条 edge 会渲染全部 outputs、explicit inputs、`|` implicit inputs 和 `||` action-ID
+dependencies。Backend 会先创建所有 output parent directories，custom edge 使用
+`restat = 1`，并按 action 的 `WorkingDirectory` 执行 tokenized command。默认目标按
+`<TargetName>::exe` 精确选择 resolved executable；不会从多输出 custom edge 猜测。
+`compile_commands.json` 只包含 compile actions。
+
+目前 custom action 的执行集成由 Ninja 后端负责。VCXProj/Xcode 生成器仍用于 IDE
+浏览、索引和调用 LB，不在原生项目文件里重复表达 custom edge。
 
 ### 7.2 ninja 给你的免费能力
 

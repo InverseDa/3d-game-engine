@@ -1,8 +1,11 @@
 #include "Authoring/RFGValidationReport.h"
 
+namespace LE
+{
+
 void FRFGValidationReport::AddIssue(const FRFGValidationIssue& Issue)
 {
-    Issues.push_back(Issue);
+    Issues.PushBack(Issue);
 }
 
 bool FRFGValidationReport::HasErrors() const
@@ -20,20 +23,22 @@ bool FRFGValidationReport::HasErrors() const
 
 bool FRFGValidationReport::IsEmpty() const
 {
-    return Issues.empty();
+    return Issues.IsEmpty();
 }
 
-const std::vector<FRFGValidationIssue>& FRFGValidationReport::GetIssues() const
+const LE::Array<FRFGValidationIssue>& FRFGValidationReport::GetIssues() const
 {
     return Issues;
 }
 
-std::vector<FRFGValidationIssue>& FRFGValidationReport::GetMutableIssues()
+LE::Array<FRFGValidationIssue>& FRFGValidationReport::GetMutableIssues()
 {
     return Issues;
 }
 
 void FRFGValidationReport::Clear()
 {
-    Issues.clear();
+    Issues.Clear();
 }
+
+} // namespace LE

@@ -4,7 +4,9 @@
 #include "Core/RFGHandles.h"
 #include "Core/RFGTypes.h"
 
-#include <vector>
+
+namespace LE
+{
 
 struct FRFGDependencyEdge
 {
@@ -16,10 +18,10 @@ struct FRFGDependencyEdge
 struct FRFGBarrierTransition
 {
     FRFGResourceHandle Resource;
-    ERALResourceState BeforeState = ERALResourceState::Unknown;
-    ERALResourceState AfterState  = ERALResourceState::Unknown;
-    EShaderStage BeforeShaderStage = EShaderStage::None;
-    EShaderStage AfterShaderStage  = EShaderStage::None;
+    LE::ERALResourceState BeforeState = LE::ERALResourceState::Unknown;
+    LE::ERALResourceState AfterState  = LE::ERALResourceState::Unknown;
+    LE::EShaderStage BeforeShaderStage = LE::EShaderStage::None;
+    LE::EShaderStage AfterShaderStage  = LE::EShaderStage::None;
     ERFGPipelineStage BeforeStage = ERFGPipelineStage::None;
     ERFGPipelineStage AfterStage  = ERFGPipelineStage::None;
     ERFGAccessType BeforeAccess   = ERFGAccessType::None;
@@ -37,16 +39,16 @@ struct FRFGBarrierTransition
 struct FRFGCompiledPass
 {
     FRFGPassHandle Handle;
-    FString Name;
+    LE::String Name;
     ERFGQueueType Queue = ERFGQueueType::Graphics;
     ERFGPassFlags Flags = ERFGPassFlags::None;
     // 拓扑层级：同 DependencyLevel 的 Pass 之间无依赖关系，可在多队列下并行执行
     // 当前单线程实现可忽略，保留供后续 AsyncCompute 调度使用
     uint32 DependencyLevel = 0;
 
-    std::vector<FRFGDependencyEdge> IncomingEdges;
-    std::vector<FRFGBarrierTransition> PreBarriers;
-    std::vector<FRFGBarrierTransition> PostBarriers;
+    LE::Array<FRFGDependencyEdge> IncomingEdges;
+    LE::Array<FRFGBarrierTransition> PreBarriers;
+    LE::Array<FRFGBarrierTransition> PostBarriers;
 };
 
 struct FRFGCompiledResourceLife
@@ -65,19 +67,21 @@ public:
 
 public:
     const FRFGGraphSignature& GetSignature() const;
-    const std::vector<FRFGCompiledPass>& GetPasses() const;
-    const std::vector<FRFGCompiledResourceLife>& GetResourceLifetimes() const;
+    const LE::Array<FRFGCompiledPass>& GetPasses() const;
+    const LE::Array<FRFGCompiledResourceLife>& GetResourceLifetimes() const;
 
 public:
     FRFGGraphSignature& GetMutableSignature();
-    std::vector<FRFGCompiledPass>& GetMutablePasses();
-    std::vector<FRFGCompiledResourceLife>& GetMutableResourceLifetimes();
+    LE::Array<FRFGCompiledPass>& GetMutablePasses();
+    LE::Array<FRFGCompiledResourceLife>& GetMutableResourceLifetimes();
 
 public:
     void Clear();
 
 private:
     FRFGGraphSignature Signature;
-    std::vector<FRFGCompiledPass> CompiledPasses;
-    std::vector<FRFGCompiledResourceLife> ResourceLifetimes;
+    LE::Array<FRFGCompiledPass> CompiledPasses;
+    LE::Array<FRFGCompiledResourceLife> ResourceLifetimes;
 };
+
+} // namespace LE

@@ -1,5 +1,8 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
+
+namespace LE
+{
 
 namespace
 {
@@ -161,3 +164,5 @@ void FVulkanRALBuffer::Unmap()
         this->MappedPtr = nullptr;
     }
 }
+
+} // namespace LE

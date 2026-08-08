@@ -1,5 +1,5 @@
 import { OutputType, Platform, TargetType } from "../Configuration/Types.ts";
-import type { Target } from "../Configuration/Types.ts";
+import type { ResolvedTarget } from "../Configuration/Types.ts";
 
 export interface APIMacroResult {
     SelfDefine: string;
@@ -7,14 +7,15 @@ export interface APIMacroResult {
     Output: OutputType;
 }
 
-export function DeriveAPIMacro(ModuleName: string, Target: Target): APIMacroResult {
+export function DeriveAPIMacro(ModuleName: string, BuildTarget: ResolvedTarget): APIMacroResult {
     const Macro = `${ModuleName.toUpperCase()}_API`;
 
-    if (ModuleName === "Launch") {
+    if (ModuleName === BuildTarget.Descriptor.EntryModule) {
         return { SelfDefine: `${Macro}=`, ExportDefine: `${Macro}=`, Output: OutputType.Lib };
     }
 
-    if (Target.TargetType === TargetType.Editor && Target.Platform === Platform.Win64) {
+    if (BuildTarget.Target.TargetType === TargetType.Editor
+        && BuildTarget.Target.Platform === Platform.Win64) {
         return {
             SelfDefine: `${Macro}=__declspec(dllexport)`,
             ExportDefine: `${Macro}=__declspec(dllimport)`,

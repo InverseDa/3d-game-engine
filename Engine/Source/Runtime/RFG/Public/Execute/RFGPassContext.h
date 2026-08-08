@@ -4,8 +4,9 @@
 #include "Core/RFGHandles.h"
 #include "Core/RFGTypes.h"
 
-#include <unordered_map>
-#include <vector>
+
+namespace LE
+{
 
 class FRALDevice;
 class FRALQueue;
@@ -17,28 +18,28 @@ class FRFGCompiledPlan;
 
 struct FRFGExecutionContext
 {
-    FRALDevice* Device = nullptr;
+    LE::FRALDevice* Device = nullptr;
 
-    FRALQueue* GraphicsQueue  = nullptr;
-    FRALQueue* ComputeQueue   = nullptr;
-    FRALQueue* TransferQueue  = nullptr;
+    LE::FRALQueue* GraphicsQueue  = nullptr;
+    LE::FRALQueue* ComputeQueue   = nullptr;
+    LE::FRALQueue* TransferQueue  = nullptr;
 
     // 当前阶段：单 CommandList，所有 Pass 共享
-    FRALCommandList* CommandList = nullptr;
+    LE::FRALCommandList* CommandList = nullptr;
 
     // 多队列预留：根据 Pass 所属队列返回对应 CommandList
     // 当前实现统一返回 CommandList，后续多线程扩展时在此分发
-    FRALCommandList* GetCommandList(ERFGQueueType /*Queue*/) const
+    LE::FRALCommandList* GetCommandList(ERFGQueueType /*Queue*/) const
     {
         return CommandList;
     }
 
     void ResetTransientResources();
 
-    std::unordered_map<uint32, FRALTexture*> TextureResources;
-    std::unordered_map<uint32, FRALBuffer*> BufferResources;
-    std::vector<FRALTexture*> OwnedTextures;
-    std::vector<FRALBuffer*> OwnedBuffers;
+    LE::HashMap<uint32, LE::FRALTexture*> TextureResources;
+    LE::HashMap<uint32, LE::FRALBuffer*> BufferResources;
+    LE::Array<LE::FRALTexture*> OwnedTextures;
+    LE::Array<LE::FRALBuffer*> OwnedBuffers;
 };
 
 class RFG_API FRFGPassContext
@@ -54,12 +55,12 @@ public:
     void SetPassIndex(uint32 InPassIndex);
 
 public:
-    FRALDevice* GetDevice() const;
-    FRALCommandList* GetCommandList() const;
+    LE::FRALDevice* GetDevice() const;
+    LE::FRALCommandList* GetCommandList() const;
 
 public:
-    FRALTexture* ResolveTexture(FRFGResourceHandle ResourceHandle) const;
-    FRALBuffer* ResolveBuffer(FRFGResourceHandle ResourceHandle) const;
+    LE::FRALTexture* ResolveTexture(FRFGResourceHandle ResourceHandle) const;
+    LE::FRALBuffer* ResolveBuffer(FRFGResourceHandle ResourceHandle) const;
 
 public:
     uint32 GetPassIndex() const;
@@ -70,3 +71,5 @@ private:
     const FRFGCompiledPlan* CompiledPlan = nullptr;
     uint32 PassIndex = 0xFFFFFFFFu;
 };
+
+} // namespace LE

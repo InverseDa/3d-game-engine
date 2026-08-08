@@ -3,14 +3,17 @@
 #include "Renderer/RenderScene.h"
 #include "World/World.h"
 
-void FWorldRenderSceneExtractor::ExtractRenderScene(const FWorld& World, FRenderScene& OutRenderScene)
+namespace LE
+{
+
+void FWorldRenderSceneExtractor::ExtractRenderScene(const FWorld& World, LE::FRenderScene& OutRenderScene)
 {
     OutRenderScene.Reset();
-    OutRenderScene.Meshes.reserve(World.MeshComponents.size());
+    OutRenderScene.Meshes.Reserve(World.MeshComponents.Size());
 
     for (const FWorldMeshComponent& MeshComponent : World.MeshComponents)
     {
-        FRenderMeshProxy& RenderMesh = OutRenderScene.Meshes.emplace_back();
+        LE::FRenderMeshProxy& RenderMesh = OutRenderScene.Meshes.EmplaceBack();
         RenderMesh.DebugName = MeshComponent.DebugName;
         RenderMesh.GraphicsPipeline = MeshComponent.GraphicsPipeline;
         RenderMesh.VertexBuffer = MeshComponent.VertexBuffer;
@@ -19,3 +22,5 @@ void FWorldRenderSceneExtractor::ExtractRenderScene(const FWorld& World, FRender
         RenderMesh.SortKey = MeshComponent.SortKey;
     }
 }
+
+} // namespace LE

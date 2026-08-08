@@ -2,6 +2,9 @@
 
 #include "CoreMinimal.h"
 
+namespace LE
+{
+
 class FRFGRecordedGraph;
 class FRFGCompiledPlan;
 
@@ -14,3 +17,5 @@ public:
 public:
     void BuildDependencies(const FRFGRecordedGraph& RecordedGraph, FRFGCompiledPlan& OutPlan) const;
 };
+
+} // namespace LE

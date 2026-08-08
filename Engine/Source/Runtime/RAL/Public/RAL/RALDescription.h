@@ -3,6 +3,9 @@
 #include "CoreMinimal.h"
 #include "RALTypes.h"
 
+namespace LE
+{
+
 class FRALBuffer;
 class FRALShader;
 class FRALSampler;
@@ -39,7 +42,7 @@ struct FRALSurfaceDesc
 
 struct FRALBufferDesc
 {
-    FString Name;
+    LE::String Name;
     uint64 Size = 0;
     uint32 Usage;       // EResourceUsage
     uint32 UsageFlag;   // EBufferUsageFlags
@@ -47,7 +50,7 @@ struct FRALBufferDesc
 
 struct FRALTextureDesc
 {
-    FString Name;
+    LE::String Name;
     uint32 Width = 1;
     uint32 Height = 1;
     uint32 Depth = 1;
@@ -113,8 +116,8 @@ struct FRALBufferBarrierDesc
 
 struct FRALBarrierBatch
 {
-    std::vector<FRALTextureBarrierDesc> TextureBarriers;
-    std::vector<FRALBufferBarrierDesc> BufferBarriers;
+    LE::Array<FRALTextureBarrierDesc> TextureBarriers;
+    LE::Array<FRALBufferBarrierDesc> BufferBarriers;
 };
 
 // ***********************************************************************************************
@@ -216,15 +219,15 @@ struct FRALRasterizerStateDesc
 
 struct FRALPipelineDesc_Graphics
 {
-    FString Name;
+    LE::String Name;
 
     // Shader
     FRALShader* VertexShader = nullptr;
     FRALShader* PixelShader = nullptr;
 
     // Vertex Input Layout
-    std::vector<FRALVertexInputBinding> VertexBindings;
-    std::vector<FRALVertexInputAttribute> VertexAttributes;
+    LE::Array<FRALVertexInputBinding> VertexBindings;
+    LE::Array<FRALVertexInputAttribute> VertexAttributes;
 
     // State
     FRALBlendStateDesc BlendState;
@@ -232,7 +235,7 @@ struct FRALPipelineDesc_Graphics
     FRALRasterizerStateDesc RasterizerState;
 
     // BindGroup Layouts
-    std::vector<FRALBindGroupLayout*> BindGroupLayouts;
+    LE::Array<FRALBindGroupLayout*> BindGroupLayouts;
 
     // Render Target Format
     EPixelFormat RenderTargetFormats[8];
@@ -255,12 +258,12 @@ struct FRALShaderResourceBinding
 
 struct FRALShaderDesc
 {
-    FString Name;
+    LE::String Name;
     EShaderStage Stage = EShaderStage::None;
-    std::vector<FRALShaderResourceBinding> Bindings;
+    LE::Array<FRALShaderResourceBinding> Bindings;
     const void* ByteCode = nullptr;
     uint64 ByteCodeSize = 0;
-    FString EntryPoint = "main";
+    LE::String EntryPoint = "main";
 };
 
 // ***********************************************************************************************
@@ -287,9 +290,9 @@ struct FRALBindGroupLayoutItem
 
 struct FRALBindGroupLayoutDesc
 {
-    FString Name;
+    LE::String Name;
     uint32 SetIndex = 0; // set in a shader
-    std::vector<FRALBindGroupLayoutItem> Bindings;
+    LE::Array<FRALBindGroupLayoutItem> Bindings;
 };
 
 struct FRALBindGroupItem
@@ -306,9 +309,9 @@ struct FRALBindGroupItem
 
 struct FRALBindGroupDesc
 {
-    FString Name;
+    LE::String Name;
     FRALBindGroupLayout* Layout = nullptr;
-    std::vector<FRALBindGroupItem> Items;
+    LE::Array<FRALBindGroupItem> Items;
 };
 
 // ***********************************************************************************************
@@ -337,7 +340,7 @@ enum class ESamplerAddressMode : uint8
 
 struct FRALSamplerDesc
 {
-    FString Name;
+    LE::String Name;
 
     ESamplerFilter MinFilter = ESamplerFilter::Linear;
     ESamplerFilter MagFilter = ESamplerFilter::Linear;
@@ -359,3 +362,5 @@ struct FRALSamplerDesc
 
     float BorderColor[4] = { 0.f, 0.f, 0.f, 1.f };
 };
+
+} // namespace LE

@@ -33,6 +33,9 @@
 #define VK_USE_PLATFORM_WIN32_KHR 1
 #endif
 
+namespace LE
+{
+
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogRAL);
 
 namespace RAL
@@ -157,7 +160,7 @@ public:
     FRALBuffer* CreateBuffer(const FRALBufferDesc& Desc) override;
     FRALTexture* CreateTexture(const FRALTextureDesc& Desc) override;
     FRALTextureView* CreateTextureView(const FRALTextureViewDesc& Desc) override;
-    FRALShader* CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size, const FString& EntryPoint = "main") override;
+    FRALShader* CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size, const LE::String& EntryPoint = "main") override;
     FRALPipeline_Graphics* CreateGraphicsPipeline(const FRALPipelineDesc_Graphics& Desc) override;
     FRALCommandList* CreateCommandList(EQueueType Type = EQueueType::Graphics) override;
     FRALSwapchain* CreateSwapchain(const FRALSwapchainDesc& Desc) override;
@@ -201,11 +204,11 @@ public:
     VkSwapchainKHR SwapchainHandle = VK_NULL_HANDLE;
     VkSurfaceKHR SurfaceHandle = VK_NULL_HANDLE;
 
-    std::vector<VkImage> Images;
-    std::vector<VkImageView> ImageViews;
+    LE::Array<VkImage> Images;
+    LE::Array<VkImageView> ImageViews;
 
-    std::vector<FVulkanRALTexture*> BackBufferTextures;
-    std::vector<FVulkanRALTextureView*> BackBufferViews;
+    LE::Array<FVulkanRALTexture*> BackBufferTextures;
+    LE::Array<FVulkanRALTextureView*> BackBufferViews;
 
     uint32 CurrentImageIndex = 0;
 
@@ -331,7 +334,7 @@ private:
 private:
     FVulkanRALPipeline_Graphics* CurrentPipeline = nullptr;
     bool bInsideRendering = false;
-    std::vector<VkImage> PendingPresentTransitionImages;
+    LE::Array<VkImage> PendingPresentTransitionImages;
 };
 
 // ***********************************************************************************************
@@ -477,3 +480,5 @@ public:
 private:
     void InitTextureView(FVulkanRALTexture* InOwner, VkImageView InViewHandle);
 };
+
+} // namespace LE

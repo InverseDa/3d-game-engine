@@ -5,7 +5,9 @@
 #include "Compile/RFGPlanCache.h"
 #include "Core/RFGTypes.h"
 
-#include <memory>
+
+namespace LE
+{
 
 class IRFGPassRegistry;
 class FRFGRecordedGraph;
@@ -31,10 +33,10 @@ public:
         const FRFGGraphSignature& Signature = {});
 
 public:
-    std::shared_ptr<const FRFGCompiledPlan> FindCompiledPlan(const FRFGGraphSignature& Signature) const;
+    LE::SharedPtr<const FRFGCompiledPlan> FindCompiledPlan(const FRFGGraphSignature& Signature) const;
     void StoreCompiledPlan(
         const FRFGGraphSignature& Signature,
-        const std::shared_ptr<const FRFGCompiledPlan>& CompiledPlan);
+        const LE::SharedPtr<const FRFGCompiledPlan>& CompiledPlan);
 
 public:
     void SetCompileOptions(const FRFGCompileOptions& InCompileOptions);
@@ -52,3 +54,5 @@ private:
     FRFGCompiler* Compiler = nullptr;
     FRFGPlanCache* PlanCache = nullptr;
 };
+
+} // namespace LE

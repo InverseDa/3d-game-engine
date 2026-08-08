@@ -1,4 +1,4 @@
-import type { BuildAction, Target } from "../Configuration/Types.ts";
+import type { BuildAction, ResolvedTarget } from "../Configuration/Types.ts";
 
 export interface GenerateOptions {
     OutputDir: string;
@@ -21,6 +21,6 @@ export interface BackendResult {
 
 export interface IBackend {
     readonly Name: string;
-    Generate(Actions: BuildAction[], Target: Target, Opts: GenerateOptions): Promise<BackendResult>;
+    Generate(Actions: BuildAction[], Target: ResolvedTarget, Opts: GenerateOptions): Promise<BackendResult>;
     Build?(Result: BackendResult, Opts: BuildOptions): Promise<number>;
 }

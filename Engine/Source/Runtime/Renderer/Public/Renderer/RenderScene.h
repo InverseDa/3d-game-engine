@@ -2,7 +2,9 @@
 
 #include "CoreMinimal.h"
 
-#include <vector>
+
+namespace LE
+{
 
 class FRALBuffer;
 class FRALPipeline_Graphics;
@@ -27,13 +29,13 @@ inline constexpr bool HasRenderMeshPass(ERenderMeshPassMask Value, ERenderMeshPa
 
 struct FRenderPrimitive
 {
-    FString DebugName;
+    LE::String DebugName;
 };
 
 struct FRenderMeshProxy : public FRenderPrimitive
 {
-    FRALPipeline_Graphics* GraphicsPipeline = nullptr;
-    FRALBuffer* VertexBuffer = nullptr;
+    LE::FRALPipeline_Graphics* GraphicsPipeline = nullptr;
+    LE::FRALBuffer* VertexBuffer = nullptr;
     uint32 VertexCount = 0;
     ERenderMeshPassMask PassMask = ERenderMeshPassMask::All;
     uint64 SortKey = 0;
@@ -52,13 +54,15 @@ class RENDERER_API FRenderScene
 public:
     void Reset()
     {
-        Meshes.clear();
-        Lights.clear();
-        Cameras.clear();
+        Meshes.Clear();
+        Lights.Clear();
+        Cameras.Clear();
     }
 
 public:
-    std::vector<FRenderMeshProxy> Meshes;
-    std::vector<FRenderLightProxy> Lights;
-    std::vector<FRenderCameraProxy> Cameras;
+    LE::Array<FRenderMeshProxy> Meshes;
+    LE::Array<FRenderLightProxy> Lights;
+    LE::Array<FRenderCameraProxy> Cameras;
 };
+
+} // namespace LE

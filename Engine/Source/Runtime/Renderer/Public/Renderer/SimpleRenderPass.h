@@ -2,18 +2,20 @@
 
 #include "RenderPass.h"
 
-#include <functional>
+
+namespace LE
+{
 
 class RENDERER_API FSimpleRenderPass final : public IRenderPass
 {
 public:
-    using FSetupCallback = std::function<void(FRenderPassSetupContext&)>;
-    using FRecordCallback = std::function<void(FRenderPassRecordContext&)>;
+    using FSetupCallback = LE::Function<void(FRenderPassSetupContext&)>;
+    using FRecordCallback = LE::Function<void(FRenderPassRecordContext&)>;
 
 public:
     FSimpleRenderPass(
         const char* InPassName,
-        ERFGQueueType InQueueType,
+        LE::ERFGQueueType InQueueType,
         FSetupCallback InSetupCallback,
         FRecordCallback InRecordCallback)
         : PassName(InPassName)
@@ -29,7 +31,7 @@ public:
         return PassName;
     }
 
-    ERFGQueueType GetQueueType() const override
+    LE::ERFGQueueType GetQueueType() const override
     {
         return QueueType;
     }
@@ -52,7 +54,9 @@ public:
 
 private:
     const char* PassName = "";
-    ERFGQueueType QueueType = ERFGQueueType::Graphics;
+    LE::ERFGQueueType QueueType = LE::ERFGQueueType::Graphics;
     FSetupCallback SetupCallback;
     FRecordCallback RecordCallback;
 };
+
+} // namespace LE

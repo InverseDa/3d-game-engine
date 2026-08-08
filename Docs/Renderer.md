@@ -211,7 +211,7 @@ enum class ERenderPlatformProfile : uint8 {
 
 | 模块 | 用途 |
 |------|------|
-| **Core** | 基础类型（`FString`、`FNonCopyable`、平台宏） |
+| **Core** | 基础类型（`LE::String`、`LE::FNonCopyable`、平台宏） |
 | **RAL** | 渲染抽象层（`FRALCommandList`、`FRALDevice`、`FRALSwapchain`、`FRALTexture`、`FRALBuffer` 等） |
 | **RFG** | 渲染帧图（`FRFGInstance`、`FRFGBuilder`、`FRFGPassHandle`、`FRFGResourceHandle`、`FRFGPassContext` 等） |
 

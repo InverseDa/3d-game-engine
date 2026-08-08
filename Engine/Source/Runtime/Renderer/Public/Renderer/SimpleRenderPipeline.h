@@ -2,7 +2,9 @@
 
 #include "RenderPipeline.h"
 
-#include <vector>
+
+namespace LE
+{
 
 class RENDERER_API FSimpleRenderPipeline final : public IRenderPipeline
 {
@@ -26,7 +28,7 @@ public:
 
     void AddPass(IRenderPass* Pass)
     {
-        Passes.push_back(Pass);
+        Passes.PushBack(Pass);
     }
 
     void BuildPasses(
@@ -46,5 +48,7 @@ public:
 private:
     const char* Name = "";
     EShadingPath ShadingPath = EShadingPath::Deferred;
-    std::vector<IRenderPass*> Passes;
+    LE::Array<IRenderPass*> Passes;
 };
+
+} // namespace LE

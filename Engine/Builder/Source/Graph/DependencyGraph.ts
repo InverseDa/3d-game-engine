@@ -5,7 +5,7 @@ import type {
     ModuleConfiguration,
     ModuleInstance,
     OutputType,
-    Target,
+    ResolvedTarget,
 } from "../Configuration/Types.ts";
 
 export interface ResolvedModule {
@@ -25,19 +25,20 @@ function IsWithoutLinking(Dependency: DependencyRef): boolean {
 export class DependencyGraph {
     private readonly ResolvedModules = new Map<string, ResolvedModule>();
     private readonly AllModules: ModuleInstance[];
-    private readonly Target: Target;
+    private readonly BuildTarget: ResolvedTarget;
 
     public constructor(
         AllModules: ModuleInstance[],
-        Target: Target,
+        BuildTarget: ResolvedTarget,
     ) {
         this.AllModules = AllModules;
-        this.Target = Target;
+        this.BuildTarget = BuildTarget;
     }
 
     public Build(): ResolvedModule[] {
         this.ResolveAll();
         this.Validate();
+        this.ValidateEntryModule();
         return this.TopologicalSort();
     }
 
@@ -100,9 +101,27 @@ export class DependencyGraph {
     }
 
     private ResolveAll(): void {
+        const DeclaredModules = new Set(this.BuildTarget.Descriptor.Modules);
+        const DiscoveredNames = new Set(this.AllModules.map((Module) => Module.Descriptor.Name));
+        for (const ModuleName of DeclaredModules) {
+            if (!DiscoveredNames.has(ModuleName)) {
+                if (ModuleName === this.BuildTarget.Descriptor.EntryModule) {
+                    throw new Error(
+                        `Target "${this.BuildTarget.Descriptor.Name}" entry module "${ModuleName}" was not discovered.`,
+                    );
+                }
+                throw new Error(
+                    `Target "${this.BuildTarget.Descriptor.Name}" declares unknown module "${ModuleName}".`,
+                );
+            }
+        }
+
         for (const Module of this.AllModules) {
+            if (!DeclaredModules.has(Module.Descriptor.Name)) {
+                continue;
+            }
             const Configuration = CreateModuleConfiguration();
-            Module.Descriptor.Configure(this.Target, Configuration);
+            Module.Descriptor.Configure(this.BuildTarget.Target, Configuration);
 
             if (Module.Descriptor.ThirdParty) {
                 this.ResolvedModules.set(Module.Descriptor.Name, {
@@ -113,7 +132,7 @@ export class DependencyGraph {
                 continue;
             }
 
-            const Macro = DeriveAPIMacro(Module.Descriptor.Name, this.Target);
+            const Macro = DeriveAPIMacro(Module.Descriptor.Name, this.BuildTarget);
             if (Configuration.Output === ("Lib" as OutputType)) {
                 Configuration.Output = Macro.Output;
             }
@@ -148,6 +167,15 @@ export class DependencyGraph {
                     throw new Error(`Module "${Name}" depends on unknown module "${DependencyName}"`);
                 }
             }
+        }
+    }
+
+    private ValidateEntryModule(): void {
+        const EntryModule = this.BuildTarget.Descriptor.EntryModule;
+        if (!this.ResolvedModules.has(EntryModule)) {
+            throw new Error(
+                `Target "${this.BuildTarget.Descriptor.Name}" entry module "${EntryModule}" was not discovered.`,
+            );
         }
     }
 

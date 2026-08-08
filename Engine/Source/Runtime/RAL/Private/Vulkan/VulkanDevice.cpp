@@ -1,10 +1,12 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
-#include <sstream>
-#include <string>
+
+namespace LE
+{
 
 LE_DECLARE_LOG_CATEGORY(LogRAL);
 
@@ -26,8 +28,9 @@ bool HasDeviceExtension(VkPhysicalDevice PhysicalDevice, const char* ExtensionNa
         return false;
     }
 
-    std::vector<VkExtensionProperties> ExtensionProps(ExtensionCount);
-    Result = vkEnumerateDeviceExtensionProperties(PhysicalDevice, nullptr, &ExtensionCount, ExtensionProps.data());
+    LE::Array<VkExtensionProperties> ExtensionProps;
+    ExtensionProps.Resize(ExtensionCount);
+    Result = vkEnumerateDeviceExtensionProperties(PhysicalDevice, nullptr, &ExtensionCount, ExtensionProps.Data());
     if (Result != VK_SUCCESS)
     {
         return false;
@@ -61,41 +64,46 @@ LE::LogLevel ValidationSeverityToLogLevel(VkDebugUtilsMessageSeverityFlagBitsEXT
     return LE::LogLevel::Trace;
 }
 
-std::string ValidationTypeToText(VkDebugUtilsMessageTypeFlagsEXT TypeFlags)
+LE::String ValidationTypeToText(VkDebugUtilsMessageTypeFlagsEXT TypeFlags)
 {
-    std::string Text;
-    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)     Text += "General|";
-    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)  Text += "Validation|";
-    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) Text += "Performance|";
-    if (!Text.empty())
+    LE::String Text;
+    auto AppendType = [&Text](const char* const Name)
     {
-        Text.pop_back();
-    }
-    return Text.empty() ? "Unknown" : Text;
+        if (!Text.IsEmpty()) { Text.Append("|"); }
+        Text.Append(Name);
+    };
+    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)     AppendType("General");
+    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)  AppendType("Validation");
+    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) AppendType("Performance");
+    return Text.IsEmpty() ? LE::String("Unknown") : Text;
 }
 
-std::string ValidationObjectsToText(const VkDebugUtilsMessengerCallbackDataEXT* CallbackData)
+LE::String ValidationObjectsToText(const VkDebugUtilsMessengerCallbackDataEXT* CallbackData)
 {
     if (CallbackData == nullptr || CallbackData->objectCount == 0 || CallbackData->pObjects == nullptr)
     {
         return "Objects: none";
     }
 
-    std::ostringstream Stream;
-    Stream << "Objects(" << CallbackData->objectCount << "):";
+    LE::String Text("Objects(");
+    char Buffer[64]{};
+    std::snprintf(Buffer, sizeof(Buffer), "%u):", CallbackData->objectCount);
+    Text.Append(Buffer);
     for (uint32 i = 0; i < CallbackData->objectCount; ++i)
     {
         const VkDebugUtilsObjectNameInfoEXT& Obj = CallbackData->pObjects[i];
-        Stream << " [#" << i
-               << " type=" << static_cast<uint32>(Obj.objectType)
-               << " handle=0x" << std::hex << static_cast<unsigned long long>(Obj.objectHandle) << std::dec;
+        std::snprintf(Buffer, sizeof(Buffer), " [#%u type=%u handle=0x%llx", i,
+            static_cast<uint32>(Obj.objectType),
+            static_cast<unsigned long long>(Obj.objectHandle));
+        Text.Append(Buffer);
         if (Obj.pObjectName != nullptr)
         {
-            Stream << " name=" << Obj.pObjectName;
+            Text.Append(" name=");
+            Text.Append(Obj.pObjectName);
         }
-        Stream << "]";
+        Text.Append("]");
     }
-    return Stream.str();
+    return Text;
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanValidationCallback(
@@ -114,26 +122,26 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanValidationCallback(
         ? pCallbackData->pMessage
         : "No validation message.";
 
-    const std::string TypeText = ValidationTypeToText(MessageType);
-    const std::string ObjectsText = ValidationObjectsToText(pCallbackData);
+    const LE::String TypeText = ValidationTypeToText(MessageType);
+    const LE::String ObjectsText = ValidationObjectsToText(pCallbackData);
 
     switch (ValidationSeverityToLogLevel(MessageSeverity))
     {
     case LE::LogLevel::Error:
         LE_LOG(LogRAL, Error, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
-            ValidationSeverityToText(MessageSeverity), TypeText, MessageIdName, MessageIdNumber, MessageText, ObjectsText);
+            ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
         break;
     case LE::LogLevel::Warn:
         LE_LOG(LogRAL, Warn, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
-            ValidationSeverityToText(MessageSeverity), TypeText, MessageIdName, MessageIdNumber, MessageText, ObjectsText);
+            ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
         break;
     case LE::LogLevel::Info:
         LE_LOG(LogRAL, Info, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
-            ValidationSeverityToText(MessageSeverity), TypeText, MessageIdName, MessageIdNumber, MessageText, ObjectsText);
+            ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
         break;
     default:
         LE_LOG(LogRAL, Trace, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
-            ValidationSeverityToText(MessageSeverity), TypeText, MessageIdName, MessageIdNumber, MessageText, ObjectsText);
+            ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
         break;
     }
 
@@ -265,17 +273,17 @@ void FVulkanRALDevice::InternalCreateInstance()
 #endif
     }
 
-    std::ostringstream ExtensionStream;
+    LE::String ExtensionText;
     for (uint32 i = 0; i < CreateInfo.enabledExtensionCount; ++i)
     {
         if (i > 0)
         {
-            ExtensionStream << ", ";
+            ExtensionText.Append(", ");
         }
-        ExtensionStream << (CreateInfo.ppEnabledExtensionNames[i] != nullptr ? CreateInfo.ppEnabledExtensionNames[i] : "<null>");
+        ExtensionText.Append(CreateInfo.ppEnabledExtensionNames[i] != nullptr ? CreateInfo.ppEnabledExtensionNames[i] : "<null>");
     }
     LE_LOG(LogRAL, Info, "Creating Vulkan instance. Flags=0x{:x}, Extensions=[{}], Layers={}",
-        static_cast<uint32>(CreateInfo.flags), ExtensionStream.str(), CreateInfo.enabledLayerCount);
+        static_cast<uint32>(CreateInfo.flags), ExtensionText.Data(), CreateInfo.enabledLayerCount);
 
     VkResult Result = vkCreateInstance(&CreateInfo, nullptr, &this->VkContext.Instance);
     if (Result == VK_ERROR_LAYER_NOT_PRESENT && CreateInfo.enabledLayerCount > 0)
@@ -384,9 +392,10 @@ void FVulkanRALDevice::InternalSelectPhysicalDevice()
         this->VkContext.GraphicsFamilyIndex = static_cast<uint32>(-1);
         return;
     }
-    std::vector<VkPhysicalDevice> Devices(DeviceCount);
+    LE::Array<VkPhysicalDevice> Devices;
+    Devices.Resize(DeviceCount);
     {
-        Result = vkEnumeratePhysicalDevices(this->VkContext.Instance, &DeviceCount, Devices.data());
+        Result = vkEnumeratePhysicalDevices(this->VkContext.Instance, &DeviceCount, Devices.Data());
     }
     if (Result != VK_SUCCESS)
     {
@@ -422,9 +431,10 @@ void FVulkanRALDevice::InternalSelectPhysicalDevice()
     {
         vkGetPhysicalDeviceQueueFamilyProperties(this->VkContext.PhysicalDevice, &QueueFamilyCount, nullptr);
     }
-    std::vector<VkQueueFamilyProperties> QueueFamilies(QueueFamilyCount);
+    LE::Array<VkQueueFamilyProperties> QueueFamilies;
+    QueueFamilies.Resize(QueueFamilyCount);
     {
-        vkGetPhysicalDeviceQueueFamilyProperties(this->VkContext.PhysicalDevice, &QueueFamilyCount, QueueFamilies.data());
+        vkGetPhysicalDeviceQueueFamilyProperties(this->VkContext.PhysicalDevice, &QueueFamilyCount, QueueFamilies.Data());
     }
     for (uint32 i = 0; i < QueueFamilyCount; i++)
     {
@@ -550,24 +560,24 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
         DeviceFeatures.features.samplerAnisotropy = SupportedFeatures.features.samplerAnisotropy;
     }
 
-    std::vector<const char*> EnabledDeviceExtensions;
-    EnabledDeviceExtensions.reserve(RAL::Vulkan::DeviceExtensionCount + 3);
+    LE::Array<const char*> EnabledDeviceExtensions;
+    EnabledDeviceExtensions.Reserve(RAL::Vulkan::DeviceExtensionCount + 3);
     for (uint32 i = 0; i < RAL::Vulkan::DeviceExtensionCount; ++i)
     {
-        EnabledDeviceExtensions.push_back(RAL::Vulkan::DeviceExtensions[i]);
+        EnabledDeviceExtensions.PushBack(RAL::Vulkan::DeviceExtensions[i]);
     }
     if (bCanEnableBindless && !bSupportsDescriptorIndexingCore)
     {
-        EnabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        EnabledDeviceExtensions.PushBack(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
     }
     if (bSupportsDynamicRenderingKHR)
     {
-        EnabledDeviceExtensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+        EnabledDeviceExtensions.PushBack(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
     }
 #if PLATFORM_MAC
     if (bSupportsPortabilitySubset)
     {
-        EnabledDeviceExtensions.push_back(GVkKhrPortabilitySubsetExtensionName);
+        EnabledDeviceExtensions.PushBack(GVkKhrPortabilitySubsetExtensionName);
     }
 #endif
 
@@ -577,8 +587,8 @@ void FVulkanRALDevice::InternalCreateLogicalDevice()
         DeviceInfo.pNext = &DeviceFeatures;
         DeviceInfo.queueCreateInfoCount = 1;
         DeviceInfo.pQueueCreateInfos = &QueueInfo;
-        DeviceInfo.enabledExtensionCount = static_cast<uint32>(EnabledDeviceExtensions.size());
-        DeviceInfo.ppEnabledExtensionNames = EnabledDeviceExtensions.data();
+        DeviceInfo.enabledExtensionCount = static_cast<uint32>(EnabledDeviceExtensions.Size());
+        DeviceInfo.ppEnabledExtensionNames = EnabledDeviceExtensions.Data();
     }
     const VkResult Result = vkCreateDevice(this->VkContext.PhysicalDevice, &DeviceInfo, nullptr, &this->VkContext.LogicalDevice);
     if (Result != VK_SUCCESS)
@@ -777,7 +787,7 @@ FRALBindGroup* FVulkanRALDevice::CreateBindGroup(const FRALBindGroupDesc& Desc)
     return new FVulkanRALBindGroup(this, Desc);
 }
 
-FRALShader* FVulkanRALDevice::CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size, const FString& EntryPoint)
+FRALShader* FVulkanRALDevice::CreateShaderFromFile(EShaderStage Stage, const void* Data, uint64 Size, const LE::String& EntryPoint)
 {
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || Data == nullptr || Size == 0 || (Size % 4) != 0)
     {
@@ -924,3 +934,5 @@ namespace RAL
         return Device;
 	}
 }
+
+} // namespace LE

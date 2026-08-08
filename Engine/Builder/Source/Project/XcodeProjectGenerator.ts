@@ -3,7 +3,8 @@ import * as FsSync from "node:fs";
 import * as Fs from "node:fs/promises";
 import * as Path from "node:path";
 import { SourceScanner } from "../Build/SourceScanner.ts";
-import type { Target } from "../Configuration/Types.ts";
+import { ResolveTarget } from "../Configuration/Target.ts";
+import type { ResolvedTarget, Target } from "../Configuration/Types.ts";
 import type { ResolvedModule } from "../Graph/DependencyGraph.ts";
 import type { EnginePaths } from "./EnginePaths.ts";
 
@@ -27,6 +28,11 @@ interface XcodeSettings {
     LibraryFlags: string[];
     Frameworks: string[];
     Defines: string[];
+}
+
+interface XcodeConfigurationTargets {
+    Debug: ResolvedTarget;
+    Release: ResolvedTarget;
 }
 
 function PbxId(Kind: string, Key: string): string {
@@ -57,7 +63,9 @@ export class XcodeProjectGenerator {
         this.Paths = Paths;
     }
 
-    public async Generate(Modules: ResolvedModule[], Target: Target): Promise<string> {
+    public async Generate(Modules: ResolvedModule[], BuildTarget: ResolvedTarget): Promise<string> {
+        const Target = BuildTarget.Target;
+        const ConfigurationTargets = this.ResolveConfigurationTargets(BuildTarget);
         const ProjectFiles = this.CollectProjectFiles();
         const CompiledSources = new Set<string>();
         for (const Module of Modules) {
@@ -76,11 +84,11 @@ export class XcodeProjectGenerator {
         const Settings = this.CollectSettings(Modules, Target);
         await this.WriteFileIfChanged(
             Path.join(ProjectDirectory, "project.pbxproj"),
-            this.BuildProject(ProjectFiles, CompiledSources, Settings, Target),
+            this.BuildProject(ProjectFiles, CompiledSources, Settings, BuildTarget, ConfigurationTargets),
         );
         await this.WriteFileIfChanged(
-            Path.join(SchemeDirectory, "LimitlessEngine.xcscheme"),
-            this.BuildScheme(Target),
+            Path.join(SchemeDirectory, `${BuildTarget.Descriptor.Name}.xcscheme`),
+            this.BuildScheme(BuildTarget, ConfigurationTargets),
         );
         return ProjectDirectory;
     }
@@ -89,14 +97,17 @@ export class XcodeProjectGenerator {
         Files: ProjectFile[],
         CompiledSources: Set<string>,
         Settings: XcodeSettings,
-        Target: Target,
+        BuildTarget: ResolvedTarget,
+        ConfigurationTargets: XcodeConfigurationTargets,
     ): string {
+        const Target = BuildTarget.Target;
+        const TargetName = BuildTarget.Descriptor.Name;
         const MainGroupId = PbxId("group", "main");
         const ProductsGroupId = PbxId("group", "products");
         const FrameworksGroupId = PbxId("group", "frameworks");
-        const ProductName = Target.TargetType === "Editor" ? "LimitlessEditor" : "LimitlessGame";
-        const ProductFileId = PbxId("file", `product:${ProductName}`);
-        const TargetId = PbxId("target", "LimitlessEngine");
+        const ProductReferenceName = "$(PRODUCT_NAME)";
+        const ProductFileId = PbxId("file", `product:${TargetName}`);
+        const TargetId = PbxId("target", TargetName);
         const ProjectId = PbxId("project", "LimitlessEngine");
         const SourcesPhaseId = PbxId("phase", "sources");
         const FrameworksPhaseId = PbxId("phase", "frameworks");
@@ -152,7 +163,7 @@ export class XcodeProjectGenerator {
             const FileId = PbxId("framework-file", Framework);
             Lines.push(`\t\t${FileId} /* ${Comment(Framework)}.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ${PbxQuote(`${Framework}.framework`)}; path = ${PbxQuote(`System/Library/Frameworks/${Framework}.framework`)}; sourceTree = SDKROOT; };`);
         }
-        Lines.push(`\t\t${ProductFileId} /* ${ProductName} */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ${ProductName}; sourceTree = BUILT_PRODUCTS_DIR; };`);
+        Lines.push(`\t\t${ProductFileId} /* Product */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ${PbxQuote(ProductReferenceName)}; sourceTree = BUILT_PRODUCTS_DIR; };`);
         Lines.push("/* End PBXFileReference section */", "", "/* Begin PBXFrameworksBuildPhase section */");
         Lines.push(`\t\t${FrameworksPhaseId} /* Frameworks */ = {`);
         Lines.push("\t\t\tisa = PBXFrameworksBuildPhase;", "\t\t\tbuildActionMask = 2147483647;", "\t\t\tfiles = (");
@@ -181,24 +192,24 @@ export class XcodeProjectGenerator {
         Lines.push("\t\t\t);", "\t\t\tname = Frameworks;", "\t\t\tsourceTree = \"<group>\";", "\t\t};");
         Lines.push(`\t\t${ProductsGroupId} /* Products */ = {`);
         Lines.push("\t\t\tisa = PBXGroup;", "\t\t\tchildren = (");
-        Lines.push(`\t\t\t\t${ProductFileId} /* ${ProductName} */,`);
+        Lines.push(`\t\t\t\t${ProductFileId} /* Product */,`);
         Lines.push("\t\t\t);", "\t\t\tname = Products;", "\t\t\tsourceTree = \"<group>\";", "\t\t};");
         Lines.push("/* End PBXGroup section */", "", "/* Begin PBXNativeTarget section */");
-        Lines.push(`\t\t${TargetId} /* LimitlessEngine */ = {`);
+        Lines.push(`\t\t${TargetId} /* ${Comment(TargetName)} */ = {`);
         Lines.push("\t\t\tisa = PBXNativeTarget;");
-        Lines.push(`\t\t\tbuildConfigurationList = ${TargetConfigListId} /* Build configuration list for PBXNativeTarget \"LimitlessEngine\" */;`);
+        Lines.push(`\t\t\tbuildConfigurationList = ${TargetConfigListId} /* Build configuration list for PBXNativeTarget \"${Comment(TargetName)}\" */;`);
         Lines.push("\t\t\tbuildPhases = (");
         Lines.push(`\t\t\t\t${SourcesPhaseId} /* Sources */,`, `\t\t\t\t${FrameworksPhaseId} /* Frameworks */,`, `\t\t\t\t${ResourcesPhaseId} /* Resources */,`);
         Lines.push("\t\t\t);", "\t\t\tbuildRules = (", "\t\t\t);", "\t\t\tdependencies = (", "\t\t\t);");
-        Lines.push("\t\t\tname = LimitlessEngine;", "\t\t\tproductName = LimitlessEngine;");
-        Lines.push(`\t\t\tproductReference = ${ProductFileId} /* ${ProductName} */;`, "\t\t\tproductType = \"com.apple.product-type.tool\";", "\t\t};");
+        Lines.push(`\t\t\tname = ${PbxQuote(TargetName)};`, `\t\t\tproductName = ${PbxQuote(ProductReferenceName)};`);
+        Lines.push(`\t\t\tproductReference = ${ProductFileId} /* Product */;`, "\t\t\tproductType = \"com.apple.product-type.tool\";", "\t\t};");
         Lines.push("/* End PBXNativeTarget section */", "", "/* Begin PBXProject section */");
         Lines.push(`\t\t${ProjectId} /* Project object */ = {`);
         Lines.push("\t\t\tisa = PBXProject;", "\t\t\tattributes = {", "\t\t\t\tBuildIndependentTargetsInParallel = 1;", "\t\t\t\tLastUpgradeCheck = 2640;", "\t\t\t};");
         Lines.push(`\t\t\tbuildConfigurationList = ${ProjectConfigListId} /* Build configuration list for PBXProject \"LimitlessEngine\" */;`);
         Lines.push("\t\t\tcompatibilityVersion = \"Xcode 14.0\";", "\t\t\tdevelopmentRegion = en;", "\t\t\thasScannedForEncodings = 0;", "\t\t\tknownRegions = (", "\t\t\t\ten,", "\t\t\t\tBase,", "\t\t\t);");
         Lines.push(`\t\t\tmainGroup = ${MainGroupId};`, `\t\t\tproductRefGroup = ${ProductsGroupId} /* Products */;`);
-        Lines.push("\t\t\tprojectDirPath = \"\";", "\t\t\tprojectRoot = \"\";", "\t\t\ttargets = (", `\t\t\t\t${TargetId} /* LimitlessEngine */,`, "\t\t\t);", "\t\t};");
+        Lines.push("\t\t\tprojectDirPath = \"\";", "\t\t\tprojectRoot = \"\";", "\t\t\ttargets = (", `\t\t\t\t${TargetId} /* ${Comment(TargetName)} */,`, "\t\t\t);", "\t\t};");
         Lines.push("/* End PBXProject section */", "", "/* Begin PBXResourcesBuildPhase section */");
         Lines.push(`\t\t${ResourcesPhaseId} /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };`);
         Lines.push("/* End PBXResourcesBuildPhase section */", "", "/* Begin PBXSourcesBuildPhase section */");
@@ -212,12 +223,16 @@ export class XcodeProjectGenerator {
 
         for (const Configuration of ["Debug", "Release"] as const) {
             this.AppendProjectBuildConfiguration(Lines, Configuration, Settings, Target);
-            this.AppendTargetBuildConfiguration(Lines, Configuration, ProductName);
+            this.AppendTargetBuildConfiguration(
+                Lines,
+                Configuration,
+                ConfigurationTargets[Configuration].OutputName,
+            );
         }
         Lines.push("/* End XCBuildConfiguration section */", "", "/* Begin XCConfigurationList section */");
         Lines.push(`\t\t${ProjectConfigListId} /* Build configuration list for PBXProject \"LimitlessEngine\" */ = {`);
         Lines.push("\t\t\tisa = XCConfigurationList;", "\t\t\tbuildConfigurations = (", `\t\t\t\t${PbxId("project-config", "Debug")} /* Debug */,`, `\t\t\t\t${PbxId("project-config", "Release")} /* Release */,`, "\t\t\t);", "\t\t\tdefaultConfigurationIsVisible = 0;", "\t\t\tdefaultConfigurationName = Debug;", "\t\t};");
-        Lines.push(`\t\t${TargetConfigListId} /* Build configuration list for PBXNativeTarget \"LimitlessEngine\" */ = {`);
+        Lines.push(`\t\t${TargetConfigListId} /* Build configuration list for PBXNativeTarget \"${Comment(TargetName)}\" */ = {`);
         Lines.push("\t\t\tisa = XCConfigurationList;", "\t\t\tbuildConfigurations = (", `\t\t\t\t${PbxId("target-config", "Debug")} /* Debug */,`, `\t\t\t\t${PbxId("target-config", "Release")} /* Release */,`, "\t\t\t);", "\t\t\tdefaultConfigurationIsVisible = 0;", "\t\t\tdefaultConfigurationName = Debug;", "\t\t};");
         Lines.push("/* End XCConfigurationList section */", "", "\t};", `\trootObject = ${ProjectId} /* Project object */;`, "}", "");
         return Lines.join("\n");
@@ -255,7 +270,7 @@ export class XcodeProjectGenerator {
     ): void {
         const ConfigId = PbxId("target-config", Configuration);
         Lines.push(`\t\t${ConfigId} /* ${Configuration} */ = {`, "\t\t\tisa = XCBuildConfiguration;", "\t\t\tbuildSettings = {");
-        Lines.push("\t\t\t\tCONFIGURATION_BUILD_DIR = \"$(SRCROOT)/Engine/Binaries/Mac\";", `\t\t\t\tCOPY_PHASE_STRIP = ${Configuration === "Debug" ? "NO" : "YES"};`, `\t\t\t\tDEBUG_INFORMATION_FORMAT = ${Configuration === "Debug" ? "dwarf" : "\"dwarf-with-dsym\""};`, "\t\t\t\tGENERATE_INFOPLIST_FILE = NO;", "\t\t\t\tMACH_O_TYPE = mh_execute;", `\t\t\t\tPRODUCT_NAME = ${ProductName};`, "\t\t\t\tSKIP_INSTALL = NO;", "\t\t\t};", `\t\t\tname = ${Configuration};`, "\t\t};");
+        Lines.push("\t\t\t\tCONFIGURATION_BUILD_DIR = \"$(SRCROOT)/Engine/Binaries/Mac\";", `\t\t\t\tCOPY_PHASE_STRIP = ${Configuration === "Debug" ? "NO" : "YES"};`, `\t\t\t\tDEBUG_INFORMATION_FORMAT = ${Configuration === "Debug" ? "dwarf" : "\"dwarf-with-dsym\""};`, "\t\t\t\tGENERATE_INFOPLIST_FILE = NO;", "\t\t\t\tMACH_O_TYPE = mh_execute;", `\t\t\t\tPRODUCT_NAME = ${PbxQuote(ProductName)};`, "\t\t\t\tSKIP_INSTALL = NO;", "\t\t\t};", `\t\t\tname = ${Configuration};`, "\t\t};");
     }
 
     private AppendBuildSettingArray(Lines: string[], Name: string, Values: string[]): void {
@@ -437,33 +452,52 @@ export class XcodeProjectGenerator {
         }
     }
 
-    private BuildScheme(Target: Target): string {
-        const TargetId = PbxId("target", "LimitlessEngine");
-        const ProductName = Target.TargetType === "Editor" ? "LimitlessEditor" : "LimitlessGame";
+    private BuildScheme(
+        BuildTarget: ResolvedTarget,
+        ConfigurationTargets: XcodeConfigurationTargets,
+    ): string {
+        const TargetName = BuildTarget.Descriptor.Name;
+        const TargetId = PbxId("target", TargetName);
+        const DebugProductName = ConfigurationTargets.Debug.OutputName;
+        const ReleaseProductName = ConfigurationTargets.Release.OutputName;
         return `<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="2640" version="1.7">
    <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
       <BuildActionEntries>
          <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="${TargetId}" BuildableName="${ProductName}" BlueprintName="LimitlessEngine" ReferencedContainer="container:LimitlessEngine.xcodeproj"/>
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="${TargetId}" BuildableName="${XmlEscape(DebugProductName)}" BlueprintName="${XmlEscape(TargetName)}" ReferencedContainer="container:LimitlessEngine.xcodeproj"/>
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES"/>
    <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="YES" customWorkingDirectory="${XmlEscape(this.Paths.Root)}" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" allowLocationSimulation="YES">
       <BuildableProductRunnable runnableDebuggingMode="0">
-         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="${TargetId}" BuildableName="${ProductName}" BlueprintName="LimitlessEngine" ReferencedContainer="container:LimitlessEngine.xcodeproj"/>
+         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="${TargetId}" BuildableName="${XmlEscape(DebugProductName)}" BlueprintName="${XmlEscape(TargetName)}" ReferencedContainer="container:LimitlessEngine.xcodeproj"/>
       </BuildableProductRunnable>
    </LaunchAction>
    <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="YES" customWorkingDirectory="${XmlEscape(this.Paths.Root)}" debugDocumentVersioning="YES">
       <BuildableProductRunnable runnableDebuggingMode="0">
-         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="${TargetId}" BuildableName="${ProductName}" BlueprintName="LimitlessEngine" ReferencedContainer="container:LimitlessEngine.xcodeproj"/>
+         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="${TargetId}" BuildableName="${XmlEscape(ReleaseProductName)}" BlueprintName="${XmlEscape(TargetName)}" ReferencedContainer="container:LimitlessEngine.xcodeproj"/>
       </BuildableProductRunnable>
    </ProfileAction>
    <AnalyzeAction buildConfiguration="Debug"/>
    <ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
 </Scheme>
 `;
+    }
+
+    private ResolveConfigurationTargets(BuildTarget: ResolvedTarget): XcodeConfigurationTargets {
+        const ResolveConfiguration = (Optimization: "Debug" | "Release"): ResolvedTarget =>
+            BuildTarget.Target.Optimization === Optimization
+                ? BuildTarget
+                : ResolveTarget(BuildTarget.Descriptor, {
+                    ...BuildTarget.Target,
+                    Optimization,
+                });
+        return {
+            Debug: ResolveConfiguration("Debug"),
+            Release: ResolveConfiguration("Release"),
+        };
     }
 
     private async WriteFileIfChanged(FilePath: string, Contents: string): Promise<void> {

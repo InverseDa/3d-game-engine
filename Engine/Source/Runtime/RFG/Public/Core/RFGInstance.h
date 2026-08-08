@@ -6,6 +6,9 @@
 #include "Record/RFGBuilder.h"
 #include "Compile/RFGCompiler.h"
 
+namespace LE
+{
+
 class FRFGRuntime;
 class IRFGPassRegistry;
 class FRFGRecordedGraph;
@@ -50,3 +53,5 @@ private:
     FRFGRuntime* Runtime = nullptr;
     FRFGExecutor* Executor = nullptr;
 };
+
+} // namespace LE

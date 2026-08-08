@@ -3,25 +3,25 @@
 #include "CoreMinimal.h"
 #include "Core/RFGTypes.h"
 
-#include <string>
-#include <unordered_map>
-#include <vector>
+
+namespace LE
+{
 
 class FRFGPassContext;
 
 struct FRFGPassParameterDesc
 {
-    FString Name;
-    FString TypeName;
+    LE::String Name;
+    LE::String TypeName;
     bool bRequired = true;
 };
 
 struct FRFGPassSchema
 {
-    FString PassTypeName;
+    LE::String PassTypeName;
     ERFGQueueType PreferredQueue = ERFGQueueType::Graphics;
     ERFGPassFlags DefaultFlags = ERFGPassFlags::None;
-    std::vector<FRFGPassParameterDesc> Parameters;
+    LE::Array<FRFGPassParameterDesc> Parameters;
 };
 
 class RFG_API IRFGPassExecutor
@@ -44,11 +44,11 @@ public:
 
 public:
     virtual bool RegisterPassType(const FRFGRegisteredPassType& InPassType) = 0;
-    virtual bool UnregisterPassType(const FString& PassTypeName) = 0;
+    virtual bool UnregisterPassType(const LE::String& PassTypeName) = 0;
 
 public:
-    virtual bool HasPassType(const FString& PassTypeName) const = 0;
-    virtual const FRFGRegisteredPassType* FindPassType(const FString& PassTypeName) const = 0;
+    virtual bool HasPassType(const LE::String& PassTypeName) const = 0;
+    virtual const FRFGRegisteredPassType* FindPassType(const LE::String& PassTypeName) const = 0;
 };
 
 class RFG_API FRFGPassRegistry final : public IRFGPassRegistry
@@ -59,12 +59,14 @@ public:
 
 public:
     bool RegisterPassType(const FRFGRegisteredPassType& InPassType) override;
-    bool UnregisterPassType(const FString& PassTypeName) override;
+    bool UnregisterPassType(const LE::String& PassTypeName) override;
 
 public:
-    bool HasPassType(const FString& PassTypeName) const override;
-    const FRFGRegisteredPassType* FindPassType(const FString& PassTypeName) const override;
+    bool HasPassType(const LE::String& PassTypeName) const override;
+    const FRFGRegisteredPassType* FindPassType(const LE::String& PassTypeName) const override;
 
 private:
-    std::unordered_map<std::string, FRFGRegisteredPassType> RegisteredPassTypes;
+    LE::HashMap<LE::String, FRFGRegisteredPassType> RegisteredPassTypes;
 };
+
+} // namespace LE

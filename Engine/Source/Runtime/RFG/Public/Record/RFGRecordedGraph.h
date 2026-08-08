@@ -4,8 +4,9 @@
 #include "Core/RFGHandles.h"
 #include "Core/RFGTypes.h"
 
-#include <unordered_set>
-#include <vector>
+
+namespace LE
+{
 
 class FRALTexture;
 class FRALBuffer;
@@ -20,8 +21,8 @@ struct FRFGPassResourceAccess
 struct FRFGPassNode
 {
     FRFGPassHandle Handle;
-    FString Name;
-    FString PassTypeName;
+    LE::String Name;
+    LE::String PassTypeName;
     ERFGQueueType Queue = ERFGQueueType::Graphics;
     ERFGPassFlags Flags = ERFGPassFlags::None;
     FRFGSourceLocation SourceLocation;
@@ -30,20 +31,20 @@ struct FRFGPassNode
     FRFGPassCallback ExecuteCallback;
     IRFGPassExecutor* Executor = nullptr;
 
-    std::vector<FRFGPassResourceAccess> ResourceAccesses;
-    std::vector<FRFGPassHandle> ExplicitDependencies;
+    LE::Array<FRFGPassResourceAccess> ResourceAccesses;
+    LE::Array<FRFGPassHandle> ExplicitDependencies;
 };
 
 struct FRFGResourceNode
 {
     FRFGResourceHandle Handle;
-    FString Name;
+    LE::String Name;
     FRFGResourceDesc Desc;
     ERFGResourceFlags Flags = ERFGResourceFlags::None;
-    ERALResourceState InitialState = ERALResourceState::Undefined;
+    LE::ERALResourceState InitialState = LE::ERALResourceState::Undefined;
 
-    FRALTexture* ImportedTexture = nullptr;
-    FRALBuffer* ImportedBuffer = nullptr;
+    LE::FRALTexture* ImportedTexture = nullptr;
+    LE::FRALBuffer* ImportedBuffer = nullptr;
 };
 
 class RFG_API FRFGRecordedGraph
@@ -67,9 +68,9 @@ public:
     bool IsOutputResource(FRFGResourceHandle ResourceHandle) const;
 
 public:
-    const std::vector<FRFGPassNode>& GetPassNodes() const;
-    const std::vector<FRFGResourceNode>& GetResourceNodes() const;
-    const std::vector<FRFGPassHandle>& GetPassOrder() const;
+    const LE::Array<FRFGPassNode>& GetPassNodes() const;
+    const LE::Array<FRFGResourceNode>& GetResourceNodes() const;
+    const LE::Array<FRFGPassHandle>& GetPassOrder() const;
 
 public:
     void Reset();
@@ -78,8 +79,10 @@ private:
     uint32 NextPassId = 0;
     uint32 NextResourceId = 0;
 
-    std::vector<FRFGPassNode> PassNodes;
-    std::vector<FRFGResourceNode> ResourceNodes;
-    std::vector<FRFGPassHandle> PassOrder;
-    std::unordered_set<FRFGResourceHandle> OutputResources;
+    LE::Array<FRFGPassNode> PassNodes;
+    LE::Array<FRFGResourceNode> ResourceNodes;
+    LE::Array<FRFGPassHandle> PassOrder;
+    LE::HashSet<FRFGResourceHandle, FRFGResourceHandleHash> OutputResources;
 };
+
+} // namespace LE

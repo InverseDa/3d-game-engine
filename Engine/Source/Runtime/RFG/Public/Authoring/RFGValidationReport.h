@@ -2,7 +2,9 @@
 
 #include "CoreMinimal.h"
 
-#include <vector>
+
+namespace LE
+{
 
 enum class ERFGValidationSeverity : uint8
 {
@@ -14,8 +16,8 @@ enum class ERFGValidationSeverity : uint8
 struct FRFGValidationIssue
 {
     ERFGValidationSeverity Severity = ERFGValidationSeverity::Info;
-    FString Message;
-    FString Context;
+    LE::String Message;
+    LE::String Context;
 };
 
 class RFG_API FRFGValidationReport
@@ -30,12 +32,14 @@ public:
     bool IsEmpty() const;
 
 public:
-    const std::vector<FRFGValidationIssue>& GetIssues() const;
-    std::vector<FRFGValidationIssue>& GetMutableIssues();
+    const LE::Array<FRFGValidationIssue>& GetIssues() const;
+    LE::Array<FRFGValidationIssue>& GetMutableIssues();
 
 public:
     void Clear();
 
 private:
-    std::vector<FRFGValidationIssue> Issues;
+    LE::Array<FRFGValidationIssue> Issues;
 };
+
+} // namespace LE

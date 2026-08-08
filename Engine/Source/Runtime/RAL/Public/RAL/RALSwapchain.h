@@ -1,8 +1,11 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "RALTexture.h"
 #include "RALResource.h"
+
+namespace LE
+{
 
 class RAL_API FRALSwapchain : public FRALResource
 {
@@ -17,3 +20,5 @@ public:
     /** Resize swapchain */
     virtual void Resize(uint32 Width, uint32 Height) = 0;
 };
+
+} // namespace LE

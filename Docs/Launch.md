@@ -153,7 +153,7 @@ public static void ApplyPlatformSourceExcludes(...)
 
 ```
 Launch
- ├─ Core        (日志、基础类型、FVector3f 等)
+ ├─ Core        (日志、基础类型、LE::Math::Vector3f 等)
  ├─ RAL         (FRALDevice、FRALSwapchain、FRALSurfaceDesc 等)
  ├─ RFG         (渲染框架图)
  ├─ Renderer    (FRenderer、FRendererFrameContext、渲染管线)

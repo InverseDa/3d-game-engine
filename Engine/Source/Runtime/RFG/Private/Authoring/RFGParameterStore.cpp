@@ -1,41 +1,36 @@
 #include "Authoring/RFGParameterStore.h"
 
-namespace
+namespace LE
 {
-std::string MakeKey(const FString& Key)
+
+bool FRFGParameterStore::HasValue(const LE::String& Key) const
 {
-    return std::string(Key.GetData());
-}
+    return Values.Contains(Key.View());
 }
 
-bool FRFGParameterStore::HasValue(const FString& Key) const
+const FRFGParameterValue* FRFGParameterStore::FindValue(const LE::String& Key) const
 {
-    return Values.find(MakeKey(Key)) != Values.end();
+    return Values.Find(Key.View());
 }
 
-const FRFGParameterValue* FRFGParameterStore::FindValue(const FString& Key) const
+FRFGParameterValue* FRFGParameterStore::FindValue(const LE::String& Key)
 {
-    const auto It = Values.find(MakeKey(Key));
-    return It != Values.end() ? &It->second : nullptr;
+    return Values.Find(Key.View());
 }
 
-FRFGParameterValue* FRFGParameterStore::FindValue(const FString& Key)
+void FRFGParameterStore::SetValue(const LE::String& Key, const FRFGParameterValue& Value)
 {
-    const auto It = Values.find(MakeKey(Key));
-    return It != Values.end() ? &It->second : nullptr;
+    Values.InsertOrAssign(Key, Value);
 }
 
-void FRFGParameterStore::SetValue(const FString& Key, const FRFGParameterValue& Value)
+void FRFGParameterStore::RemoveValue(const LE::String& Key)
 {
-    Values[MakeKey(Key)] = Value;
-}
-
-void FRFGParameterStore::RemoveValue(const FString& Key)
-{
-    Values.erase(MakeKey(Key));
+    Values.Erase(Key.View());
 }
 
 void FRFGParameterStore::Clear()
 {
-    Values.clear();
+    Values.Clear();
 }
+
+} // namespace LE

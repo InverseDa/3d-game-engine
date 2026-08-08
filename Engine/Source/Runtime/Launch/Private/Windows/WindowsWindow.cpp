@@ -1,9 +1,11 @@
 #include "CoreMinimal.h"
 #include "Windows/WindowsWindow.h"
-#include <unordered_map>
+
+namespace LE
+{
 
 // 静态窗口映射（用于 WndProc 回调）
-static std::unordered_map<HWND, FWindowsWindow*> g_WindowMap;
+static LE::HashMap<HWND, FWindowsWindow*> g_WindowMap;
 
 FWindowsWindow::FWindowsWindow(uint32 InWidth, uint32 InHeight, const char* Title)
     : Width(InWidth), Height(InHeight)
@@ -28,23 +30,23 @@ FWindowsWindow::FWindowsWindow(uint32 InWidth, uint32 InHeight, const char* Titl
         nullptr, nullptr, GetModuleHandle(nullptr), nullptr
     );
 
-    g_WindowMap[Hwnd] = this;
+    g_WindowMap.InsertOrAssign(Hwnd, this);
 }
 
 FWindowsWindow::~FWindowsWindow()
 {
     if (Hwnd)
     {
-        g_WindowMap.erase(Hwnd);
+        g_WindowMap.Erase(Hwnd);
         DestroyWindow(Hwnd);
         Hwnd = nullptr;
     }
 }
 
-FRALSurfaceDesc FWindowsWindow::GetSurfaceDesc() const
+LE::FRALSurfaceDesc FWindowsWindow::GetSurfaceDesc() const
 {
-    FRALSurfaceDesc SurfaceDesc;
-    SurfaceDesc.Type = ERALSurfaceType::Win32;
+    LE::FRALSurfaceDesc SurfaceDesc;
+    SurfaceDesc.Type = LE::ERALSurfaceType::Win32;
     SurfaceDesc.WindowHandle = static_cast<void*>(Hwnd);
     return SurfaceDesc;
 }
@@ -75,8 +77,8 @@ bool FWindowsWindow::IsMinimized() const
 
 LRESULT CALLBACK FWindowsWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    auto It = g_WindowMap.find(hwnd);
-    FWindowsWindow* Window = (It != g_WindowMap.end()) ? It->second : nullptr;
+    FWindowsWindow* const* const Found = g_WindowMap.Find(hwnd);
+    FWindowsWindow* Window = Found != nullptr ? *Found : nullptr;
 
     switch (msg)
     {
@@ -97,3 +99,5 @@ LRESULT CALLBACK FWindowsWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
             return DefWindowProc(hwnd, msg, wParam, lParam);
     }
 }
+
+} // namespace LE

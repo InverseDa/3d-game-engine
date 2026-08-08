@@ -1,12 +1,7 @@
 #include "Record/RFGPassRegistry.h"
 
-namespace
+namespace LE
 {
-std::string MakeKey(const FString& Key)
-{
-    return std::string(Key.GetData());
-}
-}
 
 bool FRFGPassRegistry::RegisterPassType(const FRFGRegisteredPassType& InPassType)
 {
@@ -15,21 +10,22 @@ bool FRFGPassRegistry::RegisterPassType(const FRFGRegisteredPassType& InPassType
         return false;
     }
 
-    return RegisteredPassTypes.emplace(MakeKey(InPassType.Schema.PassTypeName), InPassType).second;
+    return RegisteredPassTypes.Insert(InPassType.Schema.PassTypeName, InPassType);
 }
 
-bool FRFGPassRegistry::UnregisterPassType(const FString& PassTypeName)
+bool FRFGPassRegistry::UnregisterPassType(const LE::String& PassTypeName)
 {
-    return RegisteredPassTypes.erase(MakeKey(PassTypeName)) > 0;
+    return RegisteredPassTypes.Erase(PassTypeName.View());
 }
 
-bool FRFGPassRegistry::HasPassType(const FString& PassTypeName) const
+bool FRFGPassRegistry::HasPassType(const LE::String& PassTypeName) const
 {
-    return RegisteredPassTypes.find(MakeKey(PassTypeName)) != RegisteredPassTypes.end();
+    return RegisteredPassTypes.Contains(PassTypeName.View());
 }
 
-const FRFGRegisteredPassType* FRFGPassRegistry::FindPassType(const FString& PassTypeName) const
+const FRFGRegisteredPassType* FRFGPassRegistry::FindPassType(const LE::String& PassTypeName) const
 {
-    const auto It = RegisteredPassTypes.find(MakeKey(PassTypeName));
-    return It != RegisteredPassTypes.end() ? &It->second : nullptr;
+    return RegisteredPassTypes.Find(PassTypeName.View());
 }
+
+} // namespace LE

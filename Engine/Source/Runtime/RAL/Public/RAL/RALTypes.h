@@ -4,6 +4,9 @@
 
 #define LE_RAL_ENABLE_VALIDATION 1
 
+namespace LE
+{
+
 enum class ERALPlatform : uint8
 {
     Unknown,
@@ -136,3 +139,5 @@ enum class ECompareFunction : uint8
     GreaterEqual,
     Always,
 };
+
+} // namespace LE

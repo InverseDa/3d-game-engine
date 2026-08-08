@@ -3,7 +3,9 @@
 #include "CoreMinimal.h"
 #include "RFGMinimal.h"
 
-#include <unordered_map>
+
+namespace LE
+{
 
 class FRALBuffer;
 class FRALTexture;
@@ -11,22 +13,24 @@ class FRALTexture;
 class RENDERER_API FRenderGraphBuilderBridge final : public FNonCopyable
 {
 public:
-    explicit FRenderGraphBuilderBridge(FRFGBuilder& InBuilder);
+    explicit FRenderGraphBuilderBridge(LE::FRFGBuilder& InBuilder);
     ~FRenderGraphBuilderBridge();
 
 public:
-    FRFGResourceHandle ImportTexture(const FString& ResourceName, FRALTexture* Texture, ERALResourceState InitialState);
-    FRFGResourceHandle ImportBuffer(const FString& ResourceName, FRALBuffer* Buffer, ERALResourceState InitialState);
-    void Read(FRFGPassHandle PassHandle, FRFGResourceHandle ResourceHandle, const FRFGAccessDesc& AccessDesc = {});
-    void Write(FRFGPassHandle PassHandle, FRFGResourceHandle ResourceHandle, const FRFGAccessDesc& AccessDesc = {});
-    void MarkOutput(FRFGResourceHandle ResourceHandle);
+    LE::FRFGResourceHandle ImportTexture(const LE::String& ResourceName, LE::FRALTexture* Texture, LE::ERALResourceState InitialState);
+    LE::FRFGResourceHandle ImportBuffer(const LE::String& ResourceName, LE::FRALBuffer* Buffer, LE::ERALResourceState InitialState);
+    void Read(LE::FRFGPassHandle PassHandle, LE::FRFGResourceHandle ResourceHandle, const LE::FRFGAccessDesc& AccessDesc = {});
+    void Write(LE::FRFGPassHandle PassHandle, LE::FRFGResourceHandle ResourceHandle, const LE::FRFGAccessDesc& AccessDesc = {});
+    void MarkOutput(LE::FRFGResourceHandle ResourceHandle);
 
 public:
-    FRFGBuilder& GetGraphBuilder();
-    const FRFGBuilder& GetGraphBuilder() const;
+    LE::FRFGBuilder& GetGraphBuilder();
+    const LE::FRFGBuilder& GetGraphBuilder() const;
 
 private:
-    FRFGBuilder* Builder = nullptr;
-    std::unordered_map<const FRALTexture*, FRFGResourceHandle> ImportedTextures;
-    std::unordered_map<const FRALBuffer*, FRFGResourceHandle> ImportedBuffers;
+    LE::FRFGBuilder* Builder = nullptr;
+    LE::HashMap<const LE::FRALTexture*, LE::FRFGResourceHandle> ImportedTextures;
+    LE::HashMap<const LE::FRALBuffer*, LE::FRFGResourceHandle> ImportedBuffers;
 };
+
+} // namespace LE

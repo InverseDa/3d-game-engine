@@ -2,6 +2,9 @@
 
 #include "Core/RFGRuntime.h"
 
+namespace LE
+{
+
 FRFGInstance::FRFGInstance()
     : Executor(new FRFGExecutor())
 {
@@ -63,7 +66,7 @@ void FRFGInstance::Execute(
     FRFGExecutionContext& ExecutionContext,
     const FRFGExecuteOptions& ExecuteOptions)
 {
-    if (Executor == nullptr || CompileResult.Plan == nullptr)
+    if (Executor == nullptr || !CompileResult.Plan)
     {
         return;
     }
@@ -84,3 +87,5 @@ const FRFGCompileOptions& FRFGInstance::GetCompileOptions() const
     static FRFGCompileOptions DefaultOptions;
     return Runtime != nullptr ? Runtime->GetCompileOptions() : DefaultOptions;
 }
+
+} // namespace LE

@@ -3,6 +3,9 @@
 #include "RAL/RALBuffer.h"
 #include "RAL/RALTexture.h"
 
+namespace LE
+{
+
 namespace
 {
 constexpr uint64 GFNVOffsetBasis = 1469598103934665603ull;
@@ -24,7 +27,7 @@ void HashValue(uint64& Hash, const T& Value)
     HashBytes(Hash, &Value, sizeof(T));
 }
 
-void HashString(uint64& Hash, const FString& Value)
+void HashString(uint64& Hash, const LE::String& Value)
 {
     HashBytes(Hash, Value.GetData(), static_cast<size_t>(Value.Length()));
 }
@@ -52,7 +55,7 @@ IRFGPassRegistry* FRFGBuilder::GetPassRegistry() const
     return PassRegistry;
 }
 
-FRFGResourceHandle FRFGBuilder::CreateTexture(const FString& ResourceName, const FRFGTextureDesc& Desc)
+FRFGResourceHandle FRFGBuilder::CreateTexture(const LE::String& ResourceName, const FRFGTextureDesc& Desc)
 {
     FRFGResourceNode ResourceNode;
     ResourceNode.Name = ResourceName;
@@ -64,7 +67,7 @@ FRFGResourceHandle FRFGBuilder::CreateTexture(const FString& ResourceName, const
     return Handle;
 }
 
-FRFGResourceHandle FRFGBuilder::CreateBuffer(const FString& ResourceName, const FRFGBufferDesc& Desc)
+FRFGResourceHandle FRFGBuilder::CreateBuffer(const LE::String& ResourceName, const FRFGBufferDesc& Desc)
 {
     FRFGResourceNode ResourceNode;
     ResourceNode.Name = ResourceName;
@@ -76,7 +79,7 @@ FRFGResourceHandle FRFGBuilder::CreateBuffer(const FString& ResourceName, const 
     return Handle;
 }
 
-FRFGResourceHandle FRFGBuilder::ImportTexture(const FString& ResourceName, FRALTexture* ExternalTexture, ERALResourceState InitialState)
+FRFGResourceHandle FRFGBuilder::ImportTexture(const LE::String& ResourceName, LE::FRALTexture* ExternalTexture, LE::ERALResourceState InitialState)
 {
     FRFGResourceNode ResourceNode;
     ResourceNode.Name = ResourceName;
@@ -86,7 +89,7 @@ FRFGResourceHandle FRFGBuilder::ImportTexture(const FString& ResourceName, FRALT
     ResourceNode.ImportedTexture = ExternalTexture;
     if (ExternalTexture != nullptr)
     {
-        const FRALTextureDesc& TextureDesc = ExternalTexture->GetDesc();
+        const LE::FRALTextureDesc& TextureDesc = ExternalTexture->GetDesc();
         ResourceNode.Desc.Texture.Width = TextureDesc.Width;
         ResourceNode.Desc.Texture.Height = TextureDesc.Height;
         ResourceNode.Desc.Texture.Depth = TextureDesc.Depth;
@@ -105,7 +108,7 @@ FRFGResourceHandle FRFGBuilder::ImportTexture(const FString& ResourceName, FRALT
     return Handle;
 }
 
-FRFGResourceHandle FRFGBuilder::ImportBuffer(const FString& ResourceName, FRALBuffer* ExternalBuffer, ERALResourceState InitialState)
+FRFGResourceHandle FRFGBuilder::ImportBuffer(const LE::String& ResourceName, LE::FRALBuffer* ExternalBuffer, LE::ERALResourceState InitialState)
 {
     FRFGResourceNode ResourceNode;
     ResourceNode.Name = ResourceName;
@@ -115,9 +118,9 @@ FRFGResourceHandle FRFGBuilder::ImportBuffer(const FString& ResourceName, FRALBu
     ResourceNode.ImportedBuffer = ExternalBuffer;
     if (ExternalBuffer != nullptr)
     {
-        const FRALBufferDesc& BufferDesc = ExternalBuffer->GetDesc();
+        const LE::FRALBufferDesc& BufferDesc = ExternalBuffer->GetDesc();
         ResourceNode.Desc.Buffer.Size = BufferDesc.Size;
-        ResourceNode.Desc.Buffer.Usage = static_cast<EResourceUsage>(BufferDesc.Usage);
+        ResourceNode.Desc.Buffer.Usage = static_cast<LE::EResourceUsage>(BufferDesc.Usage);
         ResourceNode.Desc.Buffer.UsageMask = BufferDesc.UsageFlag;
     }
 
@@ -127,8 +130,8 @@ FRFGResourceHandle FRFGBuilder::ImportBuffer(const FString& ResourceName, FRALBu
 }
 
 FRFGPassHandle FRFGBuilder::AddPass(
-    const FString& PassName,
-    const FString& PassTypeName,
+    const LE::String& PassName,
+    const LE::String& PassTypeName,
     const FRFGPassParameterBlock& ParameterBlock,
     ERFGPassFlags Flags,
     ERFGQueueType QueueType,
@@ -173,7 +176,7 @@ void FRFGBuilder::Read(FRFGPassHandle PassHandle, FRFGResourceHandle ResourceHan
     ResourceAccess.Access = AccessDesc;
     ResourceAccess.Access.Access = ERFGAccessType::Read;
 
-    RecordedGraph.GetPassNode(PassHandle).ResourceAccesses.push_back(ResourceAccess);
+    RecordedGraph.GetPassNode(PassHandle).ResourceAccesses.PushBack(ResourceAccess);
 }
 
 void FRFGBuilder::Write(FRFGPassHandle PassHandle, FRFGResourceHandle ResourceHandle, const FRFGAccessDesc& AccessDesc)
@@ -183,12 +186,12 @@ void FRFGBuilder::Write(FRFGPassHandle PassHandle, FRFGResourceHandle ResourceHa
     ResourceAccess.Access = AccessDesc;
     ResourceAccess.Access.Access = ERFGAccessType::Write;
 
-    RecordedGraph.GetPassNode(PassHandle).ResourceAccesses.push_back(ResourceAccess);
+    RecordedGraph.GetPassNode(PassHandle).ResourceAccesses.PushBack(ResourceAccess);
 }
 
 void FRFGBuilder::AddDependency(FRFGPassHandle BeforePass, FRFGPassHandle AfterPass)
 {
-    RecordedGraph.GetPassNode(AfterPass).ExplicitDependencies.push_back(BeforePass);
+    RecordedGraph.GetPassNode(AfterPass).ExplicitDependencies.PushBack(BeforePass);
 }
 
 void FRFGBuilder::MarkOutput(FRFGResourceHandle ResourceHandle)
@@ -290,3 +293,5 @@ void FRFGBuilder::Reset()
     RecordedGraph.Reset();
     Blackboard.Clear();
 }
+
+} // namespace LE

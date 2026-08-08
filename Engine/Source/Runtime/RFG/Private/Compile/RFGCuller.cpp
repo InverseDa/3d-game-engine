@@ -4,9 +4,9 @@
 #include "Record/RFGRecordedGraph.h"
 
 #include <algorithm>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
+
+namespace LE
+{
 
 namespace
 {
@@ -18,20 +18,20 @@ bool AccessCanProduceOutput(ERFGAccessType AccessType)
 
 void FRFGCuller::CullPasses(const FRFGRecordedGraph& RecordedGraph, FRFGCompiledPlan& InOutPlan) const
 {
-    std::vector<FRFGCompiledPass>& Passes = InOutPlan.GetMutablePasses();
-    if (Passes.empty())
+    LE::Array<FRFGCompiledPass>& Passes = InOutPlan.GetMutablePasses();
+    if (Passes.IsEmpty())
     {
         return;
     }
 
-    std::unordered_map<uint32, uint32> PassIndexById;
-    for (uint32 PassIndex = 0; PassIndex < Passes.size(); ++PassIndex)
+    LE::HashMap<uint32, uint32> PassIndexById;
+    for (uint32 PassIndex = 0; PassIndex < Passes.Size(); ++PassIndex)
     {
-        PassIndexById.emplace(Passes[PassIndex].Handle.Id, PassIndex);
+        PassIndexById.Insert(Passes[PassIndex].Handle.Id, PassIndex);
     }
 
-    std::unordered_set<uint32> RequiredPassIds;
-    std::vector<FRFGPassHandle> PendingPasses;
+    LE::HashSet<uint32> RequiredPassIds;
+    LE::Array<FRFGPassHandle> PendingPasses;
 
     for (const FRFGCompiledPass& CompiledPass : Passes)
     {
@@ -52,77 +52,77 @@ void FRFGCuller::CullPasses(const FRFGRecordedGraph& RecordedGraph, FRFGCompiled
 
         if (bHasRetentionFlags || bProducesOutput)
         {
-            if (RequiredPassIds.insert(CompiledPass.Handle.Id).second)
+            if (RequiredPassIds.Insert(CompiledPass.Handle.Id))
             {
-                PendingPasses.push_back(CompiledPass.Handle);
+                PendingPasses.PushBack(CompiledPass.Handle);
             }
         }
     }
 
-    while (!PendingPasses.empty())
+    while (!PendingPasses.IsEmpty())
     {
-        const FRFGPassHandle PassHandle = PendingPasses.back();
-        PendingPasses.pop_back();
+        const FRFGPassHandle PassHandle = PendingPasses.Back();
+        PendingPasses.PopBack();
 
-        const auto PassIndexIt = PassIndexById.find(PassHandle.Id);
-        if (PassIndexIt == PassIndexById.end())
+        const uint32* const PassIndex = PassIndexById.Find(PassHandle.Id);
+        if (PassIndex == nullptr)
         {
             continue;
         }
 
-        const FRFGCompiledPass& CompiledPass = Passes[PassIndexIt->second];
+        const FRFGCompiledPass& CompiledPass = Passes[*PassIndex];
         for (const FRFGDependencyEdge& Edge : CompiledPass.IncomingEdges)
         {
-            if (RequiredPassIds.insert(Edge.SourcePass.Id).second)
+            if (RequiredPassIds.Insert(Edge.SourcePass.Id))
             {
-                PendingPasses.push_back(Edge.SourcePass);
+                PendingPasses.PushBack(Edge.SourcePass);
             }
         }
     }
 
-    std::vector<FRFGCompiledPass> CulledPasses;
-    CulledPasses.reserve(RequiredPassIds.size());
+    LE::Array<FRFGCompiledPass> CulledPasses;
+    CulledPasses.Reserve(RequiredPassIds.Size());
 
     for (FRFGCompiledPass& Pass : Passes)
     {
-        if (RequiredPassIds.find(Pass.Handle.Id) != RequiredPassIds.end())
+        if (RequiredPassIds.Contains(Pass.Handle.Id))
         {
-            CulledPasses.push_back(std::move(Pass));
+            CulledPasses.PushBack(std::move(Pass));
         }
     }
 
     Passes = std::move(CulledPasses);
 
-    PassIndexById.clear();
-    for (uint32 PassIndex = 0; PassIndex < Passes.size(); ++PassIndex)
+    PassIndexById.Clear();
+    for (uint32 PassIndex = 0; PassIndex < Passes.Size(); ++PassIndex)
     {
-        PassIndexById.emplace(Passes[PassIndex].Handle.Id, PassIndex);
+        PassIndexById.Insert(Passes[PassIndex].Handle.Id, PassIndex);
     }
 
     for (FRFGCompiledPass& Pass : Passes)
     {
-        Pass.IncomingEdges.erase(
-            std::remove_if(
-                Pass.IncomingEdges.begin(),
-                Pass.IncomingEdges.end(),
-                [&](const FRFGDependencyEdge& Edge)
-                {
-                    return RequiredPassIds.find(Edge.SourcePass.Id) == RequiredPassIds.end();
-                }),
-            Pass.IncomingEdges.end());
+        for (std::size_t EdgeIndex = Pass.IncomingEdges.Size(); EdgeIndex > 0; --EdgeIndex)
+        {
+            if (!RequiredPassIds.Contains(Pass.IncomingEdges[EdgeIndex - 1].SourcePass.Id))
+            {
+                Pass.IncomingEdges.Erase(EdgeIndex - 1);
+            }
+        }
 
         uint32 DependencyLevel = 0;
         for (const FRFGDependencyEdge& Edge : Pass.IncomingEdges)
         {
-            const auto SourceIndexIt = PassIndexById.find(Edge.SourcePass.Id);
-            if (SourceIndexIt == PassIndexById.end())
+            const uint32* const SourceIndex = PassIndexById.Find(Edge.SourcePass.Id);
+            if (SourceIndex == nullptr)
             {
                 continue;
             }
 
-            DependencyLevel = std::max(DependencyLevel, Passes[SourceIndexIt->second].DependencyLevel + 1);
+            DependencyLevel = std::max(DependencyLevel, Passes[*SourceIndex].DependencyLevel + 1);
         }
 
         Pass.DependencyLevel = DependencyLevel;
     }
 }
+
+} // namespace LE

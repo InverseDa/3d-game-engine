@@ -4,9 +4,12 @@
 #include "Authoring/RFGTemplate.h"
 #include "Authoring/RFGValidationReport.h"
 
+namespace LE
+{
+
 struct FRFGAuthoringCompileRequest
 {
-    FString AssetPath;
+    LE::String AssetPath;
     uint32 AssetVersion = 0;
     bool bAllowExperimentalNodes = false;
 };
@@ -26,3 +29,5 @@ public:
 public:
     virtual FRFGAuthoringCompileResult Compile(const FRFGAuthoringCompileRequest& Request) = 0;
 };
+
+} // namespace LE

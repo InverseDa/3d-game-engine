@@ -28,6 +28,10 @@ export class EnginePaths {
     public TemporaryOutputDirectory(Platform: string, Configuration: string): string {
         return Path.join(this.TemporaryDirectory, Platform, Configuration);
     }
+
+    public GeneratedOutputDirectory(Platform: string, Configuration: string): string {
+        return Path.join(this.TemporaryOutputDirectory(Platform, Configuration), "Generated");
+    }
 }
 
 export function FindProjectRoot(StartDirectory: string): string {

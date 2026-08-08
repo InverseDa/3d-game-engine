@@ -3,7 +3,8 @@
 #include "CoreMinimal.h"
 #include "RenderPipeline.h"
 
-#include <memory>
+namespace LE
+{
 
 class FRALBuffer;
 class FRALBindGroup;
@@ -14,16 +15,16 @@ class FRALTextureView;
 
 struct FTriangleBackBufferPipelineDesc
 {
-    FRALSwapchain* Swapchain = nullptr;
+    LE::FRALSwapchain* Swapchain = nullptr;
 };
 
 struct FTriangleCompositePipelineDesc
 {
-    FRALSwapchain* Swapchain = nullptr;
-    FRALPipeline_Graphics* CompositePipeline = nullptr;
-    FRALTexture* SceneColorTexture = nullptr;
-    FRALTextureView* SceneColorView = nullptr;
-    FRALBindGroup* CompositeBindGroup = nullptr;
+    LE::FRALSwapchain* Swapchain = nullptr;
+    LE::FRALPipeline_Graphics* CompositePipeline = nullptr;
+    LE::FRALTexture* SceneColorTexture = nullptr;
+    LE::FRALTextureView* SceneColorView = nullptr;
+    LE::FRALBindGroup* CompositeBindGroup = nullptr;
 };
 
 class FTriangleBackBufferPipelineImpl;
@@ -45,7 +46,7 @@ public:
         FRenderPipelinePlan& OutPlan) override;
 
 private:
-    std::unique_ptr<FTriangleBackBufferPipelineImpl> Impl;
+    LE::UniquePtr<FTriangleBackBufferPipelineImpl> Impl;
 };
 
 class RENDERER_API FTriangleCompositePipeline final : public IRenderPipeline
@@ -64,5 +65,7 @@ public:
         FRenderPipelinePlan& OutPlan) override;
 
 private:
-    std::unique_ptr<FTriangleCompositePipelineImpl> Impl;
+    LE::UniquePtr<FTriangleCompositePipelineImpl> Impl;
 };
+
+} // namespace LE

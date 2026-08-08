@@ -1,5 +1,8 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
+
+namespace LE
+{
 
 // TODO: kodak consider change to Macro or inline function
 
@@ -138,3 +141,5 @@ FVulkanRALSampler::~FVulkanRALSampler()
         Handle = VK_NULL_HANDLE;
     }
 }
+
+} // namespace LE

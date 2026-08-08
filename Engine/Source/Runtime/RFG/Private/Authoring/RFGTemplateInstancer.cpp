@@ -2,6 +2,9 @@
 
 #include "Core/RFGInstance.h"
 
+namespace LE
+{
+
 namespace
 {
 constexpr uint64 GFNVOffsetBasis = 1469598103934665603ull;
@@ -23,7 +26,7 @@ void HashValue(uint64& Hash, const T& Value)
     HashBytes(Hash, &Value, sizeof(T));
 }
 
-void HashString(uint64& Hash, const FString& Value)
+void HashString(uint64& Hash, const LE::String& Value)
 {
     HashBytes(Hash, Value.GetData(), static_cast<size_t>(Value.Length()));
 }
@@ -72,7 +75,7 @@ FRFGTemplateInstantiateResult FRFGTemplateInstancer::Instantiate(
     }
 
     Result.Signature.Value = Hash;
-    Result.bSucceeded = !Template.GetNodes().empty() || !Template.GetResources().empty();
+    Result.bSucceeded = !Template.GetNodes().IsEmpty() || !Template.GetResources().IsEmpty();
     if (!Result.bSucceeded)
     {
         FRFGValidationIssue Issue;
@@ -83,3 +86,5 @@ FRFGTemplateInstantiateResult FRFGTemplateInstancer::Instantiate(
 
     return Result;
 }
+
+} // namespace LE

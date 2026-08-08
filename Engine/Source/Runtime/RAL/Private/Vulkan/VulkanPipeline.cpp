@@ -1,5 +1,8 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
+
+namespace LE
+{
 
 static VkFormat ToVkFormat(EPixelFormat Format)
 {
@@ -71,8 +74,8 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         return;
     }
 
-    std::vector<VkDescriptorSetLayout> SetLayouts{};
-    SetLayouts.reserve(Desc.BindGroupLayouts.size());
+    LE::Array<VkDescriptorSetLayout> SetLayouts;
+    SetLayouts.Reserve(Desc.BindGroupLayouts.Size());
     for (FRALBindGroupLayout* SetLayout : Desc.BindGroupLayouts)
     {
         if (SetLayout == nullptr)
@@ -83,14 +86,14 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
             return;
         }
         FVulkanRALBindGroupLayout* VkLayout = static_cast<FVulkanRALBindGroupLayout*>(SetLayout);
-        SetLayouts.push_back(VkLayout->Handle);
+        SetLayouts.PushBack(VkLayout->Handle);
     }
 
     VkPipelineLayoutCreateInfo LayoutInfo{};
     {
         LayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        LayoutInfo.setLayoutCount = static_cast<uint32>(SetLayouts.size());
-        LayoutInfo.pSetLayouts = SetLayouts.data();
+        LayoutInfo.setLayoutCount = static_cast<uint32>(SetLayouts.Size());
+        LayoutInfo.pSetLayouts = SetLayouts.Data();
     }
     VkResult Result = vkCreatePipelineLayout(this->Device->VkContext.LogicalDevice, &LayoutInfo, nullptr, &this->PipelineLayout);
     if (Result != VK_SUCCESS)
@@ -107,8 +110,8 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
     }
 
     // Shader stages
-    std::vector<VkPipelineShaderStageCreateInfo> ShaderStages{};
-    ShaderStages.reserve(2); // TODO: kodak vs and ps
+    LE::Array<VkPipelineShaderStageCreateInfo> ShaderStages;
+    ShaderStages.Reserve(2); // TODO: kodak vs and ps
 
     if (this->Desc.VertexShader)
     {
@@ -124,7 +127,7 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
             ShaderStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
             ShaderStage.module = VS->Module;
             ShaderStage.pName = VS->GetEntryPoint().GetData();
-            ShaderStages.emplace_back(ShaderStage);
+            ShaderStages.EmplaceBack(ShaderStage);
         }
     }
     if (this->Desc.PixelShader)
@@ -141,12 +144,12 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
             ShaderStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
             ShaderStage.module = PS->Module;
             ShaderStage.pName = PS->GetEntryPoint().GetData();
-            ShaderStages.emplace_back(ShaderStage);
+            ShaderStages.EmplaceBack(ShaderStage);
         }
     }
 
     // 将 RAL 顶点输入转换为 Vulkan
-    std::vector<VkVertexInputBindingDescription> VkBindings;
+    LE::Array<VkVertexInputBindingDescription> VkBindings;
     for (const auto& Binding : Desc.VertexBindings)
     {
         VkVertexInputBindingDescription VkBinding{};
@@ -154,10 +157,10 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         VkBinding.stride = Binding.Stride;
         VkBinding.inputRate = Binding.bPerInstance ?
             VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
-        VkBindings.push_back(VkBinding);
+        VkBindings.PushBack(VkBinding);
     }
 
-    std::vector<VkVertexInputAttributeDescription> VkAttributes;
+    LE::Array<VkVertexInputAttributeDescription> VkAttributes;
     for (const auto& Attr : Desc.VertexAttributes)
     {
         VkVertexInputAttributeDescription VkAttr{};
@@ -170,16 +173,16 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
             return;
         }
         VkAttr.offset = Attr.Offset;
-        VkAttributes.push_back(VkAttr);
+        VkAttributes.PushBack(VkAttr);
     }
 
     VkPipelineVertexInputStateCreateInfo VertexInput{};
     {
         VertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        VertexInput.vertexBindingDescriptionCount = static_cast<uint32>(VkBindings.size());
-        VertexInput.pVertexBindingDescriptions = VkBindings.data();
-        VertexInput.vertexAttributeDescriptionCount = static_cast<uint32>(VkAttributes.size());
-        VertexInput.pVertexAttributeDescriptions = VkAttributes.data();
+        VertexInput.vertexBindingDescriptionCount = static_cast<uint32>(VkBindings.Size());
+        VertexInput.pVertexBindingDescriptions = VkBindings.Data();
+        VertexInput.vertexAttributeDescriptionCount = static_cast<uint32>(VkAttributes.Size());
+        VertexInput.pVertexAttributeDescriptions = VkAttributes.Data();
     }
 
     VkPipelineInputAssemblyStateCreateInfo InputAssembly{};
@@ -226,8 +229,8 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         }
     }
 
-    std::vector<VkPipelineColorBlendAttachmentState> ColorBlendAttachments{};
-    ColorBlendAttachments.resize(this->Desc.RenderTargetCount);
+    LE::Array<VkPipelineColorBlendAttachmentState> ColorBlendAttachments;
+    ColorBlendAttachments.Resize(this->Desc.RenderTargetCount);
     for (uint32 i = 0; i < this->Desc.RenderTargetCount; ++i)
     {
         const bool bEnableBlendState = this->Desc.BlendState.bEnable ? VK_TRUE : VK_FALSE;
@@ -243,7 +246,7 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
     {
         ColorBlendInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
         ColorBlendInfo.attachmentCount = this->Desc.RenderTargetCount;
-        ColorBlendInfo.pAttachments = ColorBlendAttachments.data();
+        ColorBlendInfo.pAttachments = ColorBlendAttachments.Data();
     }
 
     VkDynamicState Dynamics[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
@@ -254,8 +257,8 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         DynamicState.pDynamicStates = Dynamics;
     }
 
-    std::vector<VkFormat> ColorAttachmentFormats;
-    ColorAttachmentFormats.reserve(this->Desc.RenderTargetCount);
+    LE::Array<VkFormat> ColorAttachmentFormats;
+    ColorAttachmentFormats.Reserve(this->Desc.RenderTargetCount);
     for (uint32 i = 0; i < this->Desc.RenderTargetCount; ++i)
     {
         const VkFormat Format = ToVkFormat(this->Desc.RenderTargetFormats[i]);
@@ -264,7 +267,7 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
             LE_LOG(LogRAL, Error, "Pipeline creation failed: invalid render target format at index {}.", i);
             return;
         }
-        ColorAttachmentFormats.push_back(Format);
+        ColorAttachmentFormats.PushBack(Format);
     }
 
     const VkFormat DepthStencilFormat = ToVkFormat(this->Desc.DepthStencilFormat);
@@ -279,8 +282,8 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
     VkPipelineRenderingCreateInfo RenderingInfo{};
     {
         RenderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-        RenderingInfo.colorAttachmentCount = static_cast<uint32>(ColorAttachmentFormats.size());
-        RenderingInfo.pColorAttachmentFormats = ColorAttachmentFormats.data();
+        RenderingInfo.colorAttachmentCount = static_cast<uint32>(ColorAttachmentFormats.Size());
+        RenderingInfo.pColorAttachmentFormats = ColorAttachmentFormats.Data();
         RenderingInfo.depthAttachmentFormat = DepthStencilFormat;
         RenderingInfo.stencilAttachmentFormat = this->Desc.DepthStencilFormat == EPixelFormat::D24_UNORM_S8_UINT
             ? DepthStencilFormat
@@ -291,9 +294,9 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
     {
         PipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         PipelineInfo.pNext = &RenderingInfo;
-        PipelineInfo.stageCount = static_cast<uint32>(ShaderStages.size());
+        PipelineInfo.stageCount = static_cast<uint32>(ShaderStages.Size());
 
-        PipelineInfo.pStages = ShaderStages.data();
+        PipelineInfo.pStages = ShaderStages.Data();
         PipelineInfo.pVertexInputState = &VertexInput;
         PipelineInfo.pInputAssemblyState = &InputAssembly;
         PipelineInfo.pViewportState = &ViewportState;
@@ -339,3 +342,5 @@ FVulkanRALPipeline_Graphics::~FVulkanRALPipeline_Graphics()
         this->PipelineLayout = VK_NULL_HANDLE;
     }
 }
+
+} // namespace LE

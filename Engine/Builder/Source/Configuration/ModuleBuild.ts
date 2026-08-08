@@ -20,6 +20,7 @@ export function CreateModuleConfiguration(): ModuleConfiguration {
         ExportDefines: {},
         SourceFilesExclude: [],
         SourceFilesExcludeRegex: [],
+        CustomActions: [],
         CustomProperties: {},
     };
 }

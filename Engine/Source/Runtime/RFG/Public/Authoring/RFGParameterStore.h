@@ -2,13 +2,13 @@
 
 #include "CoreMinimal.h"
 
-#include <string>
-#include <unordered_map>
-#include <vector>
+
+namespace LE
+{
 
 struct FRFGParameterValue
 {
-    std::vector<uint8> Bytes;
+    LE::Array<uint8> Bytes;
     uint32 Revision = 0;
 };
 
@@ -19,15 +19,17 @@ public:
     ~FRFGParameterStore() = default;
 
 public:
-    bool HasValue(const FString& Key) const;
-    const FRFGParameterValue* FindValue(const FString& Key) const;
-    FRFGParameterValue* FindValue(const FString& Key);
+    bool HasValue(const LE::String& Key) const;
+    const FRFGParameterValue* FindValue(const LE::String& Key) const;
+    FRFGParameterValue* FindValue(const LE::String& Key);
 
 public:
-    void SetValue(const FString& Key, const FRFGParameterValue& Value);
-    void RemoveValue(const FString& Key);
+    void SetValue(const LE::String& Key, const FRFGParameterValue& Value);
+    void RemoveValue(const LE::String& Key);
     void Clear();
 
 private:
-    std::unordered_map<std::string, FRFGParameterValue> Values;
+    LE::HashMap<LE::String, FRFGParameterValue> Values;
 };
+
+} // namespace LE

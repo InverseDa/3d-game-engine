@@ -3,6 +3,9 @@
 #include "CoreMinimal.h"
 #include "Platform/Platform.h"
 
+namespace LE
+{
+
 class FMacWindow : public FPlatformWindow
 {
 public:
@@ -11,7 +14,7 @@ public:
 
 public:
     void* GetNativeHandle() const override;
-    FRALSurfaceDesc GetSurfaceDesc() const override;
+    LE::FRALSurfaceDesc GetSurfaceDesc() const override;
     bool ProcessMessages() override;
     void GetSize(uint32& OutWidth, uint32& OutHeight) const override;
     bool IsMinimized() const override;
@@ -32,3 +35,5 @@ private:
     uint32 Height = 0;
     bool bRunning = true;
 };
+
+} // namespace LE

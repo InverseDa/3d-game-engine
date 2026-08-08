@@ -5,10 +5,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <functional>
-#include <sstream>
-#include <string>
-#include <vector>
+#include <cstdio>
 
 #if PLATFORM_WINDOWS
     #ifndef WIN32_LEAN_AND_MEAN
@@ -24,6 +21,9 @@
     #include <mach-o/dyld.h>
 #endif
 
+namespace LE
+{
+
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogXBD);
 
 enum class ERuntimeShaderStage : uint8
@@ -35,72 +35,79 @@ enum class ERuntimeShaderStage : uint8
 
 namespace Launch::ShaderRuntimeCompiler
 {
-inline std::string GetParentPath(const std::string& Path)
+inline LE::String GetParentPath(const LE::String& Path)
 {
-    if (Path.empty())
+    if (Path.IsEmpty())
     {
-        return std::string();
+        return {};
     }
 
-    const size_t LastSeparator = Path.find_last_of("/\\");
-    if (LastSeparator == std::string::npos)
+    for (size_t Index = Path.Size(); Index > 0; --Index)
     {
-        return std::string();
+        const char Character = Path[Index - 1];
+        if (Character == '/' || Character == '\\')
+        {
+            return LE::String(Path.View().Substr(0, Index - 1));
+        }
     }
-
-    return Path.substr(0, LastSeparator);
+    return {};
 }
 
-inline std::string JoinPath(const std::string& Left, const std::string& Right)
+inline LE::String JoinPath(const LE::String& Left, const LE::StringView Right)
 {
-    if (Left.empty())
+    if (Left.IsEmpty())
     {
-        return Right;
+        return LE::String(Right);
     }
 
-    const char LastChar = Left[Left.size() - 1];
+    LE::String Result(Left);
+    const char LastChar = Left[Left.Size() - 1];
     if (LastChar == '/' || LastChar == '\\')
     {
-        return Left + Right;
+        Result.Append(Right);
+        return Result;
     }
 
-    return Left + "/" + Right;
+    Result.Append("/");
+    Result.Append(Right);
+    return Result;
 }
 
-inline std::string GetExecutableDirectory()
+inline LE::String GetExecutableDirectory()
 {
 #if PLATFORM_MAC
     uint32 BufferSize = 0;
     _NSGetExecutablePath(nullptr, &BufferSize);
     if (BufferSize == 0)
     {
-        return std::string();
+        return {};
     }
 
-    std::vector<char> Buffer(BufferSize);
-    if (_NSGetExecutablePath(Buffer.data(), &BufferSize) != 0)
+    LE::Array<char> Buffer;
+    Buffer.Resize(BufferSize);
+    if (_NSGetExecutablePath(Buffer.Data(), &BufferSize) != 0)
     {
-        return std::string();
+        return {};
     }
 
-    return GetParentPath(std::string(Buffer.data()));
+    return GetParentPath(LE::String(Buffer.Data()));
 #elif PLATFORM_WINDOWS
     char ModulePath[MAX_PATH] = {};
     const DWORD PathLength = GetModuleFileNameA(nullptr, ModulePath, static_cast<DWORD>(sizeof(ModulePath)));
     if (PathLength == 0 || PathLength >= sizeof(ModulePath))
     {
-        return std::string();
+        return {};
     }
 
-    return GetParentPath(std::string(ModulePath, PathLength));
+    return GetParentPath(LE::String(ModulePath, PathLength));
 #else
-    return std::string();
+    return {};
 #endif
 }
 
-inline bool ReadBinaryFile(const std::string& FilePath, std::vector<char>& OutBuffer)
+inline bool ReadBinaryFile(const LE::String& FilePath, LE::Array<char>& OutBuffer)
 {
-    std::ifstream File(FilePath.c_str(), std::ios::ate | std::ios::binary);
+    std::ifstream File(FilePath.Data(), std::ios::ate | std::ios::binary);
     if (!File.is_open())
     {
         return false;
@@ -109,30 +116,27 @@ inline bool ReadBinaryFile(const std::string& FilePath, std::vector<char>& OutBu
     const size_t FileSize = static_cast<size_t>(File.tellg());
     if (FileSize == 0)
     {
-        OutBuffer.clear();
+        OutBuffer.Clear();
         return true;
     }
 
-    OutBuffer.resize(FileSize);
+    OutBuffer.Resize(FileSize);
     File.seekg(0);
-    File.read(OutBuffer.data(), FileSize);
+    File.read(OutBuffer.Data(), static_cast<std::streamsize>(FileSize));
     return true;
 }
 
-inline std::string ReadTextFile(const std::string& FilePath)
+inline LE::String ReadTextFile(const LE::String& FilePath)
 {
-    std::ifstream File(FilePath.c_str(), std::ios::in);
-    if (!File.is_open())
+    LE::Array<char> Bytes;
+    if (!ReadBinaryFile(FilePath, Bytes))
     {
-        return std::string();
+        return {};
     }
-
-    std::ostringstream Stream;
-    Stream << File.rdbuf();
-    return Stream.str();
+    return Bytes.IsEmpty() ? LE::String() : LE::String(Bytes.Data(), Bytes.Size());
 }
 
-inline std::string ResolveExistingPath(const char* RelativePath)
+inline LE::String ResolveExistingPath(const char* RelativePath)
 {
     const char* RelativePrefixes[] = {
         "",
@@ -148,27 +152,27 @@ inline std::string ResolveExistingPath(const char* RelativePath)
 
     for (const char* Prefix : RelativePrefixes)
     {
-        const std::string Candidate = Prefix[0]
-            ? (std::string(Prefix) + "/" + RelativePath)
-            : std::string(RelativePath);
-        if (std::filesystem::exists(Candidate))
+        LE::String Candidate(Prefix);
+        if (Prefix[0]) { Candidate.Append("/"); }
+        Candidate.Append(RelativePath);
+        if (std::filesystem::exists(Candidate.Data()))
         {
             return Candidate;
         }
     }
 
-    std::string SearchBase = GetExecutableDirectory();
-    for (int32 i = 0; i < 10 && !SearchBase.empty(); ++i)
+    LE::String SearchBase = GetExecutableDirectory();
+    for (int32 i = 0; i < 10 && !SearchBase.IsEmpty(); ++i)
     {
-        const std::string Candidate = JoinPath(SearchBase, RelativePath);
-        if (std::filesystem::exists(Candidate))
+        const LE::String Candidate = JoinPath(SearchBase, RelativePath);
+        if (std::filesystem::exists(Candidate.Data()))
         {
             return Candidate;
         }
         SearchBase = GetParentPath(SearchBase);
     }
 
-    return std::string();
+    return {};
 }
 
 inline const char* ToGlslangStage(ERuntimeShaderStage Stage)
@@ -182,14 +186,14 @@ inline const char* ToGlslangStage(ERuntimeShaderStage Stage)
     }
 }
 
-inline std::string GetCompilerExecutable()
+inline LE::String GetCompilerExecutable()
 {
 #if PLATFORM_WINDOWS
     if (const char* VulkanSdk = std::getenv("VULKAN_SDK"))
     {
-        std::string Candidate = JoinPath(VulkanSdk, "Bin");
+        LE::String Candidate = JoinPath(LE::String(VulkanSdk), "Bin");
         Candidate = JoinPath(Candidate, "glslangValidator.exe");
-        if (std::filesystem::exists(Candidate))
+        if (std::filesystem::exists(Candidate.Data()))
         {
             return Candidate;
         }
@@ -220,19 +224,22 @@ inline std::string GetCompilerExecutable()
     return "glslangValidator";
 }
 
-inline std::string Quote(const std::string& Value)
+inline LE::String Quote(const LE::String& Value)
 {
-    return "\"" + Value + "\"";
+    LE::String Result("\"");
+    Result.Append(Value.View());
+    Result.Append("\"");
+    return Result;
 }
 
 inline bool CompileHlslToSpirv(
     const char* SourceFilename,
     ERuntimeShaderStage Stage,
-    std::vector<char>& OutByteCode,
+    LE::Array<char>& OutByteCode,
     const char* EntryPoint = "Main")
 {
-    const std::string SourcePath = ResolveExistingPath(SourceFilename);
-    if (SourcePath.empty())
+    const LE::String SourcePath = ResolveExistingPath(SourceFilename);
+    if (SourcePath.IsEmpty())
     {
         LE_LOG(LogXBD, Error, "Failed to resolve shader source: {}", SourceFilename);
         return false;
@@ -245,60 +252,83 @@ inline bool CompileHlslToSpirv(
         return false;
     }
 
-    const std::filesystem::path TempDir = std::filesystem::temp_directory_path() / "limitless_shader_runtime";
+    const std::filesystem::path TempDirAdapter = std::filesystem::temp_directory_path() / "limitless_shader_runtime";
     std::error_code ErrorCode;
-    std::filesystem::create_directories(TempDir, ErrorCode);
+    std::filesystem::create_directories(TempDirAdapter, ErrorCode);
 
-    const size_t SourceHash = std::hash<std::string>{}(SourcePath + StageArg + EntryPoint);
-    const std::filesystem::path OutputPath = TempDir / ("shader_" + std::to_string(SourceHash) + ".spv");
-    const std::filesystem::path LogPath = TempDir / ("shader_" + std::to_string(SourceHash) + ".log");
+    // `path::string()` is an exact filesystem interop adapter. Convert its
+    // owning result immediately and keep all engine-side path assembly in String.
+    const auto TempDirNative = TempDirAdapter.string();
+    const LE::String TempDir(TempDirNative.data(), TempDirNative.size());
 
-    std::ostringstream Command;
+    LE::String HashInput(SourcePath);
+    HashInput.Append(StageArg);
+    HashInput.Append(EntryPoint);
+    const size_t SourceHash = LE::StringHash{}(HashInput);
+    char HashText[32]{};
+    std::snprintf(HashText, sizeof(HashText), "%zu", SourceHash);
+
+    LE::String OutputFilename("shader_");
+    OutputFilename.Append(HashText);
+    OutputFilename.Append(".spv");
+    const LE::String OutputPath = JoinPath(TempDir, OutputFilename.View());
+
+    LE::String LogFilename("shader_");
+    LogFilename.Append(HashText);
+    LogFilename.Append(".log");
+    const LE::String LogPath = JoinPath(TempDir, LogFilename.View());
+
+    LE::String Command = GetCompilerExecutable();
     // NOTE: the compiler executable is intentionally NOT quoted. When std::system
     // hands the command to `cmd.exe /c`, a leading quote triggers cmd.exe's
     // quote-stripping heuristic (it strips the first and last quote of the whole
     // line when more than two quotes are present), which corrupts the command.
     // The resolved VULKAN_SDK path contains no spaces, so quoting is unnecessary.
-    Command
-        << GetCompilerExecutable()
-        << " -V -D"
-        << " -S " << StageArg
-        << " -e " << EntryPoint
-        << " " << Quote(SourcePath)
-        << " -o " << Quote(OutputPath.string())
-        << " > " << Quote(LogPath.string()) << " 2>&1";
+    Command.Append(" -V -D -S ");
+    Command.Append(StageArg);
+    Command.Append(" -e ");
+    Command.Append(EntryPoint);
+    Command.Append(" ");
+    Command.Append(Quote(SourcePath).View());
+    Command.Append(" -o ");
+    Command.Append(Quote(OutputPath).View());
+    Command.Append(" > ");
+    Command.Append(Quote(LogPath).View());
+    Command.Append(" 2>&1");
 
-    const int32 CompileResult = std::system(Command.str().c_str());
+    const int32 CompileResult = std::system(Command.Data());
     if (CompileResult != 0)
     {
-        const std::string CompileLog = ReadTextFile(LogPath.string());
+        const LE::String CompileLog = ReadTextFile(LogPath);
         LE_LOG(
             LogXBD,
             Error,
             "Runtime shader compilation failed. Source={}, Stage={}, ExitCode={}, Log={}",
-            SourcePath,
+            SourcePath.Data(),
             StageArg,
             CompileResult,
-            CompileLog.empty() ? "<empty>" : CompileLog.c_str());
+            CompileLog.IsEmpty() ? "<empty>" : CompileLog.Data());
         return false;
     }
 
-    if (!ReadBinaryFile(OutputPath.string(), OutByteCode))
+    if (!ReadBinaryFile(OutputPath, OutByteCode))
     {
-        LE_LOG(LogXBD, Error, "Failed to read compiled shader bytecode: {}", OutputPath.string());
+        LE_LOG(LogXBD, Error, "Failed to read compiled shader bytecode: {}", OutputPath.Data());
         return false;
     }
 
-    if (OutByteCode.empty() || (OutByteCode.size() % 4) != 0)
+    if (OutByteCode.IsEmpty() || (OutByteCode.Size() % 4) != 0)
     {
-        LE_LOG(LogXBD, Error, "Compiled shader bytecode is invalid: {} (size={})", SourcePath, OutByteCode.size());
+        LE_LOG(LogXBD, Error, "Compiled shader bytecode is invalid: {} (size={})", SourcePath.Data(), OutByteCode.Size());
         return false;
     }
 
-    std::filesystem::remove(OutputPath, ErrorCode);
-    std::filesystem::remove(LogPath, ErrorCode);
+    std::filesystem::remove(OutputPath.Data(), ErrorCode);
+    std::filesystem::remove(LogPath.Data(), ErrorCode);
 
-    LE_LOG(LogXBD, Info, "Compiled shader at runtime: {} -> {} bytes", SourcePath, OutByteCode.size());
+    LE_LOG(LogXBD, Info, "Compiled shader at runtime: {} -> {} bytes", SourcePath.Data(), OutByteCode.Size());
     return true;
 }
-}
+} // namespace Launch::ShaderRuntimeCompiler
+
+} // namespace LE

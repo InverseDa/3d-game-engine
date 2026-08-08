@@ -1,5 +1,8 @@
 #include "Core/RFGRuntime.h"
 
+namespace LE
+{
+
 FRFGRuntime::FRFGRuntime()
     : Compiler(new FRFGCompiler())
     , PlanCache(new FRFGPlanCache())
@@ -56,7 +59,7 @@ FRFGCompileResult FRFGRuntime::Compile(const FRFGRecordedGraph& RecordedGraph, c
 
     if (CompileOptions.bEnablePlanCache && PlanCache != nullptr && Signature.Value != 0)
     {
-        if (std::shared_ptr<const FRFGCompiledPlan> CachedPlan = PlanCache->Find(Signature))
+        if (LE::SharedPtr<const FRFGCompiledPlan> CachedPlan = PlanCache->Find(Signature))
         {
             FRFGCompileResult Result;
             Result.Plan = std::move(CachedPlan);
@@ -66,7 +69,7 @@ FRFGCompileResult FRFGRuntime::Compile(const FRFGRecordedGraph& RecordedGraph, c
     }
 
     FRFGCompileResult Result = Compiler->Compile(RecordedGraph, Signature);
-    if (CompileOptions.bEnablePlanCache && PlanCache != nullptr && Result.Plan != nullptr && Signature.Value != 0)
+    if (CompileOptions.bEnablePlanCache && PlanCache != nullptr && Result.Plan && Signature.Value != 0)
     {
         PlanCache->Store(Signature, Result.Plan);
     }
@@ -74,16 +77,16 @@ FRFGCompileResult FRFGRuntime::Compile(const FRFGRecordedGraph& RecordedGraph, c
     return Result;
 }
 
-std::shared_ptr<const FRFGCompiledPlan> FRFGRuntime::FindCompiledPlan(const FRFGGraphSignature& Signature) const
+LE::SharedPtr<const FRFGCompiledPlan> FRFGRuntime::FindCompiledPlan(const FRFGGraphSignature& Signature) const
 {
     return PlanCache != nullptr ? PlanCache->Find(Signature) : nullptr;
 }
 
 void FRFGRuntime::StoreCompiledPlan(
     const FRFGGraphSignature& Signature,
-    const std::shared_ptr<const FRFGCompiledPlan>& CompiledPlan)
+    const LE::SharedPtr<const FRFGCompiledPlan>& CompiledPlan)
 {
-    if (PlanCache != nullptr && CompiledPlan != nullptr && Signature.Value != 0)
+    if (PlanCache != nullptr && CompiledPlan && Signature.Value != 0)
     {
         PlanCache->Store(Signature, CompiledPlan);
     }
@@ -127,3 +130,5 @@ const FRFGPlanCache* FRFGRuntime::GetPlanCache() const
 {
     return PlanCache;
 }
+
+} // namespace LE

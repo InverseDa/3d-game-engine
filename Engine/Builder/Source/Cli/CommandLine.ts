@@ -2,8 +2,18 @@ import * as Path from "node:path";
 import { NinjaBackend } from "../Backend/NinjaBackend.ts";
 import type { BackendResult, IBackend } from "../Backend/IBackend.ts";
 import { IRBuilder } from "../Build/IRBuilder.ts";
+import {
+    CreateLegacyTargetDescriptor,
+    ResolveTarget,
+    SelectTargetDescriptor,
+} from "../Configuration/Target.ts";
 import { Optimization, Platform, TargetType } from "../Configuration/Types.ts";
-import type { BuildAction, Target } from "../Configuration/Types.ts";
+import type {
+    BuildAction,
+    ModuleInstance,
+    ResolvedTarget,
+    Target,
+} from "../Configuration/Types.ts";
 import { ModuleLoader, TargetLoader } from "../Discovery/ModuleLoader.ts";
 import { DependencyGraph } from "../Graph/DependencyGraph.ts";
 import { EnginePaths, FindProjectRoot, ToPosixPath } from "../Project/EnginePaths.ts";
@@ -108,7 +118,8 @@ Commands:
 Options:
     --platform <name>         Win64 | Mac
     --config <name>           Debug | Release
-    --type <name>             Game | Editor
+    --type <name>             Game | Editor | Program | Test
+    --target <name>           Target descriptor name (required when ambiguous)
     --jobs <n>                Parallel jobs (build only)
     --verbose                 Verbose output
 
@@ -131,7 +142,7 @@ function ParseTarget(Flags: Record<string, string>): Target {
         throw new Error(`Invalid config: ${RequestedOptimization} (Debug|Release)`);
     }
     if (!Object.values(TargetType).includes(RequestedTargetType)) {
-        throw new Error(`Invalid type: ${RequestedTargetType} (Game|Editor)`);
+        throw new Error(`Invalid type: ${RequestedTargetType} (Game|Editor|Program|Test)`);
     }
     return {
         Platform: RequestedPlatform,
@@ -143,6 +154,7 @@ function ParseTarget(Flags: Record<string, string>): Target {
 async function GenerateIR(
     Paths: EnginePaths,
     Target: Target,
+    RequestedTargetName?: string,
 ): Promise<{ Actions: BuildAction[]; Backend: IBackend; Result: BackendResult }> {
     const Loader = new ModuleLoader(Paths.SourceDirectory);
     const Modules = await Loader.DiscoverModules();
@@ -151,7 +163,12 @@ async function GenerateIR(
     }
     Logger.Success(`Loaded ${Modules.length} modules`);
 
-    const Graph = new DependencyGraph(Modules, Target);
+    const BuildTarget = await ResolveCommandTarget(Paths, Modules, Target, RequestedTargetName);
+    Logger.Success(
+        `Resolved target: ${BuildTarget.Descriptor.Name} (entry ${BuildTarget.Descriptor.EntryModule} -> ${BuildTarget.OutputName})`,
+    );
+
+    const Graph = new DependencyGraph(Modules, BuildTarget);
     const SortedModules = Graph.Build();
     Logger.Success(`Dependency graph resolved (${SortedModules.length} modules, topo-sorted)`);
     for (const Module of SortedModules) {
@@ -169,18 +186,18 @@ async function GenerateIR(
     }
     Logger.Success(`Toolchain: ${Toolchain.Name}`);
 
-    const Builder = new IRBuilder(Paths, Toolchain, Target, Graph);
+    const Builder = new IRBuilder(Paths, Toolchain, BuildTarget, Graph);
     const Actions = await Builder.Build(SortedModules);
     const OutputDirectory = Paths.TemporaryOutputDirectory(Target.Platform, Target.Optimization);
     const Backend = new NinjaBackend(Toolchain);
-    const Result = await Backend.Generate(Actions, Target, { OutputDir: OutputDirectory });
+    const Result = await Backend.Generate(Actions, BuildTarget, { OutputDir: OutputDirectory });
     return { Actions, Backend, Result };
 }
 
 async function Generate(Paths: EnginePaths, Flags: Record<string, string>): Promise<void> {
     const Target = ParseTarget(Flags);
     Logger.Info(`Target: ${Target.Platform} / ${Target.Optimization} / ${Target.TargetType}`);
-    const { Actions, Result } = await GenerateIR(Paths, Target);
+    const { Actions, Result } = await GenerateIR(Paths, Target, Flags.target);
 
     console.log("");
     Logger.Success(`IR generated: ${Actions.length} actions -> build.ninja`);
@@ -198,7 +215,7 @@ async function Generate(Paths: EnginePaths, Flags: Record<string, string>): Prom
 async function Build(Paths: EnginePaths, Flags: Record<string, string>): Promise<void> {
     const Target = ParseTarget(Flags);
     Logger.Info(`Target: ${Target.Platform} / ${Target.Optimization} / ${Target.TargetType}`);
-    const { Backend, Result } = await GenerateIR(Paths, Target);
+    const { Backend, Result } = await GenerateIR(Paths, Target, Flags.target);
 
     console.log("");
     Logger.Success(`build.ninja: ${ToPosixPath(Result.NinjaPath)}`);
@@ -223,12 +240,13 @@ async function GenerateSolution(Paths: EnginePaths, Flags: Record<string, string
         throw new Error("No modules found.");
     }
 
-    const Graph = new DependencyGraph(Modules, Target);
+    const BuildTarget = await ResolveCommandTarget(Paths, Modules, Target, Flags.target);
+    const Graph = new DependencyGraph(Modules, BuildTarget);
     if (Target.Platform !== Platform.Win64) {
         throw new Error(`Visual Studio solution generation is not implemented for ${Target.Platform}.`);
     }
     const Toolchain = new MSVCToolchain();
-    const SolutionPath = await new VcxprojGenerator(Paths, Graph, Toolchain).Generate(Graph.Build(), Target);
+    const SolutionPath = await new VcxprojGenerator(Paths, Graph, Toolchain).Generate(Graph.Build(), BuildTarget);
     console.log("");
     Logger.Success("Generated Visual Studio solution:");
     Logger.Dim(`    ${ToPosixPath(SolutionPath)}`);
@@ -246,12 +264,33 @@ async function GenerateXcodeProject(Paths: EnginePaths, Flags: Record<string, st
     if (Modules.length === 0) {
         throw new Error("No modules found.");
     }
-    const Graph = new DependencyGraph(Modules, Target);
-    const ProjectPath = await new XcodeProjectGenerator(Paths).Generate(Graph.Build(), Target);
+    const BuildTarget = await ResolveCommandTarget(Paths, Modules, Target, Flags.target);
+    const Graph = new DependencyGraph(Modules, BuildTarget);
+    const ProjectPath = await new XcodeProjectGenerator(Paths).Generate(Graph.Build(), BuildTarget);
     console.log("");
     Logger.Success("Generated Xcode project:");
     Logger.Dim(`    ${ToPosixPath(ProjectPath)}`);
-    Logger.Dim("    Open it in Xcode or run xcodebuild -project LimitlessEngine.xcodeproj -scheme LimitlessEngine.");
+    Logger.Dim(`    Open it in Xcode or run xcodebuild -project LimitlessEngine.xcodeproj -scheme "${BuildTarget.Descriptor.Name}".`);
+}
+
+async function ResolveCommandTarget(
+    Paths: EnginePaths,
+    Modules: ModuleInstance[],
+    Target: Target,
+    RequestedName?: string,
+): Promise<ResolvedTarget> {
+    const Descriptors = await new TargetLoader(Paths.TargetsDirectory).DiscoverTargets();
+    const Fallback = CreateLegacyTargetDescriptor(
+        Modules
+            .filter((Module) => {
+                const RelativeSourceRoot = Path.relative(Paths.SourceDirectory, Module.SourceRoot);
+                const SourceGroup = RelativeSourceRoot.split(Path.sep)[0];
+                return SourceGroup !== "Tests" && SourceGroup !== "Programs";
+            })
+            .map((Module) => Module.Descriptor.Name),
+    );
+    const Descriptor = SelectTargetDescriptor(Descriptors, Target, RequestedName, Fallback);
+    return ResolveTarget(Descriptor, Target);
 }
 
 async function Main(): Promise<void> {

@@ -1,5 +1,8 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
+
+namespace LE
+{
 
 namespace
 {
@@ -236,10 +239,10 @@ void FVulkanRALCommandList::ResourceBarriers(const FRALBarrierBatch& Barriers)
         return;
     }
 
-    std::vector<VkImageMemoryBarrier> ImageBarriers;
-    std::vector<VkBufferMemoryBarrier> BufferBarriers;
-    ImageBarriers.reserve(Barriers.TextureBarriers.size());
-    BufferBarriers.reserve(Barriers.BufferBarriers.size());
+    LE::Array<VkImageMemoryBarrier> ImageBarriers;
+    LE::Array<VkBufferMemoryBarrier> BufferBarriers;
+    ImageBarriers.Reserve(Barriers.TextureBarriers.Size());
+    BufferBarriers.Reserve(Barriers.BufferBarriers.Size());
 
     VkPipelineStageFlags SourceStages = 0;
     VkPipelineStageFlags DestinationStages = 0;
@@ -280,7 +283,7 @@ void FVulkanRALCommandList::ResourceBarriers(const FRALBarrierBatch& Barriers)
 
         SourceStages |= Before.PipelineStages;
         DestinationStages |= After.PipelineStages;
-        ImageBarriers.push_back(Barrier);
+        ImageBarriers.PushBack(Barrier);
     }
 
     for (const FRALBufferBarrierDesc& Desc : Barriers.BufferBarriers)
@@ -314,10 +317,10 @@ void FVulkanRALCommandList::ResourceBarriers(const FRALBarrierBatch& Barriers)
 
         SourceStages |= Before.PipelineStages;
         DestinationStages |= After.PipelineStages;
-        BufferBarriers.push_back(Barrier);
+        BufferBarriers.PushBack(Barrier);
     }
 
-    if (ImageBarriers.empty() && BufferBarriers.empty())
+    if (ImageBarriers.IsEmpty() && BufferBarriers.IsEmpty())
     {
         return;
     }
@@ -329,10 +332,10 @@ void FVulkanRALCommandList::ResourceBarriers(const FRALBarrierBatch& Barriers)
         0,
         0,
         nullptr,
-        static_cast<uint32>(BufferBarriers.size()),
-        BufferBarriers.data(),
-        static_cast<uint32>(ImageBarriers.size()),
-        ImageBarriers.data());
+        static_cast<uint32>(BufferBarriers.Size()),
+        BufferBarriers.Data(),
+        static_cast<uint32>(ImageBarriers.Size()),
+        ImageBarriers.Data());
 }
 
 void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
@@ -374,11 +377,11 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         return;
     }
 
-    std::vector<VkRenderingAttachmentInfo> ColorAttachments;
-    ColorAttachments.reserve(Desc.ColorAttachmentCount);
+    LE::Array<VkRenderingAttachmentInfo> ColorAttachments;
+    ColorAttachments.Reserve(Desc.ColorAttachmentCount);
     uint32 AttachmentWidth = 0;
     uint32 AttachmentHeight = 0;
-    this->PendingPresentTransitionImages.clear();
+    this->PendingPresentTransitionImages.Clear();
     for (uint32 i = 0; i < Desc.ColorAttachmentCount; ++i)
     {
         FVulkanRALTextureView* View = static_cast<FVulkanRALTextureView*>(Desc.ColorAttachments[i].RenderTarget);
@@ -421,7 +424,7 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         {
             AttachmentInfo.clearValue.color.float32[Component] = Desc.ColorAttachments[i].ClearColor[Component];
         }
-        ColorAttachments.push_back(AttachmentInfo);
+        ColorAttachments.PushBack(AttachmentInfo);
 
         // Swapchain-wrapped images are externally owned and do not have VkDeviceMemory allocated here.
         if (View->Owner->Image != VK_NULL_HANDLE && View->Owner->Memory == VK_NULL_HANDLE)
@@ -437,7 +440,7 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
             }
             if (!bAlreadyTracked)
             {
-                this->PendingPresentTransitionImages.push_back(View->Owner->Image);
+                this->PendingPresentTransitionImages.PushBack(View->Owner->Image);
             }
         }
     }
@@ -449,7 +452,7 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         if (View == nullptr || View->Owner == nullptr || View->View == VK_NULL_HANDLE)
         {
             LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment is invalid.");
-            this->PendingPresentTransitionImages.clear();
+            this->PendingPresentTransitionImages.Clear();
             return;
         }
 
@@ -459,14 +462,14 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         {
             LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment does not use a supported depth/stencil format. Format={}.",
                 static_cast<uint32>(ViewFormat));
-            this->PendingPresentTransitionImages.clear();
+            this->PendingPresentTransitionImages.Clear();
             return;
         }
         if (ViewFormat != PipelineDesc.DepthStencilFormat)
         {
             LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment format does not match pipeline. View={}, Pipeline={}.",
                 static_cast<uint32>(ViewFormat), static_cast<uint32>(PipelineDesc.DepthStencilFormat));
-            this->PendingPresentTransitionImages.clear();
+            this->PendingPresentTransitionImages.Clear();
             return;
         }
 
@@ -481,7 +484,7 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         else if (AttachmentWidth != ViewWidth || AttachmentHeight != ViewHeight)
         {
             LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment extent does not match color attachments.");
-            this->PendingPresentTransitionImages.clear();
+            this->PendingPresentTransitionImages.Clear();
             return;
         }
 
@@ -500,7 +503,7 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         static_cast<uint32>(Desc.RenderArea.Y) >= AttachmentHeight)
     {
         LE_LOG(LogRAL, Error, "BeginRenderPass failed: render area origin is outside attachment bounds.");
-        this->PendingPresentTransitionImages.clear();
+        this->PendingPresentTransitionImages.Clear();
         return;
     }
 
@@ -511,7 +514,7 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         static_cast<uint64>(Desc.RenderArea.Y) + RenderHeight > AttachmentHeight)
     {
         LE_LOG(LogRAL, Error, "BeginRenderPass failed: render area is outside attachment bounds.");
-        this->PendingPresentTransitionImages.clear();
+        this->PendingPresentTransitionImages.Clear();
         return;
     }
 
@@ -521,8 +524,8 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         Info.renderArea.offset = { Desc.RenderArea.X, Desc.RenderArea.Y };
         Info.renderArea.extent = { RenderWidth, RenderHeight };
         Info.layerCount = 1;
-        Info.colorAttachmentCount = static_cast<uint32>(ColorAttachments.size());
-        Info.pColorAttachments = ColorAttachments.empty() ? nullptr : ColorAttachments.data();
+        Info.colorAttachmentCount = static_cast<uint32>(ColorAttachments.Size());
+        Info.pColorAttachments = ColorAttachments.IsEmpty() ? nullptr : ColorAttachments.Data();
         Info.pDepthAttachment = Desc.bHasDepthStencil ? &DepthStencilAttachment : nullptr;
         Info.pStencilAttachment = Desc.bHasDepthStencil && PipelineDesc.DepthStencilFormat == EPixelFormat::D24_UNORM_S8_UINT
             ? &DepthStencilAttachment
@@ -645,7 +648,7 @@ void FVulkanRALCommandList::EndRenderPass()
             &Barrier
         );
     }
-    this->PendingPresentTransitionImages.clear();
+    this->PendingPresentTransitionImages.Clear();
 }
 
 void FVulkanRALCommandList::SetVertexBuffer(uint32 Slot, FRALBuffer* Buffer, uint64 Offset)
@@ -707,3 +710,5 @@ void FVulkanRALCommandList::SetPushConstants(EShaderStage Stage, const void* Dat
 
     vkCmdPushConstants(this->Handle, this->CurrentPipeline->PipelineLayout, StageFlags, 0, Size, Data);
 }
+
+} // namespace LE

@@ -8,6 +8,9 @@
 #include "RAL/RALQueue.h"
 #include "RAL/RALSwapchain.h"
 
+namespace LE
+{
+
 namespace
 {
 FRenderView BuildDefaultRenderView()
@@ -70,16 +73,16 @@ void FRenderer::RenderFrame(const FRendererFrameContext& FrameContext, const FRe
 
     const FRenderScene& EffectiveRenderScene = RenderScene != nullptr ? *RenderScene : EmptyRenderScene;
     const FRenderView DefaultView = BuildDefaultRenderView();
-    const FRenderView& EffectiveView = !FrameContext.ViewFamily.Views.empty() ? FrameContext.ViewFamily.Views.front() : DefaultView;
+    const FRenderView& EffectiveView = !FrameContext.ViewFamily.Views.IsEmpty() ? FrameContext.ViewFamily.Views.Front() : DefaultView;
 
     FRenderPipelinePlan PipelinePlan;
     FrameContext.Pipeline->BuildPasses(FrameContext, EffectiveRenderScene, EffectiveView, PipelinePlan);
-    if (PipelinePlan.Passes.empty())
+    if (PipelinePlan.Passes.IsEmpty())
     {
         return;
     }
 
-    FRFGBuilder Builder = GraphInstance.CreateBuilder();
+    LE::FRFGBuilder Builder = GraphInstance.CreateBuilder();
     FRenderGraphBuilderBridge GraphBridge(Builder);
 
     for (IRenderPass* Pass : PipelinePlan.Passes)
@@ -89,11 +92,11 @@ void FRenderer::RenderFrame(const FRendererFrameContext& FrameContext, const FRe
             continue;
         }
 
-        const FRFGPassHandle PassHandle = Builder.AddPass(
+        const LE::FRFGPassHandle PassHandle = Builder.AddPass(
             Pass->GetPassName(),
             Pass->GetPassName(),
             {},
-            ERFGPassFlags::None,
+            LE::ERFGPassFlags::None,
             Pass->GetQueueType());
 
         FRenderPassSetupContext SetupContext;
@@ -106,7 +109,7 @@ void FRenderer::RenderFrame(const FRendererFrameContext& FrameContext, const FRe
 
         Builder.SetPassCallback(
             PassHandle,
-            [Pass, &FrameContext, &EffectiveRenderScene, &EffectiveView](FRFGPassContext& Context)
+            [Pass, &FrameContext, &EffectiveRenderScene, &EffectiveView](LE::FRFGPassContext& Context)
             {
                 FRenderPassRecordContext RecordContext;
                 RecordContext.PassContext = &Context;
@@ -117,15 +120,15 @@ void FRenderer::RenderFrame(const FRendererFrameContext& FrameContext, const FRe
             });
     }
 
-    const FRFGGraphSignature Signature = Builder.BuildSignature();
-    const FRFGCompileResult CompileResult = GraphInstance.Compile(Builder.GetRecordedGraph(), Signature);
+    const LE::FRFGGraphSignature Signature = Builder.BuildSignature();
+    const LE::FRFGCompileResult CompileResult = GraphInstance.Compile(Builder.GetRecordedGraph(), Signature);
 
-    FRFGExecutionContext ExecutionContext;
+    LE::FRFGExecutionContext ExecutionContext;
     ExecutionContext.Device = FrameContext.Device;
     ExecutionContext.GraphicsQueue = FrameContext.Device->GetGraphicsQueue();
     ExecutionContext.CommandList = FrameContext.CommandList;
 
-    FRFGExecuteOptions ExecuteOptions;
+    LE::FRFGExecuteOptions ExecuteOptions;
     ExecuteOptions.bSubmitImmediately = true;
     ExecuteOptions.bWaitForCompletion = true;
     GraphInstance.Execute(CompileResult, Builder.GetRecordedGraph(), ExecutionContext, ExecuteOptions);
@@ -136,12 +139,14 @@ void FRenderer::RenderFrame(const FRendererFrameContext& FrameContext, const FRe
     }
 }
 
-FRFGInstance& FRenderer::GetGraphInstance()
+LE::FRFGInstance& FRenderer::GetGraphInstance()
 {
     return GraphInstance;
 }
 
-const FRFGInstance& FRenderer::GetGraphInstance() const
+const LE::FRFGInstance& FRenderer::GetGraphInstance() const
 {
     return GraphInstance;
 }
+
+} // namespace LE

@@ -1,5 +1,8 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
+
+namespace LE
+{
 
 namespace {
 VkShaderStageFlags ToVkStageFlags(EShaderStage StageFlags)
@@ -34,9 +37,9 @@ VkDescriptorType ToVkDescriptorType(ERALBindGroupItemType Type)
     }
 }
 
-void CollectPoolSize(const FRALBindGroupLayoutDesc& Desc, std::vector<VkDescriptorPoolSize>& OutPoolSizes)
+void CollectPoolSize(const FRALBindGroupLayoutDesc& Desc, LE::Array<VkDescriptorPoolSize>& OutPoolSizes)
 {
-    OutPoolSizes.clear();
+    OutPoolSizes.Clear();
 
     for (const FRALBindGroupLayoutItem& Item : Desc.Bindings)
     {
@@ -57,7 +60,7 @@ void CollectPoolSize(const FRALBindGroupLayoutDesc& Desc, std::vector<VkDescript
             VkDescriptorPoolSize Size{};
             Size.type = Type;
             Size.descriptorCount = Item.Count;
-            OutPoolSizes.push_back(Size);
+            OutPoolSizes.PushBack(Size);
         }
     }
 }
@@ -82,13 +85,13 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
 
     const FRALBindGroupLayoutDesc& LayoutDesc = Desc.Layout->GetDesc();
 
-    std::vector<VkWriteDescriptorSet> Writes;
-    std::vector<VkDescriptorBufferInfo> BufferInfos;
-    std::vector<VkDescriptorImageInfo> ImageInfos;
+    LE::Array<VkWriteDescriptorSet> Writes;
+    LE::Array<VkDescriptorBufferInfo> BufferInfos;
+    LE::Array<VkDescriptorImageInfo> ImageInfos;
 
-    Writes.reserve(Desc.Items.size());
-    BufferInfos.reserve(Desc.Items.size());
-    ImageInfos.reserve(Desc.Items.size());
+    Writes.Reserve(Desc.Items.Size());
+    BufferInfos.Reserve(Desc.Items.Size());
+    ImageInfos.Reserve(Desc.Items.Size());
 
     for (const FRALBindGroupItem& Item : Desc.Items)
     {
@@ -126,8 +129,8 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
                     Info.offset = Item.Offset;
                     Info.range = Item.Range == 0 ? VK_WHOLE_SIZE : Item.Range;
                 }
-                BufferInfos.emplace_back(Info);
-                Write.pBufferInfo = &BufferInfos.back();
+                BufferInfos.EmplaceBack(Info);
+                Write.pBufferInfo = &BufferInfos.Back();
                 break;
             }
             case ERALBindGroupItemType::SampledImage:
@@ -144,8 +147,8 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
                     Info.imageView = VkView->View;
                     Info.imageLayout = (LayoutItem->Type == ERALBindGroupItemType::StorageImage) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 }
-                ImageInfos.emplace_back(Info);
-                Write.pImageInfo = &ImageInfos.back();
+                ImageInfos.EmplaceBack(Info);
+                Write.pImageInfo = &ImageInfos.Back();
                 break;
             }
             case ERALBindGroupItemType::Sampler:
@@ -160,8 +163,8 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
                 {
                     Info.sampler = VkSampler->Handle;
                 }
-                ImageInfos.emplace_back(Info);
-                Write.pImageInfo = &ImageInfos.back();
+                ImageInfos.EmplaceBack(Info);
+                Write.pImageInfo = &ImageInfos.Back();
                 break;
             }
             case ERALBindGroupItemType::CombinedImageSampler:
@@ -179,17 +182,17 @@ static void UpdateDescriptorSets(FVulkanRALDevice* Device, VkDescriptorSet Set, 
                     Info.imageView = VkView->View;
                     Info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 }
-                ImageInfos.emplace_back(Info);
-                Write.pImageInfo = &ImageInfos.back();
+                ImageInfos.EmplaceBack(Info);
+                Write.pImageInfo = &ImageInfos.Back();
                 break;
             }
         }
-        Writes.emplace_back(Write);
+        Writes.EmplaceBack(Write);
     }
 
-    if (Writes.empty() != true)
+    if (!Writes.IsEmpty())
     {
-        vkUpdateDescriptorSets(Device->VkContext.LogicalDevice, static_cast<uint32>(Writes.size()), Writes.data(), 0, nullptr);
+        vkUpdateDescriptorSets(Device->VkContext.LogicalDevice, static_cast<uint32>(Writes.Size()), Writes.Data(), 0, nullptr);
     }
 }
 
@@ -203,8 +206,8 @@ FVulkanRALBindGroupLayout::FVulkanRALBindGroupLayout(FVulkanRALDevice* InDevice,
         return;
     }
 
-    std::vector<VkDescriptorSetLayoutBinding> Bindings{};
-    Bindings.reserve(Desc.Bindings.size());
+    LE::Array<VkDescriptorSetLayoutBinding> Bindings;
+    Bindings.Reserve(Desc.Bindings.Size());
 
     for (const FRALBindGroupLayoutItem& Item : Desc.Bindings)
     {
@@ -215,14 +218,14 @@ FVulkanRALBindGroupLayout::FVulkanRALBindGroupLayout(FVulkanRALDevice* InDevice,
             Binding.descriptorType = ToVkDescriptorType(Item.Type);
             Binding.stageFlags = ToVkStageFlags(Item.StageFlags);
         }
-        Bindings.push_back(Binding);
+        Bindings.PushBack(Binding);
     }
 
     VkDescriptorSetLayoutCreateInfo Info{};
     {
         Info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        Info.bindingCount = static_cast<uint32>(Bindings.size());
-        Info.pBindings = Bindings.data();
+        Info.bindingCount = static_cast<uint32>(Bindings.Size());
+        Info.pBindings = Bindings.Data();
     }
     const VkResult Result = vkCreateDescriptorSetLayout(Device->VkContext.LogicalDevice, &Info, nullptr, &this->Handle);
     if (Result != VK_SUCCESS)
@@ -267,15 +270,15 @@ FVulkanRALBindGroup::FVulkanRALBindGroup(FVulkanRALDevice* InDevice, const FRALB
         return;
     }
 
-    std::vector<VkDescriptorPoolSize> PoolSizes{};
+    LE::Array<VkDescriptorPoolSize> PoolSizes;
     CollectPoolSize(Layout->GetDesc(), PoolSizes);
 
     VkDescriptorPoolCreateInfo PoolInfo{};
     {
         PoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         PoolInfo.maxSets = 1;
-        PoolInfo.poolSizeCount = static_cast<uint32>(PoolSizes.size());
-        PoolInfo.pPoolSizes = PoolSizes.data();
+        PoolInfo.poolSizeCount = static_cast<uint32>(PoolSizes.Size());
+        PoolInfo.pPoolSizes = PoolSizes.Data();
     }
     VkResult Result = vkCreateDescriptorPool(Device->VkContext.LogicalDevice, &PoolInfo, nullptr, &this->Pool);
     if (Result != VK_SUCCESS)
@@ -322,3 +325,5 @@ FVulkanRALBindGroup::~FVulkanRALBindGroup()
         this->Set = VK_NULL_HANDLE; // Set
     }
 }
+
+} // namespace LE

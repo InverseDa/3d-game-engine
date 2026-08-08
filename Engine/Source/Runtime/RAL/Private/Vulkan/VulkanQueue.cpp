@@ -1,5 +1,8 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
+
+namespace LE
+{
 
 FVulkanRALQueue::FVulkanRALQueue(FVulkanRALDevice* InDevice, uint32 FamilyIndex, uint32 QueueIndex)
 	: Device(InDevice)
@@ -47,8 +50,8 @@ void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
         CmdBufferHandle = static_cast<FVulkanRALCommandList*>(SubmitInfo.CmdList)->Handle;
     }
 
-    std::vector<VkSemaphore> WaitSemaphores;
-    std::vector<VkPipelineStageFlags> WaitStages;
+    LE::Array<VkSemaphore> WaitSemaphores;
+    LE::Array<VkPipelineStageFlags> WaitStages;
     for (auto* Semaphore : SubmitInfo.WaitSemaphores)
     {
         if (Semaphore == nullptr)
@@ -62,10 +65,10 @@ void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
             LE_LOG(LogRAL, Warn, "Submit ignored a wait semaphore with null Vulkan handle.");
             continue;
         }
-        WaitSemaphores.push_back(Handle);
-        WaitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+        WaitSemaphores.PushBack(Handle);
+        WaitStages.PushBack(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
     }
-    std::vector<VkSemaphore> SignalSemaphores;
+    LE::Array<VkSemaphore> SignalSemaphores;
     for (auto* Semaphore : SubmitInfo.SignalSemaphores)
     {
         if (Semaphore == nullptr)
@@ -79,7 +82,7 @@ void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
             LE_LOG(LogRAL, Warn, "Submit ignored a signal semaphore with null Vulkan handle.");
             continue;
         }
-        SignalSemaphores.push_back(Handle);
+        SignalSemaphores.PushBack(Handle);
     }
 
     VkFence FenceHandle = VK_NULL_HANDLE;
@@ -93,15 +96,15 @@ void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
         Info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         Info.pNext = nullptr;
 
-        Info.waitSemaphoreCount = static_cast<uint32>(WaitSemaphores.size());
-        Info.pWaitSemaphores = WaitSemaphores.empty() ? nullptr : WaitSemaphores.data();
-        Info.pWaitDstStageMask = WaitStages.empty() ? nullptr : WaitStages.data();
+        Info.waitSemaphoreCount = static_cast<uint32>(WaitSemaphores.Size());
+        Info.pWaitSemaphores = WaitSemaphores.IsEmpty() ? nullptr : WaitSemaphores.Data();
+        Info.pWaitDstStageMask = WaitStages.IsEmpty() ? nullptr : WaitStages.Data();
 
         Info.commandBufferCount = CmdBufferHandle ? 1 : 0;
         Info.pCommandBuffers = CmdBufferHandle ? &CmdBufferHandle : nullptr;
 
-        Info.signalSemaphoreCount = static_cast<uint32>(SignalSemaphores.size());
-        Info.pSignalSemaphores = SignalSemaphores.empty() ? nullptr : SignalSemaphores.data();
+        Info.signalSemaphoreCount = static_cast<uint32>(SignalSemaphores.Size());
+        Info.pSignalSemaphores = SignalSemaphores.IsEmpty() ? nullptr : SignalSemaphores.Data();
     }
 
     if (Info.commandBufferCount == 0 && Info.waitSemaphoreCount == 0 && Info.signalSemaphoreCount == 0 && FenceHandle == VK_NULL_HANDLE)
@@ -116,3 +119,5 @@ void FVulkanRALQueue::Submit(const FRALSubmitInfo& SubmitInfo)
         LE_LOG(LogRAL, Error, "vkQueueSubmit failed. VkResult={}", static_cast<int32>(Result));
     }
 }
+
+} // namespace LE

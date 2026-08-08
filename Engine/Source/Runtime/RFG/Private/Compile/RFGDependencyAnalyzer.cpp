@@ -5,9 +5,9 @@
 
 #include <algorithm>
 #include <limits>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
+
+namespace LE
+{
 
 namespace
 {
@@ -28,15 +28,15 @@ uint64 MakeDependencyKey(FRFGPassHandle SourcePass, FRFGPassHandle TargetPass)
 
 struct FResourceDependencyState
 {
-    std::vector<FRFGPassHandle> LastReaders;
-    std::vector<FRFGPassHandle> LastWriters;
+    LE::Array<FRFGPassHandle> LastReaders;
+    LE::Array<FRFGPassHandle> LastWriters;
 };
 
 struct FCompiledPassOrderKey
 {
     uint32 DependencyLevel = 0;
     uint32 InsertionOrder = 0;
-    FString Name;
+    LE::String Name;
 };
 
 bool IsPassOrderLess(const FCompiledPassOrderKey& Lhs, const FCompiledPassOrderKey& Rhs)
@@ -51,7 +51,7 @@ bool IsPassOrderLess(const FCompiledPassOrderKey& Lhs, const FCompiledPassOrderK
         return Lhs.InsertionOrder < Rhs.InsertionOrder;
     }
 
-    return std::string(Lhs.Name.GetData()) < std::string(Rhs.Name.GetData());
+    return Lhs.Name < Rhs.Name;
 }
 }
 
@@ -59,10 +59,10 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
 {
     OutPlan.Clear();
 
-    std::vector<FRFGCompiledPass>& CompiledPasses = OutPlan.GetMutablePasses();
-    CompiledPasses.reserve(RecordedGraph.GetPassOrder().size());
+    LE::Array<FRFGCompiledPass>& CompiledPasses = OutPlan.GetMutablePasses();
+    CompiledPasses.Reserve(RecordedGraph.GetPassOrder().Size());
 
-    std::unordered_map<uint32, uint32> PassIndexById;
+    LE::HashMap<uint32, uint32> PassIndexById;
     for (const FRFGPassHandle PassHandle : RecordedGraph.GetPassOrder())
     {
         const FRFGPassNode& PassNode = RecordedGraph.GetPassNode(PassHandle);
@@ -73,12 +73,12 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
         CompiledPass.Queue = PassNode.Queue;
         CompiledPass.Flags = PassNode.Flags;
 
-        PassIndexById.emplace(PassHandle.Id, static_cast<uint32>(CompiledPasses.size()));
-        CompiledPasses.push_back(CompiledPass);
+        PassIndexById.Insert(PassHandle.Id, static_cast<uint32>(CompiledPasses.Size()));
+        CompiledPasses.PushBack(CompiledPass);
     }
 
-    std::unordered_map<uint32, FResourceDependencyState> DependencyStateByResource;
-    std::unordered_set<uint64> DependencyKeys;
+    LE::HashMap<uint32, FResourceDependencyState> DependencyStateByResource;
+    LE::HashSet<uint64> DependencyKeys;
 
     for (FRFGCompiledPass& CompiledPass : CompiledPasses)
     {
@@ -92,7 +92,7 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
             }
 
             const uint64 DependencyKey = MakeDependencyKey(SourcePass, CompiledPass.Handle);
-            if (!DependencyKeys.insert(DependencyKey).second)
+            if (!DependencyKeys.Insert(DependencyKey))
             {
                 return;
             }
@@ -101,7 +101,7 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
             Edge.SourcePass = SourcePass;
             Edge.TargetPass = CompiledPass.Handle;
             Edge.Hazard = HazardType;
-            CompiledPass.IncomingEdges.push_back(Edge);
+            CompiledPass.IncomingEdges.PushBack(Edge);
         };
 
         for (const FRFGPassHandle ExplicitDependency : PassNode.ExplicitDependencies)
@@ -111,7 +111,13 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
 
         for (const FRFGPassResourceAccess& ResourceAccess : PassNode.ResourceAccesses)
         {
-            FResourceDependencyState& ResourceState = DependencyStateByResource[ResourceAccess.Resource.Id];
+            FResourceDependencyState* ResourceStatePointer = DependencyStateByResource.Find(ResourceAccess.Resource.Id);
+            if (ResourceStatePointer == nullptr)
+            {
+                DependencyStateByResource.Insert(ResourceAccess.Resource.Id, FResourceDependencyState{});
+                ResourceStatePointer = DependencyStateByResource.Find(ResourceAccess.Resource.Id);
+            }
+            FResourceDependencyState& ResourceState = *ResourceStatePointer;
             const bool bReads = AccessHasRead(ResourceAccess.Access.Access);
             const bool bWrites = AccessHasWrite(ResourceAccess.Access.Access);
 
@@ -127,9 +133,9 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
                     AddDependency(Reader, ERFGHazardType::WAR);
                 }
 
-                ResourceState.LastReaders.clear();
-                ResourceState.LastWriters.clear();
-                ResourceState.LastWriters.push_back(CompiledPass.Handle);
+                ResourceState.LastReaders.Clear();
+                ResourceState.LastWriters.Clear();
+                ResourceState.LastWriters.PushBack(CompiledPass.Handle);
                 continue;
             }
 
@@ -140,7 +146,7 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
                     AddDependency(Writer, ERFGHazardType::RAW);
                 }
 
-                ResourceState.LastReaders.push_back(CompiledPass.Handle);
+                ResourceState.LastReaders.PushBack(CompiledPass.Handle);
             }
         }
     }
@@ -150,53 +156,62 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
         uint32 DependencyLevel = 0;
         for (const FRFGDependencyEdge& Edge : CompiledPass.IncomingEdges)
         {
-            const auto SourceIndexIt = PassIndexById.find(Edge.SourcePass.Id);
-            if (SourceIndexIt == PassIndexById.end())
+            const uint32* const SourceIndex = PassIndexById.Find(Edge.SourcePass.Id);
+            if (SourceIndex == nullptr)
             {
                 continue;
             }
 
-            const uint32 SourceLevel = CompiledPasses[SourceIndexIt->second].DependencyLevel;
+            const uint32 SourceLevel = CompiledPasses[*SourceIndex].DependencyLevel;
             DependencyLevel = std::max(DependencyLevel, SourceLevel + 1);
         }
 
         CompiledPass.DependencyLevel = DependencyLevel;
     }
 
-    std::unordered_map<uint32, std::vector<uint32>> OutgoingEdgesByPassId;
-    std::vector<uint32> InDegree(CompiledPasses.size(), 0);
-    std::vector<uint32> StableDependencyLevels(CompiledPasses.size(), 0);
-    std::vector<uint32> InsertionOrders(CompiledPasses.size(), 0);
+    LE::HashMap<uint32, LE::Array<uint32>> OutgoingEdgesByPassId;
+    LE::Array<uint32> InDegree;
+    LE::Array<uint32> StableDependencyLevels;
+    LE::Array<uint32> InsertionOrders;
+    InDegree.Resize(CompiledPasses.Size(), 0);
+    StableDependencyLevels.Resize(CompiledPasses.Size(), 0);
+    InsertionOrders.Resize(CompiledPasses.Size(), 0);
 
-    for (uint32 PassIndex = 0; PassIndex < CompiledPasses.size(); ++PassIndex)
+    for (uint32 PassIndex = 0; PassIndex < CompiledPasses.Size(); ++PassIndex)
     {
         InsertionOrders[PassIndex] = CompiledPasses[PassIndex].Handle.Id;
-        InDegree[PassIndex] = static_cast<uint32>(CompiledPasses[PassIndex].IncomingEdges.size());
+        InDegree[PassIndex] = static_cast<uint32>(CompiledPasses[PassIndex].IncomingEdges.Size());
 
         for (const FRFGDependencyEdge& Edge : CompiledPasses[PassIndex].IncomingEdges)
         {
-            const auto SourceIndexIt = PassIndexById.find(Edge.SourcePass.Id);
-            if (SourceIndexIt != PassIndexById.end())
+            if (PassIndexById.Contains(Edge.SourcePass.Id))
             {
-                OutgoingEdgesByPassId[Edge.SourcePass.Id].push_back(PassIndex);
+                LE::Array<uint32>* Targets = OutgoingEdgesByPassId.Find(Edge.SourcePass.Id);
+                if (Targets == nullptr)
+                {
+                    OutgoingEdgesByPassId.Insert(Edge.SourcePass.Id, LE::Array<uint32>{});
+                    Targets = OutgoingEdgesByPassId.Find(Edge.SourcePass.Id);
+                }
+                Targets->PushBack(PassIndex);
             }
         }
     }
 
-    std::vector<uint32> AvailablePassIndices;
-    for (uint32 PassIndex = 0; PassIndex < CompiledPasses.size(); ++PassIndex)
+    LE::Array<uint32> AvailablePassIndices;
+    for (uint32 PassIndex = 0; PassIndex < CompiledPasses.Size(); ++PassIndex)
     {
         if (InDegree[PassIndex] == 0)
         {
-            AvailablePassIndices.push_back(PassIndex);
+            AvailablePassIndices.PushBack(PassIndex);
         }
     }
 
     auto StableSortAvailable = [&]()
     {
+        if (AvailablePassIndices.Size() < 2) { return; }
         std::sort(
-            AvailablePassIndices.begin(),
-            AvailablePassIndices.end(),
+            AvailablePassIndices.Data(),
+            AvailablePassIndices.Data() + AvailablePassIndices.Size(),
             [&](uint32 LhsIndex, uint32 RhsIndex)
             {
                 FCompiledPassOrderKey LhsKey;
@@ -215,24 +230,24 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
 
     StableSortAvailable();
 
-    std::vector<FRFGCompiledPass> OrderedPasses;
-    OrderedPasses.reserve(CompiledPasses.size());
+    LE::Array<FRFGCompiledPass> OrderedPasses;
+    OrderedPasses.Reserve(CompiledPasses.Size());
 
-    while (!AvailablePassIndices.empty())
+    while (!AvailablePassIndices.IsEmpty())
     {
-        const uint32 CurrentIndex = AvailablePassIndices.front();
-        AvailablePassIndices.erase(AvailablePassIndices.begin());
+        const uint32 CurrentIndex = AvailablePassIndices.Front();
+        AvailablePassIndices.Erase(0);
 
         CompiledPasses[CurrentIndex].DependencyLevel = StableDependencyLevels[CurrentIndex];
-        OrderedPasses.push_back(CompiledPasses[CurrentIndex]);
+        OrderedPasses.PushBack(CompiledPasses[CurrentIndex]);
 
-        const auto OutgoingEdgesIt = OutgoingEdgesByPassId.find(CompiledPasses[CurrentIndex].Handle.Id);
-        if (OutgoingEdgesIt == OutgoingEdgesByPassId.end())
+        const LE::Array<uint32>* const OutgoingEdges = OutgoingEdgesByPassId.Find(CompiledPasses[CurrentIndex].Handle.Id);
+        if (OutgoingEdges == nullptr)
         {
             continue;
         }
 
-        for (uint32 TargetIndex : OutgoingEdgesIt->second)
+        for (uint32 TargetIndex : *OutgoingEdges)
         {
             StableDependencyLevels[TargetIndex] = std::max(
                 StableDependencyLevels[TargetIndex],
@@ -246,36 +261,34 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
             --InDegree[TargetIndex];
             if (InDegree[TargetIndex] == 0)
             {
-                AvailablePassIndices.push_back(TargetIndex);
+                AvailablePassIndices.PushBack(TargetIndex);
             }
         }
 
         StableSortAvailable();
     }
 
-    if (OrderedPasses.size() != CompiledPasses.size())
+    if (OrderedPasses.Size() != CompiledPasses.Size())
     {
-        std::vector<uint32> RemainingPassIndices;
-        for (uint32 PassIndex = 0; PassIndex < CompiledPasses.size(); ++PassIndex)
+        LE::Array<uint32> RemainingPassIndices;
+        for (uint32 PassIndex = 0; PassIndex < CompiledPasses.Size(); ++PassIndex)
         {
             const FRFGPassHandle PassHandle = CompiledPasses[PassIndex].Handle;
-            const bool bAlreadyOrdered = std::find_if(
-                OrderedPasses.begin(),
-                OrderedPasses.end(),
-                [&](const FRFGCompiledPass& OrderedPass)
-                {
-                    return OrderedPass.Handle == PassHandle;
-                }) != OrderedPasses.end();
+            bool bAlreadyOrdered = false;
+            for (const FRFGCompiledPass& OrderedPass : OrderedPasses)
+            {
+                if (OrderedPass.Handle == PassHandle) { bAlreadyOrdered = true; break; }
+            }
 
             if (!bAlreadyOrdered)
             {
-                RemainingPassIndices.push_back(PassIndex);
+                RemainingPassIndices.PushBack(PassIndex);
             }
         }
 
-        std::sort(
-            RemainingPassIndices.begin(),
-            RemainingPassIndices.end(),
+        if (RemainingPassIndices.Size() > 1) std::sort(
+            RemainingPassIndices.Data(),
+            RemainingPassIndices.Data() + RemainingPassIndices.Size(),
             [&](uint32 LhsIndex, uint32 RhsIndex)
             {
                 FCompiledPassOrderKey LhsKey;
@@ -294,9 +307,11 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
         for (uint32 RemainingIndex : RemainingPassIndices)
         {
             CompiledPasses[RemainingIndex].DependencyLevel = StableDependencyLevels[RemainingIndex];
-            OrderedPasses.push_back(CompiledPasses[RemainingIndex]);
+            OrderedPasses.PushBack(CompiledPasses[RemainingIndex]);
         }
     }
 
     CompiledPasses = std::move(OrderedPasses);
 }
+
+} // namespace LE

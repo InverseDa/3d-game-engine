@@ -3,8 +3,10 @@
 #include "Debug/RFGGraphExporter.h"
 #include "Record/RFGRecordedGraph.h"
 
-#include <sstream>
-#include <unordered_set>
+#include <cstdio>
+
+namespace LE
+{
 
 LE_DECLARE_LOG_CATEGORY(LogRFG);
 
@@ -17,11 +19,11 @@ bool ValidateBarrierDeclarations(const FRFGRecordedGraph& RecordedGraph, const F
     for (const FRFGCompiledPass& CompiledPass : CompiledPlan.GetPasses())
     {
         const FRFGPassNode& PassNode = RecordedGraph.GetPassNode(CompiledPass.Handle);
-        std::unordered_set<uint32> AccessedResourceIds;
+        LE::HashSet<uint32> AccessedResourceIds;
 
         for (const FRFGPassResourceAccess& ResourceAccess : PassNode.ResourceAccesses)
         {
-            if (!AccessedResourceIds.insert(ResourceAccess.Resource.Id).second)
+            if (!AccessedResourceIds.Insert(ResourceAccess.Resource.Id))
             {
                 LE_LOG(LogRFG, Error,
                     "RFG compile failed: pass '{}' declares resource {} more than once. Pass-internal transitions are not supported.",
@@ -30,7 +32,7 @@ bool ValidateBarrierDeclarations(const FRFGRecordedGraph& RecordedGraph, const F
                 bValid = false;
             }
 
-            if (ResourceAccess.Access.State == ERALResourceState::Unknown)
+            if (ResourceAccess.Access.State == LE::ERALResourceState::Unknown)
             {
                 LE_LOG(LogRFG, Error,
                     "RFG compile failed: pass '{}' uses resource {} without an explicit RAL resource state.",
@@ -68,7 +70,7 @@ bool ValidateBarrierDeclarations(const FRFGRecordedGraph& RecordedGraph, const F
 FRFGCompileResult FRFGCompiler::Compile(const FRFGRecordedGraph& RecordedGraph, const FRFGGraphSignature& Signature) const
 {
     FRFGCompileResult Result;
-    std::shared_ptr<FRFGCompiledPlan> MutablePlan = std::make_shared<FRFGCompiledPlan>();
+    LE::SharedPtr<FRFGCompiledPlan> MutablePlan = LE::MakeShared<FRFGCompiledPlan>();
 
     DependencyAnalyzer.BuildDependencies(RecordedGraph, *MutablePlan);
 
@@ -88,16 +90,19 @@ FRFGCompileResult FRFGCompiler::Compile(const FRFGRecordedGraph& RecordedGraph, 
     // graph identity only after all mutable compilation phases have completed.
     MutablePlan->GetMutableSignature() = Signature;
 
-    std::ostringstream PassOrderStream;
-    for (uint32 PassIndex = 0; PassIndex < MutablePlan->GetPasses().size(); ++PassIndex)
+    LE::String PassOrderText;
+    for (uint32 PassIndex = 0; PassIndex < MutablePlan->GetPasses().Size(); ++PassIndex)
     {
         if (PassIndex > 0)
         {
-            PassOrderStream << " -> ";
+            PassOrderText.Append(" -> ");
         }
 
         const FRFGCompiledPass& Pass = MutablePlan->GetPasses()[PassIndex];
-        PassOrderStream << Pass.Name.GetData() << "[L" << Pass.DependencyLevel << ",Q" << static_cast<uint32>(Pass.Queue) << "]";
+        PassOrderText.Append(Pass.Name.View());
+        char Detail[48]{};
+        std::snprintf(Detail, sizeof(Detail), "[L%u,Q%u]", Pass.DependencyLevel, static_cast<uint32>(Pass.Queue));
+        PassOrderText.Append(Detail);
     }
 
     LE_LOG(
@@ -105,14 +110,14 @@ FRFGCompileResult FRFGCompiler::Compile(const FRFGRecordedGraph& RecordedGraph, 
         Info,
         "RFG compile completed. Signature={}, Passes={}, Resources={}",
         Signature.Value,
-        MutablePlan->GetPasses().size(),
-        RecordedGraph.GetResourceNodes().size());
-    LE_LOG(LogRFG, Info, "RFG pass order: {}", PassOrderStream.str());
+        MutablePlan->GetPasses().Size(),
+        RecordedGraph.GetResourceNodes().Size());
+    LE_LOG(LogRFG, Info, "RFG pass order: {}", PassOrderText.Data());
     // TODO(rfg): FRFGGraphExporter::ExportToString is declared but not implemented yet.
     // Replace with a lightweight trace summary until the exporter is fully wired up.
     LE_LOG(LogRFG, Trace, "RFG graph summary: passes={}, resources={}",
-        RecordedGraph.GetPassNodes().size(),
-        RecordedGraph.GetResourceNodes().size());
+        RecordedGraph.GetPassNodes().Size(),
+        RecordedGraph.GetResourceNodes().Size());
 
     Result.Plan = std::move(MutablePlan);
     return Result;
@@ -127,3 +132,5 @@ const FRFGCompileOptions& FRFGCompiler::GetCompileOptions() const
 {
     return CompileOptions;
 }
+
+} // namespace LE

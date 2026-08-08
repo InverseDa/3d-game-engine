@@ -2,10 +2,13 @@
 #include "Renderer/Passes/TriangleBackBufferPass.h"
 #include "Renderer/Passes/TriangleCompositePasses.h"
 
+namespace LE
+{
+
 class FTriangleBackBufferPipelineImpl
 {
 public:
-    explicit FTriangleBackBufferPipelineImpl(const FTriangleBackBufferPipelineDesc& InDesc)
+    explicit FTriangleBackBufferPipelineImpl(const FTriangleBackBufferPipelineDesc& InDesc) noexcept
         : TriangleBackBufferPass(InDesc)
     {
     }
@@ -17,7 +20,7 @@ public:
 class FTriangleCompositePipelineImpl
 {
 public:
-    explicit FTriangleCompositePipelineImpl(const FTriangleCompositePipelineDesc& InDesc)
+    explicit FTriangleCompositePipelineImpl(const FTriangleCompositePipelineDesc& InDesc) noexcept
         : OffscreenPass(InDesc)
         , CompositePass(InDesc)
     {
@@ -29,7 +32,7 @@ public:
 };
 
 FTriangleBackBufferPipeline::FTriangleBackBufferPipeline(const FTriangleBackBufferPipelineDesc& InDesc)
-    : Impl(std::make_unique<FTriangleBackBufferPipelineImpl>(InDesc))
+    : Impl(LE::MakeUnique<FTriangleBackBufferPipelineImpl>(InDesc))
 {
 }
 
@@ -56,11 +59,11 @@ void FTriangleBackBufferPipeline::BuildPasses(
     (void)RenderView;
 
     OutPlan.Reset();
-    OutPlan.Passes.push_back(&Impl->TriangleBackBufferPass);
+    OutPlan.Passes.PushBack(&Impl->TriangleBackBufferPass);
 }
 
 FTriangleCompositePipeline::FTriangleCompositePipeline(const FTriangleCompositePipelineDesc& InDesc)
-    : Impl(std::make_unique<FTriangleCompositePipelineImpl>(InDesc))
+    : Impl(LE::MakeUnique<FTriangleCompositePipelineImpl>(InDesc))
 {
 }
 
@@ -87,6 +90,8 @@ void FTriangleCompositePipeline::BuildPasses(
     (void)RenderView;
 
     OutPlan.Reset();
-    OutPlan.Passes.push_back(&Impl->OffscreenPass);
-    OutPlan.Passes.push_back(&Impl->CompositePass);
+    OutPlan.Passes.PushBack(&Impl->OffscreenPass);
+    OutPlan.Passes.PushBack(&Impl->CompositePass);
 }
+
+} // namespace LE

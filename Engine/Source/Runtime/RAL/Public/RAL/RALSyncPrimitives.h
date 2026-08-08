@@ -1,7 +1,10 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "RALResource.h"
+
+namespace LE
+{
 
 class RAL_API FRALSemaphore : public FRALResource
 {
@@ -17,3 +20,5 @@ public:
     virtual void Wait(uint64 Timeout = UINT64_MAX) = 0;
     virtual bool IsSignaled() = 0;
 };
+
+} // namespace LE

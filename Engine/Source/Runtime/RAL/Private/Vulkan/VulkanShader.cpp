@@ -1,5 +1,8 @@
-﻿#include "CoreMinimal.h"
+#include "CoreMinimal.h"
 #include "Vulkan/VulkanRAL.h"
+
+namespace LE
+{
 
 FVulkanRALShader::FVulkanRALShader(FVulkanRALDevice* InDevice, const FRALShaderDesc& InDesc)
     : TVulkanResourceBase<FRALShaderDesc>(InDevice, InDesc)
@@ -47,3 +50,5 @@ FVulkanRALShader::~FVulkanRALShader()
         this->Module = VK_NULL_HANDLE;
     }
 }
+
+} // namespace LE

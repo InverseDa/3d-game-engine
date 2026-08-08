@@ -11,13 +11,16 @@
 #include "Record/RFGPassRegistry.h"
 #include "Record/RFGRecordedGraph.h"
 
+namespace LE
+{
+
 LE_DECLARE_LOG_CATEGORY(LogRFGExecute);
 
 namespace
 {
-FRALTextureDesc MakeTextureDesc(const FRFGResourceNode& ResourceNode)
+LE::FRALTextureDesc MakeTextureDesc(const FRFGResourceNode& ResourceNode)
 {
-    FRALTextureDesc Desc;
+    LE::FRALTextureDesc Desc;
     Desc.Name = ResourceNode.Name;
     Desc.Width = ResourceNode.Desc.Texture.Width;
     Desc.Height = ResourceNode.Desc.Texture.Height;
@@ -32,9 +35,9 @@ FRALTextureDesc MakeTextureDesc(const FRFGResourceNode& ResourceNode)
     return Desc;
 }
 
-FRALBufferDesc MakeBufferDesc(const FRFGResourceNode& ResourceNode)
+LE::FRALBufferDesc MakeBufferDesc(const FRFGResourceNode& ResourceNode)
 {
-    FRALBufferDesc Desc;
+    LE::FRALBufferDesc Desc;
     Desc.Name = ResourceNode.Name;
     Desc.Size = ResourceNode.Desc.Buffer.Size;
     Desc.Usage = static_cast<uint32>(ResourceNode.Desc.Buffer.Usage);
@@ -55,49 +58,49 @@ void PrepareResources(const FRFGRecordedGraph& RecordedGraph, FRFGExecutionConte
     {
         if (ResourceNode.Desc.Type == ERFGResourceType::Texture)
         {
-            FRALTexture* Texture = ResourceNode.ImportedTexture;
+            LE::FRALTexture* Texture = ResourceNode.ImportedTexture;
             if (Texture == nullptr)
             {
                 Texture = ExecutionContext.Device->CreateTexture(MakeTextureDesc(ResourceNode));
                 if (Texture != nullptr)
                 {
-                    ExecutionContext.OwnedTextures.push_back(Texture);
+                    ExecutionContext.OwnedTextures.PushBack(Texture);
                 }
             }
 
-            ExecutionContext.TextureResources[ResourceNode.Handle.Id] = Texture;
+            ExecutionContext.TextureResources.InsertOrAssign(ResourceNode.Handle.Id, Texture);
         }
         else
         {
-            FRALBuffer* Buffer = ResourceNode.ImportedBuffer;
+            LE::FRALBuffer* Buffer = ResourceNode.ImportedBuffer;
             if (Buffer == nullptr)
             {
                 Buffer = ExecutionContext.Device->CreateBuffer(MakeBufferDesc(ResourceNode));
                 if (Buffer != nullptr)
                 {
-                    ExecutionContext.OwnedBuffers.push_back(Buffer);
+                    ExecutionContext.OwnedBuffers.PushBack(Buffer);
                 }
             }
 
-            ExecutionContext.BufferResources[ResourceNode.Handle.Id] = Buffer;
+            ExecutionContext.BufferResources.InsertOrAssign(ResourceNode.Handle.Id, Buffer);
         }
     }
 }
 
 void ApplyBarriers(
-    const std::vector<FRFGBarrierTransition>& Transitions,
+    const LE::Array<FRFGBarrierTransition>& Transitions,
     const FRFGRecordedGraph& RecordedGraph,
     FRFGExecutionContext& ExecutionContext,
-    FRALCommandList* CommandList)
+    LE::FRALCommandList* CommandList)
 {
-    if (Transitions.empty() || CommandList == nullptr)
+    if (Transitions.IsEmpty() || CommandList == nullptr)
     {
         return;
     }
 
-    FRALBarrierBatch BarrierBatch;
-    BarrierBatch.TextureBarriers.reserve(Transitions.size());
-    BarrierBatch.BufferBarriers.reserve(Transitions.size());
+    LE::FRALBarrierBatch BarrierBatch;
+    BarrierBatch.TextureBarriers.Reserve(Transitions.Size());
+    BarrierBatch.BufferBarriers.Reserve(Transitions.Size());
 
     for (const FRFGBarrierTransition& Transition : Transitions)
     {
@@ -113,8 +116,8 @@ void ApplyBarriers(
             continue;
         }
 
-        if (Transition.BeforeState == ERALResourceState::Unknown ||
-            Transition.AfterState == ERALResourceState::Unknown)
+        if (Transition.BeforeState == LE::ERALResourceState::Unknown ||
+            Transition.AfterState == LE::ERALResourceState::Unknown)
         {
             LE_LOG(LogRFGExecute, Error,
                 "RFG barrier skipped: resource state is Unknown. ResourceId={}, BeforeState={}, AfterState={}.",
@@ -127,8 +130,8 @@ void ApplyBarriers(
         const FRFGResourceNode& ResourceNode = RecordedGraph.GetResourceNode(Transition.Resource);
         if (ResourceNode.Desc.Type == ERFGResourceType::Texture)
         {
-            const auto TextureIt = ExecutionContext.TextureResources.find(Transition.Resource.Id);
-            if (TextureIt == ExecutionContext.TextureResources.end() || TextureIt->second == nullptr)
+            LE::FRALTexture* const* const Texture = ExecutionContext.TextureResources.Find(Transition.Resource.Id);
+            if (Texture == nullptr || *Texture == nullptr)
             {
                 LE_LOG(LogRFGExecute, Error,
                     "RFG texture barrier skipped: resource could not be resolved. ResourceId={}.",
@@ -136,8 +139,8 @@ void ApplyBarriers(
                 continue;
             }
 
-            FRALTextureBarrierDesc Barrier;
-            Barrier.Texture = TextureIt->second;
+            LE::FRALTextureBarrierDesc Barrier;
+            Barrier.Texture = *Texture;
             Barrier.BeforeState = Transition.BeforeState;
             Barrier.AfterState = Transition.AfterState;
             Barrier.BeforeShaderStage = Transition.BeforeShaderStage;
@@ -146,12 +149,12 @@ void ApplyBarriers(
             Barrier.MipCount = Transition.MipCount;
             Barrier.BaseArrayLayer = Transition.BaseArrayLayer;
             Barrier.LayerCount = Transition.LayerCount;
-            BarrierBatch.TextureBarriers.push_back(Barrier);
+            BarrierBatch.TextureBarriers.PushBack(Barrier);
         }
         else
         {
-            const auto BufferIt = ExecutionContext.BufferResources.find(Transition.Resource.Id);
-            if (BufferIt == ExecutionContext.BufferResources.end() || BufferIt->second == nullptr)
+            LE::FRALBuffer* const* const Buffer = ExecutionContext.BufferResources.Find(Transition.Resource.Id);
+            if (Buffer == nullptr || *Buffer == nullptr)
             {
                 LE_LOG(LogRFGExecute, Error,
                     "RFG buffer barrier skipped: resource could not be resolved. ResourceId={}.",
@@ -159,17 +162,17 @@ void ApplyBarriers(
                 continue;
             }
 
-            FRALBufferBarrierDesc Barrier;
-            Barrier.Buffer = BufferIt->second;
+            LE::FRALBufferBarrierDesc Barrier;
+            Barrier.Buffer = *Buffer;
             Barrier.BeforeState = Transition.BeforeState;
             Barrier.AfterState = Transition.AfterState;
             Barrier.BeforeShaderStage = Transition.BeforeShaderStage;
             Barrier.AfterShaderStage = Transition.AfterShaderStage;
-            BarrierBatch.BufferBarriers.push_back(Barrier);
+            BarrierBatch.BufferBarriers.PushBack(Barrier);
         }
     }
 
-    if (!BarrierBatch.TextureBarriers.empty() || !BarrierBatch.BufferBarriers.empty())
+    if (!BarrierBatch.TextureBarriers.IsEmpty() || !BarrierBatch.BufferBarriers.IsEmpty())
     {
         CommandList->ResourceBarriers(BarrierBatch);
     }
@@ -184,7 +187,7 @@ void FRFGExecutor::Execute(
 {
     PrepareResources(RecordedGraph, ExecutionContext);
 
-    FRALCommandList* CommandList = ExecutionContext.CommandList;
+    LE::FRALCommandList* CommandList = ExecutionContext.CommandList;
     if (CommandList != nullptr)
     {
         CommandList->Begin();
@@ -195,11 +198,11 @@ void FRFGExecutor::Execute(
     PassContext.SetRecordedGraph(&RecordedGraph);
     PassContext.SetCompiledPlan(&CompiledPlan);
 
-    const std::vector<FRFGCompiledPass>& Passes = CompiledPlan.GetPasses();
-    for (uint32 PassIndex = 0; PassIndex < Passes.size(); ++PassIndex)
+    const LE::Array<FRFGCompiledPass>& Passes = CompiledPlan.GetPasses();
+    for (uint32 PassIndex = 0; PassIndex < Passes.Size(); ++PassIndex)
     {
         PassContext.SetPassIndex(PassIndex);
-        FRALCommandList* PassCommandList = ExecutionContext.GetCommandList(Passes[PassIndex].Queue);
+        LE::FRALCommandList* PassCommandList = ExecutionContext.GetCommandList(Passes[PassIndex].Queue);
         ApplyBarriers(Passes[PassIndex].PreBarriers, RecordedGraph, ExecutionContext, PassCommandList);
 
         const FRFGPassNode& PassNode = RecordedGraph.GetPassNode(Passes[PassIndex].Handle);
@@ -220,10 +223,10 @@ void FRFGExecutor::Execute(
         CommandList->End();
     }
 
-    FRALQueue* SubmitQueue = ExecutionContext.GraphicsQueue;
+    LE::FRALQueue* SubmitQueue = ExecutionContext.GraphicsQueue;
     if (ExecuteOptions.bSubmitImmediately && SubmitQueue != nullptr && CommandList != nullptr)
     {
-        FRALSubmitInfo SubmitInfo;
+        LE::FRALSubmitInfo SubmitInfo;
         SubmitInfo.CmdList = CommandList;
         SubmitQueue->Submit(SubmitInfo);
     }
@@ -235,3 +238,5 @@ void FRFGExecutor::Execute(
 
     ExecutionContext.ResetTransientResources();
 }
+
+} // namespace LE

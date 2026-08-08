@@ -3,8 +3,9 @@
 #include "CoreMinimal.h"
 #include "Core/RFGTypes.h"
 
-#include <memory>
-#include <unordered_map>
+
+namespace LE
+{
 
 class FRFGCompiledPlan;
 
@@ -22,8 +23,8 @@ public:
     ~FRFGPlanCache() = default;
 
 public:
-    std::shared_ptr<const FRFGCompiledPlan> Find(const FRFGGraphSignature& Signature) const;
-    void Store(const FRFGGraphSignature& Signature, const std::shared_ptr<const FRFGCompiledPlan>& Plan);
+    LE::SharedPtr<const FRFGCompiledPlan> Find(const FRFGGraphSignature& Signature) const;
+    void Store(const FRFGGraphSignature& Signature, const LE::SharedPtr<const FRFGCompiledPlan>& Plan);
     void Remove(const FRFGGraphSignature& Signature);
     void Clear();
 
@@ -32,5 +33,7 @@ public:
 
 private:
     mutable FRFGPlanCacheStats Stats;
-    std::unordered_map<uint64, std::shared_ptr<const FRFGCompiledPlan>> CachedPlans;
+    LE::HashMap<uint64, LE::SharedPtr<const FRFGCompiledPlan>> CachedPlans;
 };
+
+} // namespace LE

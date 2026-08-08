@@ -12,6 +12,6 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["Source/**/*.ts", "Runtime/**/*.ts"],
+  "include": ["Source/**/*.ts", "Runtime/**/*.ts", "Tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -4,6 +4,9 @@
 #include "RFGMinimal.h"
 #include "RendererFrameContext.h"
 
+namespace LE
+{
+
 class FRenderScene;
 
 class RENDERER_API FRenderer final : public FNonCopyable
@@ -21,12 +24,14 @@ public:
     void RenderFrame(const FRendererFrameContext& FrameContext, const FRenderScene* RenderScene = nullptr);
 
 public:
-    FRFGInstance& GetGraphInstance();
-    const FRFGInstance& GetGraphInstance() const;
+    LE::FRFGInstance& GetGraphInstance();
+    const LE::FRFGInstance& GetGraphInstance() const;
 
 private:
     bool bInitialized = false;
-    FRFGPassRegistry PassRegistry;
-    FRFGRuntime GraphRuntime;
-    FRFGInstance GraphInstance;
+    LE::FRFGPassRegistry PassRegistry;
+    LE::FRFGRuntime GraphRuntime;
+    LE::FRFGInstance GraphInstance;
 };
+
+} // namespace LE

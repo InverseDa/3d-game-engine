@@ -7,13 +7,15 @@
 #include "Compile/RFGDependencyAnalyzer.h"
 #include "Core/RFGTypes.h"
 
-#include <memory>
+
+namespace LE
+{
 
 class FRFGRecordedGraph;
 
 struct FRFGCompileResult
 {
-    std::shared_ptr<const FRFGCompiledPlan> Plan;
+    LE::SharedPtr<const FRFGCompiledPlan> Plan;
     bool bFromCache = false;
 };
 
@@ -38,3 +40,5 @@ private:
     FRFGCuller Culler;
     FRFGBarrierPlanner BarrierPlanner;
 };
+
+} // namespace LE
