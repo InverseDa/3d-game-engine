@@ -1,5 +1,6 @@
 import * as Fs from "node:fs";
 import * as Path from "node:path";
+import type { ResolvedTarget } from "../Configuration/Types.ts";
 
 export class EnginePaths {
     private readonly RootDirectory: string;
@@ -21,16 +22,25 @@ export class EnginePaths {
     public get IntermediateDirectory(): string { return Path.join(this.EngineDirectory, "Intermediate"); }
     public get ProjectFilesDirectory(): string { return Path.join(this.IntermediateDirectory, "ProjectFiles"); }
 
-    public BinaryOutputDirectory(Platform: string): string {
-        return Path.join(this.BinariesDirectory, Platform);
+    public BinaryOutputDirectory(BuildTarget: ResolvedTarget): string {
+        return Path.join(this.BinariesDirectory, ...this.TargetVariantSegments(BuildTarget));
     }
 
-    public TemporaryOutputDirectory(Platform: string, Configuration: string): string {
-        return Path.join(this.TemporaryDirectory, Platform, Configuration);
+    public TemporaryOutputDirectory(BuildTarget: ResolvedTarget): string {
+        return Path.join(this.TemporaryDirectory, ...this.TargetVariantSegments(BuildTarget));
     }
 
-    public GeneratedOutputDirectory(Platform: string, Configuration: string): string {
-        return Path.join(this.TemporaryOutputDirectory(Platform, Configuration), "Generated");
+    public GeneratedOutputDirectory(BuildTarget: ResolvedTarget): string {
+        return Path.join(this.TemporaryOutputDirectory(BuildTarget), "Generated");
+    }
+
+    private TargetVariantSegments(BuildTarget: ResolvedTarget): string[] {
+        return [
+            BuildTarget.Target.Platform,
+            BuildTarget.Target.Optimization,
+            BuildTarget.Descriptor.Name,
+            BuildTarget.Target.TargetType,
+        ];
     }
 }
 

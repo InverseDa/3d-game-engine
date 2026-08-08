@@ -163,7 +163,7 @@ FVulkanRALSwapchain::~FVulkanRALSwapchain()
 
 void FVulkanRALSwapchain::InternalCreateSurface()
 {
-    if (this->Desc.Surface.Type == ERALSurfaceType::Unknown)
+    if (this->Desc.Surface.Type == EPlatformSurfaceType::Unknown)
     {
         LE_LOG(LogRAL, Error, "InternalCreateSurface failed: surface type is unknown.");
         this->SurfaceHandle = VK_NULL_HANDLE;
@@ -171,7 +171,7 @@ void FVulkanRALSwapchain::InternalCreateSurface()
     }
 
 #if PLATFORM_WINDOWS
-    if (this->Desc.Surface.Type == ERALSurfaceType::Win32)
+    if (this->Desc.Surface.Type == EPlatformSurfaceType::Win32)
     {
         if (this->Desc.Surface.WindowHandle == nullptr)
         {
@@ -197,7 +197,7 @@ void FVulkanRALSwapchain::InternalCreateSurface()
 #endif
 
 #if PLATFORM_MAC
-    if (this->Desc.Surface.Type == ERALSurfaceType::MetalLayer)
+    if (this->Desc.Surface.Type == EPlatformSurfaceType::MetalLayer)
     {
         if (this->Desc.Surface.LayerHandle == nullptr)
         {

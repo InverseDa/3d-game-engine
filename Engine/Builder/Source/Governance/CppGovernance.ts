@@ -32,7 +32,7 @@ const APPROVED_NAMESPACES = new Set([
     "LE::RAL",
     "LE::RAL::Vulkan",
     "LE::RendererDemoPasses",
-    "LE::Launch::ShaderRuntimeCompiler",
+    "LE::Demo::ShaderRuntimeCompiler",
 ]);
 const CONTROL_WORDS = new Set(["if", "for", "while", "switch", "catch"]);
 const OWNER_NAMES = new Set([
@@ -249,10 +249,8 @@ const OWNER_ALLOWLIST: Allow[] = [
     { file: "Engine/Source/Runtime/Core/Private/Logger/Log.cpp", symbol: "LevelAnsiEndFormatter::clone", owners: new Set(["unique_ptr", "make_unique"]) },
     { file: "Engine/Source/Runtime/Core/Private/Logger/Log.cpp", symbol: "Log::Init", owners: new Set(["string", "unique_ptr", "shared_ptr", "make_unique", "make_shared"]) },
     { file: "Engine/Source/Runtime/Core/Private/Logger/Log.cpp", symbol: "Log::GetLoggerOrCreate", owners: new Set(["string", "make_shared"]) },
-    { file: "Engine/Source/Runtime/Launch/Private/Windows/LaunchWindows.cpp", symbol: "TryReadShaderFile", owners: new Set(["ifstream"]) },
-    { file: "Engine/Source/Runtime/Launch/Private/Mac/LaunchMac.cpp", symbol: "TryReadShaderFile", owners: new Set(["ifstream"]) },
-    { file: "Engine/Source/Runtime/Launch/Private/ShaderRuntimeCompiler.h", symbol: "ReadBinaryFile", owners: new Set(["ifstream"]) },
-    { file: "Engine/Source/Runtime/Launch/Private/ShaderRuntimeCompiler.h", symbol: "CompileHlslToSpirv", owners: new Set(["filesystem::path", "error_code", "path::string"]) },
+    { file: "Engine/Source/Runtime/DemoApplication/Private/ShaderRuntimeCompiler.h", symbol: "ReadBinaryFile", owners: new Set(["ifstream"]) },
+    { file: "Engine/Source/Runtime/DemoApplication/Private/ShaderRuntimeCompiler.h", symbol: "CompileHlslToSpirv", owners: new Set(["filesystem::path", "error_code", "path::string"]) },
 ];
 
 function isOwnerAllowed(file: string, symbol: string, owner: string): boolean {
@@ -274,7 +272,8 @@ function isPublicHeader(file: string): boolean {
 function isAllowedGlobal(file: string, symbol: string): boolean {
     return (file === "Engine/Source/Runtime/Launch/Private/Launch.cpp" && ["main", "WinMain"].includes(symbol))
         || (file === "Engine/Source/Tests/BuilderTests/Private/BuilderTests.cpp" && symbol === "main")
-        || (file === "Engine/Source/Runtime/Launch/Private/Mac/MacWindow.mm" && symbol === "FMacWindowDelegate");
+        || (file === "Engine/Source/Runtime/Platform/Private/Mac/MacPlatformWindow.mm"
+            && symbol === "FMacPlatformWindowDelegate");
 }
 
 function isApprovedSpdlogForward(file: string, statement: Token[]): boolean {

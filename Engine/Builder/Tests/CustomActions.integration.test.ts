@@ -191,12 +191,14 @@ else process.exit(8);
 `);
 
     const { Resolved } = MakeTarget();
+    const Paths = new EnginePaths(Root);
+    const GeneratedDir = Path.join(Paths.GeneratedOutputDirectory(Resolved), "Entry");
     const Module: ModuleInstance = {
         Descriptor: new CustomEntryBuild(Tool, Counters, Explicit, Implicit, DependencyInput, WorkDir),
         SourceRoot: ModuleRoot, BuildFilePath: Path.join(ModuleRoot, "Build.ts"),
     };
     const Graph = new DependencyGraph([Module], Resolved);
-    const Actions = await new IRBuilder(new EnginePaths(Root), new NodeToolchain(Tool, Counters), Resolved, Graph)
+    const Actions = await new IRBuilder(Paths, new NodeToolchain(Tool, Counters), Resolved, Graph)
         .Build(Graph.Build());
     Assert.ok(Actions.some((Action) => Action.Id === "Entry::custom::Generate"));
     Assert.ok(Actions.some((Action) => Action.Type === "compile" && Action.Inputs[0].endsWith("generated.cpp")));
@@ -206,11 +208,11 @@ else process.exit(8);
     const First = RunNinja(Ninja, Result.NinjaPath);
     Assert.equal(First.status, 0, `${First.stdout}\n${First.stderr}`);
     Assert.deepEqual(
-        JSON.parse(await Fs.readFile(Path.join(Root, "Engine", "Intermediate", "Build", "Win64", "Debug", "Generated", "Entry", "argv.json"), "utf-8")),
+        JSON.parse(await Fs.readFile(Path.join(GeneratedDir, "argv.json"), "utf-8")),
         ["space arg", "dollar$arg", "hash#arg", "amp&arg", "percent%PATH%arg", "caret^arg"],
     );
     Assert.equal(
-        await Fs.readFile(Path.join(Root, "Engine", "Intermediate", "Build", "Win64", "Debug", "Generated", "Entry", "cwd.txt"), "utf-8"),
+        await Fs.readFile(Path.join(GeneratedDir, "cwd.txt"), "utf-8"),
         WorkDir,
     );
     Assert.equal(await Count(Path.join(Counters, "generate.count")), 1);
@@ -230,7 +232,6 @@ else process.exit(8);
     Assert.equal(RunNinja(Ninja, Result.NinjaPath).status, 0);
     Assert.equal(await Count(Path.join(Counters, "generate.count")), 3);
 
-    const GeneratedDir = Path.join(Root, "Engine", "Intermediate", "Build", "Win64", "Debug", "Generated", "Entry");
     const DependencyOutput = Path.join(GeneratedDir, "dependency.stamp");
     const OrderCountBefore = await Count(Path.join(Counters, "order.count"));
     await TouchWithContent(DependencyOutput, "-direct-touch");
@@ -243,7 +244,7 @@ else process.exit(8);
     Assert.equal(await Count(Path.join(Counters, "generate.count")), 5, "deleting a secondary output must rerun its edge");
     Assert.equal(await Count(Path.join(Counters, "compile.count")), 5, "regenerated source/header must recompile");
 
-    const FailureOutput = Path.join(Root, "Engine", "Intermediate", "Build", "Win64", "Debug", "Generated", "failure.out");
+    const FailureOutput = Path.join(Paths.GeneratedOutputDirectory(Resolved), "failure.out");
     const FailureActions: BuildAction[] = [{
         Id: "Failure", Type: "custom", Inputs: [], Outputs: [FailureOutput],
         Command: [NodeExecutable, Tool, "fail"], WorkingDirectory: WorkDir,

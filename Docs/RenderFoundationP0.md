@@ -23,7 +23,7 @@ RFG/RAL P0 于 2026-08-06 关闭并冻结。冻结面为现有 RFG Record/Compil
 Engine\Builder\LimitlessBuilder.bat build --platform Win64 --config Debug --type Game
 ```
 
-以仓库根目录作为工作目录运行 `Engine\Binaries\Win64\LimitlessGame.exe`，至少渲染一帧后正常关闭窗口，再检查 `Firefly.log`。通过日志必须包含 `Vulkan validation messenger installed.`、对应 Pipeline/Pass 标记和 `Goodbye!`，且以下计数必须为 0：
+以仓库根目录作为工作目录运行 `Engine\Binaries\Win64\Debug\Limitless\Game\LimitlessGame.exe`，至少渲染一帧后正常关闭窗口，再检查 `Firefly.log`。通过日志必须包含 `Vulkan validation messenger installed.`、对应 Pipeline/Pass 标记和 `Goodbye!`，且以下计数必须为 0：
 
 ```powershell
 @(Select-String -Path Firefly.log -SimpleMatch '[VK Validation][Error]').Count

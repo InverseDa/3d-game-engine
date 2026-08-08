@@ -933,6 +933,11 @@ namespace RAL
         LE_LOG(LogRAL, Info, "CreateDevice succeeded.");
         return Device;
 	}
+
+	void DestroyResource(FRALResource* Resource) noexcept
+	{
+		delete Resource;
+	}
 }
 
 } // namespace LE

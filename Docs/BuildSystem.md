@@ -41,6 +41,13 @@ export default class CoreBuild extends ModuleBuild {
 
 LB 会递归发现全部 `Build.ts`，因此新增模块不需要维护集中式 include 列表。
 
+依赖消费者只继承依赖模块的 `ExportDefines`；模块自身的 `Defines`（包括 Editor DLL 的
+`*_API=dllexport`）不会泄漏给消费者。直接 public/private 依赖都参与当前模块的链接，
+之后只沿 public 依赖继续传播；`WithoutLinking` 只剪断链接传播，不影响编译所需的
+export defines 和 public include。Win64 DLL link action 同时声明 `.dll` 与 import `.lib`
+输出，消费者把 import `.lib` 的绝对路径作为 explicit action input，使 Ninja 能从文件
+producer 建立真实的构建顺序，而不是依赖并行时序碰巧正确。
+
 ### CustomActions 与生成源码
 
 模块通过强类型 `Configuration.CustomActions` 声明生成步骤。每项包含稳定 `Id`、
@@ -55,6 +62,14 @@ custom outputs 必须位于 `[engine.Temp]`、`[engine.Generated]`、`[module.Ge
 
 CustomActions 当前由 LB/Ninja 执行；生成的 VCXProj/Xcode 工程继续通过 LB build 命令
 进入同一 action graph，而不在 IDE 工程格式里维护第二份 custom-action 定义。
+
+二进制产物按 `Engine/Binaries/<Platform>/<Config>/<TargetDescriptor>/<TargetType>` 隔离，
+Ninja、object 和生成代码位于对应的
+`Engine/Intermediate/Build/<Platform>/<Config>/<TargetDescriptor>/<TargetType>`。variant identity
+使用已校验的 target descriptor `Name` 与 `TargetType`，不使用可能随配置变化的 `OutputName`。
+因此同一 descriptor 的 Game/Editor、不同 Program/Test descriptor，以及 Debug/Release 都不会
+复用模块库、DLL、对象、`build.ninja`、`compile_commands.json` 或 custom outputs。Visual Studio
+Clean 也只清理当前 configuration 的当前 target variant。
 
 ## 工具发现
 

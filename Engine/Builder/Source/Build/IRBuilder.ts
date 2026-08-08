@@ -5,7 +5,6 @@ import type {
     CustomActionDescriptor,
     ResolvedTarget,
     OutputType,
-    DependencyRef,
 } from "../Configuration/Types.ts";
 import { OutputType as OutputTypeEnum } from "../Configuration/Types.ts";
 import type { ResolvedModule, DependencyGraph } from "../Graph/DependencyGraph.ts";
@@ -39,34 +38,27 @@ export class IRBuilder {
         for (const Module of Modules) {
             await this.BuildModule(Module);
         }
-        this.BuildExeTarget(Modules);
+        this.BuildExeTarget();
         return ValidateAndSortActions(this.Actions);
     }
 
-    private BuildExeTarget(Modules: ResolvedModule[]): void {
+    private BuildExeTarget(): void {
         const EntryModule = this.BuildTarget.Descriptor.EntryModule;
         const ExeName = this.BuildTarget.OutputName;
         const Target = this.BuildTarget.Target;
-        const BinaryDir = this.Paths.BinaryOutputDirectory(Target.Platform);
+        const BinaryDir = this.Paths.BinaryOutputDirectory(this.BuildTarget);
         const ExePath = Path.join(BinaryDir, ExeName + ".exe");
 
-        const LibFiles: string[] = [];
         const ObjFiles: string[] = [];
         const DepIds: string[] = [];
         for (const Action of this.Actions) {
             if (Action.Type === "compile" && Action.Id.startsWith(`${EntryModule}::compile::`)) {
                 ObjFiles.push(Action.Outputs[0]);
                 DepIds.push(Action.Id);
-            } else if (Action.Type === "archive" || Action.Type === "link") {
-                if (!Action.Id.startsWith(`${EntryModule}::`)) {
-                    LibFiles.push(Action.Outputs[0]);
-                }
-                DepIds.push(Action.Id);
             } else if (Action.Type === "custom") {
                 DepIds.push(Action.Id);
             }
         }
-        LibFiles.reverse();
 
         if (ObjFiles.length === 0) {
             throw new Error(
@@ -74,28 +66,25 @@ export class IRBuilder {
             );
         }
 
-        const ExternalLibs: string[] = [];
-        const LibPaths: string[] = [BinaryDir];
-        for (const Module of Modules) {
-            ExternalLibs.push(...Module.Configuration.LibraryFiles);
-            for (const Lp of Module.Configuration.LibraryPaths) {
-                if (!LibPaths.includes(Lp)) LibPaths.push(Lp);
-            }
-        }
-        LibPaths.push(...this.Toolchain.GetSystemLibPaths());
-
         const SystemLibs = Target.Platform === "Win64"
             ? ["user32.lib", "gdi32.lib", "shell32.lib", "ole32.lib"]
             : [];
+        const Entry = this.Graph.Get(EntryModule);
+        if (!Entry) {
+            throw new Error(`Target "${this.BuildTarget.Descriptor.Name}" entry module "${EntryModule}" was not resolved.`);
+        }
+        const LinkInputs = this.CollectLinkDependencyArtifacts(Entry);
+        const ExternalLibs = this.CollectExternalLibraryFiles(Entry);
+        const LibPaths = this.CollectLibraryPaths(Entry);
 
         const Command = this.Toolchain.MakeLinkCommand(
-            ExePath, ObjFiles, [...LibFiles, ...ExternalLibs, ...SystemLibs], LibPaths, Target, false,
+            ExePath, ObjFiles, [...LinkInputs, ...ExternalLibs, ...SystemLibs], LibPaths, Target, false,
         );
 
         this.Actions.push({
             Id: `${this.BuildTarget.Descriptor.Name}::exe`,
             Type: "link",
-            Inputs: [...ObjFiles, ...LibFiles],
+            Inputs: [...ObjFiles, ...LinkInputs],
             Outputs: [ExePath],
             Command: [this.Toolchain.FindLinker(), ...Command],
             WorkingDirectory: this.Paths.Root,
@@ -121,10 +110,7 @@ export class IRBuilder {
 
         const IncludePaths = this.CollectIncludePaths(Module);
         const Defines = this.CollectDefines(Module);
-        const TempDir = this.Paths.TemporaryOutputDirectory(
-            this.BuildTarget.Target.Platform,
-            this.BuildTarget.Target.Optimization,
-        );
+        const TempDir = this.Paths.TemporaryOutputDirectory(this.BuildTarget);
         const ModuleTempDir = Path.join(TempDir, Name);
         const ProducerByOutput = new Map<string, BuildAction>();
         for (const Action of CustomActions) {
@@ -172,7 +158,7 @@ export class IRBuilder {
     ): Promise<void> {
         const Name = Module.Instance.Descriptor.Name;
         const Conf = Module.Configuration;
-        const BinaryDir = this.Paths.BinaryOutputDirectory(this.BuildTarget.Target.Platform);
+        const BinaryDir = this.Paths.BinaryOutputDirectory(this.BuildTarget);
         const Ext = Conf.Output === OutputTypeEnum.Dll ? ".dll"
                             : Conf.Output === OutputTypeEnum.Exe ? ".exe"
                             : ".lib";
@@ -191,7 +177,8 @@ export class IRBuilder {
                 Description: `LIB ${Name}`,
             });
         } else {
-            const LibFiles = this.CollectLibraryFiles(Module);
+            const LinkInputs = this.CollectLinkDependencyArtifacts(Module);
+            const LibFiles = [...LinkInputs, ...this.CollectExternalLibraryFiles(Module)];
             const LibPaths = this.CollectLibraryPaths(Module);
             const Command = this.Toolchain.MakeLinkCommand(
                 OutputPath, ObjectFiles, LibFiles, LibPaths,
@@ -200,8 +187,11 @@ export class IRBuilder {
             this.Actions.push({
                 Id: `${Name}::link`,
                 Type: "link",
-                Inputs: ObjectFiles,
-                Outputs: [OutputPath],
+                Inputs: [...ObjectFiles, ...LinkInputs],
+                Outputs: this.Toolchain.GetLinkOutputs?.(
+                    OutputPath,
+                    Conf.Output === OutputTypeEnum.Dll,
+                ) ?? [OutputPath],
                 Command: [this.Toolchain.FindLinker(), ...Command],
                 WorkingDirectory: this.Paths.Root,
                 DependsOn: this.CompileActionIds(Name),
@@ -283,16 +273,15 @@ export class IRBuilder {
     }
 
     private ExpandPathVariables(Value: string, SourceRoot: string, ModuleName?: string): string {
-        const Target = this.BuildTarget.Target;
-        const Temp = this.Paths.TemporaryOutputDirectory(Target.Platform, Target.Optimization);
-        const Generated = this.Paths.GeneratedOutputDirectory(Target.Platform, Target.Optimization);
+        const Temp = this.Paths.TemporaryOutputDirectory(this.BuildTarget);
+        const Generated = this.Paths.GeneratedOutputDirectory(this.BuildTarget);
         const Variables: Record<string, string> = {
             "[module.SourceRoot]": SourceRoot,
             "[project.SourceRootPath]": SourceRoot,
             "[engine.Root]": this.Paths.Root,
             "[engine.Source]": this.Paths.SourceDirectory,
             "[engine.Temp]": Temp,
-            "[engine.Binaries]": this.Paths.BinaryOutputDirectory(Target.Platform),
+            "[engine.Binaries]": this.Paths.BinaryOutputDirectory(this.BuildTarget),
             "[engine.Generated]": Generated,
             "[module.Generated]": Path.join(Generated, ModuleName ?? Path.basename(SourceRoot)),
         };
@@ -306,11 +295,10 @@ export class IRBuilder {
     }
 
     private IsAllowedCustomOutput(Output: string): boolean {
-        const Target = this.BuildTarget.Target;
         return [
-            this.Paths.TemporaryOutputDirectory(Target.Platform, Target.Optimization),
-            this.Paths.GeneratedOutputDirectory(Target.Platform, Target.Optimization),
-            this.Paths.BinaryOutputDirectory(Target.Platform),
+            this.Paths.TemporaryOutputDirectory(this.BuildTarget),
+            this.Paths.GeneratedOutputDirectory(this.BuildTarget),
+            this.Paths.BinaryOutputDirectory(this.BuildTarget),
         ].some((Root) => this.IsWithin(Root, Output));
     }
 
@@ -326,10 +314,7 @@ export class IRBuilder {
 
     private SourceIdentity(SourceRoot: string, Source: string): string {
         if (this.IsWithin(SourceRoot, Source)) return Path.relative(SourceRoot, Source).replace(/\\/g, "/");
-        const GeneratedRoot = this.Paths.GeneratedOutputDirectory(
-            this.BuildTarget.Target.Platform,
-            this.BuildTarget.Target.Optimization,
-        );
+        const GeneratedRoot = this.Paths.GeneratedOutputDirectory(this.BuildTarget);
         if (this.IsWithin(GeneratedRoot, Source)) {
             return `@generated/${Path.relative(GeneratedRoot, Source).replace(/\\/g, "/")}`;
         }
@@ -369,24 +354,14 @@ export class IRBuilder {
 
     private CollectTransitiveIncludePaths(Module: ResolvedModule): string[] {
         const Result: string[] = [];
-        const Visited = new Set<string>();
-        const Visit = (M: ResolvedModule) => {
-            for (const Dep of M.Configuration.PublicDependencies) {
-                const Name = typeof Dep === "string" ? Dep : Dep.Name;
-                if (Visited.has(Name)) continue;
-                Visited.add(Name);
-                const Resolved = this.Graph.Get(Name);
-                if (!Resolved) continue;
-                const DepRoot = Resolved.Instance.SourceRoot;
-                for (const Inc of Resolved.Configuration.IncludePaths) {
-                    Result.push(this.ResolvePathVar(Inc, DepRoot));
-                }
-                const PubDir = Path.join(DepRoot, "Public");
-                if (Fs.existsSync(PubDir)) Result.push(PubDir);
-                Visit(Resolved);
+        for (const Dependency of this.Graph.GetCompileDependencyClosure(Module)) {
+            const DependencyRoot = Dependency.Instance.SourceRoot;
+            for (const Include of Dependency.Configuration.IncludePaths) {
+                Result.push(this.ResolvePathVar(Include, DependencyRoot));
             }
-        };
-        Visit(Module);
+            const PublicDirectory = Path.join(DependencyRoot, "Public");
+            if (Fs.existsSync(PublicDirectory)) Result.push(PublicDirectory);
+        }
         return Result;
     }
 
@@ -405,19 +380,37 @@ export class IRBuilder {
         return Result;
     }
 
-    private CollectLibraryFiles(Module: ResolvedModule): string[] {
-        const Result: string[] = [...Module.Configuration.LibraryFiles];
-        const LinkDeps = this.Graph.GetLinkDependencies(Module);
-        for (const DepName of LinkDeps) {
-            Result.push(`${DepName}.lib`);
-        }
-        return Result;
+    private CollectLinkDependencyArtifacts(Module: ResolvedModule): string[] {
+        return this.Graph.GetLinkDependencies(Module).map((DependencyName) => {
+            const Dependency = this.Graph.Get(DependencyName);
+            if (!Dependency) {
+                throw new Error(`Module "${Module.Instance.Descriptor.Name}" has unresolved link dependency "${DependencyName}".`);
+            }
+            const BinaryDir = this.Paths.BinaryOutputDirectory(this.BuildTarget);
+            if (Dependency.Configuration.Output === OutputTypeEnum.Dll
+                && this.BuildTarget.Target.Platform !== "Win64") {
+                return Path.join(BinaryDir, `${DependencyName}.dll`);
+            }
+            return Path.join(BinaryDir, `${DependencyName}.lib`);
+        });
+    }
+
+    private CollectExternalLibraryFiles(Module: ResolvedModule): string[] {
+        return [...new Set([
+            ...Module.Configuration.LibraryFiles,
+            ...this.Graph.GetLinkDependencyClosure(Module)
+                .flatMap((Dependency) => Dependency.Configuration.LibraryFiles),
+        ])];
     }
 
     private CollectLibraryPaths(Module: ResolvedModule): string[] {
-        const Result: string[] = [...Module.Configuration.LibraryPaths];
-        Result.push(this.Paths.BinaryOutputDirectory(this.BuildTarget.Target.Platform));
+        const Result: string[] = [
+            ...Module.Configuration.LibraryPaths,
+            ...this.Graph.GetLinkDependencyClosure(Module)
+                .flatMap((Dependency) => Dependency.Configuration.LibraryPaths),
+        ];
+        Result.push(this.Paths.BinaryOutputDirectory(this.BuildTarget));
         Result.push(...this.Toolchain.GetSystemLibPaths());
-        return Result;
+        return [...new Set(Result)];
     }
 }

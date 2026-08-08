@@ -12,6 +12,10 @@ export function GetMSVCExecutableSubsystem(Target: Target): "/SUBSYSTEM:WINDOWS"
         : "/SUBSYSTEM:WINDOWS";
 }
 
+export function GetMSVCLinkOutputs(OutputFile: string, IsDll: boolean): string[] {
+    return IsDll ? [OutputFile, OutputFile.replace(/\.dll$/i, ".lib")] : [OutputFile];
+}
+
 export class MSVCToolchain implements IToolchain {
     public readonly Name = "MSVC";
     public readonly Platform = "Win64";
@@ -83,11 +87,18 @@ export class MSVCToolchain implements IToolchain {
         if (Target.Optimization === Optimization.Debug) {
             Arguments.push("/DEBUG");
         }
+        if (IsDll) {
+            Arguments.push(`/IMPLIB:${GetMSVCLinkOutputs(OutputFile, true)[1]}`);
+        }
         for (const LibraryPath of LibraryPaths) {
             Arguments.push(`/LIBPATH:${LibraryPath}`);
         }
         Arguments.push(`/OUT:${OutputFile}`, ...InputObjects, ...LibraryFiles);
         return Arguments;
+    }
+
+    public GetLinkOutputs(OutputFile: string, IsDll: boolean): string[] {
+        return GetMSVCLinkOutputs(OutputFile, IsDll);
     }
 
     public MakeArchiveCommand(OutputFile: string, InputObjects: string[]): string[] {

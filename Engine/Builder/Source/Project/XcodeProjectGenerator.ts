@@ -226,7 +226,7 @@ export class XcodeProjectGenerator {
             this.AppendTargetBuildConfiguration(
                 Lines,
                 Configuration,
-                ConfigurationTargets[Configuration].OutputName,
+                ConfigurationTargets[Configuration],
             );
         }
         Lines.push("/* End XCBuildConfiguration section */", "", "/* Begin XCConfigurationList section */");
@@ -266,11 +266,13 @@ export class XcodeProjectGenerator {
     private AppendTargetBuildConfiguration(
         Lines: string[],
         Configuration: "Debug" | "Release",
-        ProductName: string,
+        BuildTarget: ResolvedTarget,
     ): void {
         const ConfigId = PbxId("target-config", Configuration);
+        const ProductName = BuildTarget.OutputName;
+        const BinaryDirectory = this.ToBuildSettingPath(this.Paths.BinaryOutputDirectory(BuildTarget));
         Lines.push(`\t\t${ConfigId} /* ${Configuration} */ = {`, "\t\t\tisa = XCBuildConfiguration;", "\t\t\tbuildSettings = {");
-        Lines.push("\t\t\t\tCONFIGURATION_BUILD_DIR = \"$(SRCROOT)/Engine/Binaries/Mac\";", `\t\t\t\tCOPY_PHASE_STRIP = ${Configuration === "Debug" ? "NO" : "YES"};`, `\t\t\t\tDEBUG_INFORMATION_FORMAT = ${Configuration === "Debug" ? "dwarf" : "\"dwarf-with-dsym\""};`, "\t\t\t\tGENERATE_INFOPLIST_FILE = NO;", "\t\t\t\tMACH_O_TYPE = mh_execute;", `\t\t\t\tPRODUCT_NAME = ${PbxQuote(ProductName)};`, "\t\t\t\tSKIP_INSTALL = NO;", "\t\t\t};", `\t\t\tname = ${Configuration};`, "\t\t};");
+        Lines.push(`\t\t\t\tCONFIGURATION_BUILD_DIR = ${PbxQuote(BinaryDirectory)};`, `\t\t\t\tCOPY_PHASE_STRIP = ${Configuration === "Debug" ? "NO" : "YES"};`, `\t\t\t\tDEBUG_INFORMATION_FORMAT = ${Configuration === "Debug" ? "dwarf" : "\"dwarf-with-dsym\""};`, "\t\t\t\tGENERATE_INFOPLIST_FILE = NO;", "\t\t\t\tMACH_O_TYPE = mh_execute;", `\t\t\t\tPRODUCT_NAME = ${PbxQuote(ProductName)};`, "\t\t\t\tSKIP_INSTALL = NO;", "\t\t\t};", `\t\t\tname = ${Configuration};`, "\t\t};");
     }
 
     private AppendBuildSettingArray(Lines: string[], Name: string, Values: string[]): void {

@@ -188,7 +188,7 @@ async function GenerateIR(
 
     const Builder = new IRBuilder(Paths, Toolchain, BuildTarget, Graph);
     const Actions = await Builder.Build(SortedModules);
-    const OutputDirectory = Paths.TemporaryOutputDirectory(Target.Platform, Target.Optimization);
+    const OutputDirectory = Paths.TemporaryOutputDirectory(BuildTarget);
     const Backend = new NinjaBackend(Toolchain);
     const Result = await Backend.Generate(Actions, BuildTarget, { OutputDir: OutputDirectory });
     return { Actions, Backend, Result };

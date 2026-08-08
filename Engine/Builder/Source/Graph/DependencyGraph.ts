@@ -47,57 +47,58 @@ export class DependencyGraph {
     }
 
     public GetLinkDependencies(Module: ResolvedModule): string[] {
-        const Libraries: string[] = [];
-        const Visited = new Set<string>();
-        const Visit = (CurrentModule: ResolvedModule): void => {
-            for (const Dependency of CurrentModule.Configuration.PublicDependencies) {
-                if (IsWithoutLinking(Dependency)) {
-                    continue;
-                }
+        return this.GetLinkDependencyClosure(Module)
+            .filter((Dependency) => Dependency.Configuration.Output === ("Lib" as OutputType)
+                || Dependency.Configuration.Output === ("Dll" as OutputType))
+            .map((Dependency) => Dependency.Instance.Descriptor.Name);
+    }
 
-                const Name = GetDependencyName(Dependency);
-                if (Visited.has(Name)) {
-                    continue;
-                }
-                Visited.add(Name);
+    /** Direct public/private link dependencies followed by their public surface. */
+    public GetLinkDependencyClosure(Module: ResolvedModule): ResolvedModule[] {
+        return this.CollectDependencyClosure(Module, true);
+    }
 
-                const Resolved = this.ResolvedModules.get(Name);
-                if (!Resolved) {
-                    continue;
-                }
-                if (Resolved.Configuration.Output === ("Lib" as OutputType)) {
-                    Libraries.push(Name);
-                }
-                Visit(Resolved);
-            }
-        };
-
-        Visit(Module);
-        return Libraries;
+    /** Compile-visible dependencies; WithoutLinking affects linking only. */
+    public GetCompileDependencyClosure(Module: ResolvedModule): ResolvedModule[] {
+        return this.CollectDependencyClosure(Module, false);
     }
 
     public GetTransitiveExportDefines(Module: ResolvedModule): Record<string, string> {
         const Defines: Record<string, string> = {};
-        const Visited = new Set<string>();
-        const Visit = (CurrentModule: ResolvedModule): void => {
-            for (const Dependency of CurrentModule.Configuration.PublicDependencies) {
-                const Name = GetDependencyName(Dependency);
-                if (Visited.has(Name)) {
-                    continue;
-                }
-                Visited.add(Name);
+        for (const Resolved of this.GetCompileDependencyClosure(Module)) {
+            Object.assign(Defines, Resolved.Configuration.ExportDefines);
+        }
+        return Defines;
+    }
 
-                const Resolved = this.ResolvedModules.get(Name);
-                if (!Resolved) {
-                    continue;
-                }
-                Object.assign(Defines, Resolved.Configuration.ExportDefines, Resolved.Configuration.Defines);
-                Visit(Resolved);
+    private CollectDependencyClosure(Module: ResolvedModule, ForLinking: boolean): ResolvedModule[] {
+        const Results: ResolvedModule[] = [];
+        const Visited = new Set<string>();
+        const Visit = (Dependency: DependencyRef): void => {
+            if (ForLinking && IsWithoutLinking(Dependency)) {
+                return;
+            }
+            const Name = GetDependencyName(Dependency);
+            if (Visited.has(Name)) {
+                return;
+            }
+            Visited.add(Name);
+            const Resolved = this.ResolvedModules.get(Name);
+            if (!Resolved) {
+                return;
+            }
+            Results.push(Resolved);
+            for (const PublicDependency of Resolved.Configuration.PublicDependencies) {
+                Visit(PublicDependency);
             }
         };
-
-        Visit(Module);
-        return Defines;
+        for (const Dependency of [
+            ...Module.Configuration.PublicDependencies,
+            ...Module.Configuration.PrivateDependencies,
+        ]) {
+            Visit(Dependency);
+        }
+        return Results;
     }
 
     private ResolveAll(): void {

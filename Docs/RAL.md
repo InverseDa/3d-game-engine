@@ -149,7 +149,7 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
   - `GetCurrentBackBufferView()`：获取当前帧的后备缓冲 `FRALTextureView`。
   - `Present()`：提交呈现。
   - `Resize(uint32 Width, uint32 Height)`：窗口尺寸变化时重建 Swapchain。
-- **描述符（FRALSwapchainDesc）**：`FRALSurfaceDesc`（含 SurfaceType 与平台句柄）、尺寸、BackBufferFormat、`bEnableVsync`。
+- **描述符（FRALSwapchainDesc）**：`FPlatformSurface`（含 surface type 与 opaque 平台句柄）、尺寸、BackBufferFormat、`bEnableVsync`。
 - **Vulkan 实现**：`FVulkanRALSwapchain` 管理 `VkSurfaceKHR`、`VkSwapchainKHR`、后备 `VkImage` 与对应的 `FVulkanRALTextureView`。内部使用双信号量（ImageAvailable / RenderFinished）协调 Acquire/Present。`Present` 当前在提交后直接调用，无显式等待 `RenderFinished` 信号量（依赖上层 `Queue->WaitIdle()` 同步）。
 
 ---
@@ -171,7 +171,10 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 | `CreateSampler()` | 创建采样器。 |
 | `GetBindlessHeapGPUDescriptor()` / `AllocateBindlessIndex()` | Bindless 支持接口。 |
 
-工厂入口：`RAL::CreateDevice()`，当前硬编码返回 `FVulkanRALDevice`。
+工厂入口：`RAL::CreateDevice()`，当前硬编码返回 `FVulkanRALDevice`。所有由 RAL backend
+创建并以 `FRALResource*` 暴露的对象必须通过 `RAL::DestroyResource()` 释放；该导出函数
+在 RAL 模块内执行 null-safe 的 virtual destructor 路径，避免 Editor DLL consumer 跨模块
+裸 `delete`。
 
 ### 5.2 Queue（FRALQueue）
 
@@ -232,8 +235,8 @@ RAL 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 
 | 平台 | Instance 扩展 | Surface 类型 |
 |-----|--------------|-------------|
-| Windows | `VK_KHR_surface`、`VK_KHR_win32_surface`、`VK_EXT_debug_utils`（Validation） | `ERALSurfaceType::Win32` |
-| macOS | `VK_KHR_surface`、`VK_EXT_metal_surface`、`VK_KHR_portability_enumeration`、`VK_EXT_debug_utils`（Validation） | `ERALSurfaceType::MetalLayer` |
+| Windows | `VK_KHR_surface`、`VK_KHR_win32_surface`、`VK_EXT_debug_utils`（Validation） | `EPlatformSurfaceType::Win32` |
+| macOS | `VK_KHR_surface`、`VK_EXT_metal_surface`、`VK_KHR_portability_enumeration`、`VK_EXT_debug_utils`（Validation） | `EPlatformSurfaceType::MetalLayer` |
 
 ---
 

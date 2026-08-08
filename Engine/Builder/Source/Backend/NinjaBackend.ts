@@ -180,6 +180,7 @@ export class NinjaBackend implements IBackend {
             "rule link",
             "    command = $Cmd",
             "    description = $Desc",
+            "    restat = 1",
             "",
             "rule archive",
             "    command = $Cmd",

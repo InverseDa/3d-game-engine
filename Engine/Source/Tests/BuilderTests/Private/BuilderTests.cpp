@@ -1,3 +1,4 @@
+#include "Application/ApplicationMinimal.h"
 #include "Containers/Array.h"
 #include "Containers/HashMap.h"
 #include "Containers/HashSet.h"
@@ -10,6 +11,8 @@
 #include "Math/Matrix.h"
 #include "Math/Quaternion.h"
 #include "Math/Vector.h"
+#include "Platform/Platform.h"
+#include "RAL/RALDevice.h"
 #include "Templates/Function.h"
 #include "Types/EngineTypes.h"
 
@@ -1385,6 +1388,697 @@ int RunMathLayoutTests()
         "Canonical LE::Math types are directly consumable");
 }
 
+int RunPlatformContractsTests()
+{
+    int Failures = 0;
+
+    LE::FPlatformEventQueue Events;
+    Failures += Expect(Events.IsEmpty(), "Platform event queue starts empty");
+
+    LE::FPlatformEvent First;
+    First.Type = LE::EPlatformEventType::Resized;
+    First.WindowId = 17;
+    First.Width = 1280;
+    First.Height = 720;
+    LE::FPlatformEvent Second;
+    Second.Type = LE::EPlatformEventType::Minimized;
+    Second.WindowId = 17;
+    Events.Push(First);
+    Events.Push(Second);
+    Failures += Expect(Events.Size() == 2, "Platform event queue records count");
+
+    LE::FPlatformEvent Polled;
+    Failures += Expect(
+        Events.Poll(Polled) &&
+            Polled.Type == LE::EPlatformEventType::Resized &&
+            Polled.WindowId == 17 &&
+            Polled.Width == 1280 &&
+            Polled.Height == 720,
+        "Platform event queue preserves FIFO payload");
+    Failures += Expect(
+        Events.Poll(Polled) && Polled.Type == LE::EPlatformEventType::Minimized,
+        "Platform event queue preserves FIFO order");
+    Failures += Expect(!Events.Poll(Polled), "Platform event queue reports drain");
+
+    Events.Push(First);
+    Events.Clear();
+    Failures += Expect(Events.IsEmpty(), "Platform event queue clears safely");
+
+    LE::FPlatformSurface Surface;
+    Failures += Expect(!Surface.IsValid(), "Unknown platform surface is invalid");
+    Surface.Type = LE::EPlatformSurfaceType::Win32;
+    Surface.WindowHandle = reinterpret_cast<void*>(static_cast<std::uintptr_t>(1));
+    Failures += Expect(Surface.IsValid(), "Win32 platform surface requires window handle");
+    Surface.Type = LE::EPlatformSurfaceType::MetalLayer;
+    Failures += Expect(!Surface.IsValid(), "Metal platform surface requires layer handle");
+    Surface.LayerHandle = reinterpret_cast<void*>(static_cast<std::uintptr_t>(2));
+    Failures += Expect(Surface.IsValid(), "Metal platform surface accepts opaque handles");
+
+    const double BeforeSleep = LE::FPlatformTime::Seconds();
+    LE::FPlatformTime::SleepForMilliseconds(2);
+    const double AfterSleep = LE::FPlatformTime::Seconds();
+    Failures += Expect(AfterSleep > BeforeSleep, "Platform monotonic time advances across sleep");
+    Failures += Expect(
+        LE::FPlatformTime::Seconds() >= AfterSleep,
+        "Platform monotonic time never moves backwards");
+
+    return Failures;
+}
+
+struct FRuntimeModuleTestContext
+{
+    LE::Array<int>* Events = nullptr;
+    int StartEvent = 0;
+    int StopEvent = 0;
+    bool bFailStartup = false;
+    bool bActive = false;
+    int StartupCount = 0;
+    int ShutdownCount = 0;
+};
+
+bool StartRuntimeModule(void* const Context) noexcept
+{
+    FRuntimeModuleTestContext& Module = *static_cast<FRuntimeModuleTestContext*>(Context);
+    ++Module.StartupCount;
+    Module.bActive = true;
+    Module.Events->PushBack(Module.StartEvent);
+    return !Module.bFailStartup;
+}
+
+void StopRuntimeModule(void* const Context) noexcept
+{
+    FRuntimeModuleTestContext& Module = *static_cast<FRuntimeModuleTestContext*>(Context);
+    ++Module.ShutdownCount;
+    Module.bActive = false;
+    Module.Events->PushBack(Module.StopEvent);
+}
+
+bool StartStatelessRuntimeModule(void*) noexcept
+{
+    return true;
+}
+
+void StopStatelessRuntimeModule(void*) noexcept
+{
+}
+
+LE::FRuntimeModuleDescriptor MakeRuntimeModuleDescriptor(
+    const LE::StringView Name,
+    FRuntimeModuleTestContext& Context,
+    const LE::Span<const LE::StringView> Dependencies = {})
+{
+    LE::FRuntimeModuleDescriptor Descriptor;
+    Descriptor.Name = Name;
+    Descriptor.Dependencies = Dependencies;
+    Descriptor.Context = &Context;
+    Descriptor.Startup = &StartRuntimeModule;
+    Descriptor.Shutdown = &StopRuntimeModule;
+    return Descriptor;
+}
+
+bool EventsEqual(const LE::Array<int>& Events, const int* const Expected, const std::size_t Count)
+{
+    if (Events.Size() != Count)
+    {
+        return false;
+    }
+    for (std::size_t Index = 0; Index < Count; ++Index)
+    {
+        if (Events[Index] != Expected[Index])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+int RunRuntimeModuleTests()
+{
+    int Failures = 0;
+
+    {
+        LE::Array<int> Events;
+        FRuntimeModuleTestContext A{ &Events, 1, -1 };
+        FRuntimeModuleTestContext B{ &Events, 2, -2 };
+        FRuntimeModuleTestContext C{ &Events, 3, -3 };
+        FRuntimeModuleTestContext D{ &Events, 4, -4 };
+        FRuntimeModuleTestContext E{ &Events, 5, -5 };
+        const LE::StringView CDependencies[] = { "A" };
+        const LE::StringView DDependencies[] = { "A" };
+        const LE::StringView EDependencies[] = { "D", "B", "C" };
+
+        LE::FRuntimeModuleRegistry Registry;
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            "E", E, LE::Span<const LE::StringView>(EDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            "D", D, LE::Span<const LE::StringView>(DDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            "C", C, LE::Span<const LE::StringView>(CDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("B", B)));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A)));
+
+        const int StartupOrder[] = { 1, 2, 3, 4, 5 };
+        Failures += Expect(
+            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::Success &&
+                Registry.GetState() == LE::ERuntimeModuleRegistryState::Running &&
+                EventsEqual(Events, StartupOrder, 5),
+            "Runtime modules use registration-independent lexical topological order");
+        Failures += Expect(
+            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::InvalidState,
+            "Runtime module registry rejects repeated startup");
+        Failures += Expect(
+            Registry.RegisterModule(MakeRuntimeModuleDescriptor("Later", A)) ==
+                LE::ERuntimeModuleRegisterResult::InvalidState,
+            "Runtime module registry rejects registration after startup");
+
+        Registry.ShutdownAll();
+        Registry.ShutdownAll();
+        const int FullOrder[] = { 1, 2, 3, 4, 5, -5, -4, -3, -2, -1 };
+        Failures += Expect(
+            EventsEqual(Events, FullOrder, 10) &&
+                Registry.GetState() == LE::ERuntimeModuleRegistryState::Shutdown,
+            "Runtime modules shut down in strict reverse order exactly once");
+    }
+
+    {
+        LE::FRuntimeModuleRegistry Registry;
+        LE::FRuntimeModuleDescriptor Descriptor;
+        Descriptor.Name = "7.Stateless_module-1";
+        Descriptor.Startup = &StartStatelessRuntimeModule;
+        Descriptor.Shutdown = &StopStatelessRuntimeModule;
+        Failures += Expect(
+            Registry.RegisterModule(Descriptor) == LE::ERuntimeModuleRegisterResult::Success &&
+                Registry.StartupAll() == LE::ERuntimeModuleStartupResult::Success,
+            "Runtime module identifier grammar accepts readable ASCII and null context");
+    }
+
+    {
+        LE::Array<int> Events;
+        FRuntimeModuleTestContext A{ &Events, 1, -1 };
+        {
+            LE::FRuntimeModuleRegistry Registry;
+            static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A)));
+            static_cast<void>(Registry.StartupAll());
+        }
+        const int DestructorOrder[] = { 1, -1 };
+        Failures += Expect(
+            EventsEqual(Events, DestructorOrder, 2) && A.ShutdownCount == 1,
+            "Runtime module registry destructor safely shuts down active modules");
+    }
+
+    {
+        LE::Array<int> Events;
+        FRuntimeModuleTestContext A{ &Events, 1, -1 };
+        FRuntimeModuleTestContext B{ &Events, 2, -2 };
+        LE::String ModuleAName("Owned.A");
+        LE::String ModuleBName("Owned.B");
+        LE::String DependencyName("Owned.A");
+        LE::StringView Dependencies[] = { DependencyName.View() };
+
+        LE::FRuntimeModuleRegistry Registry;
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            ModuleAName.View(), A)));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            ModuleBName.View(), B, LE::Span<const LE::StringView>(Dependencies))));
+
+        ModuleAName.Clear();
+        ModuleBName.Clear();
+        DependencyName.Clear();
+        Dependencies[0] = LE::StringView();
+
+        const int StartupOrder[] = { 1, 2 };
+        Failures += Expect(
+            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::Success &&
+                EventsEqual(Events, StartupOrder, 2),
+            "Runtime module registry owns copied names beyond borrowed descriptor lifetime");
+        Registry.ShutdownAll();
+    }
+
+    {
+        const LE::StringView InvalidNames[] = {
+            LE::StringView(), ".Leading", "_Leading", "-Leading", "Has space",
+            LE::StringView("A\0B", 3),
+        };
+        for (const LE::StringView InvalidName : InvalidNames)
+        {
+            LE::FRuntimeModuleRegistry Registry;
+            LE::FRuntimeModuleDescriptor Descriptor;
+            Descriptor.Name = InvalidName;
+            Descriptor.Startup = &StartStatelessRuntimeModule;
+            Descriptor.Shutdown = &StopStatelessRuntimeModule;
+            Failures += Expect(
+                Registry.RegisterModule(Descriptor) ==
+                    LE::ERuntimeModuleRegisterResult::InvalidDescriptor &&
+                    Registry.StartupAll() ==
+                    LE::ERuntimeModuleStartupResult::InvalidRegistration,
+                "Runtime module identifier grammar rejects empty, separator-leading, and unsafe names");
+        }
+    }
+
+    {
+        LE::Array<int> Events;
+        FRuntimeModuleTestContext A{ &Events, 1, -1 };
+        const LE::StringView EmptyDependency[] = { LE::StringView() };
+        const LE::StringView DuplicateDependencies[] = { "A", "A" };
+
+        LE::FRuntimeModuleRegistry EmptyDependencyRegistry;
+        Failures += Expect(
+            EmptyDependencyRegistry.RegisterModule(MakeRuntimeModuleDescriptor(
+                "A", A, LE::Span<const LE::StringView>(EmptyDependency))) ==
+                LE::ERuntimeModuleRegisterResult::InvalidDescriptor &&
+                EmptyDependencyRegistry.StartupAll() ==
+                LE::ERuntimeModuleStartupResult::InvalidRegistration && Events.IsEmpty(),
+            "Runtime module registry rejects empty dependency names before startup");
+
+        LE::FRuntimeModuleRegistry DuplicateDependencyRegistry;
+        Failures += Expect(
+            DuplicateDependencyRegistry.RegisterModule(MakeRuntimeModuleDescriptor(
+                "B", A, LE::Span<const LE::StringView>(DuplicateDependencies))) ==
+                LE::ERuntimeModuleRegisterResult::InvalidDescriptor &&
+                DuplicateDependencyRegistry.StartupAll() ==
+                LE::ERuntimeModuleStartupResult::InvalidRegistration && Events.IsEmpty(),
+            "Runtime module registry rejects duplicate dependency names before startup");
+
+        LE::FRuntimeModuleRegistry NullCallbackRegistry;
+        LE::FRuntimeModuleDescriptor NullCallbackDescriptor;
+        NullCallbackDescriptor.Name = "Null.Callback";
+        NullCallbackDescriptor.Shutdown = &StopStatelessRuntimeModule;
+        Failures += Expect(
+            NullCallbackRegistry.RegisterModule(NullCallbackDescriptor) ==
+                LE::ERuntimeModuleRegisterResult::InvalidDescriptor &&
+                NullCallbackRegistry.StartupAll() ==
+                LE::ERuntimeModuleStartupResult::InvalidRegistration,
+            "Runtime module registry rejects null callbacks before startup");
+    }
+
+    {
+        LE::Array<int> Events;
+        FRuntimeModuleTestContext A{ &Events, 1, -1 };
+        const LE::StringView MissingDependencies[] = { "Missing" };
+        LE::FRuntimeModuleRegistry Registry;
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            "A", A, LE::Span<const LE::StringView>(MissingDependencies))));
+        Failures += Expect(
+            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::MissingDependency &&
+                Events.IsEmpty() && Registry.GetDiagnosticModuleName() == LE::StringView("A") &&
+                Registry.GetDiagnosticDependencyName() == LE::StringView("Missing"),
+            "Runtime module missing dependency fails before startup with owned diagnostics");
+    }
+
+    {
+        LE::Array<int> Events;
+        FRuntimeModuleTestContext A{ &Events, 1, -1 };
+        FRuntimeModuleTestContext B{ &Events, 2, -2 };
+        const LE::StringView ADependencies[] = { "B" };
+        const LE::StringView BDependencies[] = { "A" };
+        LE::FRuntimeModuleRegistry Registry;
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            "B", B, LE::Span<const LE::StringView>(BDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            "A", A, LE::Span<const LE::StringView>(ADependencies))));
+        Failures += Expect(
+            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::DependencyCycle &&
+                Events.IsEmpty() && Registry.GetDiagnosticModuleName() == LE::StringView("A"),
+            "Runtime module cycles fail before startup with deterministic diagnostics");
+    }
+
+    {
+        LE::Array<int> Events;
+        FRuntimeModuleTestContext A{ &Events, 1, -1 };
+        FRuntimeModuleTestContext B{ &Events, 2, -2 };
+        FRuntimeModuleTestContext Failing{ &Events, 3, -3, true };
+        const LE::StringView BDependencies[] = { "A" };
+        const LE::StringView FailingDependencies[] = { "B" };
+        LE::FRuntimeModuleRegistry Registry;
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A)));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            "B", B, LE::Span<const LE::StringView>(BDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            "Failing", Failing, LE::Span<const LE::StringView>(FailingDependencies))));
+
+        const int Expected[] = { 1, 2, 3, -3, -2, -1 };
+        Failures += Expect(
+            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::ModuleStartupFailed &&
+                EventsEqual(Events, Expected, 6) && !A.bActive && !B.bActive &&
+                !Failing.bActive && Failing.ShutdownCount == 1 &&
+                Registry.GetDiagnosticModuleName() == LE::StringView("Failing"),
+            "Runtime module startup failure cleans partial state then rolls back exactly");
+        Registry.ShutdownAll();
+        Failures += Expect(
+            EventsEqual(Events, Expected, 6),
+            "Runtime module shutdown after rollback is idempotent");
+    }
+
+    {
+        LE::Array<int> Events;
+        FRuntimeModuleTestContext A{ &Events, 1, -1 };
+        LE::FRuntimeModuleRegistry Registry;
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A)));
+        const LE::ERuntimeModuleRegisterResult DuplicateResult =
+            Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("B", A)));
+        Failures += Expect(
+            DuplicateResult == LE::ERuntimeModuleRegisterResult::DuplicateName &&
+                Registry.GetLastRegisterResult() == LE::ERuntimeModuleRegisterResult::Success &&
+                Registry.GetRegistrationFailure() == LE::ERuntimeModuleRegisterResult::DuplicateName &&
+                Registry.StartupAll() == LE::ERuntimeModuleStartupResult::InvalidRegistration &&
+                Events.IsEmpty(),
+            "Runtime module first registration failure remains latched before callbacks");
+    }
+
+    return Failures;
+}
+
+double EngineLoopClockSamples[8]{};
+std::size_t EngineLoopClockSampleCount = 0;
+std::size_t EngineLoopClockReadCount = 0;
+
+void SetEngineLoopClockSamples(const double* Samples, const std::size_t Count)
+{
+    EngineLoopClockSampleCount = Count;
+    EngineLoopClockReadCount = 0;
+    for (std::size_t Index = 0; Index < Count; ++Index)
+    {
+        EngineLoopClockSamples[Index] = Samples[Index];
+    }
+}
+
+double ReadEngineLoopClock()
+{
+    if (EngineLoopClockSampleCount == 0)
+    {
+        return 0.0;
+    }
+    const std::size_t Index = EngineLoopClockReadCount < EngineLoopClockSampleCount
+        ? EngineLoopClockReadCount
+        : EngineLoopClockSampleCount - 1;
+    ++EngineLoopClockReadCount;
+    return EngineLoopClockSamples[Index];
+}
+
+class FFakeApplication final : public LE::IApplication
+{
+public:
+    enum class EModuleMode
+    {
+        Normal,
+        InvalidRegistration,
+        MissingDependency,
+        StartupFailure,
+    };
+
+    FFakeApplication()
+        : ModuleA{ &LifecycleEvents, 10, -10 }
+        , ModuleB{ &LifecycleEvents, 20, -20 }
+    {
+    }
+
+    void RegisterModules(LE::FRuntimeModuleRegistry& Registry) override
+    {
+        if (ModuleMode == EModuleMode::InvalidRegistration)
+        {
+            LE::FRuntimeModuleDescriptor InvalidDescriptor;
+            InvalidDescriptor.Name = ".Invalid";
+            InvalidDescriptor.Startup = &StartStatelessRuntimeModule;
+            InvalidDescriptor.Shutdown = &StopStatelessRuntimeModule;
+            static_cast<void>(Registry.RegisterModule(InvalidDescriptor));
+            return;
+        }
+
+        if (ModuleMode == EModuleMode::MissingDependency)
+        {
+            const LE::StringView MissingDependencies[] = { "Missing" };
+            static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+                "Test.A", ModuleA, LE::Span<const LE::StringView>(MissingDependencies))));
+            return;
+        }
+
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("Test.A", ModuleA)));
+        const LE::StringView ModuleBDependencies[] = { "Test.A" };
+        ModuleB.bFailStartup = ModuleMode == EModuleMode::StartupFailure;
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
+            "Test.B", ModuleB, LE::Span<const LE::StringView>(ModuleBDependencies))));
+    }
+
+    bool Initialize() override
+    {
+        ++InitializeCount;
+        LifecycleEvents.PushBack(30);
+        return bInitializeResult;
+    }
+
+    LE::EApplicationTickResult Tick(const LE::FApplicationTickContext& Context) override
+    {
+        Contexts.PushBack(Context);
+        if (bExitEnabled && Context.Phase == ExitPhase)
+        {
+            return LE::EApplicationTickResult::Exit;
+        }
+        return LE::EApplicationTickResult::Continue;
+    }
+
+    void Shutdown() noexcept override
+    {
+        ++ShutdownCount;
+        LifecycleEvents.PushBack(-30);
+    }
+
+    EModuleMode ModuleMode = EModuleMode::Normal;
+    bool bInitializeResult = true;
+    bool bExitEnabled = false;
+    LE::EApplicationFramePhase ExitPhase = LE::EApplicationFramePhase::Render;
+    int InitializeCount = 0;
+    int ShutdownCount = 0;
+    LE::Array<LE::FApplicationTickContext> Contexts;
+    LE::Array<int> LifecycleEvents;
+    FRuntimeModuleTestContext ModuleA;
+    FRuntimeModuleTestContext ModuleB;
+};
+
+int RunEngineLoopTests()
+{
+    int Failures = 0;
+
+    LE::RAL::DestroyResource(nullptr);
+    Failures += Expect(true, "RAL creator-side destruction accepts null resources");
+
+    {
+        const double Clock[] = { 10.0, 10.25 };
+        SetEngineLoopClockSamples(Clock, 2);
+        FFakeApplication Application;
+        LE::FEngineLoop EngineLoop;
+        LE::FEngineLoopConfig Config;
+        Config.TimeSource = &ReadEngineLoopClock;
+
+        Failures += Expect(
+            EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::Success &&
+                EngineLoop.GetState() == LE::EEngineLoopState::Running &&
+                Application.InitializeCount == 1 && EngineLoopClockReadCount == 0,
+            "EngineLoop initializes without sampling the frame clock");
+        Failures += Expect(
+            EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::InvalidState &&
+                Application.InitializeCount == 1,
+            "EngineLoop rejects reinitialization while running");
+        Failures += Expect(
+            EngineLoop.Tick() == LE::EEngineLoopTickResult::Continue &&
+                Application.Contexts.Size() == 3 && EngineLoopClockReadCount == 1,
+            "EngineLoop accepts one tick and samples the clock once");
+        Failures += Expect(
+            Application.Contexts[0].Phase == LE::EApplicationFramePhase::ProcessPlatformEvents &&
+                Application.Contexts[1].Phase == LE::EApplicationFramePhase::Update &&
+                Application.Contexts[2].Phase == LE::EApplicationFramePhase::Render,
+            "EngineLoop executes explicit phases in canonical order");
+        Failures += Expect(
+            Application.Contexts[0].FrameIndex == 0 &&
+                Application.Contexts[1].FrameIndex == 0 &&
+                Application.Contexts[2].FrameIndex == 0 &&
+                Application.Contexts[0].DeltaSeconds == 0.0 &&
+                Application.Contexts[2].ElapsedSeconds == 0.0,
+            "EngineLoop first frame shares index zero and zero time across phases");
+
+        Failures += Expect(
+            EngineLoop.Tick() == LE::EEngineLoopTickResult::Continue &&
+                Application.Contexts.Size() == 6 && EngineLoop.GetNextFrameIndex() == 2 &&
+                EngineLoopClockReadCount == 2,
+            "EngineLoop advances one frame index per accepted top-level tick");
+        Failures += Expect(
+            Application.Contexts[3].FrameIndex == 1 &&
+                Application.Contexts[3].DeltaSeconds == 0.25 &&
+                Application.Contexts[3].ElapsedSeconds == 0.25 &&
+                Application.Contexts[5].DeltaSeconds == Application.Contexts[3].DeltaSeconds &&
+                Application.Contexts[5].ElapsedSeconds == Application.Contexts[3].ElapsedSeconds,
+            "EngineLoop shares one elapsed-time context across every phase");
+
+        EngineLoop.Shutdown();
+        EngineLoop.Shutdown();
+        const int LifecycleOrder[] = { 10, 20, 30, -30, -20, -10 };
+        Failures += Expect(
+            Application.ShutdownCount == 1 && EngineLoop.GetState() == LE::EEngineLoopState::Shutdown &&
+                EventsEqual(Application.LifecycleEvents, LifecycleOrder, 6),
+            "EngineLoop starts modules before app and shuts app before reverse modules exactly once");
+    }
+
+    {
+        struct FExitCase
+        {
+            LE::EApplicationFramePhase Phase;
+            std::size_t ExpectedCallbacks;
+        };
+        const FExitCase ExitCases[] = {
+            { LE::EApplicationFramePhase::ProcessPlatformEvents, 1 },
+            { LE::EApplicationFramePhase::Update, 2 },
+            { LE::EApplicationFramePhase::Render, 3 },
+        };
+
+        for (const FExitCase& ExitCase : ExitCases)
+        {
+            const double Clock[] = { 5.0 };
+            SetEngineLoopClockSamples(Clock, 1);
+            FFakeApplication Application;
+            Application.bExitEnabled = true;
+            Application.ExitPhase = ExitCase.Phase;
+            LE::FEngineLoop EngineLoop;
+            LE::FEngineLoopConfig Config;
+            Config.TimeSource = &ReadEngineLoopClock;
+            static_cast<void>(EngineLoop.Initialize(Application, Config));
+
+            Failures += Expect(
+                EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit &&
+                    Application.Contexts.Size() == ExitCase.ExpectedCallbacks &&
+                    Application.Contexts.Back().Phase == ExitCase.Phase &&
+                    EngineLoop.GetNextFrameIndex() == 1,
+                "EngineLoop every exit phase short-circuits later phases and consumes the tick index");
+            const std::size_t ContextCount = Application.Contexts.Size();
+            const std::size_t ClockReads = EngineLoopClockReadCount;
+            Failures += Expect(
+                EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit &&
+                    Application.Contexts.Size() == ContextCount &&
+                    EngineLoopClockReadCount == ClockReads,
+                "EngineLoop performs zero callbacks and zero clock reads after exit");
+            EngineLoop.Shutdown();
+            EngineLoop.Shutdown();
+            const int ExitLifecycleOrder[] = { 10, 20, 30, -30, -20, -10 };
+            Failures += Expect(
+                Application.ShutdownCount == 1 &&
+                    EventsEqual(Application.LifecycleEvents, ExitLifecycleOrder, 6),
+                "EngineLoop phase exit shuts app before modules exactly once");
+        }
+    }
+
+    {
+        SetEngineLoopClockSamples(nullptr, 0);
+        FFakeApplication Application;
+        Application.bInitializeResult = false;
+        LE::FEngineLoop EngineLoop;
+        LE::FEngineLoopConfig Config;
+        Config.TimeSource = &ReadEngineLoopClock;
+        Failures += Expect(
+            EngineLoop.Initialize(Application, Config) ==
+                LE::EEngineLoopInitializeResult::ApplicationInitializeFailed &&
+                Application.InitializeCount == 1 && Application.ShutdownCount == 1 &&
+                EngineLoop.GetState() == LE::EEngineLoopState::ExitRequested,
+            "EngineLoop reports initialize failure and immediately unwinds once");
+        const int FailureLifecycleOrder[] = { 10, 20, 30, -30, -20, -10 };
+        Failures += Expect(
+            EventsEqual(Application.LifecycleEvents, FailureLifecycleOrder, 6),
+            "EngineLoop application init failure shuts app before reverse module cleanup");
+        Failures += Expect(
+            EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::InvalidState &&
+                Application.InitializeCount == 1 && Application.ShutdownCount == 1,
+            "EngineLoop rejects reinitialization after failed initialization");
+        Failures += Expect(
+            EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit &&
+                Application.Contexts.IsEmpty() && EngineLoopClockReadCount == 0,
+            "EngineLoop failed initialization cannot tick or sample time");
+        EngineLoop.Shutdown();
+        EngineLoop.Shutdown();
+        Failures += Expect(Application.ShutdownCount == 1,
+            "EngineLoop explicit Shutdown does not repeat failed-init unwind");
+    }
+
+    {
+        const double Clock[] = { 5.0, 4.0, 6.0 };
+        SetEngineLoopClockSamples(Clock, 3);
+        FFakeApplication Application;
+        LE::FEngineLoop EngineLoop;
+        LE::FEngineLoopConfig Config;
+        Config.TimeSource = &ReadEngineLoopClock;
+        static_cast<void>(EngineLoop.Initialize(Application, Config));
+        static_cast<void>(EngineLoop.Tick());
+        static_cast<void>(EngineLoop.Tick());
+        static_cast<void>(EngineLoop.Tick());
+        Failures += Expect(
+            Application.Contexts[3].DeltaSeconds == 0.0 &&
+                Application.Contexts[3].ElapsedSeconds == 0.0 &&
+                Application.Contexts[6].DeltaSeconds == 1.0 &&
+                Application.Contexts[6].ElapsedSeconds == 1.0,
+            "EngineLoop clamps backwards clock movement without double-counting elapsed time");
+        EngineLoop.Shutdown();
+    }
+
+    {
+        SetEngineLoopClockSamples(nullptr, 0);
+        FFakeApplication Application;
+        Application.ModuleMode = FFakeApplication::EModuleMode::InvalidRegistration;
+        LE::FEngineLoop EngineLoop;
+        LE::FEngineLoopConfig Config;
+        Config.TimeSource = &ReadEngineLoopClock;
+        Failures += Expect(
+            EngineLoop.Initialize(Application, Config) ==
+                LE::EEngineLoopInitializeResult::ModuleRegistrationFailed &&
+                Application.InitializeCount == 0 && Application.ShutdownCount == 0 &&
+                Application.LifecycleEvents.IsEmpty() &&
+                EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit,
+            "EngineLoop registration failure never enters application lifecycle or tick");
+        EngineLoop.Shutdown();
+        Failures += Expect(Application.ShutdownCount == 0,
+            "EngineLoop does not shut down an application whose lifecycle never started");
+    }
+
+    {
+        SetEngineLoopClockSamples(nullptr, 0);
+        FFakeApplication Application;
+        Application.ModuleMode = FFakeApplication::EModuleMode::MissingDependency;
+        LE::FEngineLoop EngineLoop;
+        LE::FEngineLoopConfig Config;
+        Config.TimeSource = &ReadEngineLoopClock;
+        Failures += Expect(
+            EngineLoop.Initialize(Application, Config) ==
+                LE::EEngineLoopInitializeResult::ModuleDependencyValidationFailed &&
+                Application.InitializeCount == 0 && Application.ShutdownCount == 0 &&
+                Application.LifecycleEvents.IsEmpty() &&
+                EngineLoop.GetModuleRegistry().GetDiagnosticModuleName() == LE::StringView("Test.A") &&
+                EngineLoop.GetModuleRegistry().GetDiagnosticDependencyName() == LE::StringView("Missing"),
+            "EngineLoop exposes detailed dependency failure without module or app startup");
+        EngineLoop.Shutdown();
+    }
+
+    {
+        SetEngineLoopClockSamples(nullptr, 0);
+        FFakeApplication Application;
+        Application.ModuleMode = FFakeApplication::EModuleMode::StartupFailure;
+        LE::FEngineLoop EngineLoop;
+        LE::FEngineLoopConfig Config;
+        Config.TimeSource = &ReadEngineLoopClock;
+        const int RollbackOrder[] = { 10, 20, -20, -10 };
+        Failures += Expect(
+            EngineLoop.Initialize(Application, Config) ==
+                LE::EEngineLoopInitializeResult::ModuleStartupFailed &&
+                Application.InitializeCount == 0 && Application.ShutdownCount == 0 &&
+                EventsEqual(Application.LifecycleEvents, RollbackOrder, 4) &&
+                EngineLoop.GetModuleRegistry().GetDiagnosticModuleName() == LE::StringView("Test.B") &&
+                EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit,
+            "EngineLoop module failure rolls back modules and never enters app lifecycle");
+        EngineLoop.Shutdown();
+        Failures += Expect(
+            EventsEqual(Application.LifecycleEvents, RollbackOrder, 4) &&
+                Application.ShutdownCount == 0,
+            "EngineLoop shutdown after module rollback is exactly once");
+    }
+
+    return Failures;
+}
+
 int RunProbe(const char* const Argument)
 {
     if (std::strcmp(Argument, "--oom-probe") == 0)
@@ -1518,6 +2212,9 @@ int main(const int ArgCount, char** Arguments)
     FailureCount += RunMathMatrixTests();
     FailureCount += RunMathQuaternionTests();
     FailureCount += RunMathLayoutTests();
+    FailureCount += RunPlatformContractsTests();
+    FailureCount += RunRuntimeModuleTests();
+    FailureCount += RunEngineLoopTests();
 
     if (FailureCount == 0)
     {

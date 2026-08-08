@@ -95,6 +95,10 @@ Test("typed custom actions produce custom-only work and compile generated source
                     Id: "Stamp", Inputs: [], Outputs: ["[module.Generated]/tool.stamp"],
                     Command: ["tool", "/flag", "[module.Generated]/tool.stamp"],
                 });
+                Configuration.CustomActions.push({
+                    Id: "BinaryStamp", Inputs: [], Outputs: ["[engine.Binaries]/tool.stamp"],
+                    Command: ["tool", "[engine.Binaries]/tool.stamp"],
+                });
             }),
             SourceRoot: ToolsRoot,
             BuildFilePath: Path.join(ToolsRoot, "Build.ts"),
@@ -127,13 +131,23 @@ Test("typed custom actions produce custom-only work and compile generated source
 
     const { Actions } = await BuildFixture(Root, Modules);
     const ToolsAction = Actions.find((A) => A.Id === "Tools::custom::Stamp");
+    const BinaryStamp = Actions.find((A) => A.Id === "Tools::custom::BinaryStamp");
     const GenerateOne = Actions.find((A) => A.Id === "Entry::custom::GenerateOne");
     const GenerateTwo = Actions.find((A) => A.Id === "Entry::custom::GenerateTwo");
     Assert.ok(ToolsAction, "Output.None modules must still emit custom actions");
+    Assert.equal(
+        BinaryStamp?.Outputs[0],
+        Path.join(Root, "Engine", "Binaries", "Win64", "Debug", "CustomTarget", "Program", "tool.stamp"),
+        "[engine.Binaries] must be scoped to the active configuration",
+    );
     Assert.ok(GenerateOne);
     Assert.ok(GenerateTwo);
     Assert.equal(GenerateOne.Command[1], "/flag", "opaque command options must not be path-normalized");
-    Assert.match(GenerateOne.Outputs[0], /Generated[\\/]Entry[\\/]one[\\/]foo\.cpp$/);
+    const VariantTemp = Path.join(
+        Root, "Engine", "Intermediate", "Build", "Win64", "Debug", "CustomTarget", "Program",
+    );
+    Assert.equal(GenerateOne.Outputs[0], Path.join(VariantTemp, "Generated", "Entry", "one", "foo.cpp"));
+    Assert.equal(GenerateTwo.Outputs[0], Path.join(VariantTemp, "other", "foo.cpp"));
     Assert.deepEqual(GenerateTwo.DependsOn, ["Entry::custom::GenerateOne", "Tools::custom::Stamp"]);
 
     const GeneratedCompiles = Actions.filter((A) =>

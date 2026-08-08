@@ -181,13 +181,14 @@ producer 和依赖环在完整 action graph 上统一校验，不依赖声明数
 | `[project.SourceRootPath]` | 兼容旧配置的当前模块源码根目录 |
 | `[engine.Root]` | 项目根目录 |
 | `[engine.Source]` | `Engine/Source` |
-| `[engine.Binaries]` | `Engine/Binaries/<Platform>` |
-| `[engine.Temp]` | `Engine/Intermediate/Build/<Platform>/<Config>` |
+| `[engine.Binaries]` | `Engine/Binaries/<Platform>/<Config>/<TargetDescriptor>/<TargetType>` |
+| `[engine.Temp]` | `Engine/Intermediate/Build/<Platform>/<Config>/<TargetDescriptor>/<TargetType>` |
 | `[engine.Generated]` | `<engine.Temp>/Generated` |
 | `[module.Generated]` | `<engine.Generated>/<ModuleName>` |
 
 路径字段允许相对路径（相对模块根）并在 IR 中规范化为绝对路径。custom outputs 只允许
-落在当前配置的 temp/generated 或当前平台 binaries 根内，`..` 逃逸会被拒绝。Command
+落在当前 resolved target variant 的 temp/generated 或 binaries 根内，`..` 逃逸会被拒绝。variant
+由经过校验的 descriptor `Name` 与 `TargetType` 标识，而不是由 `OutputName` 标识。Command
 是 argv token 数组而不是 shell 字符串；路径变量会展开，但 `/flag` 等普通 token 不会被
 当成路径改写。
 
@@ -221,6 +222,12 @@ IR Builder 的职责：
 2. 根据模块 `Output` 类型生成 `link`（DLL/EXE）或 `archive`（Lib）action
 3. 处理 typed custom actions 及其 generated-file compile 集成
 4. 对完整 action graph 校验 ID、producer、依赖和 cycle
+
+依赖链接遵循“直接 public/private，递归 public”的可见性。`WithoutLinking` edge 不进入
+链接闭包，但不会阻断 export define/include 的编译传播。Win64 DLL action 将 `.dll` 和
+MSVC import `.lib` 都列为 outputs，并显式传入 `/IMPLIB:<absolute .lib>`；依赖 DLL 的
+link action 使用该 `.lib` 的绝对路径作为 input，因此 ActionGraph 和 Ninja 都能直接识别
+producer edge。最终 exe 只链接 entry module 可见的模块产物，不扫描无关模块 action。
 
 ## 6. IBackend 接口
 
@@ -267,12 +274,12 @@ rule custom
   description = $Desc
   restat = 1
 
-build Temp/Win64/Debug/Core/Core.obj: cc Engine/Source/Runtime/Core/Private/Core.cpp
+build Engine/Intermediate/Build/Win64/Debug/Limitless/Editor/Core/Core.obj: cc Engine/Source/Runtime/Core/Private/Core.cpp
   flags = /std:c++17 /utf-8 /DDEBUG=1 ...
   cl = "C:/Program Files/.../cl.exe"
-  pdb = "Temp/Win64/Debug/Core/Core.pdb"
+  pdb = "Engine/Intermediate/Build/Win64/Debug/Limitless/Editor/Core/Core.pdb"
 
-build Engine/Binaries/Win64/Core.dll: link Temp/Win64/Debug/Core/Core.obj ...
+build Engine/Binaries/Win64/Debug/Limitless/Editor/Core.dll Engine/Binaries/Win64/Debug/Limitless/Editor/Core.lib: link Engine/Intermediate/Build/Win64/Debug/Limitless/Editor/Core/Core.obj ...
   libs = vulkan-1.lib ...
 ```
 
@@ -519,7 +526,7 @@ export function deriveApiMacro(
 - [ ] 实现 `ClangToolchain`
 - [ ] 实现 Mac 平台规则（`arm64`、`AppKit/QuartzCore` framework）
 - [ ] 实现 `.mm` / `.m` 文件编译支持
-- [ ] 平台源文件排除（`MacWindow.mm` vs `WindowsWindow.cpp`）
+- [x] 平台源文件排除（`MacPlatformWindow.mm` vs `WindowsPlatformWindow.cpp`）
 - [x] 从 `Build.ts` 生成原生 Xcode 工程
 
 **验收**：在 macOS 上用 LimitlessBuilder 编译出 `LimitlessGame` 可执行文件。

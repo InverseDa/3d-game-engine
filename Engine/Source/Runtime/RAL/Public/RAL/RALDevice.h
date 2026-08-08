@@ -47,6 +47,9 @@ public:
 namespace RAL
 {
     RAL_API FRALDevice* CreateDevice();
+    // RAL objects are allocated by the backend module. Route destruction back
+    // through RAL so Editor DLL consumers never perform a cross-module delete.
+    RAL_API void DestroyResource(FRALResource* Resource) noexcept;
 }
 
 } // namespace LE

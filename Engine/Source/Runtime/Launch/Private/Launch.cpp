@@ -1,8 +1,35 @@
 #include "CoreMinimal.h"
+#include "Application/EngineLoop.h"
+#include "DemoApplication/DemoApplication.h"
 
 namespace LE
 {
-int32 GuardedMain();
+
+int32 GuardedMain()
+{
+    LE_INIT()
+
+    int32 ExitCode = -1;
+    {
+        FApplicationPtr Application = CreateDemoApplication();
+        if (Application)
+        {
+            FEngineLoop EngineLoop;
+            if (EngineLoop.Initialize(*Application) == EEngineLoopInitializeResult::Success)
+            {
+                while (EngineLoop.Tick() == EEngineLoopTickResult::Continue)
+                {
+                }
+                ExitCode = 0;
+            }
+            EngineLoop.Shutdown();
+        }
+    }
+
+    LE_SHUTDOWN()
+    return ExitCode;
+}
+
 }
 
 #if PLATFORM_WINDOWS

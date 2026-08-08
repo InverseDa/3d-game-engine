@@ -95,7 +95,6 @@ export class VcxprojGenerator {
         const Target = BuildTarget.Target;
         AllDefines.add(`WITH_EDITOR=${Target.TargetType === "Editor" ? "1" : "0"}`);
 
-        const CleanCmd = `del /Q "$(ProjectDir)..\\..\\Binaries\\Win64\\*.lib" "$(ProjectDir)..\\..\\Binaries\\Win64\\*.exe" 2>nul`;
         const IncludeStr = [...AllIncludes].filter((PathName) => FsSync.existsSync(PathName)).join(";");
         const DefineStr = [...AllDefines].join(";");
 
@@ -123,12 +122,19 @@ export class VcxprojGenerator {
                 ? BuildTarget
                 : ResolveTarget(BuildTarget.Descriptor, { ...Target, Optimization: Configuration });
             const OutputName = ConfigurationTarget.OutputName;
-            const Output = `$(ProjectDir)..\\..\\Binaries\\Win64\\${OutputName}.exe`;
+            const BinaryDirectory = this.ToProjectDirectoryPath(
+                this.Paths.BinaryOutputDirectory(ConfigurationTarget),
+            );
+            const IntermediateDirectory = this.ToProjectDirectoryPath(
+                this.Paths.TemporaryOutputDirectory(ConfigurationTarget),
+            );
+            const Output = `${BinaryDirectory}\\${OutputName}.exe`;
             const BuildCmd = `$(ProjectDir)..\\..\\Builder\\LimitlessBuilder.bat build --target "${BuildTarget.Descriptor.Name}" --platform Win64 --config ${Configuration} --type ${Target.TargetType}`;
+            const CleanCmd = `if exist "${BinaryDirectory}" rmdir /S /Q "${BinaryDirectory}" & if exist "${IntermediateDirectory}" rmdir /S /Q "${IntermediateDirectory}"`;
             Lines.push(`  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='${Configuration}|x64'">`);
             Lines.push(`    <NMakeBuildCommandLine>${XmlEscape(BuildCmd)}</NMakeBuildCommandLine>`);
             Lines.push(`    <NMakeReBuildCommandLine>${XmlEscape(BuildCmd)}</NMakeReBuildCommandLine>`);
-            Lines.push(`    <NMakeCleanCommandLine>${CleanCmd}</NMakeCleanCommandLine>`);
+            Lines.push(`    <NMakeCleanCommandLine>${XmlEscape(CleanCmd)}</NMakeCleanCommandLine>`);
             Lines.push(`    <NMakeOutput>${XmlEscape(Output)}</NMakeOutput>`);
             Lines.push(`    <TargetName>${XmlEscape(OutputName)}</TargetName>`);
             Lines.push(`    <TargetExt>.exe</TargetExt>`);
@@ -154,6 +160,11 @@ export class VcxprojGenerator {
         Lines.push(`  <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.targets" />`);
         Lines.push(`</Project>`);
         return Lines.join("\r\n");
+    }
+
+    private ToProjectDirectoryPath(AbsolutePath: string): string {
+        const RelativePath = Path.relative(this.Paths.ProjectFilesDirectory, AbsolutePath);
+        return `$(ProjectDir)${RelativePath.replace(/\//g, "\\")}`;
     }
 
     private BuildCommonProps(): string {
@@ -328,19 +339,9 @@ export class VcxprojGenerator {
         };
 
         AddModuleIncludes(Module, true);
-        const Visited = new Set<string>();
-        const VisitPublicDependencies = (Current: ResolvedModule): void => {
-            for (const Dependency of Current.Configuration.PublicDependencies) {
-                const Name = typeof Dependency === "string" ? Dependency : Dependency.Name;
-                if (Visited.has(Name)) continue;
-                Visited.add(Name);
-                const Resolved = this.Graph.Get(Name);
-                if (!Resolved) continue;
-                AddModuleIncludes(Resolved, false);
-                VisitPublicDependencies(Resolved);
-            }
-        };
-        VisitPublicDependencies(Module);
+        for (const Dependency of this.Graph.GetCompileDependencyClosure(Module)) {
+            AddModuleIncludes(Dependency, false);
+        }
 
         for (const IncludePath of IntelliSense.IncludePaths) {
             IncludePaths.add(IncludePath);

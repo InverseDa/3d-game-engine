@@ -33,7 +33,7 @@ enum class ERuntimeShaderStage : uint8
     Compute,
 };
 
-namespace Launch::ShaderRuntimeCompiler
+namespace Demo::ShaderRuntimeCompiler
 {
 inline LE::String GetParentPath(const LE::String& Path)
 {
@@ -329,6 +329,6 @@ inline bool CompileHlslToSpirv(
     LE_LOG(LogXBD, Info, "Compiled shader at runtime: {} -> {} bytes", SourcePath.Data(), OutByteCode.Size());
     return true;
 }
-} // namespace Launch::ShaderRuntimeCompiler
+} // namespace Demo::ShaderRuntimeCompiler
 
 } // namespace LE
