@@ -117,6 +117,9 @@ export class NinjaBackend implements IBackend {
         if (Options.Verbose) {
             Arguments.push("-v");
         }
+        if (Options.Targets) {
+            Arguments.push(...Options.Targets);
+        }
 
         return new Promise((Resolve) => {
             const Process = ChildProcess.spawn(NinjaExecutable, Arguments, {

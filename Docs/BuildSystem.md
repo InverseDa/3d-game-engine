@@ -60,8 +60,17 @@ custom outputs 必须位于 `[engine.Temp]`、`[engine.Generated]`、`[module.Ge
 依赖，将 `DependsOn` 作为 order-only 依赖，并对多输出 custom edge 开启 `restat`。
 完整 schema、路径变量和增量语义见 `Docs/LimitlessBuilder.md`。
 
-CustomActions 当前由 LB/Ninja 执行；生成的 VCXProj/Xcode 工程继续通过 LB build 命令
-进入同一 action graph，而不在 IDE 工程格式里维护第二份 custom-action 定义。
+CustomActions 仍由 LB/Ninja 执行。生成的 VCXProj 是 NMake 工程，其 Build 命令会回到
+LB 并进入完整 action graph；尚未生成的源码不会预先显示在 IDE source list 中，但不影响
+从 Visual Studio 发起构建。Xcode 保持 native C/C++/ObjC 编译：每个相关 CustomAction
+在 Sources phase 前调用 `LimitlessBuilder.sh build-action`，该命令只生成并执行当前
+configuration 的 custom-only Ninja DAG。稳定的 bridge source 按 `DEBUG`/`NDEBUG`
+include Debug/Release 的真实 generated source，因此 metadata 只有一份，不会复制进工程文件。
+custom-only `build.ninja` 位于 variant 的 `CustomActions` 子目录，不覆盖普通构建图或
+`compile_commands.json`；phase 可每次进入，真正的增量与 `restat` 仍由 Ninja 和 generator
+的 write-if-changed 决定。工程显式设置 `ENABLE_USER_SCRIPT_SANDBOXING = NO`，因为该 phase
+需要启动 LB/Ninja 并写入 workspace 的 variant generated output。当前 Windows 环境已验证
+工程结构与 custom-only DAG，仍需在真实 macOS/Xcode 上执行一次 `xcodebuild` 验收。
 
 二进制产物按 `Engine/Binaries/<Platform>/<Config>/<TargetDescriptor>/<TargetType>` 隔离，
 Ninja、object 和生成代码位于对应的

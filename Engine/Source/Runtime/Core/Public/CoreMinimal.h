@@ -17,3 +17,5 @@
 #include "Memory/UniquePtr.h"
 #include "Templates/Function.h"
 #include "Types/EngineTypes.h"
+#include "Types/RuntimeHandle.h"
+#include "Types/Uuid.h"

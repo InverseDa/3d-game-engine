@@ -5,6 +5,7 @@ import * as Os from "node:os";
 import * as Path from "node:path";
 import Test from "node:test";
 import { NinjaBackend } from "../Source/Backend/NinjaBackend.ts";
+import { BuildCustomActionGraph } from "../Source/Build/CustomActionBuilder.ts";
 import { IRBuilder } from "../Source/Build/IRBuilder.ts";
 import { ModuleBuild } from "../Source/Configuration/ModuleBuild.ts";
 import { ResolveTarget } from "../Source/Configuration/Target.ts";
@@ -15,6 +16,7 @@ import {
 } from "../Source/Configuration/Types.ts";
 import { DependencyGraph } from "../Source/Graph/DependencyGraph.ts";
 import { EnginePaths } from "../Source/Project/EnginePaths.ts";
+import { CustomActionToolchain } from "../Source/Toolchain/CustomActionToolchain.ts";
 import { FindNinjaExecutable } from "../Source/Toolchain/ExecutableLocator.ts";
 import type { IToolchain } from "../Source/Toolchain/IToolchain.ts";
 
@@ -120,6 +122,56 @@ class CustomEntryBuild extends ModuleBuild {
                     Path.join(this.Counters, "order.count"), "[module.Generated]/order-only.stamp", "order",
                 ],
                 DependsOn: ["Dependency"],
+            },
+        );
+    }
+}
+
+class SelectedActionBuild extends ModuleBuild {
+    public readonly Name = "Entry";
+    private readonly Tool: string;
+    private readonly Counters: string;
+    private readonly DependencyInput: string;
+    private readonly ImplicitInput: string;
+
+    public constructor(Tool: string, Counters: string, DependencyInput: string, ImplicitInput: string) {
+        super();
+        this.Tool = Tool;
+        this.Counters = Counters;
+        this.DependencyInput = DependencyInput;
+        this.ImplicitInput = ImplicitInput;
+    }
+
+    public Configure(_Target: Target, Configuration: ModuleConfiguration): void {
+        Configuration.CustomActions.push(
+            {
+                Id: "Dependency",
+                Inputs: [this.DependencyInput],
+                Outputs: ["[module.Generated]/dependency.stamp"],
+                Command: [
+                    NodeExecutable, this.Tool, "copy", Path.join(this.Counters, "dependency.count"),
+                    this.DependencyInput, "[module.Generated]/dependency.stamp",
+                ],
+            },
+            {
+                Id: "Selected",
+                Inputs: [],
+                ImplicitInputs: [this.ImplicitInput, "[module.Generated]/dependency.stamp"],
+                Outputs: ["[module.Generated]/selected.stamp"],
+                Command: [
+                    NodeExecutable, this.Tool, "combine", Path.join(this.Counters, "selected.count"),
+                    this.ImplicitInput, "[module.Generated]/dependency.stamp", "[module.Generated]/selected.stamp",
+                ],
+                DependsOn: ["Dependency"],
+            },
+            {
+                Id: "Unrelated",
+                Inputs: [],
+                Outputs: ["[module.Generated]/unrelated.stamp"],
+                Command: [
+                    NodeExecutable, this.Tool, "literal", Path.join(this.Counters, "unrelated.count"),
+                    "[module.Generated]/unrelated.stamp", "unrelated",
+                ],
             },
         );
     }
@@ -252,4 +304,85 @@ else process.exit(8);
     }];
     const Failure = await Backend.Generate(FailureActions, Resolved, { OutputDir: Path.join(Root, "failure ninja") });
     Assert.notEqual(RunNinja(Ninja, Failure.NinjaPath).status, 0, "custom command failure must propagate a nonzero exit status");
+});
+
+Test("custom-only Ninja builds the selected action DAG without touching the ordinary graph", async (Context) => {
+    if (!FindNinjaExecutable()) { Context.skip("ninja executable is unavailable"); return; }
+
+    const Root = await Fs.mkdtemp(Path.join(Os.tmpdir(), "limitless-build-action-"));
+    Context.after(() => Fs.rm(Root, { recursive: true, force: true }));
+    const ModuleRoot = Path.join(Root, "Engine", "Source", "Programs", "Entry");
+    const FixtureDir = Path.join(Root, "fixture");
+    const Counters = Path.join(Root, "counters");
+    await Promise.all([
+        Fs.mkdir(ModuleRoot, { recursive: true }),
+        Fs.mkdir(FixtureDir, { recursive: true }),
+        Fs.mkdir(Counters, { recursive: true }),
+    ]);
+    const Tool = Path.join(FixtureDir, "custom-only-tool.mjs");
+    const DependencyInput = Path.join(FixtureDir, "dependency.txt");
+    const ImplicitInput = Path.join(FixtureDir, "implicit.txt");
+    await Fs.writeFile(DependencyInput, "dependency-1");
+    await Fs.writeFile(ImplicitInput, "implicit-1");
+    await Fs.writeFile(Tool, `
+import fs from "node:fs";
+import path from "node:path";
+const [mode, ...args] = process.argv.slice(2);
+const bump = (file) => { let n = 0; try { n = Number(fs.readFileSync(file, "utf8")); } catch {} fs.mkdirSync(path.dirname(file), {recursive:true}); fs.writeFileSync(file, String(n + 1)); };
+const write = (file, data) => { fs.mkdirSync(path.dirname(file), {recursive:true}); fs.writeFileSync(file, data); };
+if (mode === "copy") { bump(args[0]); write(args[2], fs.readFileSync(args[1])); }
+else if (mode === "combine") { bump(args[0]); write(args[3], fs.readFileSync(args[1]) + "|" + fs.readFileSync(args[2])); }
+else if (mode === "literal") { bump(args[0]); write(args[1], args[2]); }
+else process.exit(8);
+`);
+
+    const { Resolved } = MakeTarget();
+    const Paths = new EnginePaths(Root);
+    const Module: ModuleInstance = {
+        Descriptor: new SelectedActionBuild(Tool, Counters, DependencyInput, ImplicitInput),
+        SourceRoot: ModuleRoot,
+        BuildFilePath: Path.join(ModuleRoot, "Build.ts"),
+    };
+    const Graph = new DependencyGraph([Module], Resolved);
+    const Actions = await BuildCustomActionGraph(Paths, Resolved, Graph.Build());
+    Assert.equal(Actions.length, 3);
+    const Selected = Actions.find((Action) => Action.Id === "Entry::custom::Selected");
+    Assert.ok(Selected);
+
+    const VariantDir = Paths.TemporaryOutputDirectory(Resolved);
+    await Fs.mkdir(VariantDir, { recursive: true });
+    const OrdinaryNinja = Path.join(VariantDir, "build.ninja");
+    const OrdinarySentinel = "ordinary graph must remain intact\n";
+    await Fs.writeFile(OrdinaryNinja, OrdinarySentinel);
+
+    const CustomDir = Path.join(VariantDir, "CustomActions");
+    const Backend = new NinjaBackend(new CustomActionToolchain());
+    const Result = await Backend.Generate(Actions, Resolved, { OutputDir: CustomDir });
+    await Backend.Build(Result, { Targets: Selected.Outputs });
+    Assert.equal(await Count(Path.join(Counters, "dependency.count")), 1);
+    Assert.equal(await Count(Path.join(Counters, "selected.count")), 1);
+    Assert.equal(await Count(Path.join(Counters, "unrelated.count")), 0);
+
+    await Backend.Build(Result, { Targets: Selected.Outputs });
+    Assert.equal(await Count(Path.join(Counters, "dependency.count")), 1, "unchanged dependency must not rerun");
+    Assert.equal(await Count(Path.join(Counters, "selected.count")), 1, "unchanged selected action must not rerun");
+
+    await TouchWithContent(ImplicitInput, "-changed");
+    await Backend.Build(Result, { Targets: Selected.Outputs });
+    Assert.equal(await Count(Path.join(Counters, "dependency.count")), 1);
+    Assert.equal(await Count(Path.join(Counters, "selected.count")), 2, "implicit input must dirty selected action");
+
+    await Fs.rm(Selected.Outputs[0]);
+    await Backend.Build(Result, { Targets: Selected.Outputs });
+    Assert.equal(await Count(Path.join(Counters, "selected.count")), 3, "deleted selected output must rerun its edge");
+
+    await TouchWithContent(DependencyInput, "-changed");
+    await Backend.Build(Result, { Targets: Selected.Outputs });
+    Assert.equal(await Count(Path.join(Counters, "dependency.count")), 2, "selected target must execute its dependency");
+    Assert.equal(await Count(Path.join(Counters, "selected.count")), 4, "changed dependency output must dirty selected action");
+    Assert.equal(await Count(Path.join(Counters, "unrelated.count")), 0, "unrelated action must never execute");
+
+    Assert.equal(await Fs.readFile(OrdinaryNinja, "utf-8"), OrdinarySentinel);
+    await Fs.access(Path.join(CustomDir, "build.ninja"));
+    await Fs.access(Path.join(CustomDir, "compile_commands.json"));
 });

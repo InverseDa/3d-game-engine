@@ -289,8 +289,20 @@ dependencies。Backend 会先创建所有 output parent directories，custom edg
 `<TargetName>::exe` 精确选择 resolved executable；不会从多输出 custom edge 猜测。
 `compile_commands.json` 只包含 compile actions。
 
-目前 custom action 的执行集成由 Ninja 后端负责。VCXProj/Xcode 生成器仍用于 IDE
-浏览、索引和调用 LB，不在原生项目文件里重复表达 custom edge。
+custom action 的执行集成由 Ninja 后端负责。VCXProj 是调用 LB 的 NMake 工程，不在工程
+文件里重复表达 custom edge。Xcode 保持 native 编译，在 Sources phase 前调用
+`LimitlessBuilder.sh build-action --id <full-id>`。这个入口只解析 CustomActions，使用禁止
+compile/link/archive 的 host toolchain，把独立 Ninja 文件写入当前 variant 的
+`CustomActions` 子目录，并仅选择目标 action 的 outputs；custom producer 与 `DependsOn`
+仍由 Ninja DAG 自动拉起，不会覆盖普通 `build.ninja` 或 `compile_commands.json`。
+
+Xcode 将每个 generated compilable source 投影为一个稳定 bridge source。bridge 根据
+`DEBUG`/`NDEBUG` include 对应 Debug/Release output 的仓库内相对路径，保持 `.c/.cc/.cpp/.m/.mm`
+语言类型，不复制生成 metadata。pre-Sources phase 总会进入，实际 no-work、implicit-input
+失效、deleted-output 恢复与 `restat` 由 custom-only Ninja 和 generator write-if-changed
+负责。工程设置 `ENABLE_USER_SCRIPT_SANDBOXING = NO`，允许 phase 启动 LB/Ninja 并写 variant
+generated output。C++ 编译仍完全属于 Xcode；这不是尚未实现的完整 Mac Ninja build。
+该投影及 DAG 已在 Windows 测试，真实 macOS `xcodebuild` 仍需平台验收。
 
 ### 7.2 ninja 给你的免费能力
 
@@ -370,6 +382,7 @@ limitless-builder <command> [options]
 Commands:
   generate [target]              生成 build.ninja + compile_commands.json
   build    [target] [--config]   生成并执行编译
+  build-action --id <full-id>    仅执行目标 custom action 及其 custom 依赖
   clean    [target]              清理产物
   list     modules|targets       列出模块/目标
   graph    [target] --dot        导出依赖图（DOT 格式）
@@ -378,6 +391,7 @@ Options:
   --platform <win64|mac>
   --config <debug|release>
   --type <game|editor>
+  --id <Module::custom::Id>       build-action 的完整 custom action ID
   --backend <ninja|action-graph>  覆盖 config 里的默认后端
   --verbose
 ```

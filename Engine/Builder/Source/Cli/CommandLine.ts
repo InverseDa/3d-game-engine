@@ -2,6 +2,7 @@ import * as Path from "node:path";
 import { NinjaBackend } from "../Backend/NinjaBackend.ts";
 import type { BackendResult, IBackend } from "../Backend/IBackend.ts";
 import { IRBuilder } from "../Build/IRBuilder.ts";
+import { BuildCustomActionGraph } from "../Build/CustomActionBuilder.ts";
 import {
     CreateLegacyTargetDescriptor,
     ResolveTarget,
@@ -21,6 +22,7 @@ import { VcxprojGenerator } from "../Project/VcxprojGenerator.ts";
 import { XcodeProjectGenerator } from "../Project/XcodeProjectGenerator.ts";
 import { MSVCToolchain } from "../Toolchain/MSVCToolchain.ts";
 import type { IToolchain } from "../Toolchain/IToolchain.ts";
+import { CustomActionToolchain } from "../Toolchain/CustomActionToolchain.ts";
 import { Logger } from "../Utilities/Logger.ts";
 
 interface ParsedArguments {
@@ -111,6 +113,7 @@ Commands:
     list targets              List all discovered *.target.ts targets
     generate [options]        Generate build.ninja + compile_commands.json
     build [options]           Generate and run ninja
+    build-action [options]    Build one typed custom action by full IR id
     sln [options]             Generate Visual Studio .sln + .vcxproj
     xcode [options]           Generate a native Xcode project for macOS
     help                      Show this help message
@@ -120,6 +123,7 @@ Options:
     --config <name>           Debug | Release
     --type <name>             Game | Editor | Program | Test
     --target <name>           Target descriptor name (required when ambiguous)
+    --id <full-action-id>     <Module>::custom::<Id> for build-action
     --jobs <n>                Parallel jobs (build only)
     --verbose                 Verbose output
 
@@ -265,12 +269,44 @@ async function GenerateXcodeProject(Paths: EnginePaths, Flags: Record<string, st
         throw new Error("No modules found.");
     }
     const BuildTarget = await ResolveCommandTarget(Paths, Modules, Target, Flags.target);
-    const Graph = new DependencyGraph(Modules, BuildTarget);
-    const ProjectPath = await new XcodeProjectGenerator(Paths).Generate(Graph.Build(), BuildTarget);
+    const DebugTarget = Target.Optimization === Optimization.Debug
+        ? BuildTarget
+        : ResolveTarget(BuildTarget.Descriptor, { ...Target, Optimization: Optimization.Debug });
+    const ReleaseTarget = Target.Optimization === Optimization.Release
+        ? BuildTarget
+        : ResolveTarget(BuildTarget.Descriptor, { ...Target, Optimization: Optimization.Release });
+    const ProjectPath = await new XcodeProjectGenerator(Paths).Generate({
+        Debug: new DependencyGraph(Modules, DebugTarget).Build(),
+        Release: new DependencyGraph(Modules, ReleaseTarget).Build(),
+    }, BuildTarget);
     console.log("");
     Logger.Success("Generated Xcode project:");
     Logger.Dim(`    ${ToPosixPath(ProjectPath)}`);
     Logger.Dim(`    Open it in Xcode or run xcodebuild -project LimitlessEngine.xcodeproj -scheme "${BuildTarget.Descriptor.Name}".`);
+}
+
+async function BuildAction(Paths: EnginePaths, Flags: Record<string, string>): Promise<void> {
+    const Target = ParseTarget(Flags);
+    const RequestedId = Flags.id;
+    if (!RequestedId) throw new Error("build-action requires --id <Module::custom::Id>.");
+    const Modules = await new ModuleLoader(Paths.SourceDirectory).DiscoverModules();
+    if (Modules.length === 0) throw new Error("No modules found.");
+    const BuildTarget = await ResolveCommandTarget(Paths, Modules, Target, Flags.target);
+    const Graph = new DependencyGraph(Modules, BuildTarget);
+    const Actions = BuildCustomActionGraph(Paths, BuildTarget, Graph.Build());
+    const Selected = Actions.find((Action) => Action.Id === RequestedId);
+    if (!Selected) throw new Error(`Unknown custom action id "${RequestedId}".`);
+
+    const Toolchain = new CustomActionToolchain();
+    const Backend = new NinjaBackend(Toolchain);
+    const OutputDirectory = Path.join(Paths.TemporaryOutputDirectory(BuildTarget), "CustomActions");
+    const Result = await Backend.Generate(Actions, BuildTarget, { OutputDir: OutputDirectory });
+    const ExitCode = await Backend.Build(Result, {
+        Verbose: Flags.verbose === "true",
+        Targets: Selected.Outputs,
+    });
+    if (ExitCode !== 0) throw new Error(`Custom action failed (exit code ${ExitCode}).`);
+    Logger.Success(`Custom action succeeded: ${RequestedId}`);
 }
 
 async function ResolveCommandTarget(
@@ -311,6 +347,9 @@ async function Main(): Promise<void> {
             break;
         case "build":
             await Build(Paths, Arguments.Flags);
+            break;
+        case "build-action":
+            await BuildAction(Paths, Arguments.Flags);
             break;
         case "sln":
             await GenerateSolution(Paths, Arguments.Flags);

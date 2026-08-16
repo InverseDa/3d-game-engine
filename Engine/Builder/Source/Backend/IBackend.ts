@@ -9,6 +9,8 @@ export interface GenerateOptions {
 export interface BuildOptions {
     Jobs?: number;
     Verbose?: boolean;
+    /** Optional concrete Ninja output targets. Omitted builds the backend default. */
+    Targets?: string[];
 }
 
 export interface BackendResult {

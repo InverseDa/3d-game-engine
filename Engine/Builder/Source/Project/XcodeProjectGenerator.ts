@@ -2,7 +2,8 @@ import * as Crypto from "node:crypto";
 import * as FsSync from "node:fs";
 import * as Fs from "node:fs/promises";
 import * as Path from "node:path";
-import { SourceScanner } from "../Build/SourceScanner.ts";
+import { BuildCustomActionGraph } from "../Build/CustomActionBuilder.ts";
+import { IsCompilableSource, SourceScanner } from "../Build/SourceScanner.ts";
 import { ResolveTarget } from "../Configuration/Target.ts";
 import type { ResolvedTarget, Target } from "../Configuration/Types.ts";
 import type { ResolvedModule } from "../Graph/DependencyGraph.ts";
@@ -35,6 +36,16 @@ interface XcodeConfigurationTargets {
     Release: ResolvedTarget;
 }
 
+export interface XcodeConfigurationModules {
+    Debug: ResolvedModule[];
+    Release: ResolvedModule[];
+}
+
+interface XcodeCustomActionProjection {
+    Id: string;
+    Bridges: ProjectFile[];
+}
+
 function PbxId(Kind: string, Key: string): string {
     return Crypto.createHash("sha1").update(`${Kind}\0${Key}`).digest("hex").slice(0, 24).toUpperCase();
 }
@@ -63,10 +74,14 @@ export class XcodeProjectGenerator {
         this.Paths = Paths;
     }
 
-    public async Generate(Modules: ResolvedModule[], BuildTarget: ResolvedTarget): Promise<string> {
+    public async Generate(ConfigurationModules: XcodeConfigurationModules, BuildTarget: ResolvedTarget): Promise<string> {
         const Target = BuildTarget.Target;
         const ConfigurationTargets = this.ResolveConfigurationTargets(BuildTarget);
-        const ProjectFiles = this.CollectProjectFiles();
+        const Modules = ConfigurationModules[Target.Optimization];
+        const CustomActions = await this.BuildCustomActionProjections(
+            ConfigurationModules, ConfigurationTargets, BuildTarget,
+        );
+        const ProjectFiles = [...this.CollectProjectFiles(), ...CustomActions.flatMap((Action) => Action.Bridges)];
         const CompiledSources = new Set<string>();
         for (const Module of Modules) {
             for (const SourceFile of await this.Scanner.Scan(
@@ -76,6 +91,9 @@ export class XcodeProjectGenerator {
                 CompiledSources.add(Path.resolve(SourceFile));
             }
         }
+        for (const Bridge of CustomActions.flatMap((Action) => Action.Bridges)) {
+            CompiledSources.add(Path.resolve(Bridge.AbsolutePath));
+        }
 
         const ProjectDirectory = Path.join(this.Paths.Root, "LimitlessEngine.xcodeproj");
         const SchemeDirectory = Path.join(ProjectDirectory, "xcshareddata", "xcschemes");
@@ -84,7 +102,9 @@ export class XcodeProjectGenerator {
         const Settings = this.CollectSettings(Modules, Target);
         await this.WriteFileIfChanged(
             Path.join(ProjectDirectory, "project.pbxproj"),
-            this.BuildProject(ProjectFiles, CompiledSources, Settings, BuildTarget, ConfigurationTargets),
+            this.BuildProject(
+                ProjectFiles, CompiledSources, Settings, BuildTarget, ConfigurationTargets, CustomActions,
+            ),
         );
         await this.WriteFileIfChanged(
             Path.join(SchemeDirectory, `${BuildTarget.Descriptor.Name}.xcscheme`),
@@ -99,6 +119,7 @@ export class XcodeProjectGenerator {
         Settings: XcodeSettings,
         BuildTarget: ResolvedTarget,
         ConfigurationTargets: XcodeConfigurationTargets,
+        CustomActions: XcodeCustomActionProjection[],
     ): string {
         const Target = BuildTarget.Target;
         const TargetName = BuildTarget.Descriptor.Name;
@@ -127,7 +148,10 @@ export class XcodeProjectGenerator {
         const SourceGroup = this.BuildGroupTree("Source", "Engine/Source", Files);
         const BuilderGroup = this.BuildGroupTree("Build System", "Engine/Builder", Files);
         const ContentGroup = this.BuildGroupTree("Content", "Engine/Content", Files);
-        const RootGroups = [SourceGroup, BuilderGroup, ContentGroup]
+        const GeneratedGroup = this.BuildGroupTree(
+            "Generated", "Engine/Intermediate/ProjectFiles/XcodeGenerated", Files,
+        );
+        const RootGroups = [SourceGroup, BuilderGroup, ContentGroup, GeneratedGroup]
             .filter((Group) => Group.Files.length > 0 || Group.Children.size > 0);
 
         const FrameworkNames = [...Settings.Frameworks].sort((Left, Right) => Left.localeCompare(Right));
@@ -199,6 +223,9 @@ export class XcodeProjectGenerator {
         Lines.push("\t\t\tisa = PBXNativeTarget;");
         Lines.push(`\t\t\tbuildConfigurationList = ${TargetConfigListId} /* Build configuration list for PBXNativeTarget \"${Comment(TargetName)}\" */;`);
         Lines.push("\t\t\tbuildPhases = (");
+        for (const Action of CustomActions) {
+            Lines.push(`\t\t\t\t${PbxId("custom-phase", Action.Id)} /* ${Comment(Action.Id)} */,`);
+        }
         Lines.push(`\t\t\t\t${SourcesPhaseId} /* Sources */,`, `\t\t\t\t${FrameworksPhaseId} /* Frameworks */,`, `\t\t\t\t${ResourcesPhaseId} /* Resources */,`);
         Lines.push("\t\t\t);", "\t\t\tbuildRules = (", "\t\t\t);", "\t\t\tdependencies = (", "\t\t\t);");
         Lines.push(`\t\t\tname = ${PbxQuote(TargetName)};`, `\t\t\tproductName = ${PbxQuote(ProductReferenceName)};`);
@@ -212,7 +239,13 @@ export class XcodeProjectGenerator {
         Lines.push("\t\t\tprojectDirPath = \"\";", "\t\t\tprojectRoot = \"\";", "\t\t\ttargets = (", `\t\t\t\t${TargetId} /* ${Comment(TargetName)} */,`, "\t\t\t);", "\t\t};");
         Lines.push("/* End PBXProject section */", "", "/* Begin PBXResourcesBuildPhase section */");
         Lines.push(`\t\t${ResourcesPhaseId} /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };`);
-        Lines.push("/* End PBXResourcesBuildPhase section */", "", "/* Begin PBXSourcesBuildPhase section */");
+        Lines.push("/* End PBXResourcesBuildPhase section */", "", "/* Begin PBXShellScriptBuildPhase section */");
+        for (const Action of CustomActions) {
+            const Script = this.BuildCustomActionShellScript(BuildTarget, Action.Id);
+            Lines.push(`\t\t${PbxId("custom-phase", Action.Id)} /* ${Comment(Action.Id)} */ = {`);
+            Lines.push("\t\t\tisa = PBXShellScriptBuildPhase;", "\t\t\talwaysOutOfDate = 1;", "\t\t\tbuildActionMask = 2147483647;", "\t\t\tfiles = ();", "\t\t\tinputPaths = ();", `\t\t\tname = ${PbxQuote(`Generate ${Action.Id}`)};`, "\t\t\toutputPaths = ();", "\t\t\trunOnlyForDeploymentPostprocessing = 0;", "\t\t\tshellPath = /bin/sh;", `\t\t\tshellScript = ${PbxQuote(Script)};`, "\t\t\tshowEnvVarsInLog = 0;", "\t\t};");
+        }
+        Lines.push("/* End PBXShellScriptBuildPhase section */", "", "/* Begin PBXSourcesBuildPhase section */");
         Lines.push(`\t\t${SourcesPhaseId} /* Sources */ = {`);
         Lines.push("\t\t\tisa = PBXSourcesBuildPhase;", "\t\t\tbuildActionMask = 2147483647;", "\t\t\tfiles = (");
         for (const File of SourceFiles) {
@@ -253,7 +286,7 @@ export class XcodeProjectGenerator {
             Configuration === "Debug" ? "DEBUG=1" : "NDEBUG=1",
         ];
         Lines.push(`\t\t${ConfigId} /* ${Configuration} */ = {`, "\t\t\tisa = XCBuildConfiguration;", "\t\t\tbuildSettings = {");
-        Lines.push("\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;", "\t\t\t\tARCHS = \"$(ARCHS_STANDARD)\";", "\t\t\t\tCLANG_CXX_LANGUAGE_STANDARD = \"c++17\";", "\t\t\t\tCLANG_CXX_LIBRARY = \"libc++\";", "\t\t\t\tCLANG_ENABLE_MODULES = NO;", "\t\t\t\tCODE_SIGNING_ALLOWED = NO;", "\t\t\t\tGCC_ENABLE_CPP_EXCEPTIONS = NO;", "\t\t\t\tGCC_ENABLE_CPP_RTTI = NO;");
+        Lines.push("\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;", "\t\t\t\tARCHS = \"$(ARCHS_STANDARD)\";", "\t\t\t\tCLANG_CXX_LANGUAGE_STANDARD = \"c++17\";", "\t\t\t\tCLANG_CXX_LIBRARY = \"libc++\";", "\t\t\t\tCLANG_ENABLE_MODULES = NO;", "\t\t\t\tCODE_SIGNING_ALLOWED = NO;", "\t\t\t\tENABLE_USER_SCRIPT_SANDBOXING = NO;", "\t\t\t\tGCC_ENABLE_CPP_EXCEPTIONS = NO;", "\t\t\t\tGCC_ENABLE_CPP_RTTI = NO;");
         this.AppendBuildSettingArray(Lines, "GCC_PREPROCESSOR_DEFINITIONS", Defines);
         this.AppendBuildSettingArray(Lines, "HEADER_SEARCH_PATHS", ["$(inherited)", ...Settings.IncludePaths]);
         this.AppendBuildSettingArray(Lines, "LIBRARY_SEARCH_PATHS", ["$(inherited)", ...Settings.LibraryPaths]);
@@ -303,6 +336,105 @@ export class XcodeProjectGenerator {
         for (const Child of [...Group.Children.values()].sort((Left, Right) => Left.Name.localeCompare(Right.Name))) {
             this.AppendGroupObjects(Lines, Child);
         }
+    }
+
+    private async BuildCustomActionProjections(
+        ConfigurationModules: XcodeConfigurationModules,
+        ConfigurationTargets: XcodeConfigurationTargets,
+        BuildTarget: ResolvedTarget,
+    ): Promise<XcodeCustomActionProjection[]> {
+        const DebugActions = BuildCustomActionGraph(
+            this.Paths, ConfigurationTargets.Debug, ConfigurationModules.Debug,
+        );
+        const ReleaseActions = BuildCustomActionGraph(
+            this.Paths, ConfigurationTargets.Release, ConfigurationModules.Release,
+        );
+        const DebugById = new Map(DebugActions.map((Action) => [Action.Id, Action]));
+        const ReleaseById = new Map(ReleaseActions.map((Action) => [Action.Id, Action]));
+        if (DebugById.size !== ReleaseById.size ||
+            [...DebugById.keys()].some((Id) => !ReleaseById.has(Id))) {
+            throw new Error("Xcode requires identical typed custom action IDs in Debug and Release configurations.");
+        }
+
+        const RelevantIds = (Modules: ResolvedModule[]): Set<string> => new Set(Modules.flatMap((Module) =>
+            Module.Configuration.CustomActions
+                .filter((Action) => Action.RunBeforeCompile || Action.Outputs.some(IsCompilableSource))
+                .map((Action) => `${Module.Instance.Descriptor.Name}::custom::${Action.Id}`)));
+        const DebugRelevant = RelevantIds(ConfigurationModules.Debug);
+        const ReleaseRelevant = RelevantIds(ConfigurationModules.Release);
+        if (DebugRelevant.size !== ReleaseRelevant.size ||
+            [...DebugRelevant].some((Id) => !ReleaseRelevant.has(Id))) {
+            throw new Error("Xcode requires matching before-compile/generated-source custom actions in Debug and Release.");
+        }
+
+        const BridgeDirectory = Path.join(
+            this.Paths.ProjectFilesDirectory,
+            "XcodeGenerated",
+            BuildTarget.Descriptor.Name,
+            BuildTarget.Target.TargetType,
+        );
+        await Fs.mkdir(BridgeDirectory, { recursive: true });
+        const Result: XcodeCustomActionProjection[] = [];
+        for (const DebugAction of DebugActions.filter((Action) => DebugRelevant.has(Action.Id))) {
+            const ReleaseAction = ReleaseById.get(DebugAction.Id)!;
+            if (DebugAction.Outputs.length !== ReleaseAction.Outputs.length ||
+                DebugAction.Outputs.some((Output, Index) =>
+                    Path.extname(Output).toLowerCase() !== Path.extname(ReleaseAction.Outputs[Index]).toLowerCase())) {
+                throw new Error(`Xcode custom action "${DebugAction.Id}" has different Debug/Release output shape.`);
+            }
+            const Bridges: ProjectFile[] = [];
+            for (let Index = 0; Index < DebugAction.Outputs.length; Index++) {
+                if (!IsCompilableSource(DebugAction.Outputs[Index])) continue;
+                const SafeName = DebugAction.Id.replace(/[^A-Za-z0-9_.-]/g, "_");
+                const Identity = PbxId("bridge", `${DebugAction.Id}:${Index}`).slice(0, 8);
+                const Extension = Path.extname(DebugAction.Outputs[Index]).toLowerCase();
+                const BridgePath = Path.join(
+                    BridgeDirectory, `${SafeName}.${Index}.${Identity}.bridge${Extension}`,
+                );
+                const RelativeInclude = (Output: string): string => {
+                    const Relative = Path.relative(Path.dirname(BridgePath), Output).replace(/\\/g, "/");
+                    return Relative.startsWith(".") ? Relative : `./${Relative}`;
+                };
+                const DebugInclude = RelativeInclude(DebugAction.Outputs[Index]);
+                const ReleaseInclude = RelativeInclude(ReleaseAction.Outputs[Index]);
+                const Contents = [
+                    "// Generated Xcode bridge. The typed CustomAction owns the included source.",
+                    "#if defined(DEBUG)",
+                    `#include ${PbxQuote(DebugInclude)}`,
+                    "#elif defined(NDEBUG)",
+                    `#include ${PbxQuote(ReleaseInclude)}`,
+                    "#else",
+                    "#error \"Xcode generated-source bridge requires DEBUG or NDEBUG\"",
+                    "#endif",
+                    "",
+                ].join("\n");
+                await this.WriteFileIfChanged(BridgePath, Contents);
+                Bridges.push({
+                    AbsolutePath: BridgePath,
+                    ProjectRelativePath: Path.relative(this.Paths.Root, BridgePath).replace(/\\/g, "/"),
+                    FileType: this.GetFileType(BridgePath),
+                });
+            }
+            Result.push({ Id: DebugAction.Id, Bridges });
+        }
+        return Result;
+    }
+
+    private BuildCustomActionShellScript(BuildTarget: ResolvedTarget, ActionId: string): string {
+        const ShellQuote = (Value: string): string => `'${Value.replaceAll("'", `'"'"'`)}'`;
+        return [
+            "set -eu",
+            "case \"${CONFIGURATION}\" in",
+            "  Debug|Release) ;;",
+            "  *) echo \"Unsupported Xcode configuration: ${CONFIGURATION}\" >&2; exit 2 ;;",
+            "esac",
+            "exec \"${SRCROOT}/Engine/Builder/LimitlessBuilder.sh\" build-action" +
+                ` --target ${ShellQuote(BuildTarget.Descriptor.Name)}` +
+                " --platform Mac" +
+                " --config \"${CONFIGURATION}\"" +
+                ` --type ${ShellQuote(BuildTarget.Target.TargetType)}` +
+                ` --id ${ShellQuote(ActionId)}`,
+        ].join("\n");
     }
 
     private BuildGroupTree(Name: string, RootRelativePath: string, Files: ProjectFile[]): GroupNode {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Reflection/ReflectionMacros.h"
 #include "Renderer/RenderScene.h"
 
 namespace LE
@@ -23,8 +24,11 @@ struct FWorldMeshComponent : public FWorldPrimitive
     uint64 SortKey = 0;
 };
 
+LE_CLASS("50000000-0000-4000-8000-000000000001")
 class WORLD_API FWorld
 {
+    LE_GENERATED_BODY()
+
 public:
     void Reset()
     {

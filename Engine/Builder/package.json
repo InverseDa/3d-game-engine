@@ -7,7 +7,7 @@
     "limitless-builder": "./Source/Cli/CommandLine.ts"
   },
   "scripts": {
-    "test": "node --no-warnings --experimental-strip-types --test Tests/TargetDescriptor.test.ts Tests/TestProgramTarget.test.ts Tests/CustomActions.test.ts Tests/EditorDllLinkGraph.test.ts Tests/CppGovernance.test.ts && node --no-warnings --experimental-strip-types Source/Governance/CheckCppGovernance.ts",
+    "test": "node --no-warnings --experimental-strip-types --test Tests/TargetDescriptor.test.ts Tests/TestProgramTarget.test.ts Tests/CustomActions.test.ts Tests/ReflectionGenerator.test.ts Tests/XcodeCustomActions.test.ts Tests/EditorDllLinkGraph.test.ts Tests/CppGovernance.test.ts && node --no-warnings --experimental-strip-types Source/Governance/CheckCppGovernance.ts",
     "test:governance": "node --no-warnings --experimental-strip-types Source/Governance/CheckCppGovernance.ts",
     "test:integration": "node --no-warnings --experimental-strip-types --test Tests/TestTarget.integration.test.ts Tests/CustomActions.integration.test.ts",
     "list:modules": "node --experimental-strip-types Source/Cli/CommandLine.ts list modules",

@@ -160,8 +160,40 @@ public:
 | `Math/Matrix.h` | `LE::Math::Matrix` | row-major、column-vector rectangular matrix |
 | `Math/Quaternion.h` | `LE::Math::Quaternion` | xyzw Hamilton quaternion，radians |
 | `Types/EngineTypes.h` | `LE::int8` 等数值别名 / `LE::FNonCopyable` / `FORCE_INLINE` | 跨平台基础类型与编译器宏 |
+| `Types/Uuid.h` | `LE::FUuid` / `LE::TStableId<Tag>` | RFC variant version-4 UUID value and typed stable-ID vocabulary |
+| `Types/RuntimeHandle.h` | `LE::TRuntimeHandle<Tag>` / `LE::TRuntimeHandlePool<Tag>` | Pool-relative index+generation runtime identity and issuance |
 | `Logger/Log.h` | `LE::Log` / `LE::LogLevel` | 日志管理与级别枚举 |
 | `Logger/Log.h` | `LE_INIT/LE_LOG/LE_SHUTDOWN` 等 | 日志使用宏 |
+
+---
+
+### Stable IDs and runtime handles
+
+`FUuid` is a fixed 16-byte native value. Its all-zero nil value is the invalid
+sentinel. Text uses the strict lowercase canonical `8-4-4-4-12` spelling;
+`TryParse` rejects uppercase, misplaced separators, invalid hexadecimal bytes,
+and non-canonical lengths without changing its output. Parsing the nil spelling
+is syntactically successful, while `IsValid()` remains false. `TryGenerate`
+uses the platform CSPRNG on Win64 and Mac, sets RFC version 4 and variant bits,
+and leaves its output unchanged if entropy is unavailable. Unsupported platforms
+fail safely. Equality, ordering, and hashing operate on the 16 explicit bytes,
+so they do not depend on padding, addresses, module-local state, or DLL identity.
+
+`TStableId<Tag>` adds compile-time domain separation to `FUuid`. It does not
+define Entity, Asset, reflected-type, registry, or serialization semantics.
+Unlike the UUID syntax parser, its parser rejects nil because nil is never a
+stable identity.
+
+`TRuntimeHandle<Tag>` is a non-owning value containing a 32-bit index and 32-bit
+generation by default. Index `UINT32_MAX` and generation zero are reserved for
+invalid values. `TRuntimeHandlePool<Tag>` is the minimal issuance domain used to
+validate a handle against a live slot. Releasing and reusing a slot increments
+its generation; reaching the maximum generation permanently retires that slot
+instead of wrapping and permitting ABA. The pool deliberately owns no business
+object, is non-copyable/non-movable, and is not thread-safe. Validation is
+pool-relative: `Tag` separates different domains at compile time, but callers
+must not mix handles from separate pools instantiated with the same tag. Access
+from multiple threads requires synchronization by the owning subsystem.
 
 ---
 
@@ -176,8 +208,9 @@ public:
    与统一 OOM policy；arena/pool/tracking allocator 仅在真实消费者出现后增加窄 adapter。
 4. **数学库扩展**：C4 只建立 Transform/camera 前所需的基础数值契约；行列式、通用 matrix
    inverse 及 Vulkan projection builders 应在出现真实消费者时增加并补 numerical tests。
-5. **平台抽象**：仅日志系统包含 Windows 控制台处理，缺少通用的平台检测、线程、时间、原子操作等封装。
-6. **配置与反射**：无命令行参数解析、无属性/反射基础设施。
+5. **平台边界**：窗口、事件与时间属于 `Platform` 模块；Core 仅为日志和 UUID entropy 保留窄 private OS adapter。通用线程、Runnable、Job System 与原子操作抽象尚未实现。
+6. **配置与反射**：无命令行参数解析；Reflection P0 已迁入独立的 Runtime/Reflection
+   模块，其 ownership、registry 与 provider 生命周期见 [Reflection P0](Reflection.md)。
 
 基础设施治理采用 ADR-0001 的固定顺序：allocator/连续容器 → 哈希容器 → String 与按需
 ownership utilities → GLM 退出与数学约定 → 分模块 owning data migration → namespace

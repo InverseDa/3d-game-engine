@@ -204,8 +204,15 @@ Test("non-default EntryModule and OutputName drive IR, Ninja, VCXProj, and Xcode
     );
     const MacBuildTarget = ResolveTarget(MacDescriptor, MacTarget);
     const MacGraph = new DependencyGraph(Modules, MacBuildTarget);
+    const MacReleaseTarget = ResolveTarget(MacDescriptor, {
+        ...MacTarget,
+        Optimization: Optimization.Release,
+    });
     const XcodePath = await new XcodeProjectGenerator(Paths)
-        .Generate(MacGraph.Build(), MacBuildTarget);
+        .Generate({
+            Debug: MacGraph.Build(),
+            Release: new DependencyGraph(Modules, MacReleaseTarget).Build(),
+        }, MacBuildTarget);
     const Project = await Fs.readFile(Path.join(XcodePath, "project.pbxproj"), "utf-8");
     const Scheme = await Fs.readFile(
         Path.join(XcodePath, "xcshareddata", "xcschemes", "Nebula.xcscheme"),

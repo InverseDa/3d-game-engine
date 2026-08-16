@@ -7,7 +7,7 @@ import {
 
 export default DefineTarget({
     Name: "LimitlessTests",
-    Modules: ["Spdlog", "Core", "Platform", "Vulkan", "RAL", "RFG", "Renderer", "Application", "BuilderTests"],
+    Modules: ["Spdlog", "Core", "Platform", "Vulkan", "RAL", "RFG", "Renderer", "Application", "Reflection", "World", "BuilderTests"],
     EntryModule: "BuilderTests",
     Matrix: Object.values(Platform).flatMap((ConcretePlatform) =>
         Object.values(Optimization).map((ConcreteOptimization) => ({

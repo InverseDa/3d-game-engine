@@ -2,6 +2,7 @@
 
 #include "Application/RuntimeModule.h"
 #include "CoreMinimal.h"
+#include "DemoSettings.h"
 
 #include "Platform/Platform.h"
 #include "RALMinimal.h"
@@ -310,14 +311,64 @@ public:
     {
         LE_LOG(LogXBD, Info, "=== Limitless Engine P1: RFG Composite Triangle Demo ===")
 
+        if (RegisterDemoApplicationReflection(ReflectionRegistry, ReflectionHandle) !=
+            EReflectionRegisterResult::Success)
+        {
+            LE_LOG(LogXBD, Error, "Failed to register demo settings reflection");
+            return false;
+        }
+        bReflectionRegistered = true;
+
+        const FTypeInfo* const SettingsType = ReflectionRegistry.FindType("LE.FDemoSettings");
+        FDemoSettings Defaults;
+        FPropertyBag Captured;
+        Array<uint8> Encoded;
+        if (SettingsType == nullptr ||
+            TryCapturePropertyBag(
+                ReflectionRegistry, SettingsType->Id, SettingsSchemaVersion, &Defaults, Captured) !=
+                EPropertySerializationResult::Success ||
+            TryEncodePropertyBag(Captured, Encoded) != EPropertySerializationResult::Success ||
+            TryDecodePropertyBag(
+                Span<const uint8>(Encoded.Data(), Encoded.Size()), DecodedSettings) !=
+                EPropertySerializationResult::Success ||
+            ValidatePropertyBag(ReflectionRegistry, DecodedSettings) !=
+                EPropertySerializationResult::Success)
+        {
+            LE_LOG(LogXBD, Error, "Failed to capture and round-trip demo settings");
+            CleanupReflection();
+            return false;
+        }
+
+        const FPropertyInfo* const WidthProperty = SettingsType->FindProperty("WindowWidth");
+        const FPropertyInfo* const HeightProperty = SettingsType->FindProperty("WindowHeight");
+        const FPropertyInfo* const TitleProperty = SettingsType->FindProperty("WindowTitle");
+        uint32 Width = 0;
+        uint32 Height = 0;
+        StringView Title;
+        const FPropertyValue* const WidthValue = WidthProperty == nullptr
+            ? nullptr : DecodedSettings.Find(WidthProperty->Id);
+        const FPropertyValue* const HeightValue = HeightProperty == nullptr
+            ? nullptr : DecodedSettings.Find(HeightProperty->Id);
+        const FPropertyValue* const TitleValue = TitleProperty == nullptr
+            ? nullptr : DecodedSettings.Find(TitleProperty->Id);
+        if (WidthValue == nullptr || HeightValue == nullptr || TitleValue == nullptr ||
+            !WidthValue->TryGetUInt32(Width) || !HeightValue->TryGetUInt32(Height) ||
+            !TitleValue->TryGetString(Title) || Width == 0 || Height == 0)
+        {
+            LE_LOG(LogXBD, Error, "Decoded demo settings are incomplete or invalid");
+            CleanupReflection();
+            return false;
+        }
+
         FPlatformWindowDesc WindowDesc;
-        WindowDesc.Width = DefaultWindowWidth;
-        WindowDesc.Height = DefaultWindowHeight;
-        WindowDesc.Title = "Limitless Engine - RFG Composite Triangle Demo";
+        WindowDesc.Width = Width;
+        WindowDesc.Height = Height;
+        WindowDesc.Title = Title;
         Window = CreatePlatformWindow(WindowDesc);
         if (!Window)
         {
             LE_LOG(LogXBD, Error, "Failed to create window");
+            CleanupReflection();
             return false;
         }
         return true;
@@ -330,6 +381,7 @@ public:
             return;
         }
         bShutdown = true;
+        CleanupReflection();
         Window.Reset();
         PlatformEvents.Clear();
     }
@@ -364,11 +416,25 @@ public:
     }
 
 private:
-    static constexpr uint32 DefaultWindowWidth = 1280;
-    static constexpr uint32 DefaultWindowHeight = 720;
+    void CleanupReflection() noexcept
+    {
+        if (bReflectionRegistered)
+        {
+            static_cast<void>(
+                UnregisterDemoApplicationReflection(ReflectionRegistry, ReflectionHandle));
+            ReflectionHandle.Reset();
+            bReflectionRegistered = false;
+        }
+        DecodedSettings.Reset();
+    }
 
+    static constexpr uint32 SettingsSchemaVersion = 1;
+    FReflectionRegistry ReflectionRegistry;
+    FReflectionModuleHandle ReflectionHandle;
+    FPropertyBag DecodedSettings;
     FPlatformWindowPtr Window;
     FPlatformEventQueue PlatformEvents;
+    bool bReflectionRegistered = false;
     bool bShutdown = false;
 };
 

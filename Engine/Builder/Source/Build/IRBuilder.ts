@@ -2,7 +2,6 @@ import * as Path from "node:path";
 import * as Fs from "node:fs";
 import type {
     BuildAction,
-    CustomActionDescriptor,
     ResolvedTarget,
     OutputType,
 } from "../Configuration/Types.ts";
@@ -12,6 +11,7 @@ import type { IToolchain } from "../Toolchain/IToolchain.ts";
 import { IsCompilableSource, SourceScanner } from "./SourceScanner.ts";
 import { ValidateAndSortActions } from "./ActionGraph.ts";
 import type { EnginePaths } from "../Project/EnginePaths.ts";
+import { ResolveCustomActions } from "./CustomActionResolver.ts";
 
 export class IRBuilder {
     private readonly Actions: BuildAction[] = [];
@@ -98,7 +98,8 @@ export class IRBuilder {
         const Conf = Module.Configuration;
         const SourceRoot = Module.Instance.SourceRoot;
 
-        const CustomActions = this.BuildCustomActions(Module);
+        const CustomActions = ResolveCustomActions(this.Paths, this.BuildTarget, Module);
+        this.Actions.push(...CustomActions);
         if (Conf.Output === OutputTypeEnum.None) return;
 
         const ScannedSources = await this.Scanner.Scan(SourceRoot, Conf);
@@ -218,58 +219,9 @@ export class IRBuilder {
         return `${Stem}_${(Hash >>> 0).toString(16).padStart(8, "0")}.obj`;
     }
 
-    private BuildCustomActions(Module: ResolvedModule): BuildAction[] {
-        const Name = Module.Instance.Descriptor.Name;
-        const SourceRoot = Module.Instance.SourceRoot;
-        const Result: BuildAction[] = [];
-        for (const Descriptor of Module.Configuration.CustomActions) {
-            this.ValidateCustomDescriptor(Name, Descriptor);
-            const Id = `${Name}::custom::${Descriptor.Id}`;
-            const Outputs = Descriptor.Outputs.map((Output) => {
-                const Resolved = this.ResolvePath(Output, SourceRoot, Name);
-                if (!this.IsAllowedCustomOutput(Resolved)) {
-                    throw new Error(`Custom action "${Id}" output escapes engine generated/temp/binaries roots: ${Resolved}`);
-                }
-                return Resolved;
-            });
-            const Action: BuildAction = {
-                Id,
-                Type: "custom",
-                Inputs: Descriptor.Inputs.map((Input) => this.ResolvePath(Input, SourceRoot, Name)),
-                Outputs,
-                Command: Descriptor.Command.map((Token) => this.ResolveCommandToken(Token, SourceRoot, Name)),
-                WorkingDirectory: this.ResolvePath(Descriptor.WorkingDirectory ?? "[engine.Root]", SourceRoot, Name),
-                DependsOn: (Descriptor.DependsOn ?? []).map((Dependency) =>
-                    Dependency.includes("::") ? Dependency : `${Name}::custom::${Dependency}`),
-                Description: Descriptor.Description ?? `CUSTOM ${Name}/${Descriptor.Id}`,
-                ImplicitInputs: (Descriptor.ImplicitInputs ?? []).map((Input) => this.ResolvePath(Input, SourceRoot, Name)),
-            };
-            this.Actions.push(Action);
-            Result.push(Action);
-        }
-        return Result;
-    }
-
-    private ValidateCustomDescriptor(ModuleName: string, Descriptor: CustomActionDescriptor): void {
-        if (!/^[A-Za-z0-9_.-]+$/.test(Descriptor.Id)) {
-            throw new Error(`Module "${ModuleName}" has unsafe custom action id "${Descriptor.Id}".`);
-        }
-        if (Descriptor.Outputs.length === 0) {
-            throw new Error(`Custom action "${ModuleName}::custom::${Descriptor.Id}" has no outputs.`);
-        }
-        if (Descriptor.Command.length === 0 || Descriptor.Command.some((Token) => Token.length === 0)) {
-            throw new Error(`Custom action "${ModuleName}::custom::${Descriptor.Id}" has an empty command or command token.`);
-        }
-    }
-
     private ResolvePath(Value: string, SourceRoot: string, ModuleName?: string): string {
         const Expanded = this.ExpandPathVariables(Value, SourceRoot, ModuleName);
         return Path.normalize(Path.isAbsolute(Expanded) ? Expanded : Path.resolve(SourceRoot, Expanded));
-    }
-
-    private ResolveCommandToken(Value: string, SourceRoot: string, ModuleName: string): string {
-        // Command arguments are opaque tokens: `/flag` is an option, not a filesystem root.
-        return this.ExpandPathVariables(Value, SourceRoot, ModuleName);
     }
 
     private ExpandPathVariables(Value: string, SourceRoot: string, ModuleName?: string): string {
@@ -292,14 +244,6 @@ export class IRBuilder {
         const Unknown = Expanded.match(/\[(?:module|project|engine)\.[^\]]+\]/);
         if (Unknown) throw new Error(`Unknown Builder path variable "${Unknown[0]}".`);
         return Expanded;
-    }
-
-    private IsAllowedCustomOutput(Output: string): boolean {
-        return [
-            this.Paths.TemporaryOutputDirectory(this.BuildTarget),
-            this.Paths.GeneratedOutputDirectory(this.BuildTarget),
-            this.Paths.BinaryOutputDirectory(this.BuildTarget),
-        ].some((Root) => this.IsWithin(Root, Output));
     }
 
     private IsWithin(Root: string, Candidate: string): boolean {

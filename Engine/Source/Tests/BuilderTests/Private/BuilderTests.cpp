@@ -20,6 +20,8 @@
 #include "Renderer/RenderFrameScheduler.h"
 #include "Templates/Function.h"
 #include "Types/EngineTypes.h"
+#include "Types/RuntimeHandle.h"
+#include "Types/Uuid.h"
 
 #include <cmath>
 #include <cstdint>
@@ -30,8 +32,20 @@
 #include <type_traits>
 #include <utility>
 
+namespace LE
+{
+int RunReflectionTests();
+int RunReflectionMacroTests();
+int RunPropertySerializationTests();
+}
+
 namespace
 {
+
+struct FStableIdTestDomain;
+struct FOtherStableIdTestDomain;
+struct FRuntimeHandleTestDomain;
+struct FOtherRuntimeHandleTestDomain;
 
 class FFakeRALCommandList final : public LE::FRALCommandList
 {
@@ -1549,6 +1563,208 @@ int RunStringTests()
     }
     Failures += Expect(Allocator.LiveAllocations == 0,
         "String frees storage through its original allocator identity");
+
+    return Failures;
+}
+
+int RunUuidTests()
+{
+    int Failures = 0;
+    using FStableId = LE::TStableId<FStableIdTestDomain>;
+    using FOtherStableId = LE::TStableId<FOtherStableIdTestDomain>;
+
+    static_assert(sizeof(LE::FUuid) == LE::FUuid::ByteCount, "UUID storage must be exactly 16 bytes");
+    static_assert(std::is_standard_layout<LE::FUuid>::value, "UUID must have standard layout");
+    static_assert(std::is_trivially_copyable<LE::FUuid>::value, "UUID must be trivially copyable");
+    static_assert(!std::is_constructible<FOtherStableId, FStableId>::value,
+        "stable ID domains must not implicitly cross");
+
+    const LE::StringView Canonical("00112233-4455-4677-8899-aabbccddeeff");
+    LE::FUuid Parsed;
+    Failures += Expect(LE::FUuid::TryParse(Canonical, Parsed)
+        && Parsed.IsValid()
+        && Parsed.GetVersion() == 4
+        && Parsed.HasRfcVariant()
+        && Parsed.ToString() == Canonical,
+        "FUuid parses and formats the strict canonical RFC byte order");
+
+    LE::FUuid Copied = Parsed;
+    Failures += Expect(Copied == Parsed && !(Copied < Parsed) && !(Parsed < Copied)
+        && LE::FUuidHash{}(Copied) == LE::DefaultHash<LE::FUuid>{}(Parsed),
+        "FUuid copy comparison ordering and hashing are value-based");
+
+    LE::HashMap<LE::FUuid, int> UuidValues;
+    UuidValues.Insert(Parsed, 42);
+    Failures += Expect(UuidValues.Contains(Copied) && *UuidValues.Find(Copied) == 42,
+        "FUuid is a default-hash key across the public Core API");
+
+    LE::FUuid Nil;
+    Failures += Expect(LE::FUuid::TryParse("00000000-0000-0000-0000-000000000000", Nil)
+        && !Nil.IsValid()
+        && Nil.ToString() == LE::StringView("00000000-0000-0000-0000-000000000000"),
+        "FUuid accepts nil syntax while preserving nil as the invalid sentinel");
+
+    const LE::StringView InvalidSpellings[] = {
+        "00112233-4455-4677-8899-aabbccddeef",
+        "00112233-4455-4677-8899-aabbccddeeff0",
+        "00112233_4455-4677-8899-aabbccddeeff",
+        "00112233-4455-4677-8899-Aabbccddeeff",
+        "00112233-4455-4677-8899-aabbccddegff",
+    };
+    for (const LE::StringView Invalid : InvalidSpellings)
+    {
+        LE::FUuid Preserved = Parsed;
+        Failures += Expect(!LE::FUuid::TryParse(Invalid, Preserved) && Preserved == Parsed,
+            "FUuid rejects non-canonical input without changing the output value");
+    }
+
+    LE::HashSet<LE::FUuid> GeneratedValues;
+    bool bGeneratedContractHolds = true;
+    for (int Index = 0; Index < 64; ++Index)
+    {
+        LE::FUuid Generated = Parsed;
+        if (!LE::FUuid::TryGenerate(Generated)
+            || !Generated.IsValid()
+            || Generated.GetVersion() != 4
+            || !Generated.HasRfcVariant()
+            || !GeneratedValues.Insert(Generated))
+        {
+            bGeneratedContractHolds = false;
+            break;
+        }
+        LE::FUuid RoundTripped;
+        if (!LE::FUuid::TryParse(Generated.ToString(), RoundTripped) || RoundTripped != Generated)
+        {
+            bGeneratedContractHolds = false;
+            break;
+        }
+    }
+    Failures += Expect(bGeneratedContractHolds && GeneratedValues.Size() == 64,
+        "OS-generated UUIDs are unique in the sample and satisfy RFC v4 and variant bits");
+
+    FStableId Stable;
+    Failures += Expect(FStableId::TryParse(Canonical, Stable)
+        && Stable.IsValid()
+        && Stable.ToString() == Canonical,
+        "TStableId preserves UUID value semantics for one compile-time domain");
+    FStableId PreservedStable = Stable;
+    Failures += Expect(!FStableId::TryParse("00000000-0000-0000-0000-000000000000", PreservedStable)
+        && PreservedStable == Stable,
+        "TStableId rejects nil without changing the output ID");
+    FStableId GeneratedStable;
+    Failures += Expect(FStableId::TryGenerate(GeneratedStable) && GeneratedStable.IsValid(),
+        "TStableId generates a valid UUID-backed domain value");
+    LE::HashMap<FStableId, int> StableValues;
+    StableValues.Insert(Stable, 7);
+    Failures += Expect(StableValues.Contains(FStableId::FromUuid(Parsed))
+        && *StableValues.Find(FStableId::FromUuid(Parsed)) == 7,
+        "TStableId supplies domain-specific default hashing");
+
+    return Failures;
+}
+
+int RunRuntimeHandleTests()
+{
+    int Failures = 0;
+    using FHandle = LE::TRuntimeHandle<FRuntimeHandleTestDomain>;
+    using FOtherHandle = LE::TRuntimeHandle<FOtherRuntimeHandleTestDomain>;
+    using FPool = LE::TRuntimeHandlePool<FRuntimeHandleTestDomain>;
+
+    static_assert(sizeof(FHandle) == sizeof(LE::uint32) * 2,
+        "default runtime handles must be a fixed 64-bit pair");
+    static_assert(std::is_trivially_copyable<FHandle>::value,
+        "runtime handles must be trivially copyable values");
+    static_assert(!std::is_constructible<FOtherHandle, FHandle>::value,
+        "runtime handle domains must not implicitly cross");
+    static_assert(!std::is_copy_constructible<FPool>::value && !std::is_move_constructible<FPool>::value,
+        "runtime handle pools must preserve one issuance domain");
+
+    FHandle Invalid;
+    Failures += Expect(!Invalid.IsValid(), "default runtime handle is invalid");
+
+    FPool Pool;
+    FHandle First;
+    FHandle Second;
+    Failures += Expect(Pool.TryAllocate(First) && Pool.TryAllocate(Second)
+        && First.IsValid() && Second.IsValid()
+        && First.Index == 0 && First.Generation == 1
+        && Second.Index == 1 && Second.Generation == 1
+        && Pool.IsAlive(First) && Pool.IsAlive(Second)
+        && Pool.GetSlotCount() == 2 && Pool.GetAliveCount() == 2,
+        "runtime handle pool issues live index-generation pairs");
+
+    const FHandle ForgedGeneration{ First.Index, static_cast<LE::uint32>(First.Generation + 1) };
+    const FHandle OutOfRange{ 99, 1 };
+    Failures += Expect(!Pool.IsAlive(ForgedGeneration)
+        && !Pool.IsAlive(OutOfRange)
+        && !Pool.Release(Invalid)
+        && !Pool.Release(ForgedGeneration),
+        "runtime handle validation rejects invalid forged and out-of-range values");
+
+    Failures += Expect(Pool.Release(First) && !Pool.IsAlive(First) && !Pool.Release(First),
+        "runtime handle release invalidates stale and double-release values");
+    FHandle Reused;
+    Failures += Expect(Pool.TryAllocate(Reused)
+        && Reused.Index == First.Index
+        && Reused.Generation == First.Generation + 1
+        && Pool.IsAlive(Reused)
+        && !Pool.IsAlive(First),
+        "runtime handle slot reuse increments generation and keeps the prior handle stale");
+
+    LE::HashMap<FHandle, int> HandleValues;
+    HandleValues.Insert(Reused, 23);
+    Failures += Expect(HandleValues.Contains(Reused) && *HandleValues.Find(Reused) == 23
+        && LE::DefaultHash<FHandle>{}(Reused) != LE::DefaultHash<FHandle>{}(First),
+        "runtime handle hashing includes both index and generation");
+
+    using FSmallGenerationHandle = LE::TRuntimeHandle<FRuntimeHandleTestDomain, LE::uint32, LE::uint8>;
+    LE::TRuntimeHandlePool<FRuntimeHandleTestDomain, LE::uint32, LE::uint8> ExhaustionPool;
+    FSmallGenerationHandle Earliest;
+    bool bGenerationSequenceValid = ExhaustionPool.TryAllocate(Earliest)
+        && Earliest.Index == 0 && Earliest.Generation == 1
+        && ExhaustionPool.Release(Earliest);
+    for (unsigned int Expected = 2; Expected <= 255 && bGenerationSequenceValid; ++Expected)
+    {
+        FSmallGenerationHandle Current;
+        bGenerationSequenceValid = ExhaustionPool.TryAllocate(Current)
+            && Current.Index == 0
+            && Current.Generation == static_cast<LE::uint8>(Expected)
+            && ExhaustionPool.Release(Current);
+    }
+    FSmallGenerationHandle AfterRetirement;
+    bGenerationSequenceValid = bGenerationSequenceValid
+        && ExhaustionPool.TryAllocate(AfterRetirement)
+        && AfterRetirement.Index == 1
+        && AfterRetirement.Generation == 1
+        && !ExhaustionPool.IsAlive(Earliest)
+        && ExhaustionPool.GetSlotCount() == 2;
+    Failures += Expect(bGenerationSequenceValid,
+        "generation exhaustion permanently retires the slot instead of wrapping into ABA");
+
+    using FSmallIndexHandle = LE::TRuntimeHandle<FRuntimeHandleTestDomain, LE::uint8, LE::uint8>;
+    LE::TRuntimeHandlePool<FRuntimeHandleTestDomain, LE::uint8, LE::uint8> IndexPool;
+    LE::Array<FSmallIndexHandle> Issued;
+    bool bIndexSequenceValid = true;
+    for (unsigned int Index = 0; Index < 255; ++Index)
+    {
+        FSmallIndexHandle Handle;
+        if (!IndexPool.TryAllocate(Handle)
+            || Handle.Index != static_cast<LE::uint8>(Index)
+            || Handle.Generation != 1)
+        {
+            bIndexSequenceValid = false;
+            break;
+        }
+        Issued.PushBack(Handle);
+    }
+    FSmallIndexHandle Preserved{ 7, 9 };
+    bIndexSequenceValid = bIndexSequenceValid
+        && !IndexPool.TryAllocate(Preserved)
+        && Preserved == FSmallIndexHandle{ 7, 9 }
+        && IndexPool.GetSlotCount() == 255
+        && IndexPool.GetAliveCount() == 255;
+    Failures += Expect(bIndexSequenceValid,
+        "runtime handle index sentinel is never issued and exhaustion preserves the output value");
 
     return Failures;
 }
@@ -3168,6 +3384,11 @@ int main(const int ArgCount, char** Arguments)
     FailureCount += RunHashMapPolicyAndFailureTests();
     FailureCount += RunHashSetParityTests();
     FailureCount += RunStringTests();
+    FailureCount += RunUuidTests();
+    FailureCount += RunRuntimeHandleTests();
+    FailureCount += LE::RunReflectionTests();
+    FailureCount += LE::RunReflectionMacroTests();
+    FailureCount += LE::RunPropertySerializationTests();
     FailureCount += RunOwnershipTests();
     FailureCount += RunFunctionTests();
     FailureCount += RunMathVectorTests();
