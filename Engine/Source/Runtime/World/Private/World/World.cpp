@@ -144,6 +144,7 @@ struct FWorld::FImpl
         , AliveEntities(InAllocator)
         , TransformComponents(InAllocator)
         , MeshComponents(InAllocator)
+        , CameraComponents(InAllocator)
         , NativeGameplaySystems(InAllocator)
         , FixedSystemOrder(InAllocator)
         , VariableSystemOrder(InAllocator)
@@ -157,6 +158,7 @@ struct FWorld::FImpl
     FComponentStorageNode* FirstStorage = nullptr;
     TComponentStorage<FTransformComponent> TransformComponents;
     TComponentStorage<FWorldMeshComponent> MeshComponents;
+    TComponentStorage<FWorldCameraComponent> CameraComponents;
     FWorldCommandBuffer* CommandBuffer = nullptr;
     Array<FRegisteredNativeGameplaySystem> NativeGameplaySystems;
     Array<std::size_t> FixedSystemOrder;
@@ -219,6 +221,13 @@ FWorld::FWorld(IAllocator& Allocator) noexcept
     }
     Impl = new (Storage) FImpl(Allocator, WorldDomain);
     if (!AttachStorage(Impl->MeshComponents))
+    {
+        Impl->~FImpl();
+        DeallocateArray(Allocator, Impl, 1);
+        Impl = nullptr;
+        return;
+    }
+    if (!AttachStorage(Impl->CameraComponents))
     {
         Impl->~FImpl();
         DeallocateArray(Allocator, Impl, 1);
@@ -1427,6 +1436,16 @@ TComponentStorage<FWorldMeshComponent>* FWorld::GetMeshComponents() noexcept
 const TComponentStorage<FWorldMeshComponent>* FWorld::GetMeshComponents() const noexcept
 {
     return Impl == nullptr ? nullptr : &Impl->MeshComponents;
+}
+
+TComponentStorage<FWorldCameraComponent>* FWorld::GetCameraComponents() noexcept
+{
+    return Impl == nullptr ? nullptr : &Impl->CameraComponents;
+}
+
+const TComponentStorage<FWorldCameraComponent>* FWorld::GetCameraComponents() const noexcept
+{
+    return Impl == nullptr ? nullptr : &Impl->CameraComponents;
 }
 
 bool FWorld::AttachStorage(FComponentStorageNode& Storage) noexcept

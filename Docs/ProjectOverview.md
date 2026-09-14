@@ -45,12 +45,14 @@ E:\Projects\3d-game-engine
 | **Core** | Core | 基础类型、自有数学值类型、日志与引擎通用工具 | 5 | Spdlog |
 | **Platform** | Platform | 窗口所有权、消息泵、平台事件、surface 与单调时间边界 | 11 | Core |
 | **Application** | Application | `FEngineLoop`、Application 生命周期、确定性 runtime module registry、显式帧阶段与时间上下文 | 7 | Core, Platform |
+| **Asset** | Asset | 持久 Asset/Type ID、typed runtime handle、虚拟 soft path 与同步 registry；定义 opaque Mesh/Material 逻辑类型，不持有 GPU payload | 8 | Core |
 | **Reflection** | Reflection | 稳定 type/property IDs、owned runtime metadata registry、property bag、结构化二进制序列化与显式 provider 生命周期 | 14 | Core |
 | **RAL** | Render Abstraction Layer | 渲染抽象层，封装 Vulkan 底层对象 (Buffer、Texture、Pipeline、Swapchain、CommandList 等) | 27 | Core, Platform, Spdlog, Vulkan |
 | **RFG** | Render Frame Graph | 渲染帧图系统，负责 Pass 编排、资源屏障规划、依赖分析与执行调度 | 42 | Core, RAL |
-| **Renderer** | Renderer | 高层渲染器，定义 RenderPass / RenderPipeline / RenderView，对接 Frame Graph 与 RAL | 18 | Core, RAL, RFG |
-| **World** | World | Entity 生命周期、typed contiguous component storage、Transform hierarchy/dirty world-matrix cache、确定性 tick/deferred command boundary、单线程 native fixed/variable system schedule、渲染场景提取，以及显式 `FWorld` Reflection P0 provider | 12 | Core, RAL, Reflection, Renderer |
-| **DemoApplication** | Demo Application | 当前 RFG composite triangle；`Demo.Window` 真实消费 private reflected settings/property serialization，`Demo.Render` 持久 World 运行 private native rotation system、End 提交命令、Render 提取只读场景 | 5 | Application, Core, Platform, Spdlog, RAL, RFG, Reflection, Renderer, World |
+| **Renderer** | Renderer | 高层渲染器，定义 RenderPass / RenderPipeline / RenderView、Mesh/Material GPU payload 与正式 BasePass→Composite 管线，对接 Asset、Frame Graph 与 RAL | 22 | Core, Asset, RAL, RFG |
+| **World** | World | Entity 生命周期、typed contiguous component storage、Transform hierarchy/dirty world-matrix cache、确定性 tick/deferred command boundary、单线程 native fixed/variable system schedule、Mesh/Material typed handles、primary camera 逻辑组件，以及显式 `FWorld` Reflection P0 provider | 10 | Core, Asset, Reflection |
+| **WorldRenderer** | World Renderer | 从 committed World 与同步 Asset registry 构建 frame-owned immutable render snapshot，选择相机、剔除并确定性排序 indexed mesh proxies | 4 | Core, Asset, Renderer, World |
+| **DemoApplication** | Demo Application | Phase 6 BasePass vertical slice；持有同步 asset registry 和 borrowed Renderer payload，通过 WorldRenderer 构建帧快照并事务化处理 SceneColor/depth resize Replace | 4 | Application, Asset, Core, Platform, Spdlog, RAL, RFG, Reflection, Renderer, World, WorldRenderer |
 | **Launch** | Launch | `WinMain` / `main` 与通用 lifecycle bootstrap | 2 | Core, DemoApplication |
 
 > **注**：文件数统计包含 `.cpp` / `.h` / `.hpp` / `.mm` 等源码文件。
@@ -106,18 +108,19 @@ GenerateProject.bat
 
 ```text
 Spdlog ---> Core ---> Platform ---> Application
-   |         |           |
-   |         +---------------> Reflection
-   |         +-----------+----> RAL <--- Vulkan
-   |                              |
-   +----------------------------> RFG
-                                  |
-                                  v
-                              Renderer -----+
-                                            +---> World
-                              Reflection ---+
+              | \
+              |  +-------> Reflection ------+
+              +----------> Asset --------+   |
+                              |          |   |
+                              +------> Renderer
+                              |          |   |
+                              +------> World <+
+                                         | \
+                              Renderer --+--> WorldRenderer
 
-Application / Platform / RAL / RFG / Reflection / Renderer / World / Spdlog
+Core + Platform + Spdlog + Vulkan ---> RAL ---> RFG ---> Renderer
+
+Application / Platform / Asset / RAL / RFG / Reflection / Renderer / World / WorldRenderer / Spdlog
                          |
                          v
                   DemoApplication
@@ -141,12 +144,14 @@ Application / Platform / RAL / RFG / Reflection / Renderer / World / Spdlog
 | Core | Spdlog |
 | Platform | Core |
 | Application | Core, Platform |
+| Asset | Core |
 | RAL | Core, Platform, Spdlog, Vulkan |
 | RFG | Core, RAL |
-| Renderer | Core, RAL, RFG |
+| Renderer | Core, Asset, RAL, RFG |
 | Reflection | Core |
-| World | Core, RAL, Reflection, Renderer |
-| DemoApplication | Application, Core, Platform, Spdlog, RAL, RFG, Reflection, Renderer, World |
+| World | Core, Asset, Reflection |
+| WorldRenderer | Core, Asset, Renderer, World |
+| DemoApplication | Application, Asset, Core, Platform, Spdlog, RAL, RFG, Reflection, Renderer, World, WorldRenderer |
 | Launch | Core, DemoApplication |
 | LimitlessEngine (主工程) | 由 Launch 入口沿 public link graph 到达全部运行时依赖 |
 

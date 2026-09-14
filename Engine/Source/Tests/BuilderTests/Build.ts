@@ -15,12 +15,14 @@ export default class BuilderTestsBuild extends ModuleBuild {
             : OutputType.None;
         Configuration.PublicDependencies.push(
             "Application",
+            "Asset",
             "Core",
             "Platform",
             "RAL",
             "Reflection",
             "Renderer",
             "World",
+            "WorldRenderer",
         );
         if (Target.TargetType === TargetType.Test) {
             Configuration.CustomActions.push({

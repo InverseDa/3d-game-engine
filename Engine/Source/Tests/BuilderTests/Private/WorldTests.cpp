@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <type_traits>
 #include <utility>
 
@@ -439,6 +440,7 @@ int RunWorldFailureAndDetachTests()
     Failures += Expect(!InvalidWorld.IsValid() && !InvalidWorld.TryCreateEntity(Preserved) &&
         Preserved == FEntity{FEntitySlotHandle{7, 9}, 11} &&
         InvalidWorld.GetEntityCount() == 0 && InvalidWorld.GetMeshComponents() == nullptr &&
+        InvalidWorld.GetCameraComponents() == nullptr &&
         InvalidWorld.GetTransformMutationVersion() == 0 && !InvalidWorld.UpdateTransforms(),
         "FWorld remains safely constructed and preserves outputs when PImpl allocation fails");
 
@@ -763,7 +765,7 @@ int RunTransformValidationAndDestroyTests()
     return Failures;
 }
 
-int RunTransformDepthOomAndExtractionTests()
+int RunTransformDepthOomAndMeshStorageTests()
 {
     int Failures = 0;
     FWorld DeepWorld;
@@ -808,23 +810,48 @@ int RunTransformDepthOomAndExtractionTests()
             EComponentMutationResult::Added && OomWorld.HasTransform(OomEntity),
         "Transform Add succeeds on the first retry after OOM");
 
+    static_assert(sizeof(FMeshAssetHandle) == 16 && sizeof(FMaterialAssetHandle) == 16,
+        "World render asset handles must remain 16-byte values");
+    static_assert(std::is_same<decltype(FWorldMeshComponent::Mesh),
+            FMeshAssetHandle>::value &&
+        std::is_same<decltype(FWorldMeshComponent::Material),
+            FMaterialAssetHandle>::value,
+        "World mesh components must contain typed asset handles");
+    static_assert(std::is_base_of<FWorldPrimitive, FWorldCameraComponent>::value,
+        "World camera components retain the World primitive contract");
+
     FWorld SceneWorld;
     TComponentStorage<FWorldMeshComponent>* const Meshes = SceneWorld.GetMeshComponents();
-    FEntity TransformedMesh;
-    FEntity IdentityMesh;
-    SceneWorld.TryCreateEntity(TransformedMesh);
-    SceneWorld.TryCreateEntity(IdentityMesh);
-    FTransform MeshTransform;
-    MeshTransform.Translation = Math::Vector3f(4.0f, 5.0f, 6.0f);
-    SceneWorld.TryAddTransform(TransformedMesh, MeshTransform);
-    SceneWorld.TryAddComponent(*Meshes, TransformedMesh, FWorldMeshComponent{});
-    SceneWorld.TryAddComponent(*Meshes, IdentityMesh, FWorldMeshComponent{});
-    FRenderScene RenderScene;
-    FWorldRenderSceneExtractor::ExtractRenderScene(SceneWorld, RenderScene);
-    Failures += Expect(RenderScene.Meshes.Size() == 2 &&
-        HasTranslation(RenderScene.Meshes[0].LocalToWorld, 4.0f, 5.0f, 6.0f) &&
-        RenderScene.Meshes[1].LocalToWorld == Math::Matrix4f::Identity(),
-        "render extraction consumes Transform world matrices with identity fallback");
+    FEntity MeshEntity;
+    SceneWorld.TryCreateEntity(MeshEntity);
+    FWorldMeshComponent MeshComponent;
+    MeshComponent.DebugName = "AssetBackedMesh";
+    MeshComponent.SortKey = 17;
+    SceneWorld.TryAddComponent(*Meshes, MeshEntity, std::move(MeshComponent));
+    const Span<const FWorldMeshComponent> StoredMeshes = Meshes->GetComponents();
+    Failures += Expect(StoredMeshes.Size() == 1 &&
+        StoredMeshes[0].Mesh == FMeshAssetHandle{} &&
+        StoredMeshes[0].Material == FMaterialAssetHandle{} &&
+        StoredMeshes[0].SortKey == 17 &&
+        StoredMeshes[0].DebugName == StringView("AssetBackedMesh"),
+        "World mesh storage owns only asset handles and world-authored metadata");
+
+    TComponentStorage<FWorldCameraComponent>* const Cameras =
+        SceneWorld.GetCameraComponents();
+    FEntity CameraEntity;
+    SceneWorld.TryCreateEntity(CameraEntity);
+    FWorldCameraComponent CameraComponent;
+    CameraComponent.DebugName = "LogicalCamera";
+    CameraComponent.Priority = 3;
+    SceneWorld.TryAddComponent(*Cameras, CameraEntity, std::move(CameraComponent));
+    const Span<const FWorldCameraComponent> StoredCameras = Cameras->GetComponents();
+    Failures += Expect(StoredCameras.Size() == 1 && StoredCameras[0].bActive &&
+        StoredCameras[0].Priority == 3 &&
+        StoredCameras[0].DebugName == StringView("LogicalCamera"),
+        "World camera storage owns only logical projection and selection data");
+    Failures += Expect(SceneWorld.Reset() && Cameras->GetComponents().IsEmpty() &&
+        Meshes->GetComponents().IsEmpty(),
+        "World reset clears built-in camera and mesh storage together");
     return Failures;
 }
 
@@ -1700,7 +1727,7 @@ int RunWorldTests()
     Failures += RunWorldFailureAndDetachTests();
     Failures += RunTransformValueAndHierarchyTests();
     Failures += RunTransformValidationAndDestroyTests();
-    Failures += RunTransformDepthOomAndExtractionTests();
+    Failures += RunTransformDepthOomAndMeshStorageTests();
     Failures += RunWorldTickBoundaryTests();
     Failures += RunDeferredCommandFifoAndTokenTests();
     Failures += RunDeferredCommandOomAndReentryTests();

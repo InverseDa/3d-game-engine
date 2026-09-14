@@ -350,6 +350,7 @@ private:
 private:
     FVulkanRALPipeline_Graphics* CurrentPipeline = nullptr;
     bool bInsideRendering = false;
+    FRALRenderingAttachmentSignature ActiveRenderingSignature;
     LE::Array<VkImage> PendingPresentTransitionImages;
 };
 

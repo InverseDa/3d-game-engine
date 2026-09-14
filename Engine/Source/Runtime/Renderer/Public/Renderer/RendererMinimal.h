@@ -1,6 +1,8 @@
 #pragma once
 
 #include "PlatformRenderProfile.h"
+#include "BasePass.h"
+#include "RenderAssets.h"
 #include "ShadingPath.h"
 #include "RenderScene.h"
 #include "RenderView.h"
@@ -8,6 +10,6 @@
 #include "RenderFrameScheduler.h"
 #include "RenderPass.h"
 #include "RenderPipeline.h"
-#include "DemoRenderPipelines.h"
+#include "BasePassCompositePipeline.h"
 #include "RenderGraphBuilderBridge.h"
 #include "Renderer.h"

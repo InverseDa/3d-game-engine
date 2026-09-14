@@ -1,0 +1,18 @@
+struct FBasePassConstants
+{
+    row_major float4x4 LocalToClip;
+    float4 BaseColor;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<FBasePassConstants> ObjectConstants;
+
+struct PSInput
+{
+    [[vk::location(0)]] float3 Color : COLOR0;
+};
+
+float4 MainPS(PSInput input) : SV_Target0
+{
+    return float4(input.Color * ObjectConstants.BaseColor.rgb, 1.0);
+}

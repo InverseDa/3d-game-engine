@@ -26,6 +26,9 @@ enum class EPixelFormat : uint8
     R8_UINT,
     R8_SINT,
 
+    // 16-bit
+    R16_UINT,
+
     // 32-bit
     R32_UINT,
     R8G8B8A8_UNORM,
@@ -73,6 +76,11 @@ inline EShaderStage operator|(EShaderStage A, EShaderStage B)
 inline bool EnumHasAnyFlags(EShaderStage Value, EShaderStage Flags)
 {
     return (static_cast<uint8>(Value) & static_cast<uint8>(Flags)) != 0;
+}
+
+inline constexpr bool IsValidIndexFormat(const EPixelFormat Format) noexcept
+{
+    return Format == EPixelFormat::R16_UINT || Format == EPixelFormat::R32_UINT;
 }
 
 enum class EShaderResourceType : uint8

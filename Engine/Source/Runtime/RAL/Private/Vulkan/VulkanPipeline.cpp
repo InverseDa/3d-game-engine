@@ -12,6 +12,7 @@ static VkFormat ToVkFormat(EPixelFormat Format)
     case EPixelFormat::R8_SNORM:         return VK_FORMAT_R8_SNORM;
     case EPixelFormat::R8_UINT:          return VK_FORMAT_R8_UINT;
     case EPixelFormat::R8_SINT:          return VK_FORMAT_R8_SINT;
+    case EPixelFormat::R16_UINT:         return VK_FORMAT_R16_UINT;
     case EPixelFormat::R32_UINT:         return VK_FORMAT_R32_UINT;
     case EPixelFormat::R8G8B8A8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
     case EPixelFormat::R8G8B8A8_SNORM: return VK_FORMAT_R8G8B8A8_SNORM;
@@ -47,6 +48,18 @@ static VkCompareOp ToVkCompareOp(ECompareFunction Func)
     }
 }
 
+static VkShaderStageFlags ToVkShaderStageFlags(const EShaderStage Stage)
+{
+    VkShaderStageFlags Result = 0;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Vertex)) Result |= VK_SHADER_STAGE_VERTEX_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Pixel)) Result |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Compute)) Result |= VK_SHADER_STAGE_COMPUTE_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Geometry)) Result |= VK_SHADER_STAGE_GEOMETRY_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Hull)) Result |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Domain)) Result |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    return Result;
+}
+
 static VkCullModeFlags ToVkCullMode(ECullMode Mode)
 {
     switch (Mode)
@@ -74,6 +87,32 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         return;
     }
 
+    const bool bHasPushConstants = !Desc.PushConstants.IsDisabled();
+    if (bHasPushConstants && !Desc.PushConstants.IsValid())
+    {
+        LE_LOG(LogRAL, Error,
+            "Pipeline creation failed: push constants require non-empty stages and an aligned size in [4, 128]. Stages={}, Size={}.",
+            static_cast<uint32>(Desc.PushConstants.StageFlags),
+            Desc.PushConstants.Size);
+        this->Pipeline = VK_NULL_HANDLE;
+        this->PipelineLayout = VK_NULL_HANDLE;
+        return;
+    }
+    VkPushConstantRange PushConstantRange{};
+    if (bHasPushConstants)
+    {
+        PushConstantRange.stageFlags = ToVkShaderStageFlags(Desc.PushConstants.StageFlags);
+        PushConstantRange.offset = 0;
+        PushConstantRange.size = Desc.PushConstants.Size;
+        if (PushConstantRange.stageFlags == 0)
+        {
+            LE_LOG(LogRAL, Error, "Pipeline creation failed: push constant stages are unsupported.");
+            this->Pipeline = VK_NULL_HANDLE;
+            this->PipelineLayout = VK_NULL_HANDLE;
+            return;
+        }
+    }
+
     LE::Array<VkDescriptorSetLayout> SetLayouts;
     SetLayouts.Reserve(Desc.BindGroupLayouts.Size());
     for (FRALBindGroupLayout* SetLayout : Desc.BindGroupLayouts)
@@ -94,6 +133,8 @@ FVulkanRALPipeline_Graphics::FVulkanRALPipeline_Graphics(FVulkanRALDevice* InDev
         LayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         LayoutInfo.setLayoutCount = static_cast<uint32>(SetLayouts.Size());
         LayoutInfo.pSetLayouts = SetLayouts.Data();
+        LayoutInfo.pushConstantRangeCount = bHasPushConstants ? 1u : 0u;
+        LayoutInfo.pPushConstantRanges = bHasPushConstants ? &PushConstantRange : nullptr;
     }
     VkResult Result = vkCreatePipelineLayout(this->Device->VkContext.LogicalDevice, &LayoutInfo, nullptr, &this->PipelineLayout);
     if (Result != VK_SUCCESS)

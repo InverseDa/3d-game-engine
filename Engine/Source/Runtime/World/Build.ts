@@ -8,7 +8,7 @@ export default class WorldBuild extends ModuleBuild {
     public readonly Name = "World";
 
     public Configure(_Target: Target, Configuration: ModuleConfiguration): void {
-        Configuration.PublicDependencies.push("Core", "RAL", "Reflection", "Renderer");
+        Configuration.PublicDependencies.push("Core", "Asset", "Reflection");
         Configuration.CustomActions.push({
             Id: "GenerateReflection",
             Inputs: ["[module.SourceRoot]/Public/World/World.h"],

@@ -4,6 +4,12 @@
 
 Renderer 是引擎的高层渲染模块，基于 **RFG（Render Frame Graph）** + **RAL（Render Abstraction Layer）** 构建可扩展的渲染管线。
 
+Renderer is the sole owner of the complete `FMeshAsset` and `FMaterialAsset`
+GPU payload definitions. Asset owns only their stable logical type IDs, while
+World stores opaque typed handles and has no Renderer/RAL dependency. The
+separate WorldRenderer module resolves those handles into an immutable,
+frame-owned `FRenderScene` snapshot for synchronous command recording.
+
 其主要职责包括：
 
 - 接收游戏线程提交的场景描述（`FRenderScene`）和视图参数（`FRenderView`）。
@@ -23,9 +29,9 @@ Renderer 是引擎的高层渲染模块，基于 **RFG（Render Frame Graph）**
 
 | 成员 | 类型 | 说明 |
 |------|------|------|
-| `Meshes` | `LE::Array<FRenderMeshProxy>` | 网格渲染代理，含 `LocalToWorld` snapshot、`GraphicsPipeline`、`VertexBuffer`、`VertexCount`、`PassMask`、`SortKey` |
-| `Lights` | `std::vector<FRenderLightProxy>` | 光源代理（当前为空壳） |
-| `Cameras` | `std::vector<FRenderCameraProxy>` | 相机代理（当前为空壳） |
+| `Meshes` | `LE::Array<FRenderMeshProxy>` | 已剔除并确定性排序的 indexed mesh proxies，复制 transform/bounds、persistent material ID、VB/IB、pipeline 与最小 opaque base color |
+| `Lights` | `LE::Array<FRenderLightProxy>` | 光源代理（当前为空壳） |
+| `Cameras` | `LE::Array<FRenderCameraProxy>` | 恰好一个 primary camera，复制 View/Projection/ViewProjection、primitive ID 与 viewport |
 
 `ERenderMeshPassMask` 定义了网格可参与的目标通道：`BackBuffer`、`SceneColor`。
 
@@ -125,7 +131,10 @@ class IRenderPipeline {
 
 ### 4.2 `FRenderScene`（RenderScene.h）
 
-帧级场景代理容器。`Reset()` 用于清空上一帧数据。
+帧级场景代理容器。WorldRenderer 将它封装在只读
+`FWorldRenderSnapshot` 中；Renderer 只在当前 frame callback 内同步读取。
+`FRenderPrimitiveId` 是两个 `uint64` 组成的 Renderer-neutral strong value，
+`FRenderBounds` 是默认 invalid、显式校验 finite/min-max 的 world-space AABB。
 
 ### 4.3 `FRenderView` / `FRenderViewFamily`（RenderView.h）
 
@@ -161,28 +170,34 @@ Pipeline.AddPass(&PassB);
 
 ---
 
-## 5. DemoRenderPipelines 与 SimpleRenderPipeline 现状
+## 5. BasePassCompositePipeline 与 SimpleRenderPipeline
 
-### 5.1 Demo 管线
+### 5.1 正式 BasePass vertical slice
 
-当前引擎仅提供两条演示管线，用于验证 RFG + RAL 链路：
+`FBasePassCompositePipeline` 规划严格的两 Pass 链路：
 
 | 管线 | 名称 | Pass 数 | 说明 |
 |------|------|---------|------|
-| `FTriangleBackBufferPipeline` | `TriangleBackBufferPipeline` | 1 | 直接将场景网格绘制到 Swapchain BackBuffer |
-| `FTriangleCompositePipeline` | `TriangleCompositePipeline` | 2 | 先绘制到 Offscreen `SceneColor` 纹理，再通过全屏 Composite Pass 采样并输出到 BackBuffer |
+| `FBasePassCompositePipeline` | `BasePassCompositePipeline` | 2 | indexed opaque BasePass 写 SceneColor+depth，随后 Composite 采样 SceneColor 输出 BackBuffer |
 
-#### `FTriangleBackBufferPass`
-- Setup：导入上层显式 Acquire 返回的 BackBuffer view，标记 Write + Output。
-- Record：筛选 `PassMask` 含 `BackBuffer` 的网格，按 `SortKey` 排序，设置 Viewport/Scissor，绑定图形管线并绘制。
+#### `FBasePass`
 
-#### `FOffscreenTrianglePass`
-- Setup：导入外部创建的 `SceneColor` 纹理，标记 Write。
-- Record：筛选 `PassMask` 含 `SceneColor` 的网格，绘制到 `SceneColorView`。
+- Preflight 在产生计划前验证唯一 primary camera、B8G8R8A8_SRGB SceneColor、D32_FLOAT
+  depth、extent、opaque blend/depth contract、slot0 vertex binding、VB/IB usage/size、R16/R32
+  index format，以及有效的 persistent Material asset ID。
+- Setup 导入 SceneColor/depth 及全部可见 VB/IB；声明 `Undefined -> RenderTarget`、
+  `Undefined -> DepthStencilWrite`、`VertexBuffer` 与 `IndexBuffer` 读取，并保留两个附件输出。
+- Record 不再分配或排序；严格按 immutable snapshot 顺序清除 color/depth、设置 viewport/scissor，
+  绑定 pipeline/VB/IB，上传精确 80-byte `row_major LocalToClip + BaseColor` push constants，
+  并调用 `DrawIndexed`。BaseColor alpha 固定为 1。
+- 零可见 mesh 仍是有效计划，BasePass 仍清除 SceneColor/depth。
 
-#### `FCompositePass`
-- Setup：读取 `SceneColor`，写入 BackBuffer，标记 Output。
-- Record：手动插入 Vulkan `vkCmdPipelineBarrier` 将 `SceneColor` 从 `COLOR_ATTACHMENT_OPTIMAL` 转换到 `SHADER_READ_ONLY_OPTIMAL`，然后绑定 Composite 管线与 BindGroup，绘制全屏三角形（3 个顶点）。
+#### `FSceneColorCompositePass`
+
+- Setup 只读取同一 SceneColor 并写/输出 BackBuffer，因此真实的 BasePass→Composite
+  依赖和 RenderTarget→ShaderRead barrier 完全由 RFG 推导；Composite 不读取 depth。
+- Record 仅使用 RAL render pass、pipeline、bind group 与 fullscreen draw，不含 Vulkan API。
+- 即使 BasePass 零可见 mesh，Composite 仍采样并输出 clear SceneColor。
 
 ### 5.2 SimpleRenderPipeline
 
@@ -212,6 +227,7 @@ enum class ERenderPlatformProfile : uint8 {
 | 模块 | 用途 |
 |------|------|
 | **Core** | 基础类型（`LE::String`、`LE::FNonCopyable`、平台宏） |
+| **Asset** | persistent asset IDs 与 opaque Mesh/Material logical identities |
 | **RAL** | 渲染抽象层（`FRALCommandList`、`FRALDevice`、`FRALSwapchain`、`FRALTexture`、`FRALBuffer` 等） |
 | **RFG** | 渲染帧图（`FRFGInstance`、`FRFGBuilder`、`FRFGPassHandle`、`FRFGResourceHandle`、`FRFGPassContext` 等） |
 
@@ -239,11 +255,11 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 
 ## 8. 当前限制
 
-1. **仅有 Demo 管线**：生产级 `Forward+`、`Deferred` 管线尚未实现；`EShadingPath` 枚举存在但无对应管线类。
-2. **无正式材质系统**：`FRenderMeshProxy` 直接持有 `FRALPipeline_Graphics*` 和 `FRALBuffer*`，没有材质、Shader、参数表的抽象。
-3. **场景数据极简**：mesh proxy 仅携带尚未被 GPU draw 使用的 `LocalToWorld` snapshot；`FRenderLightProxy`、`FRenderCameraProxy` 仍为空壳，且无 Bounds、LOD、剔除系统。
+1. **BasePass 仍是最小 vertical slice**：生产级 `Forward+`、`Deferred`、透明与多 Pass 材质尚未实现；`EShadingPath` 枚举存在但未驱动选择。
+2. **无通用材质系统**：`FRenderMeshProxy` 直接复制 resolved pipeline、buffers 与最小 RGB base color，没有纹理参数表、材质实例或 shader variant 抽象。
+3. **场景数据仍精简**：已有 primary camera 与 CPU frustum culling，但 `FRenderLightProxy` 仍为空壳，且无 LOD、occlusion culling 或 shadows。
 4. **单视图限制**：`FRenderer::RenderFrame` 仅取 `ViewFamily.Views.front()`，多视口/分屏/Shadow Cascade 不支持。
-5. **平台特定代码侵入**：`TriangleCompositePasses.h` 中直接调用了 Vulkan API（`vkCmdPipelineBarrier`），破坏了 RAL 的抽象边界。
+5. **同步资产路径**：Asset registry 和 WorldRenderer snapshot build 仍同步执行，没有异步加载或 render thread。
 6. **无后处理框架**：无 Bloom、Tone Mapping、AA 等后处理 Pass 的标准注册与组合机制。
 7. **Transient 暂无跨帧复用池**：RFG-owned transient 已绑定 exact frame slot 并在 fence 完成后安全销毁，但尚未实现跨帧 aliasing/复用池或显存预算策略。
 
@@ -266,16 +282,12 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 - 定义后处理体积（Post Process Volume）与混合权重。
 
 ### 9.4 场景与剔除
-- 填充 `FRenderCameraProxy`（View/Projection 矩阵、FOV、Near/Far）。
 - 填充 `FRenderLightProxy`（类型、位置、方向、颜色、强度、阴影参数）。
-- 引入 CPU 端 Frustum/Occlusion Culling，生成可见性列表后再构建 `FRenderScene`。
+- 在现有 CPU frustum culling 之后增加 LOD、occlusion culling 与批处理。
 
 ### 9.5 多视图与并行
 - 支持 `FRenderViewFamily` 的多视图渲染（Split Screen、Shadow Maps、Reflection Probes）。
 - 在其余调用方迁移到 `FRenderFrameScheduler` 后，淘汰 RFG 的 legacy immediate-submit / `WaitIdle` 兼容入口。
-
-### 9.6 跨平台清理
-- 移除 Demo Pass 中的裸 Vulkan 调用，统一通过 RAL 的屏障/Transition API 表达资源状态变更。
 
 ---
 
@@ -295,11 +307,12 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 | `Public/Renderer/ShadingPath.h` | `EShadingPath` |
 | `Public/Renderer/SimpleRenderPass.h` | `FSimpleRenderPass` |
 | `Public/Renderer/SimpleRenderPipeline.h` | `FSimpleRenderPipeline` |
-| `Public/Renderer/DemoRenderPipelines.h` | `FTriangleBackBufferPipeline`、`FTriangleCompositePipeline` |
+| `Public/Renderer/BasePass.h` | 正式 BasePass attachment、indexed draw 与 80-byte object constants 契约 |
+| `Public/Renderer/BasePassCompositePipeline.h` | 正式 BasePass→Composite 双 Pass pipeline |
 | `Public/Renderer/RendererMinimal.h` | 模块统一头文件（聚合包含） |
 | `Private/Renderer/Renderer.cpp` | `FRenderer` 实现 |
 | `Private/Renderer/RenderFrameScheduler.cpp` | 两槽 Acquire/record/Submit/Present 状态机 |
 | `Private/Renderer/RenderGraphBuilderBridge.cpp` | `FRenderGraphBuilderBridge` 实现 |
-| `Private/Renderer/Pipelines/DemoRenderPipelines.cpp` | Demo 管线实现 |
-| `Private/Renderer/Passes/TriangleBackBufferPass.h` | BackBuffer 绘制 Pass |
-| `Private/Renderer/Passes/TriangleCompositePasses.h` | Offscreen + Composite Pass |
+| `Private/Renderer/Passes/BasePass.cpp` | BasePass preflight、RFG Setup 与 RAL Record |
+| `Private/Renderer/Passes/SceneColorCompositePass.h` | backend-neutral SceneColor composite pass |
+| `Private/Renderer/Pipelines/BasePassCompositePipeline.cpp` | 正式双 Pass pipeline 实现 |

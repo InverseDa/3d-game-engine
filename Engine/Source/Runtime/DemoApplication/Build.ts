@@ -13,6 +13,7 @@ export default class DemoApplicationBuild extends ModuleBuild {
         // backend-neutral Application contract.
         Configuration.PublicDependencies.push(
             "Application",
+            "Asset",
             "Core",
             "Platform",
             "Spdlog",
@@ -21,6 +22,7 @@ export default class DemoApplicationBuild extends ModuleBuild {
             "Reflection",
             "Renderer",
             "World",
+            "WorldRenderer",
         );
         Configuration.CustomActions.push({
             Id: "GenerateReflection",

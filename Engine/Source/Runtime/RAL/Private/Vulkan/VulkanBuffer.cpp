@@ -59,13 +59,13 @@ FVulkanRALBuffer::FVulkanRALBuffer(FVulkanRALDevice* InDevice, const FRALBufferD
     {
         BufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         BufferInfo.size = InDesc.Size;
-        BufferInfo.usage = ToVkBufferUsage(InDesc.Usage);
+        BufferInfo.usage = ToVkBufferUsage(InDesc.UsageFlag);
         BufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // TODO: kodak
     }
     VkResult Result = vkCreateBuffer(Device->VkContext.LogicalDevice, &BufferInfo, nullptr, &this->Buffer);
     if (Result != VK_SUCCESS)
     {
-        LE_LOG(LogRAL, Error, "vkCreateBuffer failed. Size={}, Usage={}, VkResult={}", InDesc.Size, InDesc.Usage, static_cast<int32>(Result));
+        LE_LOG(LogRAL, Error, "vkCreateBuffer failed. Size={}, UsageFlags={}, VkResult={}", InDesc.Size, InDesc.UsageFlag, static_cast<int32>(Result));
         this->Buffer = VK_NULL_HANDLE;
         this->Memory = VK_NULL_HANDLE;
         return;
@@ -103,7 +103,8 @@ FVulkanRALBuffer::FVulkanRALBuffer(FVulkanRALDevice* InDevice, const FRALBufferD
         return;
     }
 
-    LE_LOG(LogRAL, Info, "Buffer created. Size={}, Usage={}", InDesc.Size, InDesc.Usage);
+    LE_LOG(LogRAL, Info, "Buffer created. Size={}, ResourceUsage={}, UsageFlags={}",
+        InDesc.Size, InDesc.Usage, InDesc.UsageFlag);
 }
 
 FVulkanRALBuffer::~FVulkanRALBuffer()

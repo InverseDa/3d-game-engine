@@ -241,6 +241,10 @@ void FVulkanRALCommandList::Begin()
         return;
     }
 
+    CurrentPipeline = nullptr;
+    bInsideRendering = false;
+    ActiveRenderingSignature.Reset();
+    PendingPresentTransitionImages.Clear();
     VkCommandBufferBeginInfo BeginInfo{};
     {
         BeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -387,26 +391,25 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         LE_LOG(LogRAL, Error, "BeginRenderPass failed: a rendering scope is already active.");
         return;
     }
-    if (this->CurrentPipeline == nullptr || this->CurrentPipeline->Pipeline == VK_NULL_HANDLE)
-    {
-        LE_LOG(LogRAL, Error, "BeginRenderPass failed: graphics pipeline is invalid.");
-        return;
-    }
     if (Desc.ColorAttachmentCount > 8 || (Desc.ColorAttachmentCount == 0 && !Desc.bHasDepthStencil))
     {
         LE_LOG(LogRAL, Error, "BeginRenderPass failed: rendering requires at least one color or depth/stencil attachment. Colors={}, HasDepthStencil={}.",
             Desc.ColorAttachmentCount, Desc.bHasDepthStencil);
         return;
     }
-    const FRALPipelineDesc_Graphics& PipelineDesc = this->CurrentPipeline->GetDesc();
-    if (PipelineDesc.RenderTargetCount != Desc.ColorAttachmentCount)
+    const FRALPipelineDesc_Graphics* const PipelineDesc =
+        this->CurrentPipeline != nullptr && this->CurrentPipeline->Pipeline != VK_NULL_HANDLE
+        ? &this->CurrentPipeline->GetDesc()
+        : nullptr;
+    if (PipelineDesc != nullptr && PipelineDesc->RenderTargetCount != Desc.ColorAttachmentCount)
     {
         LE_LOG(LogRAL, Error, "BeginRenderPass failed: attachment count does not match pipeline. Pass={}, Pipeline={}.",
-            Desc.ColorAttachmentCount, PipelineDesc.RenderTargetCount);
+            Desc.ColorAttachmentCount, PipelineDesc->RenderTargetCount);
         return;
     }
-    const bool bPipelineHasDepthStencil = PipelineDesc.DepthStencilFormat != EPixelFormat::Unknown;
-    if (bPipelineHasDepthStencil != Desc.bHasDepthStencil)
+    const bool bPipelineHasDepthStencil = PipelineDesc != nullptr &&
+        PipelineDesc->DepthStencilFormat != EPixelFormat::Unknown;
+    if (PipelineDesc != nullptr && bPipelineHasDepthStencil != Desc.bHasDepthStencil)
     {
         LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment presence does not match pipeline. Pass={}, Pipeline={}.",
             Desc.bHasDepthStencil, bPipelineHasDepthStencil);
@@ -415,6 +418,8 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
 
     LE::Array<VkRenderingAttachmentInfo> ColorAttachments;
     ColorAttachments.Reserve(Desc.ColorAttachmentCount);
+    FRALRenderingAttachmentSignature RenderingSignature;
+    RenderingSignature.RenderTargetCount = Desc.ColorAttachmentCount;
     uint32 AttachmentWidth = 0;
     uint32 AttachmentHeight = 0;
     this->PendingPresentTransitionImages.Clear();
@@ -428,10 +433,19 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         }
         const FRALTextureDesc& TextureDesc = View->Owner->GetDesc();
         const EPixelFormat ViewFormat = View->GetDesc().Format != EPixelFormat::Unknown ? View->GetDesc().Format : TextureDesc.Format;
-        if (ViewFormat != PipelineDesc.RenderTargetFormats[i])
+        RenderingSignature.RenderTargetFormats[i] = ViewFormat;
+        if (!TextureDesc.bIsRenderTarget || ViewFormat == EPixelFormat::Unknown ||
+            IsDepthStencilFormat(ViewFormat))
+        {
+            LE_LOG(LogRAL, Error,
+                "BeginRenderPass failed: color attachment {} does not use a color render-target format. Format={}.",
+                i, static_cast<uint32>(ViewFormat));
+            return;
+        }
+        if (PipelineDesc != nullptr && ViewFormat != PipelineDesc->RenderTargetFormats[i])
         {
             LE_LOG(LogRAL, Error, "BeginRenderPass failed: color attachment {} format does not match pipeline. View={}, Pipeline={}.",
-                i, static_cast<uint32>(ViewFormat), static_cast<uint32>(PipelineDesc.RenderTargetFormats[i]));
+                i, static_cast<uint32>(ViewFormat), static_cast<uint32>(PipelineDesc->RenderTargetFormats[i]));
             return;
         }
 
@@ -494,6 +508,7 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
 
         const FRALTextureDesc& TextureDesc = View->Owner->GetDesc();
         const EPixelFormat ViewFormat = View->GetDesc().Format != EPixelFormat::Unknown ? View->GetDesc().Format : TextureDesc.Format;
+        RenderingSignature.DepthStencilFormat = ViewFormat;
         if (!TextureDesc.bIsDepthStencil || !IsDepthStencilFormat(ViewFormat))
         {
             LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment does not use a supported depth/stencil format. Format={}.",
@@ -501,10 +516,10 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
             this->PendingPresentTransitionImages.Clear();
             return;
         }
-        if (ViewFormat != PipelineDesc.DepthStencilFormat)
+        if (PipelineDesc != nullptr && ViewFormat != PipelineDesc->DepthStencilFormat)
         {
             LE_LOG(LogRAL, Error, "BeginRenderPass failed: depth/stencil attachment format does not match pipeline. View={}, Pipeline={}.",
-                static_cast<uint32>(ViewFormat), static_cast<uint32>(PipelineDesc.DepthStencilFormat));
+                static_cast<uint32>(ViewFormat), static_cast<uint32>(PipelineDesc->DepthStencilFormat));
             this->PendingPresentTransitionImages.Clear();
             return;
         }
@@ -563,11 +578,13 @@ void FVulkanRALCommandList::BeginRenderPass(const FRALRenderPassDesc& Desc)
         Info.colorAttachmentCount = static_cast<uint32>(ColorAttachments.Size());
         Info.pColorAttachments = ColorAttachments.IsEmpty() ? nullptr : ColorAttachments.Data();
         Info.pDepthAttachment = Desc.bHasDepthStencil ? &DepthStencilAttachment : nullptr;
-        Info.pStencilAttachment = Desc.bHasDepthStencil && PipelineDesc.DepthStencilFormat == EPixelFormat::D24_UNORM_S8_UINT
+        Info.pStencilAttachment = Desc.bHasDepthStencil &&
+            RenderingSignature.DepthStencilFormat == EPixelFormat::D24_UNORM_S8_UINT
             ? &DepthStencilAttachment
             : nullptr;
     }
     this->Device->VkContext.CmdBeginRendering(this->Handle, &Info);
+    this->ActiveRenderingSignature = RenderingSignature;
     this->bInsideRendering = true;
 }
 
@@ -584,7 +601,20 @@ void FVulkanRALCommandList::SetGraphicsPipeline(FRALPipeline_Graphics* Pipeline)
         return;
     }
 
-    this->CurrentPipeline = static_cast<FVulkanRALPipeline_Graphics*>(Pipeline);
+    FVulkanRALPipeline_Graphics* const Candidate =
+        static_cast<FVulkanRALPipeline_Graphics*>(Pipeline);
+    const FRALPipelineDesc_Graphics& CandidateDesc = Candidate->GetDesc();
+    if (this->bInsideRendering)
+    {
+        if (!IsRenderingSignatureCompatible(this->ActiveRenderingSignature, CandidateDesc))
+        {
+            LE_LOG(LogRAL, Error,
+                "SetGraphicsPipeline skipped: pipeline attachment signature does not match the active rendering scope.");
+            return;
+        }
+    }
+
+    this->CurrentPipeline = Candidate;
     if (this->CurrentPipeline->Pipeline != VK_NULL_HANDLE)
     {
         vkCmdBindPipeline(this->Handle, VK_PIPELINE_BIND_POINT_GRAPHICS, this->CurrentPipeline->Pipeline);
@@ -651,6 +681,7 @@ void FVulkanRALCommandList::EndRenderPass()
 
     this->Device->VkContext.CmdEndRendering(this->Handle);
     this->bInsideRendering = false;
+    this->ActiveRenderingSignature.Reset();
 
     for (VkImage Image : this->PendingPresentTransitionImages)
     {
@@ -707,6 +738,12 @@ void FVulkanRALCommandList::SetVertexBuffer(uint32 Slot, FRALBuffer* Buffer, uin
 
 void FVulkanRALCommandList::SetIndexBuffer(FRALBuffer* Buffer, uint64 Offset, EPixelFormat IndexFormat)
 {
+    if (!IsValidIndexFormat(IndexFormat))
+    {
+        LE_LOG(LogRAL, Error, "SetIndexBuffer failed: format {} is not R16_UINT or R32_UINT.",
+            static_cast<uint32>(IndexFormat));
+        return;
+    }
     if (Buffer == nullptr)
     {
         LE_LOG(LogRAL, Error, "SetIndexBuffer failed: buffer is null.");
@@ -718,7 +755,8 @@ void FVulkanRALCommandList::SetIndexBuffer(FRALBuffer* Buffer, uint64 Offset, EP
         LE_LOG(LogRAL, Error, "SetIndexBuffer failed: Vulkan buffer handle is null.");
         return;
     }
-    VkIndexType IndexType = (IndexFormat == EPixelFormat::R32_UINT) ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+    const VkIndexType IndexType = IndexFormat == EPixelFormat::R32_UINT
+        ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
     vkCmdBindIndexBuffer(this->Handle, VkRALBuffer->Buffer, Offset, IndexType);
 }
 
@@ -732,6 +770,19 @@ void FVulkanRALCommandList::SetPushConstants(EShaderStage Stage, const void* Dat
     if (this->CurrentPipeline == nullptr || this->CurrentPipeline->PipelineLayout == VK_NULL_HANDLE || Data == nullptr || Size == 0)
     {
         LE_LOG(LogRAL, Warn, "SetPushConstants skipped: invalid pipeline or push constant data.");
+        return;
+    }
+
+    const FRALPushConstantRangeDesc& Contract =
+        this->CurrentPipeline->GetDesc().PushConstants;
+    if (!Contract.AcceptsWrite(Stage, Size))
+    {
+        LE_LOG(LogRAL, Error,
+            "SetPushConstants skipped: call does not exactly match the bound pipeline contract. Stages={}/{}, Size={}/{}.",
+            static_cast<uint32>(Stage),
+            static_cast<uint32>(Contract.StageFlags),
+            Size,
+            Contract.Size);
         return;
     }
 

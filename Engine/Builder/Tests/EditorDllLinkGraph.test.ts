@@ -3,9 +3,15 @@ import * as Fs from "node:fs/promises";
 import * as Os from "node:os";
 import * as Path from "node:path";
 import Test from "node:test";
+import AssetBuild from "../../Source/Runtime/Asset/Build.ts";
+import DemoApplicationBuild from "../../Source/Runtime/DemoApplication/Build.ts";
+import RendererBuild from "../../Source/Runtime/Renderer/Build.ts";
+import WorldBuild from "../../Source/Runtime/World/Build.ts";
+import WorldRendererBuild from "../../Source/Runtime/WorldRenderer/Build.ts";
 import { NinjaBackend } from "../Source/Backend/NinjaBackend.ts";
+import { APIMacroName } from "../Source/Build/APIMacro.ts";
 import { IRBuilder } from "../Source/Build/IRBuilder.ts";
-import { ModuleBuild } from "../Source/Configuration/ModuleBuild.ts";
+import { CreateModuleConfiguration, ModuleBuild } from "../Source/Configuration/ModuleBuild.ts";
 import { ResolveTarget } from "../Source/Configuration/Target.ts";
 import {
     Optimization,
@@ -221,4 +227,148 @@ Test("MSVC DLL output contract pairs the DLL with its explicitly named import li
         Path.resolve("Engine", "Binaries", "Win64", "Debug", "Core.lib"),
     ]);
     Assert.deepEqual(GetMSVCLinkOutputs(Dll, false), [Dll]);
+});
+
+Test("Asset remains a Core-only runtime module with its own public ABI macro", () => {
+    const Module = new AssetBuild();
+    const Configuration = CreateModuleConfiguration();
+    Module.Configure({
+        Platform: Platform.Win64,
+        Optimization: Optimization.Debug,
+        TargetType: TargetType.Editor,
+    }, Configuration);
+
+    Assert.equal(Module.Name, "Asset");
+    Assert.equal(APIMacroName(Module.Name), "ASSET_API");
+    Assert.deepEqual(Configuration.PublicDependencies, ["Core"]);
+    Assert.deepEqual(Configuration.PrivateDependencies, []);
+    Assert.deepEqual(Configuration.CustomActions, []);
+});
+
+Test("World render assets preserve one-way module dependencies", () => {
+    const Target: Target = {
+        Platform: Platform.Win64,
+        Optimization: Optimization.Debug,
+        TargetType: TargetType.Editor,
+    };
+    const WorldConfiguration = CreateModuleConfiguration();
+    new WorldBuild().Configure(Target, WorldConfiguration);
+    Assert.deepEqual(WorldConfiguration.PublicDependencies,
+        ["Core", "Asset", "Reflection"]);
+    Assert.deepEqual(WorldConfiguration.PrivateDependencies, []);
+
+    const RendererConfiguration = CreateModuleConfiguration();
+    new RendererBuild().Configure(Target, RendererConfiguration);
+    Assert.deepEqual(RendererConfiguration.PublicDependencies,
+        ["Core", "Asset", "RAL", "RFG"]);
+    Assert.deepEqual(RendererConfiguration.PrivateDependencies, []);
+
+    const WorldRendererConfiguration = CreateModuleConfiguration();
+    const WorldRendererModule = new WorldRendererBuild();
+    WorldRendererModule.Configure(Target, WorldRendererConfiguration);
+    Assert.equal(WorldRendererModule.Name, "WorldRenderer");
+    Assert.equal(APIMacroName(WorldRendererModule.Name), "WORLDRENDERER_API");
+    Assert.deepEqual(WorldRendererConfiguration.PublicDependencies,
+        ["Core", "Asset", "Renderer", "World"]);
+    Assert.deepEqual(WorldRendererConfiguration.PrivateDependencies, []);
+
+    const DemoConfiguration = CreateModuleConfiguration();
+    new DemoApplicationBuild().Configure(Target, DemoConfiguration);
+    Assert.equal(DemoConfiguration.PublicDependencies.includes("Asset"), true);
+    Assert.equal(DemoConfiguration.PublicDependencies.includes("World"), true);
+    Assert.equal(DemoConfiguration.PublicDependencies.includes("Renderer"), true);
+    Assert.equal(DemoConfiguration.PublicDependencies.includes("WorldRenderer"), true);
+});
+
+Test("World source tree has no RAL or Renderer surface", async () => {
+    const WorldRoot = Path.resolve(
+        import.meta.dirname, "..", "..", "Source", "Runtime", "World");
+    const Pending = [WorldRoot];
+    const Sources: string[] = [];
+    while (Pending.length > 0) {
+        const Directory = Pending.pop()!;
+        for (const Entry of await Fs.readdir(Directory, { withFileTypes: true })) {
+            const EntryPath = Path.join(Directory, Entry.name);
+            if (Entry.isDirectory()) Pending.push(EntryPath);
+            else if (/\.(?:h|hpp|cpp|cc|cxx)$/.test(Entry.name)) Sources.push(EntryPath);
+        }
+    }
+    Assert.ok(Sources.length > 0);
+    for (const SourcePath of Sources) {
+        const Source = await Fs.readFile(SourcePath, "utf-8");
+        Assert.doesNotMatch(Source, /#\s*include\s*[<"](?:RAL|Renderer)\//,
+            SourcePath);
+        Assert.doesNotMatch(Source, /\b(?:FRAL|FRender|ERender)[A-Za-z0-9_]*/,
+            SourcePath);
+    }
+    await Assert.rejects(Fs.access(Path.join(
+        WorldRoot, "Public", "World", "WorldRenderSceneExtractor.h")));
+});
+
+Test("Demo WorldRenderer bridge preserves frame and asset lifetime order", async () => {
+    const DemoSourcePath = Path.resolve(
+        import.meta.dirname, "..", "..", "Source", "Runtime",
+        "DemoApplication", "Private", "DemoApplication.cpp");
+    const Source = await Fs.readFile(DemoSourcePath, "utf-8");
+    const TransitionalBridgePath = Path.join(
+        Path.dirname(DemoSourcePath), "DemoWorldRenderSceneExtraction.h");
+    await Assert.rejects(Fs.access(TransitionalBridgePath));
+
+    const RenderBegin = Source.indexOf("EApplicationTickResult Render()");
+    const RenderEnd = Source.indexOf("static bool StartupThunk", RenderBegin);
+    const Render = Source.slice(RenderBegin, RenderEnd);
+    const Snapshot = Render.indexOf("FWorldRenderSnapshot RenderSnapshot");
+    const BuildSnapshot = Render.indexOf("WorldRenderer.BuildSnapshot(");
+    const ScheduledFrame = Render.indexOf("ScheduledFrame.GetFrameIndex()", BuildSnapshot);
+    const ConsumeSnapshot = Render.indexOf(
+        "&RenderSnapshot.GetRenderScene()", BuildSnapshot);
+    Assert.ok(RenderBegin >= 0 && RenderEnd > RenderBegin && Snapshot >= 0 &&
+        BuildSnapshot > Snapshot && ScheduledFrame > BuildSnapshot &&
+        ConsumeSnapshot > ScheduledFrame,
+    "Demo must build and synchronously consume one stack-owned snapshot per frame callback");
+
+    const ResizeBegin = Source.indexOf("EApplicationTickResult UpdateRenderResources()");
+    const ResizeEnd = Source.indexOf("EApplicationTickResult Update(", ResizeBegin);
+    const Resize = Source.slice(ResizeBegin, ResizeEnd);
+    const DrainFrames = Resize.indexOf("FrameScheduler.WaitForAllFrames()");
+    const CreateCandidate = Resize.indexOf("TryCreateDemoRenderResources(");
+    const Replace = Resize.indexOf("ReplaceBasePassMaterial(Candidate.BasePassPipeline)");
+    const SwapCandidate = Resize.indexOf("RenderResources = Candidate");
+    const DestroyPrevious = Resize.indexOf("DestroyDemoRenderResources(Previous)");
+    Assert.ok(ResizeBegin >= 0 && ResizeEnd > ResizeBegin && DrainFrames >= 0 &&
+        CreateCandidate > DrainFrames && Replace > CreateCandidate &&
+        SwapCandidate > Replace && DestroyPrevious > SwapCandidate,
+    "resize must drain frames, complete a candidate, publish, swap, then destroy old resources");
+    Assert.doesNotMatch(Render, /WaitForAllFrames\s*\(/,
+        "normal frame rendering must not globally drain frames");
+
+    const ShutdownBegin = Source.indexOf("void Shutdown() noexcept");
+    const ShutdownEnd = Source.indexOf("EApplicationTickResult UpdateRenderResources()", ShutdownBegin);
+    const Shutdown = Source.slice(ShutdownBegin, ShutdownEnd);
+    const ResetWorld = Shutdown.indexOf("World.Reset()");
+    const UnregisterAssets = Shutdown.indexOf("UnregisterRenderAssets()");
+    const StopFrames = Shutdown.indexOf("FrameScheduler.Shutdown()");
+    const DestroyMesh = Shutdown.indexOf("DestroyResource(VertexBuffer)");
+    const DestroyIndices = Shutdown.indexOf("DestroyResource(IndexBuffer)");
+    Assert.ok(ShutdownBegin >= 0 && ShutdownEnd > ShutdownBegin &&
+        ResetWorld >= 0 && UnregisterAssets > ResetWorld &&
+        StopFrames > UnregisterAssets && DestroyMesh > StopFrames &&
+        DestroyIndices > DestroyMesh,
+    "shutdown must clear World, unregister borrowed assets, stop frames, then destroy GPU resources");
+
+    Assert.match(Source, /MeshAsset\.IndexBuffer\s*=\s*IndexBuffer/);
+    Assert.match(Source, /MeshAsset\.IndexFormat\s*=\s*EPixelFormat::R16_UINT/);
+    Assert.match(Source, /BootstrapCameraToken/);
+    Assert.match(Source, /RenderResources\.SceneColorTexture->GetDesc\(\)\.Width/);
+});
+
+Test("Vulkan buffer creation honors the usage bitmask used by indexed meshes", async () => {
+    const SourcePath = Path.resolve(
+        import.meta.dirname, "..", "..", "Source", "Runtime", "RAL",
+        "Private", "Vulkan", "VulkanBuffer.cpp");
+    const Source = await Fs.readFile(SourcePath, "utf-8");
+    Assert.match(Source, /ToVkBufferUsage\(InDesc\.UsageFlag\)/,
+        "buffer creation must translate the UsageFlag bitmask");
+    Assert.doesNotMatch(Source, /ToVkBufferUsage\(InDesc\.Usage\)/,
+        "legacy single Usage must not silently turn IndexBuffer into VertexBuffer");
 });

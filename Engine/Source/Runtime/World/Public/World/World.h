@@ -1,8 +1,8 @@
 #pragma once
 
+#include "Asset/RenderAssetTypes.h"
 #include "CoreMinimal.h"
 #include "Reflection/ReflectionMacros.h"
-#include "Renderer/RenderScene.h"
 #include "World/ComponentStorage.h"
 #include "World/NativeGameplaySystem.h"
 #include "World/Transform.h"
@@ -10,8 +10,6 @@
 namespace LE
 {
 
-class FRALBuffer;
-class FRALPipeline_Graphics;
 class FWorldCommandBuffer;
 struct FWorldCommandFlushResult;
 
@@ -22,11 +20,21 @@ struct FWorldPrimitive
 
 struct FWorldMeshComponent : public FWorldPrimitive
 {
-    LE::FRALPipeline_Graphics* GraphicsPipeline = nullptr;
-    LE::FRALBuffer* VertexBuffer = nullptr;
-    uint32 VertexCount = 0;
-    LE::ERenderMeshPassMask PassMask = LE::ERenderMeshPassMask::All;
+    FMeshAssetHandle Mesh;
+    FMaterialAssetHandle Material;
     uint64 SortKey = 0;
+};
+
+// Renderer-neutral authored camera data. Camera pose is supplied by the
+// FTransform attached to the same Entity; viewport-dependent matrices are
+// derived downstream by WorldRenderer.
+struct FWorldCameraComponent : public FWorldPrimitive
+{
+    float VerticalFieldOfViewRadians = 1.0471975512f;
+    float NearPlane = 0.1f;
+    float FarPlane = 1000.0f;
+    int32 Priority = 0;
+    bool bActive = true;
 };
 
 struct FWorldTickContext
@@ -122,6 +130,8 @@ public:
 
     TComponentStorage<FWorldMeshComponent>* GetMeshComponents() noexcept;
     const TComponentStorage<FWorldMeshComponent>* GetMeshComponents() const noexcept;
+    TComponentStorage<FWorldCameraComponent>* GetCameraComponents() noexcept;
+    const TComponentStorage<FWorldCameraComponent>* GetCameraComponents() const noexcept;
 
     template <typename T>
     bool AttachComponentStorage(TComponentStorage<T>& Storage) noexcept

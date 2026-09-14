@@ -30,8 +30,8 @@ struct FRALBufferDesc
 {
     LE::String Name;
     uint64 Size = 0;
-    uint32 Usage;       // EResourceUsage
-    uint32 UsageFlag;   // EBufferUsageFlags
+    uint32 Usage = 0;       // EResourceUsage
+    uint32 UsageFlag = 0;   // EBufferUsageFlags
 };
 
 struct FRALTextureDesc
@@ -196,6 +196,31 @@ struct FRALDepthStencilStateDesc
     ECompareFunction DepthFunc = ECompareFunction::Less;
 };
 
+// The first renderer slice needs one portable, offset-zero push range. The
+// 128-byte cap is Vulkan's guaranteed minimum and keeps the RAL contract
+// backend-independent until larger device limits are surfaced explicitly.
+struct FRALPushConstantRangeDesc
+{
+    EShaderStage StageFlags = EShaderStage::None;
+    uint32 Size = 0;
+
+    bool IsValid() const noexcept
+    {
+        return StageFlags != EShaderStage::None && Size > 0 &&
+            (Size % 4u) == 0 && Size <= 128;
+    }
+
+    bool IsDisabled() const noexcept
+    {
+        return StageFlags == EShaderStage::None && Size == 0;
+    }
+
+    bool AcceptsWrite(const EShaderStage InStageFlags, const uint32 InSize) const noexcept
+    {
+        return IsValid() && InStageFlags == StageFlags && InSize == Size;
+    }
+};
+
 struct FRALRasterizerStateDesc
 {
     ECullMode CullMode = ECullMode::Back;
@@ -219,15 +244,53 @@ struct FRALPipelineDesc_Graphics
     FRALBlendStateDesc BlendState;
     FRALDepthStencilStateDesc DepthStencilState;
     FRALRasterizerStateDesc RasterizerState;
+    FRALPushConstantRangeDesc PushConstants;
 
     // BindGroup Layouts
     LE::Array<FRALBindGroupLayout*> BindGroupLayouts;
 
     // Render Target Format
-    EPixelFormat RenderTargetFormats[8];
+    EPixelFormat RenderTargetFormats[8]{};
     uint32 RenderTargetCount = 0;
     EPixelFormat DepthStencilFormat = EPixelFormat::Unknown;
 };
+
+struct FRALRenderingAttachmentSignature
+{
+    EPixelFormat RenderTargetFormats[8]{};
+    uint32 RenderTargetCount = 0;
+    EPixelFormat DepthStencilFormat = EPixelFormat::Unknown;
+
+    void Reset() noexcept
+    {
+        for (EPixelFormat& Format : RenderTargetFormats)
+        {
+            Format = EPixelFormat::Unknown;
+        }
+        RenderTargetCount = 0;
+        DepthStencilFormat = EPixelFormat::Unknown;
+    }
+};
+
+inline bool IsRenderingSignatureCompatible(
+    const FRALRenderingAttachmentSignature& Signature,
+    const FRALPipelineDesc_Graphics& Pipeline) noexcept
+{
+    if (Signature.RenderTargetCount > 8 || Pipeline.RenderTargetCount > 8 ||
+        Signature.RenderTargetCount != Pipeline.RenderTargetCount ||
+        Signature.DepthStencilFormat != Pipeline.DepthStencilFormat)
+    {
+        return false;
+    }
+    for (uint32 Index = 0; Index < Signature.RenderTargetCount; ++Index)
+    {
+        if (Signature.RenderTargetFormats[Index] != Pipeline.RenderTargetFormats[Index])
+        {
+            return false;
+        }
+    }
+    return true;
+}
 
 // ***********************************************************************************************
 // ************************************ Shader Relative ******************************************

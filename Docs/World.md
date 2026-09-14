@@ -12,9 +12,13 @@ single-threaded native gameplay schedule:
   another World even when its slot pair is identical.
 - `TComponentStorage<T>` keeps one contiguous dense `T` array, a parallel dense
   Entity array, and a sparse Entity-index-to-dense-index table.
-- `FWorldMeshComponent` is the first real storage consumer. The demo creates an
-  Entity, adds the mesh component through `FWorld`, and the render-scene
-  extractor walks the dense component span.
+- `FWorldMeshComponent` is the first real storage consumer. It retains only
+  typed 16-byte Mesh/Material runtime asset handles plus world-authored debug
+  name and sort key; no RAL or Renderer type crosses the World boundary.
+- `FWorldCameraComponent` is a logical `FWorldPrimitive` with active/priority,
+  vertical FOV, near and far planes. Its built-in typed storage follows the same
+  Reset/Destroy lifetime as mesh and Transform storage and contains no Renderer
+  or RAL types.
 - `FTransform` is a standard-layout, trivially-copyable local TRS value. World
   owns its component storage privately and exposes only dirty-aware authored
   mutation and value-copy query APIs.
@@ -25,10 +29,14 @@ single-threaded native gameplay schedule:
 - Explicitly registered native systems execute in deterministic dependency
   order across fixed and variable update phases.
 
-Scripts, jobs/Runnable execution, asset handles, and `WorldRenderer` are later
-roadmap tasks and are intentionally absent here.
-The prototype mesh component therefore still contains its existing raw RAL
-buffer and pipeline pointers until the asset/renderer migration.
+Scripts and jobs/Runnable execution are later roadmap tasks and intentionally
+absent here. WorldRenderer is a separate downstream module; World itself still
+does not know Renderer or RAL. Task 20 makes World depend only on the
+Core-only Asset module: `FMeshAsset` and `FMaterialAsset` remain opaque here,
+while Renderer uniquely completes their GPU-facing payload definitions.
+Vertex count moved to the Mesh payload and prototype pass intent moved to the
+Material payload. The former World-owned and Demo-private render-scene
+extractors are both removed; the formal Task 21 bridge lives in WorldRenderer.
 
 ## Entity identity and lifetime
 
@@ -325,26 +333,38 @@ existing committed World snapshot. The callback has no renderer, RAL, asset, or
 script dependency.
 
 The demo is the first real consumer: its render runtime owns one persistent
-World, records mesh Entity/component/Transform bootstrap commands after GPU
-resource setup, flushes them through the Application Update context, and Render
-only extracts the committed World. Tick or command failure closes an accepted
-tick and exits instead of silently rendering an empty scene.
+World and `FAssetRegistry`, registers borrowed Renderer-owned Mesh/Material
+payloads, records their handles with the Entity/Transform bootstrap commands,
+and Render reads only the committed World. Tick, command, or asset-resolution
+failure closes the accepted work and exits instead of dereferencing invalid GPU
+state.
 
 ## Rendering bridge
 
-`FWorldRenderSceneExtractor` remains a synchronous one-way bridge:
+WorldRenderer performs the formal one-way bridge:
 
 ```text
-FWorld mesh TComponentStorage + private Transform hierarchy
+FWorld mesh handles + private Transform hierarchy + FAssetRegistry
         -> paired dense Entity/FWorldMeshComponent spans
+        -> synchronous Mesh/Material payload resolution
         -> LocalToWorld matrix or identity fallback
-        -> FRenderScene mesh proxies
+        -> immutable frame-owned FWorldRenderSnapshot / FRenderScene proxies
         -> Renderer
 ```
 
-It validates the paired dense spans, resolves Transform caches, reserves for the
-dense mesh count, and copies the existing prototype fields plus `LocalToWorld`.
-Meshes without a Transform use identity. The demo attaches an identity Transform
-to its real mesh Entity. The matrix is snapshot data only: the current shader
-and draw path do not consume it. Removing raw RAL fields, adding assets, or
-using the matrix in BasePass remains Phase 6 work.
+It accepts only an Idle committed World, validates paired dense spans and
+Transform caches, resolves both typed handles, and immediately copies owned
+debug text, resolved GPU handles/scalars, LocalToWorld, stable primitive ID, and
+the transformed world AABB, indexed draw data, opaque base color, and selected
+camera matrices into an allocator-owned candidate. Only a complete
+candidate is published; missing, stale, foreign, type-mismatched, invalid, or
+OOM input leaves the output snapshot empty and unpublished. No registry object
+pointer or borrowed metadata view survives the call.
+
+The snapshot is a stack value in the frame callback and remains const while
+Renderer synchronously records commands. GPU resources remain provider-owned;
+on resize the Demo waits all actual frame fences, builds a replacement pipeline
+in the inactive borrowed Material slot, calls `FAssetRegistry::Replace`, switches
+the idle World component to the new handle, and only then destroys the old
+pipeline. Task 22 now consumes this snapshot through the actual BasePass,
+indexed draw, depth, camera, culling, and deterministic sorting contract.

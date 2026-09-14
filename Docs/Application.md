@@ -7,7 +7,7 @@
 `FRuntimeModuleRegistry`。
 `FEngineLoop` 只借用 `IApplication`；它会调用生命周期函数，但不会销毁对象。
 
-当前 RFG composite triangle 是第一个真实 consumer，位于独立的
+当前 Phase 6 BasePass vertical slice 是第一个真实场景 consumer，位于独立的
 `DemoApplication` 模块。其工厂返回带 creator-side destroy thunk 的
 `FApplicationPtr`，因此 Editor 构建中对象始终回到 `DemoApplication.dll` 销毁。
 
@@ -94,10 +94,17 @@ Elapsed。
   render-finished semaphore、initially-signaled fence 和 deferred releases。Update 负责 minimize
   与显式 resize/retry；Render 驱动两槽 Acquire/record/Submit/Present 并处理
   Suboptimal/OutOfDate/Error。
+- Demo World 持有一个 +Z 朝向 -Z 的 primary camera 与一个 indexed mesh；WorldRenderer 用
+  实际 SceneColor extent 构建 immutable snapshot，执行 frustum culling 与 deterministic sort，
+  Renderer 录制 `BasePass -> CompositeToBackBufferPass`。BasePass 清除并写入 B8G8R8A8
+  SceneColor 和 D32 depth；即使可见 mesh 为零，Composite 仍输出 SceneColor clear 值。
 - 正常成功帧不再调用 `WaitIdle`。resize 先等待实际 InFlight 槽，swapchain 底层重建和
   terminal shutdown 仍允许 exceptional idle。Renderer 将 RFG-owned texture/buffer transient
   的 ownership 转交给当前 frame slot；它们只在该槽 fence 完成后、allocator reset 前回收。
   imported resources 始终保持外部所有权。
+- Resize 先构造完整的候选 SceneColor/depth/views/sampler/bind group/pipelines，再 Replace
+  inactive Material payload、切换 Idle World handle、交换资源并销毁旧资源。vertex/index buffer
+  不随 resize 重建；候选失败不会破坏旧可用状态。
 - 所有 RAL 对象通过 `RAL::DestroyResource` 回到 RAL 模块走 virtual destructor；上层 DLL
   不直接 delete backend 分配的对象。
 

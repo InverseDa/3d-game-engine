@@ -6,4 +6,3 @@
 #include "Transform.h"
 #include "World.h"
 #include "WorldCommandBuffer.h"
-#include "WorldRenderSceneExtractor.h"

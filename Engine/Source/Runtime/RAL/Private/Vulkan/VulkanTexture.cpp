@@ -30,6 +30,7 @@ namespace
         case EPixelFormat::R8_SNORM:         return VK_FORMAT_R8_SNORM;
         case EPixelFormat::R8_UINT:          return VK_FORMAT_R8_UINT;
         case EPixelFormat::R8_SINT:          return VK_FORMAT_R8_SINT;
+        case EPixelFormat::R16_UINT:         return VK_FORMAT_R16_UINT;
         case EPixelFormat::R32_UINT:         return VK_FORMAT_R32_UINT;
         case EPixelFormat::R8G8B8A8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
         case EPixelFormat::R8G8B8A8_SNORM: return VK_FORMAT_R8G8B8A8_SNORM;

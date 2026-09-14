@@ -1,6 +1,7 @@
 #include "DemoApplication/DemoApplication.h"
 
 #include "Application/RuntimeModule.h"
+#include "Asset/AssetMinimal.h"
 #include "CoreMinimal.h"
 #include "DemoSettings.h"
 
@@ -10,8 +11,10 @@
 #include "Renderer/RendererMinimal.h"
 #include "ShaderRuntimeCompiler.h"
 #include "World/WorldMinimal.h"
+#include "WorldRenderer/WorldRendererMinimal.h"
 
 #include <cmath>
+#include <cstdint>
 
 namespace LE
 {
@@ -26,167 +29,49 @@ struct FSimpleVertex
     LE::Math::Vector3f Color;
 };
 
-struct FOffscreenPassResources
+struct FDemoRenderResources
 {
-    LE::FRALTexture* Texture = nullptr;
-    LE::FRALTextureView* TextureView = nullptr;
+    LE::FRALTexture* SceneColorTexture = nullptr;
+    LE::FRALTextureView* SceneColorView = nullptr;
+    LE::FRALTexture* SceneDepthTexture = nullptr;
+    LE::FRALTextureView* SceneDepthView = nullptr;
     LE::FRALSampler* Sampler = nullptr;
     LE::FRALBindGroupLayout* BindGroupLayout = nullptr;
     LE::FRALBindGroup* BindGroup = nullptr;
+    LE::FRALPipeline_Graphics* BasePassPipeline = nullptr;
+    LE::FRALPipeline_Graphics* CompositePipeline = nullptr;
 };
 
-static void DestroyOffscreenPassResources(FOffscreenPassResources& Resources)
+static void DestroyDemoRenderResources(FDemoRenderResources& Resources)
 {
+    RAL::DestroyResource(Resources.CompositePipeline);
+    RAL::DestroyResource(Resources.BasePassPipeline);
     RAL::DestroyResource(Resources.BindGroup);
     RAL::DestroyResource(Resources.BindGroupLayout);
     RAL::DestroyResource(Resources.Sampler);
-    RAL::DestroyResource(Resources.TextureView);
-    RAL::DestroyResource(Resources.Texture);
+    RAL::DestroyResource(Resources.SceneDepthView);
+    RAL::DestroyResource(Resources.SceneDepthTexture);
+    RAL::DestroyResource(Resources.SceneColorView);
+    RAL::DestroyResource(Resources.SceneColorTexture);
 
+    Resources.CompositePipeline = nullptr;
+    Resources.BasePassPipeline = nullptr;
     Resources.BindGroup = nullptr;
     Resources.BindGroupLayout = nullptr;
     Resources.Sampler = nullptr;
-    Resources.TextureView = nullptr;
-    Resources.Texture = nullptr;
+    Resources.SceneDepthView = nullptr;
+    Resources.SceneDepthTexture = nullptr;
+    Resources.SceneColorView = nullptr;
+    Resources.SceneColorTexture = nullptr;
 }
 
-static bool CreateOffscreenPassResources(
-    LE::FRALDevice* Device,
-    uint32 Width,
-    uint32 Height,
-    FOffscreenPassResources& Resources)
-{
-    DestroyOffscreenPassResources(Resources);
-
-    LE::FRALTextureDesc TextureDesc;
-    TextureDesc.Name = "RFGSceneColor";
-    TextureDesc.Width = Width;
-    TextureDesc.Height = Height;
-    TextureDesc.Depth = 1;
-    TextureDesc.MipLevels = 1;
-    TextureDesc.ArrayLayers = 1;
-    TextureDesc.Format = LE::EPixelFormat::B8G8R8A8_SRGB;
-    TextureDesc.bIsRenderTarget = true;
-    TextureDesc.bIsShaderResource = true;
-
-    Resources.Texture = Device->CreateTexture(TextureDesc);
-    if (Resources.Texture == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create offscreen texture.");
-        return false;
-    }
-
-    LE::FRALTextureViewDesc TextureViewDesc;
-    TextureViewDesc.Texture = Resources.Texture;
-    TextureViewDesc.Format = TextureDesc.Format;
-    TextureViewDesc.MipSlice = 0;
-    TextureViewDesc.ArraySlice = 0;
-    TextureViewDesc.MipLevels = 1;
-    TextureViewDesc.ArrayLayers = 1;
-    Resources.TextureView = Device->CreateTextureView(TextureViewDesc);
-    if (Resources.TextureView == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create offscreen texture view.");
-        DestroyOffscreenPassResources(Resources);
-        return false;
-    }
-
-    LE::FRALSamplerDesc SamplerDesc;
-    SamplerDesc.Name = "RFGSceneColorSampler";
-    SamplerDesc.AddressU = LE::ESamplerAddressMode::ClampToEdge;
-    SamplerDesc.AddressV = LE::ESamplerAddressMode::ClampToEdge;
-    SamplerDesc.AddressW = LE::ESamplerAddressMode::ClampToEdge;
-    Resources.Sampler = Device->CreateSampler(SamplerDesc);
-    if (Resources.Sampler == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create offscreen sampler.");
-        DestroyOffscreenPassResources(Resources);
-        return false;
-    }
-
-    LE::FRALBindGroupLayoutDesc BindGroupLayoutDesc;
-    BindGroupLayoutDesc.Name = "CompositeSceneColorLayout";
-    BindGroupLayoutDesc.SetIndex = 0;
-
-    LE::FRALBindGroupLayoutItem LayoutItem;
-    LayoutItem.Binding = 0;
-    LayoutItem.Count = 1;
-    LayoutItem.Type = LE::ERALBindGroupItemType::SampledImage;
-    LayoutItem.StageFlags = LE::EShaderStage::Pixel;
-    BindGroupLayoutDesc.Bindings.PushBack(LayoutItem);
-
-    LayoutItem.Binding = 1;
-    LayoutItem.Type = LE::ERALBindGroupItemType::Sampler;
-    BindGroupLayoutDesc.Bindings.PushBack(LayoutItem);
-
-    Resources.BindGroupLayout = Device->CreateBindGroupLayout(BindGroupLayoutDesc);
-    if (Resources.BindGroupLayout == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create composite bind group layout.");
-        DestroyOffscreenPassResources(Resources);
-        return false;
-    }
-
-    LE::FRALBindGroupDesc BindGroupDesc;
-    BindGroupDesc.Name = "CompositeSceneColorBindGroup";
-    BindGroupDesc.Layout = Resources.BindGroupLayout;
-
-    LE::FRALBindGroupItem BindGroupItem;
-    BindGroupItem.Binding = 0;
-    BindGroupItem.TextureView = Resources.TextureView;
-    BindGroupDesc.Items.PushBack(BindGroupItem);
-
-    BindGroupItem = {};
-    BindGroupItem.Binding = 1;
-    BindGroupItem.Sampler = Resources.Sampler;
-    BindGroupDesc.Items.PushBack(BindGroupItem);
-
-    Resources.BindGroup = Device->CreateBindGroup(BindGroupDesc);
-    if (Resources.BindGroup == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create composite bind group.");
-        DestroyOffscreenPassResources(Resources);
-        return false;
-    }
-
-    return true;
-}
-
-// Create triangle vertex buffer
-LE::FRALBuffer* CreateTriangleVertexBuffer(LE::FRALDevice* Device)
-{
-    FSimpleVertex Vertices[3] = {
-        { LE::Math::Vector3f( 0.0f,  0.5f, 0.0f), LE::Math::Vector3f(1.0f, 0.0f, 0.0f) }, // Top - Red
-        { LE::Math::Vector3f( 0.5f, -0.5f, 0.0f), LE::Math::Vector3f(0.0f, 1.0f, 0.0f) }, // Right - Green
-        { LE::Math::Vector3f(-0.5f, -0.5f, 0.0f), LE::Math::Vector3f(0.0f, 0.0f, 1.0f) }, // Left - Blue
-    };
-
-    const uint64 BufferSize = sizeof(Vertices);
-
-    LE::FRALBufferDesc BufferDesc;
-    BufferDesc.Name = "TriangleVertexBuffer";
-    BufferDesc.Size = BufferSize;
-    BufferDesc.Usage = static_cast<uint32>(LE::EResourceUsage::Upload);
-    BufferDesc.UsageFlag = static_cast<uint32>(LE::EBufferUsageFlags::VertexBuffer);
-
-    LE::FRALBuffer* Buffer = Device->CreateBuffer(BufferDesc);
-
-    void* MappedData = Buffer->Map(0, BufferSize);
-    memcpy(MappedData, Vertices, BufferSize);
-    Buffer->Unmap();
-
-    LE_LOG(LogXBD, Info, "Created triangle vertex buffer");
-    return Buffer;
-}
-
-static LE::FRALPipeline_Graphics* CreateTrianglePipeline(
+static LE::FRALPipeline_Graphics* CreateBasePassPipeline(
     LE::FRALDevice* Device,
     LE::FRALShader* VertexShader,
-    LE::FRALShader* PixelShader,
-    LE::EPixelFormat RenderTargetFormat)
+    LE::FRALShader* PixelShader)
 {
     LE::FRALPipelineDesc_Graphics PipelineDesc;
-    PipelineDesc.Name = "TrianglePipeline";
+    PipelineDesc.Name = "BasePassPipeline";
     PipelineDesc.VertexShader = VertexShader;
     PipelineDesc.PixelShader = PixelShader;
 
@@ -211,12 +96,17 @@ static LE::FRALPipeline_Graphics* CreateTrianglePipeline(
     PipelineDesc.VertexAttributes.PushBack(ColorAttr);
 
     PipelineDesc.RenderTargetCount = 1;
-    PipelineDesc.RenderTargetFormats[0] = RenderTargetFormat;
-    PipelineDesc.DepthStencilFormat = LE::EPixelFormat::Unknown;
+    PipelineDesc.RenderTargetFormats[0] = LE::EPixelFormat::B8G8R8A8_SRGB;
+    PipelineDesc.DepthStencilFormat = LE::EPixelFormat::D32_FLOAT;
+    PipelineDesc.DepthStencilState.bDepthTestEnable = true;
+    PipelineDesc.DepthStencilState.bDepthWriteEnable = true;
+    PipelineDesc.DepthStencilState.DepthFunc = LE::ECompareFunction::Less;
     PipelineDesc.RasterizerState.CullMode = LE::ECullMode::None;
     PipelineDesc.RasterizerState.FillMode = LE::EFillMode::Solid;
     PipelineDesc.BlendState.bEnable = false;
-
+    PipelineDesc.PushConstants.StageFlags =
+        LE::EShaderStage::Vertex | LE::EShaderStage::Pixel;
+    PipelineDesc.PushConstants.Size = sizeof(LE::FBasePassObjectConstants);
     return Device->CreateGraphicsPipeline(PipelineDesc);
 }
 
@@ -234,12 +124,230 @@ static LE::FRALPipeline_Graphics* CreateCompositePipeline(
     PipelineDesc.RenderTargetCount = 1;
     PipelineDesc.RenderTargetFormats[0] = RenderTargetFormat;
     PipelineDesc.DepthStencilFormat = LE::EPixelFormat::Unknown;
+    PipelineDesc.DepthStencilState.bDepthTestEnable = false;
+    PipelineDesc.DepthStencilState.bDepthWriteEnable = false;
     PipelineDesc.RasterizerState.CullMode = LE::ECullMode::None;
     PipelineDesc.RasterizerState.FillMode = LE::EFillMode::Solid;
     PipelineDesc.BlendState.bEnable = false;
     PipelineDesc.BindGroupLayouts.PushBack(BindGroupLayout);
 
     return Device->CreateGraphicsPipeline(PipelineDesc);
+}
+
+static bool TryCreateDemoRenderResources(
+    LE::FRALDevice* Device,
+    LE::FRALShader* BasePassVertexShader,
+    LE::FRALShader* BasePassPixelShader,
+    LE::FRALShader* CompositeVertexShader,
+    LE::FRALShader* CompositePixelShader,
+    uint32 Width,
+    uint32 Height,
+    FDemoRenderResources& OutResources)
+{
+    if (Device == nullptr || Width == 0 || Height == 0 ||
+        OutResources.SceneColorTexture != nullptr ||
+        OutResources.SceneDepthTexture != nullptr ||
+        OutResources.BasePassPipeline != nullptr ||
+        OutResources.CompositePipeline != nullptr)
+    {
+        return false;
+    }
+
+    LE::FRALTextureDesc TextureDesc;
+    TextureDesc.Name = "SceneColor";
+    TextureDesc.Width = Width;
+    TextureDesc.Height = Height;
+    TextureDesc.Depth = 1;
+    TextureDesc.MipLevels = 1;
+    TextureDesc.ArrayLayers = 1;
+    TextureDesc.Format = LE::EPixelFormat::B8G8R8A8_SRGB;
+    TextureDesc.bIsRenderTarget = true;
+    TextureDesc.bIsShaderResource = true;
+
+    OutResources.SceneColorTexture = Device->CreateTexture(TextureDesc);
+    if (OutResources.SceneColorTexture == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create offscreen texture.");
+        return false;
+    }
+
+    LE::FRALTextureViewDesc TextureViewDesc;
+    TextureViewDesc.Texture = OutResources.SceneColorTexture;
+    TextureViewDesc.Format = TextureDesc.Format;
+    TextureViewDesc.MipSlice = 0;
+    TextureViewDesc.ArraySlice = 0;
+    TextureViewDesc.MipLevels = 1;
+    TextureViewDesc.ArrayLayers = 1;
+    OutResources.SceneColorView = Device->CreateTextureView(TextureViewDesc);
+    if (OutResources.SceneColorView == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create offscreen texture view.");
+        DestroyDemoRenderResources(OutResources);
+        return false;
+    }
+
+    LE::FRALTextureDesc DepthDesc;
+    DepthDesc.Name = "SceneDepth";
+    DepthDesc.Width = Width;
+    DepthDesc.Height = Height;
+    DepthDesc.Depth = 1;
+    DepthDesc.MipLevels = 1;
+    DepthDesc.ArrayLayers = 1;
+    DepthDesc.Format = LE::EPixelFormat::D32_FLOAT;
+    DepthDesc.bIsDepthStencil = true;
+    OutResources.SceneDepthTexture = Device->CreateTexture(DepthDesc);
+    if (OutResources.SceneDepthTexture == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create SceneDepth texture.");
+        DestroyDemoRenderResources(OutResources);
+        return false;
+    }
+    LE::FRALTextureViewDesc DepthViewDesc;
+    DepthViewDesc.Texture = OutResources.SceneDepthTexture;
+    DepthViewDesc.Format = DepthDesc.Format;
+    OutResources.SceneDepthView = Device->CreateTextureView(DepthViewDesc);
+    if (OutResources.SceneDepthView == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create SceneDepth texture view.");
+        DestroyDemoRenderResources(OutResources);
+        return false;
+    }
+
+    LE::FRALSamplerDesc SamplerDesc;
+    SamplerDesc.Name = "RFGSceneColorSampler";
+    SamplerDesc.AddressU = LE::ESamplerAddressMode::ClampToEdge;
+    SamplerDesc.AddressV = LE::ESamplerAddressMode::ClampToEdge;
+    SamplerDesc.AddressW = LE::ESamplerAddressMode::ClampToEdge;
+    OutResources.Sampler = Device->CreateSampler(SamplerDesc);
+    if (OutResources.Sampler == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create offscreen sampler.");
+        DestroyDemoRenderResources(OutResources);
+        return false;
+    }
+
+    LE::FRALBindGroupLayoutDesc BindGroupLayoutDesc;
+    BindGroupLayoutDesc.Name = "CompositeSceneColorLayout";
+    BindGroupLayoutDesc.SetIndex = 0;
+
+    LE::FRALBindGroupLayoutItem LayoutItem;
+    LayoutItem.Binding = 0;
+    LayoutItem.Count = 1;
+    LayoutItem.Type = LE::ERALBindGroupItemType::SampledImage;
+    LayoutItem.StageFlags = LE::EShaderStage::Pixel;
+    BindGroupLayoutDesc.Bindings.PushBack(LayoutItem);
+
+    LayoutItem.Binding = 1;
+    LayoutItem.Type = LE::ERALBindGroupItemType::Sampler;
+    BindGroupLayoutDesc.Bindings.PushBack(LayoutItem);
+
+    OutResources.BindGroupLayout = Device->CreateBindGroupLayout(BindGroupLayoutDesc);
+    if (OutResources.BindGroupLayout == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create composite bind group layout.");
+        DestroyDemoRenderResources(OutResources);
+        return false;
+    }
+
+    LE::FRALBindGroupDesc BindGroupDesc;
+    BindGroupDesc.Name = "CompositeSceneColorBindGroup";
+    BindGroupDesc.Layout = OutResources.BindGroupLayout;
+
+    LE::FRALBindGroupItem BindGroupItem;
+    BindGroupItem.Binding = 0;
+    BindGroupItem.TextureView = OutResources.SceneColorView;
+    BindGroupDesc.Items.PushBack(BindGroupItem);
+
+    BindGroupItem = {};
+    BindGroupItem.Binding = 1;
+    BindGroupItem.Sampler = OutResources.Sampler;
+    BindGroupDesc.Items.PushBack(BindGroupItem);
+
+    OutResources.BindGroup = Device->CreateBindGroup(BindGroupDesc);
+    if (OutResources.BindGroup == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create composite bind group.");
+        DestroyDemoRenderResources(OutResources);
+        return false;
+    }
+
+    OutResources.BasePassPipeline = CreateBasePassPipeline(
+        Device, BasePassVertexShader, BasePassPixelShader);
+    OutResources.CompositePipeline = CreateCompositePipeline(
+        Device,
+        CompositeVertexShader,
+        CompositePixelShader,
+        OutResources.BindGroupLayout,
+        LE::EPixelFormat::B8G8R8A8_SRGB);
+    if (OutResources.BasePassPipeline == nullptr ||
+        OutResources.CompositePipeline == nullptr)
+    {
+        LE_LOG(LogXBD, Error, "Failed to create BasePass/Composite pipelines.");
+        DestroyDemoRenderResources(OutResources);
+        return false;
+    }
+
+    return true;
+}
+
+// Create triangle vertex buffer
+LE::FRALBuffer* CreateTriangleVertexBuffer(LE::FRALDevice* Device)
+{
+    FSimpleVertex Vertices[3] = {
+        { LE::Math::Vector3f( 0.0f,  0.5f, 0.0f), LE::Math::Vector3f(1.0f, 0.0f, 0.0f) }, // Top - Red
+        { LE::Math::Vector3f( 0.5f, -0.5f, 0.0f), LE::Math::Vector3f(0.0f, 1.0f, 0.0f) }, // Right - Green
+        { LE::Math::Vector3f(-0.5f, -0.5f, 0.0f), LE::Math::Vector3f(0.0f, 0.0f, 1.0f) }, // Left - Blue
+    };
+
+    const uint64 BufferSize = sizeof(Vertices);
+
+    LE::FRALBufferDesc BufferDesc;
+    BufferDesc.Name = "TriangleVertexBuffer";
+    BufferDesc.Size = BufferSize;
+    BufferDesc.Usage = static_cast<uint32>(LE::EResourceUsage::Upload);
+    BufferDesc.UsageFlag = static_cast<uint32>(LE::EBufferUsageFlags::VertexBuffer);
+
+    LE::FRALBuffer* Buffer = Device == nullptr ? nullptr : Device->CreateBuffer(BufferDesc);
+    if (Buffer == nullptr)
+    {
+        return nullptr;
+    }
+    void* MappedData = Buffer->Map(0, BufferSize);
+    if (MappedData == nullptr)
+    {
+        RAL::DestroyResource(Buffer);
+        return nullptr;
+    }
+    memcpy(MappedData, Vertices, BufferSize);
+    Buffer->Unmap();
+
+    LE_LOG(LogXBD, Info, "Created triangle vertex buffer");
+    return Buffer;
+}
+
+LE::FRALBuffer* CreateTriangleIndexBuffer(LE::FRALDevice* Device)
+{
+    const std::uint16_t Indices[3] = {0, 1, 2};
+    LE::FRALBufferDesc BufferDesc;
+    BufferDesc.Name = "TriangleIndexBuffer";
+    BufferDesc.Size = sizeof(Indices);
+    BufferDesc.Usage = static_cast<uint32>(LE::EResourceUsage::Upload);
+    BufferDesc.UsageFlag = static_cast<uint32>(LE::EBufferUsageFlags::IndexBuffer);
+    LE::FRALBuffer* Buffer = Device == nullptr ? nullptr : Device->CreateBuffer(BufferDesc);
+    if (Buffer == nullptr)
+    {
+        return nullptr;
+    }
+    void* const MappedData = Buffer->Map(0, sizeof(Indices));
+    if (MappedData == nullptr)
+    {
+        RAL::DestroyResource(Buffer);
+        return nullptr;
+    }
+    memcpy(MappedData, Indices, sizeof(Indices));
+    Buffer->Unmap();
+    LE_LOG(LogXBD, Info, "Created triangle index buffer");
+    return Buffer;
 }
 
 static void GetBackBufferExtent(
@@ -268,37 +376,6 @@ static void GetBackBufferExtent(
     OutHeight = BackBufferDesc.Height;
 }
 
-static bool SyncSwapchainToWindowSize(
-    FPlatformWindow* Window,
-    LE::FRALSwapchain* Swapchain,
-    uint32& InOutWidth,
-    uint32& InOutHeight,
-    const bool bForceRecreate)
-{
-    uint32 CurrentWindowWidth = 0;
-    uint32 CurrentWindowHeight = 0;
-    const FPlatformWindowSize WindowSize = Window->GetSize();
-    CurrentWindowWidth = WindowSize.Width;
-    CurrentWindowHeight = WindowSize.Height;
-    if (CurrentWindowWidth == 0 || CurrentWindowHeight == 0)
-    {
-        return false;
-    }
-
-    if (bForceRecreate || CurrentWindowWidth != InOutWidth || CurrentWindowHeight != InOutHeight)
-    {
-        LE_LOG(LogXBD, Info, "Explicitly recreating swapchain at {}x{}.", CurrentWindowWidth, CurrentWindowHeight);
-        if (!Swapchain->Resize(CurrentWindowWidth, CurrentWindowHeight))
-        {
-            return false;
-        }
-        InOutWidth = CurrentWindowWidth;
-        InOutHeight = CurrentWindowHeight;
-    }
-
-    return true;
-}
-
 namespace
 {
 class FDemoWindowRuntimeModule final
@@ -311,7 +388,7 @@ public:
 
     bool Startup() noexcept
     {
-        LE_LOG(LogXBD, Info, "=== Limitless Engine P1: RFG Composite Triangle Demo ===")
+        LE_LOG(LogXBD, Info, "=== Limitless Engine Phase 6: BasePass Vertical Slice ===")
 
         if (RegisterDemoApplicationReflection(ReflectionRegistry, ReflectionHandle) !=
             EReflectionRegisterResult::Success)
@@ -505,27 +582,27 @@ public:
             return false;
         }
 
-        LE::Array<char> TriangleVertBytecode;
-        LE::Array<char> TriangleFragBytecode;
+        LE::Array<char> BasePassVertBytecode;
+        LE::Array<char> BasePassFragBytecode;
         LE::Array<char> CompositeVertBytecode;
         LE::Array<char> CompositeFragBytecode;
-        if (!Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/TriangleVS.lsf", ERuntimeShaderStage::Vertex, TriangleVertBytecode, "MainVS") ||
-            !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/TrianglePS.lsf", ERuntimeShaderStage::Fragment, TriangleFragBytecode, "MainPS") ||
+        if (!Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/BasePassVS.lsf", ERuntimeShaderStage::Vertex, BasePassVertBytecode, "MainVS") ||
+            !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/BasePassPS.lsf", ERuntimeShaderStage::Fragment, BasePassFragBytecode, "MainPS") ||
             !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositeVS.lsf", ERuntimeShaderStage::Vertex, CompositeVertBytecode, "MainVS") ||
             !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositePS.lsf", ERuntimeShaderStage::Fragment, CompositeFragBytecode, "MainPS"))
         {
             return false;
         }
 
-        TriangleVertexShader = Device->CreateShaderFromFile(
-            LE::EShaderStage::Vertex, TriangleVertBytecode.Data(), TriangleVertBytecode.Size(), "MainVS");
-        TrianglePixelShader = Device->CreateShaderFromFile(
-            LE::EShaderStage::Pixel, TriangleFragBytecode.Data(), TriangleFragBytecode.Size(), "MainPS");
+        BasePassVertexShader = Device->CreateShaderFromFile(
+            LE::EShaderStage::Vertex, BasePassVertBytecode.Data(), BasePassVertBytecode.Size(), "MainVS");
+        BasePassPixelShader = Device->CreateShaderFromFile(
+            LE::EShaderStage::Pixel, BasePassFragBytecode.Data(), BasePassFragBytecode.Size(), "MainPS");
         CompositeVertexShader = Device->CreateShaderFromFile(
             LE::EShaderStage::Vertex, CompositeVertBytecode.Data(), CompositeVertBytecode.Size(), "MainVS");
         CompositePixelShader = Device->CreateShaderFromFile(
             LE::EShaderStage::Pixel, CompositeFragBytecode.Data(), CompositeFragBytecode.Size(), "MainPS");
-        if (TriangleVertexShader == nullptr || TrianglePixelShader == nullptr ||
+        if (BasePassVertexShader == nullptr || BasePassPixelShader == nullptr ||
             CompositeVertexShader == nullptr || CompositePixelShader == nullptr)
         {
             LE_LOG(LogXBD, Error, "Failed to create shader modules.");
@@ -535,57 +612,74 @@ public:
         uint32 InitialRenderWidth = DefaultWindowWidth;
         uint32 InitialRenderHeight = DefaultWindowHeight;
         GetBackBufferExtent(Swapchain, DefaultWindowWidth, DefaultWindowHeight, InitialRenderWidth, InitialRenderHeight);
-        if (!CreateOffscreenPassResources(Device, InitialRenderWidth, InitialRenderHeight, OffscreenResources))
+        if (!TryCreateDemoRenderResources(
+                Device,
+                BasePassVertexShader,
+                BasePassPixelShader,
+                CompositeVertexShader,
+                CompositePixelShader,
+                InitialRenderWidth,
+                InitialRenderHeight,
+                RenderResources))
         {
-            return false;
-        }
-
-        TrianglePipeline = CreateTrianglePipeline(
-            Device, TriangleVertexShader, TrianglePixelShader, LE::EPixelFormat::B8G8R8A8_SRGB);
-        CompositePipeline = CreateCompositePipeline(
-            Device,
-            CompositeVertexShader,
-            CompositePixelShader,
-            OffscreenResources.BindGroupLayout,
-            LE::EPixelFormat::B8G8R8A8_SRGB);
-        if (TrianglePipeline == nullptr || CompositePipeline == nullptr)
-        {
-            LE_LOG(LogXBD, Error, "Failed to create composite demo pipelines.");
             return false;
         }
 
         VertexBuffer = CreateTriangleVertexBuffer(Device);
-        if (VertexBuffer == nullptr || !FrameScheduler.Initialize(Device))
+        IndexBuffer = CreateTriangleIndexBuffer(Device);
+        if (VertexBuffer == nullptr || IndexBuffer == nullptr ||
+            !FrameScheduler.Initialize(Device))
         {
             LE_LOG(LogXBD, Error, "Failed to create demo frame scheduler resources.");
+            return false;
+        }
+
+        if (!RegisterRenderAssets())
+        {
+            LE_LOG(LogXBD, Error, "Failed to register demo render assets.");
+            Shutdown();
             return false;
         }
 
         FWorldCommandBuffer* const Commands = World.GetCommandBuffer();
         TComponentStorage<FWorldMeshComponent>* const MeshComponents =
             World.GetMeshComponents();
+        TComponentStorage<FWorldCameraComponent>* const CameraComponents =
+            World.GetCameraComponents();
         FWorldMeshComponent MeshComponent;
         MeshComponent.DebugName = "TriangleMesh";
-        MeshComponent.GraphicsPipeline = TrianglePipeline;
-        MeshComponent.VertexBuffer = VertexBuffer;
-        MeshComponent.VertexCount = 3;
-        MeshComponent.PassMask = ERenderMeshPassMask::SceneColor;
+        MeshComponent.Mesh = MeshAssetHandle;
+        MeshComponent.Material = MaterialAssetHandle;
         MeshComponent.SortKey = 0;
+        FWorldCameraComponent CameraComponent;
+        CameraComponent.DebugName = "PrimaryCamera";
+        CameraComponent.Priority = 100;
+        CameraComponent.bActive = true;
+        FTransform CameraTransform;
+        CameraTransform.Translation = Math::Vector3f(0.0f, 0.0f, 2.0f);
         if (!World.IsValid() || Commands == nullptr || MeshComponents == nullptr ||
+            CameraComponents == nullptr ||
             Commands->TryCreateEntity(BootstrapMeshToken) != EWorldCommandRecordResult::Recorded ||
             Commands->TryAddComponent(*MeshComponents, BootstrapMeshToken, std::move(MeshComponent)) !=
                 EWorldCommandRecordResult::Recorded ||
-            Commands->TryAddTransform(BootstrapMeshToken) != EWorldCommandRecordResult::Recorded)
+            Commands->TryAddTransform(BootstrapMeshToken) != EWorldCommandRecordResult::Recorded ||
+            Commands->TryCreateEntity(BootstrapCameraToken) != EWorldCommandRecordResult::Recorded ||
+            Commands->TryAddComponent(
+                *CameraComponents, BootstrapCameraToken, std::move(CameraComponent)) !=
+                EWorldCommandRecordResult::Recorded ||
+            Commands->TryAddTransform(BootstrapCameraToken, CameraTransform) !=
+                EWorldCommandRecordResult::Recorded)
         {
             LE_LOG(LogXBD, Error, "Failed to record the demo World bootstrap commands.");
+            Shutdown();
             return false;
         }
         bWorldBootstrapPending = true;
 
         Renderer.Initialize();
         bRendererInitialized = true;
-        CachedWindowWidth = DefaultWindowWidth;
-        CachedWindowHeight = DefaultWindowHeight;
+        CachedWindowWidth = InitialRenderWidth;
+        CachedWindowHeight = InitialRenderHeight;
         bCanRender = true;
         return true;
     }
@@ -599,7 +693,12 @@ public:
         bShutdown = true;
 
         LE_LOG(LogXBD, Info, "Shutting down demo render runtime...");
-        const bool bWorldIdle = World.GetTickState() == EWorldTickState::Idle;
+        bool bWorldIdle = World.GetTickState() == EWorldTickState::Idle;
+        if (!bWorldIdle && World.GetTickState() == EWorldTickState::Updating)
+        {
+            static_cast<void>(World.EndTick());
+            bWorldIdle = World.GetTickState() == EWorldTickState::Idle;
+        }
         if (bGameplaySystemRegistered && bWorldIdle)
         {
             if (World.UnregisterNativeGameplaySystem("Demo.RotateTriangle") !=
@@ -609,9 +708,22 @@ public:
             }
             bGameplaySystemRegistered = false;
         }
-        if (!bWorldIdle || !World.Reset())
+        const bool bWorldReset = bWorldIdle && World.Reset();
+        if (!bWorldReset)
         {
             LE_LOG(LogXBD, Error, "Demo World was not idle during render runtime shutdown.");
+        }
+        else
+        {
+            bWorldBootstrapPending = false;
+            BootstrapMeshToken.Reset();
+            BootstrapCameraToken.Reset();
+            MeshEntity.Reset();
+            CameraEntity.Reset();
+            if (!UnregisterRenderAssets())
+            {
+                LE_LOG(LogXBD, Error, "Failed to unregister demo render assets.");
+            }
         }
         FrameScheduler.Shutdown();
         if (bRendererInitialized)
@@ -622,19 +734,17 @@ public:
 
         RAL::DestroyResource(VertexBuffer);
         VertexBuffer = nullptr;
-        RAL::DestroyResource(CompositePipeline);
-        CompositePipeline = nullptr;
-        RAL::DestroyResource(TrianglePipeline);
-        TrianglePipeline = nullptr;
-        DestroyOffscreenPassResources(OffscreenResources);
+        RAL::DestroyResource(IndexBuffer);
+        IndexBuffer = nullptr;
+        DestroyDemoRenderResources(RenderResources);
         RAL::DestroyResource(CompositePixelShader);
         CompositePixelShader = nullptr;
         RAL::DestroyResource(CompositeVertexShader);
         CompositeVertexShader = nullptr;
-        RAL::DestroyResource(TrianglePixelShader);
-        TrianglePixelShader = nullptr;
-        RAL::DestroyResource(TriangleVertexShader);
-        TriangleVertexShader = nullptr;
+        RAL::DestroyResource(BasePassPixelShader);
+        BasePassPixelShader = nullptr;
+        RAL::DestroyResource(BasePassVertexShader);
+        BasePassVertexShader = nullptr;
         RAL::DestroyResource(Swapchain);
         Swapchain = nullptr;
         RAL::DestroyResource(Device);
@@ -644,48 +754,78 @@ public:
     EApplicationTickResult UpdateRenderResources()
     {
         FPlatformWindow* const Window = WindowModule.GetWindow();
-        bCanRender = !Window->IsMinimized() &&
-            SyncSwapchainToWindowSize(
-                Window,
-                Swapchain,
-                CachedWindowWidth,
-                CachedWindowHeight,
-                bSwapchainRecreateRequested);
-        if (!bCanRender)
+        const FPlatformWindowSize WindowSize = Window->GetSize();
+        if (Window->IsMinimized() || WindowSize.Width == 0 || WindowSize.Height == 0)
         {
+            bCanRender = false;
             FPlatformTime::SleepForMilliseconds(16);
             return EApplicationTickResult::Continue;
         }
-        bSwapchainRecreateRequested = false;
+
+        const bool bResizeSwapchain = bSwapchainRecreateRequested ||
+            WindowSize.Width != CachedWindowWidth ||
+            WindowSize.Height != CachedWindowHeight;
+        if (bResizeSwapchain)
+        {
+            FrameScheduler.WaitForAllFrames();
+            LE_LOG(LogXBD, Info, "Explicitly recreating swapchain at {}x{}.",
+                WindowSize.Width, WindowSize.Height);
+            if (!Swapchain->Resize(WindowSize.Width, WindowSize.Height))
+            {
+                bCanRender = false;
+                return EApplicationTickResult::Continue;
+            }
+            CachedWindowWidth = WindowSize.Width;
+            CachedWindowHeight = WindowSize.Height;
+            bSwapchainRecreateRequested = false;
+        }
 
         uint32 TargetRenderWidth = CachedWindowWidth;
         uint32 TargetRenderHeight = CachedWindowHeight;
         GetBackBufferExtent(Swapchain, CachedWindowWidth, CachedWindowHeight, TargetRenderWidth, TargetRenderHeight);
-        if (OffscreenResources.Texture != nullptr &&
-            OffscreenResources.Texture->GetDesc().Width == TargetRenderWidth &&
-            OffscreenResources.Texture->GetDesc().Height == TargetRenderHeight)
+        if (RenderResources.SceneColorTexture != nullptr &&
+            RenderResources.SceneColorTexture->GetDesc().Width == TargetRenderWidth &&
+            RenderResources.SceneColorTexture->GetDesc().Height == TargetRenderHeight)
         {
+            bCanRender = true;
             return EApplicationTickResult::Continue;
         }
 
-        FrameScheduler.WaitForAllFrames();
-        if (!CreateOffscreenPassResources(Device, TargetRenderWidth, TargetRenderHeight, OffscreenResources))
+        if (!bResizeSwapchain)
         {
-            return EApplicationTickResult::Exit;
+            FrameScheduler.WaitForAllFrames();
         }
-
-        RAL::DestroyResource(CompositePipeline);
-        CompositePipeline = CreateCompositePipeline(
+        FDemoRenderResources Candidate;
+        if (!TryCreateDemoRenderResources(
             Device,
+            BasePassVertexShader,
+            BasePassPixelShader,
             CompositeVertexShader,
             CompositePixelShader,
-            OffscreenResources.BindGroupLayout,
-            LE::EPixelFormat::B8G8R8A8_SRGB);
-        if (CompositePipeline == nullptr)
+            TargetRenderWidth,
+            TargetRenderHeight,
+            Candidate))
         {
-            LE_LOG(LogXBD, Error, "Failed to recreate composite pipeline after resize.");
-            return EApplicationTickResult::Exit;
+            LE_LOG(LogXBD, Error,
+                "Resize candidate creation failed; preserving the previous render resources.");
+            bCanRender = true;
+            return EApplicationTickResult::Continue;
         }
+        if (!ReplaceBasePassMaterial(Candidate.BasePassPipeline))
+        {
+            DestroyDemoRenderResources(Candidate);
+            LE_LOG(LogXBD, Error,
+                "Resize candidate publication failed; preserving the previous render resources.");
+            bCanRender = true;
+            return EApplicationTickResult::Continue;
+        }
+
+        FDemoRenderResources Previous = RenderResources;
+        RenderResources = Candidate;
+        Candidate = {};
+        MaterialAssets[ActiveMaterialSlot == 0 ? 1 : 0] = {};
+        DestroyDemoRenderResources(Previous);
+        bCanRender = true;
         return EApplicationTickResult::Continue;
     }
 
@@ -709,12 +849,17 @@ public:
         if (bWorldBootstrapPending)
         {
             FWorldCommandBuffer* const Commands = World.GetCommandBuffer();
-            const EDeferredEntityResolveResult ResolveResult = Commands == nullptr
+            const EDeferredEntityResolveResult MeshResolveResult = Commands == nullptr
                 ? EDeferredEntityResolveResult::InvalidState
                 : Commands->TryResolveDeferredEntity(BootstrapMeshToken, MeshEntity);
+            const EDeferredEntityResolveResult CameraResolveResult = Commands == nullptr
+                ? EDeferredEntityResolveResult::InvalidState
+                : Commands->TryResolveDeferredEntity(BootstrapCameraToken, CameraEntity);
             BootstrapMeshToken.Reset();
+            BootstrapCameraToken.Reset();
             bWorldBootstrapPending = false;
-            bBootstrapFailed = ResolveResult != EDeferredEntityResolveResult::Resolved;
+            bBootstrapFailed = MeshResolveResult != EDeferredEntityResolveResult::Resolved ||
+                CameraResolveResult != EDeferredEntityResolveResult::Resolved;
         }
         const bool bBeginCommandsFailed =
             BeginResult == EWorldTickResult::CompletedWithCommandFailures;
@@ -749,8 +894,29 @@ public:
 
         auto RecordFrame = [this](LE::FRenderFrameScope& ScheduledFrame)
         {
-            LE::FRenderScene RenderScene;
-            LE::FWorldRenderSceneExtractor::ExtractRenderScene(World, RenderScene);
+            LE::FWorldRenderSnapshot RenderSnapshot;
+            LE::FWorldRenderSnapshotBuildReport SnapshotReport;
+            LE::FWorldRenderSnapshotBuildContext SnapshotContext;
+            SnapshotContext.FrameIndex = ScheduledFrame.GetFrameIndex();
+            SnapshotContext.ViewportWidth =
+                RenderResources.SceneColorTexture->GetDesc().Width;
+            SnapshotContext.ViewportHeight =
+                RenderResources.SceneColorTexture->GetDesc().Height;
+            if (WorldRenderer.BuildSnapshot(
+                    World,
+                    AssetRegistry,
+                    SnapshotContext,
+                    RenderSnapshot,
+                    &SnapshotReport) !=
+                LE::EWorldRenderSnapshotBuildResult::Success)
+            {
+                LE_LOG(LogXBD, Error,
+                    "Demo World snapshot build failed: Result={} MeshIndex={} AssetResolve={}.",
+                    static_cast<uint32>(SnapshotReport.Result),
+                    SnapshotReport.MeshIndex,
+                    static_cast<uint32>(SnapshotReport.AssetResolveResult));
+                return LE::ERenderFrameRecordResult::Error;
+            }
 
             LE::FRendererFrameContext FrameContext;
             FrameContext.FrameIndex = ScheduledFrame.GetFrameIndex();
@@ -759,15 +925,22 @@ public:
             FrameContext.CommandList = ScheduledFrame.GetCommandList();
             FrameContext.FrameScope = &ScheduledFrame;
             FrameContext.ViewFamily.PrimarySwapchain = Swapchain;
-            LE::FTriangleCompositePipelineDesc RenderPipelineDesc;
+            LE::FBasePassCompositePipelineDesc RenderPipelineDesc;
+            RenderPipelineDesc.BasePassResources.SceneColorTexture =
+                RenderResources.SceneColorTexture;
+            RenderPipelineDesc.BasePassResources.SceneColorView =
+                RenderResources.SceneColorView;
+            RenderPipelineDesc.BasePassResources.SceneDepthTexture =
+                RenderResources.SceneDepthTexture;
+            RenderPipelineDesc.BasePassResources.SceneDepthView =
+                RenderResources.SceneDepthView;
             RenderPipelineDesc.BackBufferView = ScheduledFrame.GetBackBufferView();
-            RenderPipelineDesc.CompositePipeline = CompositePipeline;
-            RenderPipelineDesc.SceneColorTexture = OffscreenResources.Texture;
-            RenderPipelineDesc.SceneColorView = OffscreenResources.TextureView;
-            RenderPipelineDesc.CompositeBindGroup = OffscreenResources.BindGroup;
-            LE::FTriangleCompositePipeline RenderPipeline(RenderPipelineDesc);
+            RenderPipelineDesc.CompositePipeline = RenderResources.CompositePipeline;
+            RenderPipelineDesc.CompositeBindGroup = RenderResources.BindGroup;
+            LE::FBasePassCompositePipeline RenderPipeline(RenderPipelineDesc);
             FrameContext.Pipeline = &RenderPipeline;
-            return Renderer.RenderFrame(FrameContext, &RenderScene);
+            return Renderer.RenderFrame(
+                FrameContext, &RenderSnapshot.GetRenderScene());
         };
 
         const FRenderFrameResult FrameResult = FrameScheduler.ExecuteFrame(Swapchain, RecordFrame);
@@ -799,6 +972,139 @@ public:
     }
 
 private:
+    bool RegisterRenderAssets() noexcept
+    {
+        if (!FAssetId::TryParse(
+                "a2100000-0000-4000-8000-000000000001", MeshAssetId) ||
+            !FAssetId::TryParse(
+                "a2100000-0000-4000-8000-000000000002", MaterialAssetId))
+        {
+            return false;
+        }
+
+        MeshAsset.VertexBuffer = VertexBuffer;
+        MeshAsset.VertexCount = 3;
+        MeshAsset.IndexBuffer = IndexBuffer;
+        MeshAsset.IndexCount = 3;
+        MeshAsset.IndexFormat = EPixelFormat::R16_UINT;
+        MeshAsset.LocalBounds = FRenderBounds(
+            Math::Vector3f(-0.5f, -0.5f, 0.0f),
+            Math::Vector3f(0.5f, 0.5f, 0.0f));
+        TAssetRegistration<FMeshAsset> MeshRegistration;
+        MeshRegistration.Id = MeshAssetId;
+        MeshRegistration.SoftPath = "Engine/Demo/Triangle.mesh";
+        MeshRegistration.DisplayName = "TriangleMesh";
+        MeshRegistration.ProviderName = "Demo.Render";
+        MeshRegistration.Object = &MeshAsset;
+        if (AssetRegistry.Register(MeshRegistration, MeshAssetHandle) !=
+            EAssetRegisterResult::Success)
+        {
+            return false;
+        }
+        bMeshAssetRegistered = true;
+
+        ActiveMaterialSlot = 0;
+        MaterialAssets[ActiveMaterialSlot].GraphicsPipeline =
+            RenderResources.BasePassPipeline;
+        MaterialAssets[ActiveMaterialSlot].PassMask = ERenderMeshPassMask::SceneColor;
+        MaterialAssets[ActiveMaterialSlot].BaseColor =
+            Math::Vector4f(1.0f, 0.9f, 0.8f, 1.0f);
+        TAssetRegistration<FMaterialAsset> MaterialRegistration;
+        MaterialRegistration.Id = MaterialAssetId;
+        MaterialRegistration.SoftPath = "Engine/Demo/Triangle.material";
+        MaterialRegistration.DisplayName = "TriangleMaterial";
+        MaterialRegistration.ProviderName = "Demo.Render";
+        MaterialRegistration.Object = &MaterialAssets[ActiveMaterialSlot];
+        if (AssetRegistry.Register(MaterialRegistration, MaterialAssetHandle) !=
+            EAssetRegisterResult::Success)
+        {
+            static_cast<void>(UnregisterRenderAssets());
+            return false;
+        }
+        bMaterialAssetRegistered = true;
+        return true;
+    }
+
+    bool ReplaceBasePassMaterial(FRALPipeline_Graphics* const NewPipeline) noexcept
+    {
+        if (NewPipeline == nullptr || !bMaterialAssetRegistered ||
+            World.GetTickState() != EWorldTickState::Idle)
+        {
+            return false;
+        }
+        TComponentStorage<FWorldMeshComponent>* const MeshComponents =
+            World.GetMeshComponents();
+        FWorldMeshComponent* const MeshComponent = MeshComponents == nullptr
+            ? nullptr
+            : World.GetComponent(*MeshComponents, MeshEntity);
+        if (MeshComponent == nullptr || MeshComponent->Material != MaterialAssetHandle)
+        {
+            return false;
+        }
+
+        const uint32 NewSlot = ActiveMaterialSlot == 0 ? 1 : 0;
+        MaterialAssets[NewSlot].GraphicsPipeline = NewPipeline;
+        MaterialAssets[NewSlot].PassMask = ERenderMeshPassMask::SceneColor;
+        MaterialAssets[NewSlot].BaseColor = MaterialAssets[ActiveMaterialSlot].BaseColor;
+        TAssetRegistration<FMaterialAsset> Registration;
+        Registration.Id = MaterialAssetId;
+        Registration.SoftPath = "Engine/Demo/Triangle.material";
+        Registration.DisplayName = "TriangleMaterial";
+        Registration.ProviderName = "Demo.Render";
+        Registration.Object = &MaterialAssets[NewSlot];
+
+        FMaterialAssetHandle NewHandle;
+        if (AssetRegistry.Replace(MaterialAssetHandle, Registration, NewHandle) !=
+            EAssetReplaceResult::Success)
+        {
+            MaterialAssets[NewSlot] = {};
+            return false;
+        }
+
+        MeshComponent->Material = NewHandle;
+        MaterialAssetHandle = NewHandle;
+        ActiveMaterialSlot = NewSlot;
+        return true;
+    }
+
+    bool UnregisterRenderAssets() noexcept
+    {
+        bool bSuccess = true;
+        if (bMaterialAssetRegistered)
+        {
+            if (AssetRegistry.Unregister(MaterialAssetHandle) ==
+                EAssetUnregisterResult::Success)
+            {
+                MaterialAssetHandle.Reset();
+                bMaterialAssetRegistered = false;
+            }
+            else
+            {
+                bSuccess = false;
+            }
+        }
+        if (bMeshAssetRegistered)
+        {
+            if (AssetRegistry.Unregister(MeshAssetHandle) ==
+                EAssetUnregisterResult::Success)
+            {
+                MeshAssetHandle.Reset();
+                bMeshAssetRegistered = false;
+            }
+            else
+            {
+                bSuccess = false;
+            }
+        }
+        if (bSuccess)
+        {
+            MeshAsset = {};
+            MaterialAssets[0] = {};
+            MaterialAssets[1] = {};
+        }
+        return bSuccess;
+    }
+
     static ENativeGameplaySystemResult RotateTriangleSystem(
         void* const ProviderContext,
         const FNativeGameplaySystemUpdateContext& Context) noexcept
@@ -830,20 +1136,31 @@ private:
     static constexpr uint32 DefaultWindowHeight = 720;
 
     FDemoWindowRuntimeModule& WindowModule;
+    // Declaration order is a fallback lifetime guarantee: reverse destruction
+    // releases World before Registry, and Registry before its borrowed payloads.
+    FMeshAsset MeshAsset;
+    FMaterialAsset MaterialAssets[2];
+    FAssetRegistry AssetRegistry;
     FWorld World;
+    FWorldRenderer WorldRenderer;
+    FAssetId MeshAssetId;
+    FAssetId MaterialAssetId;
+    FMeshAssetHandle MeshAssetHandle;
+    FMaterialAssetHandle MaterialAssetHandle;
     FDeferredEntityToken BootstrapMeshToken;
+    FDeferredEntityToken BootstrapCameraToken;
     FEntity MeshEntity;
+    FEntity CameraEntity;
     FRALDevice* Device = nullptr;
     FRALSwapchain* Swapchain = nullptr;
-    FRALShader* TriangleVertexShader = nullptr;
-    FRALShader* TrianglePixelShader = nullptr;
+    FRALShader* BasePassVertexShader = nullptr;
+    FRALShader* BasePassPixelShader = nullptr;
     FRALShader* CompositeVertexShader = nullptr;
     FRALShader* CompositePixelShader = nullptr;
-    FRALPipeline_Graphics* TrianglePipeline = nullptr;
-    FRALPipeline_Graphics* CompositePipeline = nullptr;
     FRALBuffer* VertexBuffer = nullptr;
+    FRALBuffer* IndexBuffer = nullptr;
     FRenderFrameScheduler FrameScheduler;
-    FOffscreenPassResources OffscreenResources;
+    FDemoRenderResources RenderResources;
     FRenderer Renderer;
     uint32 CachedWindowWidth = DefaultWindowWidth;
     uint32 CachedWindowHeight = DefaultWindowHeight;
@@ -852,6 +1169,9 @@ private:
     bool bRendererInitialized = false;
     bool bWorldBootstrapPending = false;
     bool bGameplaySystemRegistered = false;
+    bool bMeshAssetRegistered = false;
+    bool bMaterialAssetRegistered = false;
+    uint32 ActiveMaterialSlot = 0;
     bool bShutdown = false;
 };
 
@@ -889,7 +1209,7 @@ public:
 
     bool Initialize() override
     {
-        LE_LOG(LogXBD, Info, "Entering composite main loop...");
+        LE_LOG(LogXBD, Info, "Entering BasePass composite main loop...");
         return true;
     }
 
