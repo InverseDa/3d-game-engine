@@ -37,6 +37,7 @@ namespace LE
 int RunReflectionTests();
 int RunReflectionMacroTests();
 int RunPropertySerializationTests();
+int RunWorldTests();
 }
 
 namespace
@@ -3389,6 +3390,7 @@ int main(const int ArgCount, char** Arguments)
     FailureCount += LE::RunReflectionTests();
     FailureCount += LE::RunReflectionMacroTests();
     FailureCount += LE::RunPropertySerializationTests();
+    FailureCount += LE::RunWorldTests();
     FailureCount += RunOwnershipTests();
     FailureCount += RunFunctionTests();
     FailureCount += RunMathVectorTests();

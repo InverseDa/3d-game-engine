@@ -23,7 +23,7 @@ Renderer 是引擎的高层渲染模块，基于 **RFG（Render Frame Graph）**
 
 | 成员 | 类型 | 说明 |
 |------|------|------|
-| `Meshes` | `std::vector<FRenderMeshProxy>` | 网格渲染代理，含 `GraphicsPipeline`、`VertexBuffer`、`VertexCount`、`PassMask`、`SortKey` |
+| `Meshes` | `LE::Array<FRenderMeshProxy>` | 网格渲染代理，含 `LocalToWorld` snapshot、`GraphicsPipeline`、`VertexBuffer`、`VertexCount`、`PassMask`、`SortKey` |
 | `Lights` | `std::vector<FRenderLightProxy>` | 光源代理（当前为空壳） |
 | `Cameras` | `std::vector<FRenderCameraProxy>` | 相机代理（当前为空壳） |
 
@@ -241,7 +241,7 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 
 1. **仅有 Demo 管线**：生产级 `Forward+`、`Deferred` 管线尚未实现；`EShadingPath` 枚举存在但无对应管线类。
 2. **无正式材质系统**：`FRenderMeshProxy` 直接持有 `FRALPipeline_Graphics*` 和 `FRALBuffer*`，没有材质、Shader、参数表的抽象。
-3. **场景数据极简**：`FRenderLightProxy`、`FRenderCameraProxy` 为空壳；无 Transform、Bounds、LOD、剔除系统。
+3. **场景数据极简**：mesh proxy 仅携带尚未被 GPU draw 使用的 `LocalToWorld` snapshot；`FRenderLightProxy`、`FRenderCameraProxy` 仍为空壳，且无 Bounds、LOD、剔除系统。
 4. **单视图限制**：`FRenderer::RenderFrame` 仅取 `ViewFamily.Views.front()`，多视口/分屏/Shadow Cascade 不支持。
 5. **平台特定代码侵入**：`TriangleCompositePasses.h` 中直接调用了 Vulkan API（`vkCmdPipelineBarrier`），破坏了 RAL 的抽象边界。
 6. **无后处理框架**：无 Bloom、Tone Mapping、AA 等后处理 Pass 的标准注册与组合机制。

@@ -1,231 +1,350 @@
-# World 模块设计文档
+# World module
 
-## 1. 模块职责
+## Current scope
 
-World 模块是引擎的**游戏世界表示层**，负责维护运行时场景数据，并为渲染管线提供可消费的渲染代理（Render Proxy）。当前核心职责包括：
+World now owns the Phase 5 Task 15 identity/storage foundation, Task 16
+Transform hierarchy, Task 17 tick/deferred-mutation boundary, and Task 18
+single-threaded native gameplay schedule:
 
-- **场景数据容器**：以 `FWorld` 为中心，持有场景中的几何体数据（`FWorldMeshComponent`）。
-- **渲染数据提取**：通过 `FWorldRenderSceneExtractor` 将世界数据转换为渲染器可理解的 `FRenderScene`。
-- **渲染桥梁**：作为游戏逻辑（未来）与 Renderer 模块之间的中间层，解耦世界表示与渲染实现。
+- `FWorld` creates and destroys `FEntity` values.
+- `FEntity` combines a pool-issued index+generation slot with a nonzero runtime
+  World domain. Generation rejects stale reuse; the domain rejects a handle from
+  another World even when its slot pair is identical.
+- `TComponentStorage<T>` keeps one contiguous dense `T` array, a parallel dense
+  Entity array, and a sparse Entity-index-to-dense-index table.
+- `FWorldMeshComponent` is the first real storage consumer. The demo creates an
+  Entity, adds the mesh component through `FWorld`, and the render-scene
+  extractor walks the dense component span.
+- `FTransform` is a standard-layout, trivially-copyable local TRS value. World
+  owns its component storage privately and exposes only dirty-aware authored
+  mutation and value-copy query APIs.
+- Parent/child links use generation-checked Entity values, reject cycles, and
+  update cached world matrices iteratively in parent-before-child order.
+- `BeginTick` / `EndTick` publish deferred structural commands at deterministic
+  boundaries while keeping the Updating snapshot structurally stable.
+- Explicitly registered native systems execute in deterministic dependency
+  order across fixed and variable update phases.
 
----
+Scripts, jobs/Runnable execution, asset handles, and `WorldRenderer` are later
+roadmap tasks and are intentionally absent here.
+The prototype mesh component therefore still contains its existing raw RAL
+buffer and pipeline pointers until the asset/renderer migration.
 
-## 2. 当前架构
+## Entity identity and lifetime
 
-### 2.1 类图与数据流
+`FEntity` is a trivially copyable, non-owning value. Invalid values use world
+domain zero or the invalid `TRuntimeHandle` sentinels. A World domain is issued
+once per process and is never reused; exhaustion makes subsequently constructed
+Worlds operationally invalid rather than wrapping.
 
-```
-+----------------------------+         ExtractRenderScene()         +-------------------------+
-|         FWorld             | -----------------------------------> |      FRenderScene       |
-|----------------------------|                                      |-------------------------|
-| - MeshComponents[]         |                                      | - Meshes[]              |
-|   (FWorldMeshComponent)    |                                      |   (FRenderMeshProxy)    |
-|                            |                                      | - Lights[]              |
-| - Reset()                  |                                      | - Cameras[]             |
-+----------------------------+                                      +-------------------------+
-```
+The value keeps its slot fields visible for diagnostics and hashing, so native
+code can physically forge bytes. Those bytes are never authority: every World
+operation checks the domain and then asks its private handle pool whether the
+index+generation pair is currently alive.
 
-### 2.2 核心类型
+`FWorld::TryCreateEntity` preserves its output and entity count on allocation
+failure. It reserves the dense live-Entity list before asking the handle pool to
+issue a slot, so a failed create does not consume a generation. Destroying an
+Entity removes all of its attached components while it is still alive, releases
+the slot, and swap-removes it from the live list. Stale, double-destroyed,
+forged-generation, and foreign-World values are rejected.
 
-| 类型 | 文件 | 说明 |
-|------|------|------|
-| `FWorldPrimitive` | `World.h` | 世界基元基类，仅含 `DebugName`。 |
-| `FWorldMeshComponent` | `World.h` | 继承自 `FWorldPrimitive`，持有 `GraphicsPipeline`、`VertexBuffer`、`VertexCount`、`PassMask`、`SortKey`。 |
-| `FWorld` | `World.h` | 世界根对象，内部为一个 `std::vector<FWorldMeshComponent>` 容器，提供 `Reset()` 方法。 |
-| `FWorldRenderSceneExtractor` | `WorldRenderSceneExtractor.h/.cpp` | 静态工具类，单方法 `ExtractRenderScene(const FWorld&, FRenderScene&)`，负责逐元素浅拷贝至渲染场景。 |
-| `WorldMinimal.h` | `WorldMinimal.h` | 聚合头文件，仅包含 `World.h` 与 `WorldRenderSceneExtractor.h`。 |
+`FWorld` is non-copyable, non-movable, and not thread-safe. Its implementation
+and allocator-backed ownership live behind a World-module PImpl. PImpl
+allocation failure still leaves a valid C++ object, but `IsValid()` is false,
+entity operations fail, counts are zero, and storage accessors return null.
 
-### 2.3 关键代码路径
+## Typed contiguous storage
 
-**世界定义**（`World.h`）：
+Each `TComponentStorage<T>` owns one allocator block with checked aligned
+regions for:
+
+1. sparse entries indexed by Entity slot index;
+2. dense `FEntity` values;
+3. dense `T` values with `sizeof(T)` stride.
+
+Growth computes every offset and byte count before one aligned allocation.
+Only after allocation succeeds are existing nothrow-movable components
+relocated and the new block committed. Consequently an allocation-failed Add
+does not consume its rvalue, move existing components, alter dense order, change
+the exposed data address, or advance the mutation version. Over-aligned
+components retain their required real address alignment.
+
+Removal uses swap-remove. The last component is move-constructed into the hole,
+the old objects are destroyed exactly once, the parallel dense Entity is moved,
+and that Entity's sparse entry is repaired. `GetEntities()` and
+`GetComponents()` have equal sizes and matching indices; iteration order is
+dense but intentionally unstable after removal.
+
+Sparse mutation helpers are private to `FWorld`. Callers cannot insert directly
+into a storage and therefore cannot use a stale or forged generation to
+overwrite the sparse mapping invariant.
+
+The component API is explicit about both World and storage:
 
 ```cpp
-class FWorld
+LE::FWorld World;
+LE::FEntity Entity;
+auto* Meshes = World.GetMeshComponents();
+
+if (World.IsValid() && Meshes != nullptr && World.TryCreateEntity(Entity))
 {
-public:
-    void Reset() { MeshComponents.clear(); }
-    std::vector<FWorldMeshComponent> MeshComponents;
-};
-```
-
-**提取器实现**（`WorldRenderSceneExtractor.cpp:6-21`）：
-
-```cpp
-void FWorldRenderSceneExtractor::ExtractRenderScene(const FWorld& World, FRenderScene& OutRenderScene)
-{
-    OutRenderScene.Reset();
-    OutRenderScene.Meshes.reserve(World.MeshComponents.size());
-
-    for (const FWorldMeshComponent& MeshComponent : World.MeshComponents)
-    {
-        FRenderMeshProxy& RenderMesh = OutRenderScene.Meshes.emplace_back();
-        RenderMesh.DebugName       = MeshComponent.DebugName;
-        RenderMesh.GraphicsPipeline = MeshComponent.GraphicsPipeline;
-        RenderMesh.VertexBuffer    = MeshComponent.VertexBuffer;
-        RenderMesh.VertexCount     = MeshComponent.VertexCount;
-        RenderMesh.PassMask        = MeshComponent.PassMask;
-        RenderMesh.SortKey         = MeshComponent.SortKey;
-    }
+    LE::FWorldMeshComponent Mesh;
+    World.TryAddComponent(*Meshes, Entity, std::move(Mesh));
 }
 ```
 
----
+Generic external storage is attached without allocation:
 
-## 3. 与 Renderer 的交互流程
-
-World 模块本身不直接执行绘制命令，而是通过**提取器模式**将数据推送至 Renderer：
-
-```
-Game Loop / Editor
-       |
-       v
-   [FWorld]  <-- 逻辑层维护场景数据
-       |
-       | FWorldRenderSceneExtractor::ExtractRenderScene(World, RenderScene)
-       v
-   [FRenderScene]  <-- Renderer 模块的纯数据视图
-       |
-       v
-   [Renderer]  <-- 执行裁剪、排序、提交 RAL 绘制
+```cpp
+LE::TComponentStorage<FGameplayComponent> Components;
+World.AttachComponentStorage(Components);
 ```
 
-### 交互要点
+Registration is a non-owning intrusive node. World never deletes an external
+storage. Storage destruction detaches itself in O(1); World destruction clears
+and detaches every surviving external storage, after which its World-mediated
+operations report `InvalidStorage`. In Editor DLL configurations, the module
+which instantiated a component storage supplies its remove/clear thunks and
+must remain loaded until the storage is detached. No allocation is freed by a
+foreign module or raw cross-DLL `delete`.
 
-1. **单向数据流**：World → Extractor → RenderScene，无回写。渲染器对 `FRenderScene` 的修改不影响 `FWorld`。
-2. **逐帧重建**：`ExtractRenderScene` 首先调用 `OutRenderScene.Reset()`，每帧完全重建渲染代理列表。当前无增量更新或持久化映射。
-3. **字段一一对应**：`FWorldMeshComponent` 与 `FRenderMeshProxy` 字段完全一致，提取器本质为浅拷贝循环。
+## Operation semantics
 
----
+`TryAddComponent` returns `Added`, `AlreadyPresent`, `InvalidEntity`,
+`InvalidStorage`, or `AllocationFailed`. Duplicate Add does not consume its
+argument or replace the existing value. `TrySetComponent` returns `Added` or
+`Replaced` on success and supports move-only values. `GetComponent` returns null
+and `RemoveComponent` reports an explicit non-success result for missing,
+invalid, stale, foreign, or detached inputs.
 
-## 4. 依赖关系
+Every successful Add, Replace, Remove, or Clear invalidates all pointers, spans,
+and iteration positions borrowed from that storage and advances its mutation
+version. Duplicate, missing, invalid, and allocation-failed operations do
+neither. Structural operations and component construction/destruction are
+non-reentrant; concurrent access requires synchronization by the caller.
 
-依据 `Build.ts`：
+## Transform and hierarchy
 
-```csharp
-conf.AddPublicDependency<CoreProject>(target);      // LE::String、基础类型
-conf.AddPublicDependency<RALProject>(target);       // FRALBuffer、FRALPipeline_Graphics
-conf.AddPublicDependency<RendererProject>(target);  // FRenderScene、ERenderMeshPassMask
+`FTransform` stores local translation, quaternion rotation, and scale. Authored
+rotations are normalized; a zero-length quaternion canonicalizes to identity.
+Scale may contain zero because Task 16 never performs an inverse. Core matrices
+use row-major physical storage and column vectors, so a local matrix is
+`Translation * Rotation * Scale` and a child world matrix is
+`ParentLocalToWorld * ChildLocalMatrix`. Caching the full matrix preserves exact
+affine composition when a rotated hierarchy also contains non-uniform scale.
+
+Transform storage is an internal `TComponentStorage` owned by `FWorld::FImpl`.
+It is deliberately not returned as a mutable pointer or span: callers could
+otherwise change local data or hierarchy links without dirty propagation. The
+controlled API provides Add/Remove, local edit, Set/Clear parent, value-copy
+local/parent/world queries, explicit cache update, and a read-only authored
+mutation version.
+
+All query outputs remain unchanged on failure. A world-matrix query resolves
+dirty caches first, but fails while another World structural mutation is in
+progress so it cannot observe a half-committed hierarchy. Cache resolution is
+derived work and does not advance the authored mutation version. Each
+successful Add, local edit, reparent, Remove, or Entity destroy containing a
+Transform advances it exactly once; unchanged, rejected, missing, foreign,
+stale, allocation-failed, and cache-only operations do not. An operationally
+invalid World reports version zero.
+
+Parent, first-child, previous-sibling, and next-sibling are stored as `FEntity`
+links rather than pointers, so component storage growth and swap-removal cannot
+invalidate them. Reparenting prepends to the new parent's child list. Sibling
+order is deterministic for a given mutation sequence but is not a stable sort
+contract.
+
+Task 16 supports only **KeepLocal** hierarchy edits. Reparent and clear-parent
+leave local TRS unchanged and recompute world matrices. KeepWorld is not
+offered: Core does not yet define affine inverse/decomposition, and decomposing
+non-uniform scale plus rotation may be lossy due to shear. Removing a Transform
+or destroying its Entity first unlinks it, makes each direct child a root with
+its local value unchanged, dirties those child subtrees, then removes the
+component. Entity slot release happens afterward, so generation reuse cannot
+inherit stale hierarchy links.
+
+Cycle detection walks the proposed parent's ancestor chain. Dirty propagation
+and cache update both walk the intrusive hierarchy iteratively without a call
+stack or scratch allocation; roots are discovered in dense Transform order and
+each subtree is evaluated parent before child. Only Add may allocate, and its
+OOM behavior is inherited from transactional typed storage. Reparent, local
+edit, Remove, cycle detection, dirty propagation, and cache update allocate
+nothing.
+
+## Tick pipeline and deferred structural mutation
+
+`FWorldTickContext` copies frame index, delta seconds, and elapsed seconds from
+the Application layer without making World depend on the Application module.
+The first accepted frame index may be any value. Later frame indices must be
+strictly increasing, elapsed time may not move backward, and both time values
+must be finite and nonnegative. Invalid context/state leaves the current
+context, command queue, tick state, and optional flush-result output unchanged.
+
+The P0 pipeline places the native schedule inside one Task 17 boundary:
+
+```text
+Idle/Render records -> BeginTick FIFO flush -> Transform resolve -> Updating
+Updating             -> fixed substeps -> one variable pass
+Updating records     -> EndTick FIFO flush -> Transform resolve -> Idle/Render
 ```
 
-| 依赖模块 | 用途 |
-|----------|------|
-| **Core** | 使用 `LE::String`（`DebugName`）、`LE::uint32`/`LE::uint64` 等基础类型。 |
-| **RAL** | 直接持有 RAL 渲染资源指针（`FRALBuffer*`、`FRALPipeline_Graphics*`），说明 World 层已穿透至底层图形抽象。 |
-| **Renderer** | 依赖 `FRenderScene`、`FRenderMeshProxy`、`ERenderMeshPassMask` 完成提取。 |
+Commands recorded after `EndTick`, including during Render, therefore become
+visible at the next `BeginTick`. Commands recorded during Updating become
+visible at the same frame's `EndTick`, before Render. A Begin boundary that
+reports command failures still completes Transform resolution and enters
+Updating; its caller must close the accepted tick with `EndTick`.
 
-> **注意**：World 同时依赖 RAL 与 Renderer，导致其同时接触底层图形 API 抽象和上层渲染场景表示，耦合度较高。
+Immediate structural APIs, `Reset`, and storage attachment reject Updating and
+Flushing. Value queries read the last committed snapshot and world-matrix
+queries may resolve its dirty cache. During a flush, only the individual
+command execute thunk may temporarily enter structural mutation. Nested record,
+resolve/discard, immediate mutation, and payload-lifecycle reentry are rejected;
+payload destruction occurs after that execute permission has been removed.
 
----
+The World-owned `FWorldCommandBuffer` records Entity create/destroy, generic
+typed component Add/Set/Remove, and authored Transform/hierarchy commands.
+`FDeferredEntityToken` is not an Entity. It addresses a generation-checked
+result slot so later FIFO commands can depend on a deferred Create. After the
+boundary, resolution consumes a successful/failed/dead result slot exactly
+once; pending, creation-failed, no-longer-alive, invalid-token, and invalid-state
+outcomes are distinct. Foreign and stale tokens both map to `InvalidToken`, and
+every failed resolution preserves its Entity output.
 
-## 5. 严重不足分析
+Validation occurs both while recording and immediately before execution.
+Conflicts are not merged: FIFO state is authority. Thus Destroy followed by Add
+fails the Add, Add followed by Set replaces, Add followed by Remove removes,
+and hierarchy cycle checks see every earlier command's committed result.
+Create failure marks its token failed and dependent commands report dependency
+failure without side effects.
 
-当前 World 模块处于**极度原始的原型阶段**，距离生产级场景管理差距显著：
+Record allocates every fallible node/token resource before copying or moving a
+typed payload; OOM does not append, consume an rvalue, issue a token generation,
+or alter outputs. Flush is atomic per command, not per batch: it preserves a
+successful prefix, reports the first failing FIFO index and reason, and keeps
+executing independent suffix commands. This is required for move-only generic
+components, which cannot be transactionally cloned for whole-batch rollback.
+An rvalue that aliases the target storage's current dense array is rejected
+before it is moved, because consuming it while recording would mutate the
+committed Updating snapshot before the boundary. A copied alias is safe because
+the command owns its independent snapshot.
 
-### 5.1 无 ECS / 无对象模型
+Command nodes and payload bytes use the World's allocator. Typed execute and
+destroy thunks are instantiated by the module that records the component type.
+That provider module and every borrowed external component storage must remain
+loaded/alive through flush or explicit World `Reset`; storage detach while the
+World is non-idle or while any command is pending is a contract violation.
+Reset and World destruction cancel queued payloads/tokens before clearing
+storage and Entities. Reset also forgets the accepted tick context, so the next
+Begin may establish a fresh timeline from any frame index.
 
-- `FWorld` 仅为一个 `std::vector<FWorldMeshComponent>`，没有 **Entity**、**Actor** 或 **Object** 概念。
-- 无法表达“一个物体由多个 Component 组成”的常识性结构（如 Mesh + Light + Collider）。
-- 没有唯一标识符（EntityID / ObjectID），无法对场景元素进行寻址、销毁或生命周期管理。
+## Native gameplay systems
 
-### 5.2 无 Transform 层级
+Native gameplay scheduling is owned by `FWorld::FImpl` and exported through
+`FWorld`; World still has no dependency on Application. Registration is
+explicit per World. There is no static registry, discovery hook, scripting VM,
+Runnable, or worker-thread execution.
 
-- `FWorldMeshComponent` 不包含任何空间信息：`Position`、`Rotation`、`Scale`、`LocalToWorld` 矩阵均缺失。
-- 无父子层级（Scene Graph），无法实现骨骼、嵌套节点、坐标空间变换。
-- 提取器直接将原始数据拷贝至 `FRenderScene`，渲染器接收到的 Mesh 缺乏世界空间变换。
+`FNativeGameplaySystemDescriptor` contains a stable name, a Fixed or Variable
+phase, explicit dependency names, an opaque provider context, and a
+`noexcept` C-style update thunk. World copies names and dependency names with
+its allocator. The context and executable thunk remain borrowed: an Editor DLL
+provider must unregister before unload and must keep its code/context alive
+through every callback. World never invokes provider callbacks while
+unregistering, resetting, or destructing. Generic deferred payload thunks from
+Task 17 independently require their provider DLL and external storage to remain
+loaded until `EndTick`, `Reset`, or World destruction consumes/cancels them.
 
-### 5.3 无场景图与空间查询
+Registration validates descriptor shape and duplicate identity immediately,
+but permits a forward dependency. After all registrations, callers explicitly
+call `CompileNativeGameplaySystemSchedule`. Compilation reports missing,
+cross-phase, and cyclic dependencies. Cross-phase edges are rejected: the
+fixed-before-variable phase barrier is already implicit, and a reverse edge is
+impossible. Within each phase, Kahn topological order chooses the
+lexicographically smallest ready system, so registration order is irrelevant.
+Registration and compilation are transactional on allocation failure. A graph
+mutation marks the old plan dirty, and a dirty plan cannot execute even though
+its previous arrays remain internally intact.
 
-- 所有 Mesh 平铺于一个线性 `vector` 中，无加速结构（BVH、八叉树、网格）。
-- 无法支持视锥裁剪、遮挡剔除、光线查询等基础功能。
+Register, unregister, enable/disable, configure, and compile are Idle-only.
+`UpdateNativeGameplaySystems` is Updating-only and accepted at most once per
+`BeginTick`. Callback reentry into scheduler mutation or another update is
+rejected. Disabled callbacks are skipped; their dependents still run because a
+dependency is an ordering constraint, not an enablement contract. Fixed steps
+still consume time when their phase is empty or every fixed system is disabled.
 
-### 5.4 资源管理缺失
+The required call sequence is:
 
-- `FWorldMeshComponent` 直接持有原始指针（`FRALBuffer*`、`FRALPipeline_Graphics*`），无资源句柄、引用计数或弱引用机制。
-- 无材质、纹理、网格资源的间接引用系统，资源生命周期与世界对象生命周期纠缠。
-
-### 5.5 序列化与持久化空白
-
-- 无任何序列化接口（Save/Load、JSON/Binary）。
-- 场景无法保存至磁盘，也无法从文件加载。
-
-### 5.6 模块规模极小
-
-- 整个模块仅 **5 个文件**，有效代码不足 100 行。
-- `FWorldPrimitive` 与 `FRenderPrimitive`、`FWorldMeshComponent` 与 `FRenderMeshProxy` 几乎完全镜像，存在重复定义。
-- `WorldMinimal.h` 仅为头文件聚合，无实际功能价值。
-
-### 5.7 架构耦合
-
-- World 层直接暴露 RAL 类型指针，破坏了“高层模块不应依赖低层细节”的分层原则。理想情况下，World 应通过资源句柄（如 `FMeshHandle`、`FMaterialHandle`）间接引用渲染资源，由 Renderer 或 RAL 模块在提取阶段解析为实际 GPU 对象。
-
----
-
-## 6. 未来演进方向
-
-### 6.1 短期：基础对象与 Transform
-
-1. **引入 `FEntity` / `FActor`**
-   - 为场景元素分配唯一 ID（`FEntityID : uint32`）。
-   - 支持 `AddComponent<T>()`、`RemoveComponent()`、`GetComponent<T>()`。
-
-2. **添加 `FTransformComponent`**
-   - 包含 `Translation`、`Rotation`、`Scale`。
-   - 支持局部/世界空间矩阵计算及脏标记（Dirty Flag）缓存。
-
-3. **父子层级（Scene Graph）**
-   - `FHierarchyComponent`：存储 `Parent`、`Children` 索引。
-   - 支持递归计算 `LocalToWorld`。
-
-### 6.2 中期：ECS 框架（推荐路径）
-
-建议迁移至 **Entity-Component-System** 架构，以提升缓存友好性和扩展性：
-
+```cpp
+World.BeginTick(FrameContext);
+World.UpdateNativeGameplaySystems(); // all fixed steps, then one variable pass
+World.EndTick();                     // publishes every recorded command
 ```
-+------------+     +-------------------+     +------------------+
-| FEntity    | --> | FComponentManager | --> | TArray<T> Pools  |
-| (ID only)  |     | (Archetype/Chunk) |     | (SoA 紧凑存储)    |
-+------------+     +-------------------+     +------------------+
-                          ^
-                          |
-                   +----------------+
-                   | ISystem        |
-                   | - Update()     |
-                   | - Extract()    |
-                   +----------------+
+
+Callbacks receive only native World/command-buffer pointers and timing values.
+They can read the committed snapshot and record structural commands. No flush
+occurs between fixed substeps or before the variable pass. Immediate structural
+mutation remains rejected during Updating; all recorded commands become
+visible together at `EndTick` in Task 17 FIFO order.
+
+Fixed configuration defaults to 1/60 second and four substeps. `MaxSubsteps`
+must be in `[1, MaxNativeGameplayFixedSubsteps]`, where the public hard limit is
+1024; `FixedDeltaSeconds * MaxSubsteps` must remain finite. Configuration resets
+the accumulator, fixed simulation time, and index timeline. Each frame uses an
+overflow-safe finite saturated sum of accumulator plus frame delta, caps it to
+`FixedDeltaSeconds * MaxSubsteps`, and reports the finite representable excess
+as dropped time. Due-step calculation uses a documented 64-epsilon ratio
+tolerance to avoid losing an exact boundary to division rounding.
+
+Each due step is consumed immediately before its callbacks: one FixedDelta is
+removed, the unique fixed index is issued, and fixed simulation time advances.
+The first context therefore has fixed index 0, substep index 0, and end-of-step
+time FixedDelta. A callback failure stops all later callbacks, substeps, and the
+Variable phase. The failed fixed step remains consumed so successful-prefix
+effects are not replayed; due steps not yet attempted remain in the accumulator.
+The caller must still call `EndTick`, which commits commands already recorded.
+
+`LastFixedTickIndex` is an inclusive configuration bound and defaults to the
+largest `uint64`. Its last unique value is issued once. If another due step
+needs an index, the accepted update reports `TimelineExhausted`, consumes no
+additional step, skips Variable, and still requires `EndTick`; it never wraps or
+repeats an index. Reset/configuration starts a fresh index timeline.
+
+Invalid World/state/dirty-schedule calls preserve the optional update report.
+An accepted success, system failure, or timeline exhaustion commits a report.
+Its failed-system name and the compile diagnostic name views borrow
+registry-owned bytes; callers must not retain them across successful
+register/unregister or World destruction.
+
+The demo registers private `Demo.RotateTriangle` in Variable phase. After the
+bootstrap token resolves, the system reads the mesh Entity's local Transform,
+computes an absolute rotation from frame elapsed time, and records a Transform
+update. The old value remains visible until `EndTick`; Render then consumes the
+existing committed World snapshot. The callback has no renderer, RAL, asset, or
+script dependency.
+
+The demo is the first real consumer: its render runtime owns one persistent
+World, records mesh Entity/component/Transform bootstrap commands after GPU
+resource setup, flushes them through the Application Update context, and Render
+only extracts the committed World. Tick or command failure closes an accepted
+tick and exits instead of silently rendering an empty scene.
+
+## Rendering bridge
+
+`FWorldRenderSceneExtractor` remains a synchronous one-way bridge:
+
+```text
+FWorld mesh TComponentStorage + private Transform hierarchy
+        -> paired dense Entity/FWorldMeshComponent spans
+        -> LocalToWorld matrix or identity fallback
+        -> FRenderScene mesh proxies
+        -> Renderer
 ```
 
-- **Component**：纯数据（`FTransformComponent`、`FMeshComponent`、`FLightComponent`）。
-- **System**：行为逻辑（`FTransformSystem`、`FRenderExtractSystem`）。
-- **Archetype/Chunk 存储**：同类 Entity 的 Component 紧凑存储，提升遍历效率。
-
-收益：
-- 渲染提取变为对 `FMeshComponent` 连续数组的线性遍历，CPU 缓存命中率高。
-- 易于扩展新 Component（Physics、Audio、AI）而不修改 `FWorld` 核心。
-
-### 6.3 中期：资源引用与资产管理
-
-- 用 `FMeshHandle`、`FMaterialHandle` 替代原始 `FRALBuffer*` / `FRALPipeline_Graphics*` 指针。
-- 引入 `FAssetManager` 或 `FResourceRegistry`，World 仅存储逻辑句柄，Renderer 在提取阶段通过句柄查询 GPU 资源。
-- 支持异步加载、引用计数、热重载。
-
-### 6.4 长期：场景序列化与编辑器集成
-
-- **场景序列化**：支持 YAML/JSON/Binary 格式保存/加载 `FWorld`。
-- **世界分区（World Partition）**：大型场景流式加载、Sub-Level 管理。
-- **编辑器集成**：Undo/Redo、Scene Diff、属性面板反射（需结合 Core 的反射系统）。
-
-### 6.5 长期：空间加速结构
-
-- 为静态几何体构建 BVH 或八叉树，支持视锥裁剪与遮挡查询。
-- 动态物体采用宽松 AABB 树或均匀网格。
-
----
-
-## 7. 结论
-
-World 模块当前仅实现了**最基础的场景数据容器与渲染提取管道**，验证了“World → Extractor → RenderScene”的分层思路，但缺乏任何生产级游戏引擎必备的核心设施：ECS/Actor 模型、Transform 层级、资源引用、序列化。其当前状态更适合视为**架构占位符（Placeholder）**。
-
-**下一步建议**：
-1. 优先引入 `FEntity` + `FTransformComponent` + `FMeshComponent` 的最小对象模型，解决“场景中有什么、在哪里”的基础问题。
-2. 随后将 World 中的 RAL 原始指针替换为资源句柄，解除对底层图形 API 的直接依赖。
-3. 在此基础上迭代至 ECS 架构，为后续 Physics、Audio、Gameplay 系统的接入奠定可扩展的数据基础。
+It validates the paired dense spans, resolves Transform caches, reserves for the
+dense mesh count, and copies the existing prototype fields plus `LocalToWorld`.
+Meshes without a Transform use identity. The demo attaches an identity Transform
+to its real mesh Entity. The matrix is snapshot data only: the current shader
+and draw path do not consume it. Removing raw RAL fields, adding assets, or
+using the matrix in BasePass remains Phase 6 work.

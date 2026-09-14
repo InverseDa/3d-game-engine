@@ -49,8 +49,8 @@ E:\Projects\3d-game-engine
 | **RAL** | Render Abstraction Layer | 渲染抽象层，封装 Vulkan 底层对象 (Buffer、Texture、Pipeline、Swapchain、CommandList 等) | 27 | Core, Platform, Spdlog, Vulkan |
 | **RFG** | Render Frame Graph | 渲染帧图系统，负责 Pass 编排、资源屏障规划、依赖分析与执行调度 | 42 | Core, RAL |
 | **Renderer** | Renderer | 高层渲染器，定义 RenderPass / RenderPipeline / RenderView，对接 Frame Graph 与 RAL | 18 | Core, RAL, RFG |
-| **World** | World | 场景世界管理、渲染场景提取，以及显式 `FWorld` Reflection P0 provider | 6 | Core, RAL, Reflection, Renderer |
-| **DemoApplication** | Demo Application | 当前 RFG composite triangle；`Demo.Window` 真实消费 private reflected settings/property serialization，`Demo.Render` 依赖它 | 5 | Application, Core, Platform, Spdlog, RAL, RFG, Reflection, Renderer, World |
+| **World** | World | Entity 生命周期、typed contiguous component storage、Transform hierarchy/dirty world-matrix cache、确定性 tick/deferred command boundary、单线程 native fixed/variable system schedule、渲染场景提取，以及显式 `FWorld` Reflection P0 provider | 12 | Core, RAL, Reflection, Renderer |
+| **DemoApplication** | Demo Application | 当前 RFG composite triangle；`Demo.Window` 真实消费 private reflected settings/property serialization，`Demo.Render` 持久 World 运行 private native rotation system、End 提交命令、Render 提取只读场景 | 5 | Application, Core, Platform, Spdlog, RAL, RFG, Reflection, Renderer, World |
 | **Launch** | Launch | `WinMain` / `main` 与通用 lifecycle bootstrap | 2 | Core, DemoApplication |
 
 > **注**：文件数统计包含 `.cpp` / `.h` / `.hpp` / `.mm` 等源码文件。

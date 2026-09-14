@@ -11,6 +11,8 @@
 #include "ShaderRuntimeCompiler.h"
 #include "World/WorldMinimal.h"
 
+#include <cmath>
+
 namespace LE
 {
 
@@ -460,6 +462,29 @@ public:
             return false;
         }
 
+        FNativeGameplaySystemDescriptor RotateSystem;
+        RotateSystem.Name = "Demo.RotateTriangle";
+        RotateSystem.ProviderContext = this;
+        RotateSystem.Update = &RotateTriangleSystem;
+        RotateSystem.Phase = ENativeGameplaySystemPhase::Variable;
+        const ENativeGameplaySystemRegisterResult RegisterResult =
+            World.RegisterNativeGameplaySystem(RotateSystem);
+        if (RegisterResult != ENativeGameplaySystemRegisterResult::Success)
+        {
+            LE_LOG(LogXBD, Error, "Failed to register demo native gameplay system: {}.",
+                static_cast<uint32>(RegisterResult));
+            return false;
+        }
+        bGameplaySystemRegistered = true;
+        const ENativeGameplayScheduleResult ScheduleResult =
+            World.CompileNativeGameplaySystemSchedule();
+        if (ScheduleResult != ENativeGameplayScheduleResult::Success)
+        {
+            LE_LOG(LogXBD, Error, "Failed to compile demo native gameplay schedule: {}.",
+                static_cast<uint32>(ScheduleResult));
+            return false;
+        }
+
         Device = LE::RAL::CreateDevice();
         if (Device == nullptr)
         {
@@ -536,6 +561,27 @@ public:
             return false;
         }
 
+        FWorldCommandBuffer* const Commands = World.GetCommandBuffer();
+        TComponentStorage<FWorldMeshComponent>* const MeshComponents =
+            World.GetMeshComponents();
+        FWorldMeshComponent MeshComponent;
+        MeshComponent.DebugName = "TriangleMesh";
+        MeshComponent.GraphicsPipeline = TrianglePipeline;
+        MeshComponent.VertexBuffer = VertexBuffer;
+        MeshComponent.VertexCount = 3;
+        MeshComponent.PassMask = ERenderMeshPassMask::SceneColor;
+        MeshComponent.SortKey = 0;
+        if (!World.IsValid() || Commands == nullptr || MeshComponents == nullptr ||
+            Commands->TryCreateEntity(BootstrapMeshToken) != EWorldCommandRecordResult::Recorded ||
+            Commands->TryAddComponent(*MeshComponents, BootstrapMeshToken, std::move(MeshComponent)) !=
+                EWorldCommandRecordResult::Recorded ||
+            Commands->TryAddTransform(BootstrapMeshToken) != EWorldCommandRecordResult::Recorded)
+        {
+            LE_LOG(LogXBD, Error, "Failed to record the demo World bootstrap commands.");
+            return false;
+        }
+        bWorldBootstrapPending = true;
+
         Renderer.Initialize();
         bRendererInitialized = true;
         CachedWindowWidth = DefaultWindowWidth;
@@ -553,6 +599,20 @@ public:
         bShutdown = true;
 
         LE_LOG(LogXBD, Info, "Shutting down demo render runtime...");
+        const bool bWorldIdle = World.GetTickState() == EWorldTickState::Idle;
+        if (bGameplaySystemRegistered && bWorldIdle)
+        {
+            if (World.UnregisterNativeGameplaySystem("Demo.RotateTriangle") !=
+                ENativeGameplaySystemUnregisterResult::Success)
+            {
+                LE_LOG(LogXBD, Error, "Failed to unregister demo native gameplay system.");
+            }
+            bGameplaySystemRegistered = false;
+        }
+        if (!bWorldIdle || !World.Reset())
+        {
+            LE_LOG(LogXBD, Error, "Demo World was not idle during render runtime shutdown.");
+        }
         FrameScheduler.Shutdown();
         if (bRendererInitialized)
         {
@@ -581,7 +641,7 @@ public:
         Device = nullptr;
     }
 
-    EApplicationTickResult Update()
+    EApplicationTickResult UpdateRenderResources()
     {
         FPlatformWindow* const Window = WindowModule.GetWindow();
         bCanRender = !Window->IsMinimized() &&
@@ -629,6 +689,57 @@ public:
         return EApplicationTickResult::Continue;
     }
 
+    EApplicationTickResult Update(const FApplicationTickContext& Context)
+    {
+        FWorldTickContext WorldContext;
+        WorldContext.FrameIndex = Context.FrameIndex;
+        WorldContext.DeltaSeconds = Context.DeltaSeconds;
+        WorldContext.ElapsedSeconds = Context.ElapsedSeconds;
+        FWorldCommandFlushResult BeginFlush;
+        const EWorldTickResult BeginResult = World.BeginTick(WorldContext, &BeginFlush);
+        if (BeginResult != EWorldTickResult::Success &&
+            BeginResult != EWorldTickResult::CompletedWithCommandFailures)
+        {
+            LE_LOG(LogXBD, Error, "Demo World BeginTick failed: {}.",
+                static_cast<uint32>(BeginResult));
+            return EApplicationTickResult::Exit;
+        }
+
+        bool bBootstrapFailed = false;
+        if (bWorldBootstrapPending)
+        {
+            FWorldCommandBuffer* const Commands = World.GetCommandBuffer();
+            const EDeferredEntityResolveResult ResolveResult = Commands == nullptr
+                ? EDeferredEntityResolveResult::InvalidState
+                : Commands->TryResolveDeferredEntity(BootstrapMeshToken, MeshEntity);
+            BootstrapMeshToken.Reset();
+            bWorldBootstrapPending = false;
+            bBootstrapFailed = ResolveResult != EDeferredEntityResolveResult::Resolved;
+        }
+        const bool bBeginCommandsFailed =
+            BeginResult == EWorldTickResult::CompletedWithCommandFailures;
+        const ENativeGameplayUpdateResult GameplayResult =
+            bBeginCommandsFailed || bBootstrapFailed
+            ? ENativeGameplayUpdateResult::InvalidState
+            : World.UpdateNativeGameplaySystems();
+        FWorldCommandFlushResult EndFlush;
+        const EWorldTickResult EndResult = World.EndTick(&EndFlush);
+        if (bBeginCommandsFailed || bBootstrapFailed ||
+            GameplayResult != ENativeGameplayUpdateResult::Success ||
+            EndResult != EWorldTickResult::Success)
+        {
+            LE_LOG(LogXBD, Error,
+                "Demo World update failed: Gameplay={} BeginFirst={} BeginReason={} EndFirst={} EndReason={}.",
+                static_cast<uint32>(GameplayResult),
+                BeginFlush.FirstFailureIndex,
+                static_cast<uint32>(BeginFlush.FirstFailureReason),
+                EndFlush.FirstFailureIndex,
+                static_cast<uint32>(EndFlush.FirstFailureReason));
+            return EApplicationTickResult::Exit;
+        }
+        return UpdateRenderResources();
+    }
+
     EApplicationTickResult Render()
     {
         if (!bCanRender)
@@ -638,16 +749,6 @@ public:
 
         auto RecordFrame = [this](LE::FRenderFrameScope& ScheduledFrame)
         {
-            LE::FWorld World;
-            LE::FWorldMeshComponent MeshComponent;
-            MeshComponent.DebugName = "TriangleMesh";
-            MeshComponent.GraphicsPipeline = TrianglePipeline;
-            MeshComponent.VertexBuffer = VertexBuffer;
-            MeshComponent.VertexCount = 3;
-            MeshComponent.PassMask = LE::ERenderMeshPassMask::SceneColor;
-            MeshComponent.SortKey = 0;
-            World.MeshComponents.PushBack(MeshComponent);
-
             LE::FRenderScene RenderScene;
             LE::FWorldRenderSceneExtractor::ExtractRenderScene(World, RenderScene);
 
@@ -698,10 +799,40 @@ public:
     }
 
 private:
+    static ENativeGameplaySystemResult RotateTriangleSystem(
+        void* const ProviderContext,
+        const FNativeGameplaySystemUpdateContext& Context) noexcept
+    {
+        FDemoRenderRuntimeModule& Module =
+            *static_cast<FDemoRenderRuntimeModule*>(ProviderContext);
+        if (Context.World == nullptr || Context.Commands == nullptr ||
+            !Context.World->IsAlive(Module.MeshEntity))
+        {
+            return ENativeGameplaySystemResult::Failure;
+        }
+        FTransform LocalTransform;
+        if (!Context.World->TryGetLocalTransform(Module.MeshEntity, LocalTransform))
+        {
+            return ENativeGameplaySystemResult::Failure;
+        }
+        constexpr double TwoPi = 6.28318530717958647692;
+        const float Angle = static_cast<float>(
+            std::fmod(Context.FrameElapsedSeconds * 0.75, TwoPi));
+        LocalTransform.Rotation = Math::Quaternionf(
+            Math::Vector3f(0.0f, 0.0f, 1.0f), Angle);
+        return Context.Commands->TrySetLocalTransform(Module.MeshEntity, LocalTransform) ==
+            EWorldCommandRecordResult::Recorded
+            ? ENativeGameplaySystemResult::Success
+            : ENativeGameplaySystemResult::Failure;
+    }
+
     static constexpr uint32 DefaultWindowWidth = 1280;
     static constexpr uint32 DefaultWindowHeight = 720;
 
     FDemoWindowRuntimeModule& WindowModule;
+    FWorld World;
+    FDeferredEntityToken BootstrapMeshToken;
+    FEntity MeshEntity;
     FRALDevice* Device = nullptr;
     FRALSwapchain* Swapchain = nullptr;
     FRALShader* TriangleVertexShader = nullptr;
@@ -719,6 +850,8 @@ private:
     bool bCanRender = false;
     bool bSwapchainRecreateRequested = false;
     bool bRendererInitialized = false;
+    bool bWorldBootstrapPending = false;
+    bool bGameplaySystemRegistered = false;
     bool bShutdown = false;
 };
 
@@ -767,7 +900,7 @@ public:
         case EApplicationFramePhase::ProcessPlatformEvents:
             return WindowModule.ProcessPlatformEvents();
         case EApplicationFramePhase::Update:
-            return RenderModule.Update();
+            return RenderModule.Update(Context);
         case EApplicationFramePhase::Render:
             return RenderModule.Render();
         }

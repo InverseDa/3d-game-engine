@@ -34,6 +34,7 @@ struct FRenderPrimitive
 
 struct FRenderMeshProxy : public FRenderPrimitive
 {
+    Math::Matrix4f LocalToWorld = Math::Matrix4f::Identity();
     LE::FRALPipeline_Graphics* GraphicsPipeline = nullptr;
     LE::FRALBuffer* VertexBuffer = nullptr;
     uint32 VertexCount = 0;
