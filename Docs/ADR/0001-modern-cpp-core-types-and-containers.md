@@ -50,7 +50,7 @@ API。
 - 引擎根 namespace 直接使用短 PascalCase `LE`。
 - 不定义 `Limitless` namespace，也不提供 `Limitless = LE` 或 `LE = Limitless` 的公开 alias。
 - Core 的通用词汇类型直接位于 `LE`，例如 `LE::Array`、`LE::String`。
-- 仅在领域边界有真实语义时使用浅层 namespace：`LE::Core`、`LE::RAL`、`LE::RFG`、
+- 仅在领域边界有真实语义时使用浅层 namespace：`LE::Core`、`LE::RHI`、`LE::RFG`、
   `LE::Math`、`LE::Vulkan`、`LE::Detail`。
 - 不机械地为每个 Build 模块、目录或文件建立 namespace。Renderer、World、Platform 等类型
   可以先直接位于 `LE`，直到出现需要消歧或形成独立领域契约的证据。
@@ -85,7 +85,7 @@ P0 保留现有 `F/L/T/E/I` 前缀以及现有函数、成员、常量和布尔�
 - 反射声明及其他必须参与预处理的代码生成入口。
 
 普通常量、类型别名、模板、inline 函数、enum 和算法不得为了缩短书写而做成宏。宏不得
-偷偷分配、转移 ownership 或改变控制流。现有 `FORCE_INLINE`、`CORE_API`/`RAL_API` 等
+偷偷分配、转移 ownership 或改变控制流。现有 `FORCE_INLINE`、`CORE_API`/`RHI_API` 等
 非 `LE_*` 引擎宏是迁移债务，不在 C0 改代码；后续宏迁移应落为 `LE_FORCE_INLINE`、
 `LE_<MODULE>_API` 等形式，并与调用方一次性同步。
 
@@ -253,7 +253,7 @@ vector/matrix 乘法方向、Quaternion 分量顺序、角度单位和 alignment
 3. **C3**：`String`、`StringView`；仅按真实消费者决定 `UniquePtr`、`SharedPtr`、`WeakPtr`、
    `Optional`、`Function`，并先落实跨 DLL 销毁规则。
 4. **C4**：移除 Runtime/Core 的 GLM 并验证 `LE::Math` 数学约定。
-5. **C5**：按 Core → RAL → RFG → Renderer → World → Platform/Launch → Programs/Tests 的
+5. **C5**：按 Core → RHI → RFG → Renderer → World → Platform/Launch → Programs/Tests 的
    顺序迁移 owning data structures。每批先迁公共 API，再迁私有和临时 Vulkan arrays；每个
    模块批次单独 rebuild/test，不夹带渲染或玩法重构。
 6. **C6**：另行按依赖顺序迁移到 `LE` 及批准的浅层 namespace，不夹带语义或 cosmetic

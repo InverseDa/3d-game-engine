@@ -20,7 +20,7 @@ bool AccessHasWrite(ERFGAccessType AccessType)
 
 struct FLastResourceState
 {
-    LE::ERALResourceState ResourceState = LE::ERALResourceState::Unknown;
+    LE::ERHIResourceState ResourceState = LE::ERHIResourceState::Unknown;
     LE::EShaderStage ShaderStage = LE::EShaderStage::None;
     ERFGPipelineStage Stage = ERFGPipelineStage::None;
     ERFGAccessType Access = ERFGAccessType::None;
@@ -95,9 +95,9 @@ void FRFGBarrierPlanner::BuildBarriers(const FRFGRecordedGraph& RecordedGraph, F
             }
             FLastResourceState& LastState = *LastStatePointer;
             const FRFGResourceNode& ResourceNode = RecordedGraph.GetResourceNode(ResourceAccess.Resource);
-            const LE::ERALResourceState BeforeState = LastState.bInitialized ? LastState.ResourceState : ResourceNode.InitialState;
+            const LE::ERHIResourceState BeforeState = LastState.bInitialized ? LastState.ResourceState : ResourceNode.InitialState;
             const bool bNeedsBarrier =
-                (!LastState.bInitialized && ResourceAccess.Access.State != LE::ERALResourceState::Undefined) ||
+                (!LastState.bInitialized && ResourceAccess.Access.State != LE::ERHIResourceState::Undefined) ||
                 (LastState.bInitialized &&
                  (LastState.Queue != CompiledPass.Queue ||
                  BeforeState != ResourceAccess.Access.State ||

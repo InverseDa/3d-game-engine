@@ -1,15 +1,15 @@
 #include "Renderer/RenderFrameScheduler.h"
 
-#include "RAL/RALCommandAllocator.h"
-#include "RAL/RALCommandList.h"
-#include "RAL/RALDevice.h"
-#include "RAL/RALResource.h"
-#include "RAL/RALSyncPrimitives.h"
+#include "RHI/RHICommandAllocator.h"
+#include "RHI/RHICommandList.h"
+#include "RHI/RHIDevice.h"
+#include "RHI/RHIResource.h"
+#include "RHI/RHISyncPrimitives.h"
 
 namespace LE
 {
 
-bool FRenderFrameScope::DeferRelease(FRALResource* const Resource)
+bool FRenderFrameScope::DeferRelease(FRHIResource* const Resource)
 {
     return Scheduler != nullptr && Scheduler->DeferReleaseFromScope(SlotIndex, Generation, Resource);
 }
@@ -19,7 +19,7 @@ FRenderFrameScheduler::~FRenderFrameScheduler()
     Shutdown();
 }
 
-bool FRenderFrameScheduler::Initialize(FRALDevice* const InDevice)
+bool FRenderFrameScheduler::Initialize(FRHIDevice* const InDevice)
 {
     if (bInitialized || InDevice == nullptr || InDevice->GetGraphicsQueue() == nullptr)
     {
@@ -115,7 +115,7 @@ void FRenderFrameScheduler::Shutdown() noexcept
 }
 
 FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(
-    FRALSwapchain* const Swapchain,
+    FRHISwapchain* const Swapchain,
     const FRenderFrameCallback& Callback)
 {
     FRenderFrameResult Result;
@@ -142,14 +142,14 @@ FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(
         return Result;
     }
 
-    const FRALAcquireResult AcquireResult = Swapchain->AcquireNextImage(Slot.AcquireSemaphore);
+    const FRHIAcquireResult AcquireResult = Swapchain->AcquireNextImage(Slot.AcquireSemaphore);
     Result.AcquireStatus = AcquireResult.Status;
     if (!AcquireResult.HasImage())
     {
-        Result.Action = AcquireResult.Status == ERALSwapchainStatus::OutOfDate
+        Result.Action = AcquireResult.Status == ERHISwapchainStatus::OutOfDate
             ? ERenderFrameAction::RecreateSwapchain
             : ERenderFrameAction::Exit;
-        bTerminal = AcquireResult.Status != ERALSwapchainStatus::OutOfDate;
+        bTerminal = AcquireResult.Status != ERHISwapchainStatus::OutOfDate;
         return Result;
     }
 
@@ -172,14 +172,14 @@ FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(
         return Result;
     }
 
-    FRALSubmitInfo SubmitInfo;
+    FRHISubmitInfo SubmitInfo;
     SubmitInfo.CmdList = Slot.CommandList;
     SubmitInfo.WaitSemaphores.PushBack(Slot.AcquireSemaphore);
     SubmitInfo.SignalSemaphores.PushBack(Slot.RenderFinishedSemaphore);
     SubmitInfo.FenceToSignal = Slot.CompletionFence;
     Slot.CompletionFence->Reset();
     Result.SubmitResult = Device->GetGraphicsQueue()->Submit(SubmitInfo);
-    if (Result.SubmitResult != ERALQueueSubmitResult::Success)
+    if (Result.SubmitResult != ERHIQueueSubmitResult::Success)
     {
         Slot.State = ESlotState::UnsignaledAfterSubmitFailure;
         bTerminal = true;
@@ -191,15 +191,15 @@ FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(
     ++NextFrameIndex;
     NextSlotIndex = (NextSlotIndex + 1) % FrameSlotCount;
 
-    if (Result.PresentStatus == ERALSwapchainStatus::Error)
+    if (Result.PresentStatus == ERHISwapchainStatus::Error)
     {
         bTerminal = true;
         return Result;
     }
 
-    Result.Action = AcquireResult.Status == ERALSwapchainStatus::Suboptimal ||
-        Result.PresentStatus == ERALSwapchainStatus::Suboptimal ||
-        Result.PresentStatus == ERALSwapchainStatus::OutOfDate
+    Result.Action = AcquireResult.Status == ERHISwapchainStatus::Suboptimal ||
+        Result.PresentStatus == ERHISwapchainStatus::Suboptimal ||
+        Result.PresentStatus == ERHISwapchainStatus::OutOfDate
         ? ERenderFrameAction::RecreateSwapchain
         : ERenderFrameAction::Continue;
     return Result;
@@ -229,7 +229,7 @@ void FRenderFrameScheduler::WaitForAllFrames()
 bool FRenderFrameScheduler::DeferReleaseFromScope(
     const uint32 SlotIndex,
     const uint64 Generation,
-    FRALResource* const Resource)
+    FRHIResource* const Resource)
 {
     if (!bInitialized || Resource == nullptr || SlotIndex >= FrameSlotCount)
     {
@@ -241,7 +241,7 @@ bool FRenderFrameScheduler::DeferReleaseFromScope(
     {
         return false;
     }
-    for (FRALResource* const Deferred : Slot.DeferredReleases)
+    for (FRHIResource* const Deferred : Slot.DeferredReleases)
     {
         if (Deferred == Resource)
         {
@@ -254,9 +254,9 @@ bool FRenderFrameScheduler::DeferReleaseFromScope(
 
 void FRenderFrameScheduler::FlushDeferredReleases(FFrameSlot& Slot) noexcept
 {
-    for (FRALResource* const Resource : Slot.DeferredReleases)
+    for (FRHIResource* const Resource : Slot.DeferredReleases)
     {
-        RAL::DestroyResource(Resource);
+        RHI::DestroyResource(Resource);
     }
     Slot.DeferredReleases.Clear();
 }
@@ -268,15 +268,15 @@ void FRenderFrameScheduler::DestroySlots() noexcept
         FFrameSlot& Slot = Slots[ReverseIndex - 1];
         FlushDeferredReleases(Slot);
         // A Vulkan command buffer must be freed before its owning command pool.
-        RAL::DestroyResource(Slot.CommandList);
+        RHI::DestroyResource(Slot.CommandList);
         Slot.CommandList = nullptr;
-        RAL::DestroyResource(Slot.CommandAllocator);
+        RHI::DestroyResource(Slot.CommandAllocator);
         Slot.CommandAllocator = nullptr;
-        RAL::DestroyResource(Slot.CompletionFence);
+        RHI::DestroyResource(Slot.CompletionFence);
         Slot.CompletionFence = nullptr;
-        RAL::DestroyResource(Slot.RenderFinishedSemaphore);
+        RHI::DestroyResource(Slot.RenderFinishedSemaphore);
         Slot.RenderFinishedSemaphore = nullptr;
-        RAL::DestroyResource(Slot.AcquireSemaphore);
+        RHI::DestroyResource(Slot.AcquireSemaphore);
         Slot.AcquireSemaphore = nullptr;
         Slot.Generation = 0;
         Slot.State = ESlotState::Ready;

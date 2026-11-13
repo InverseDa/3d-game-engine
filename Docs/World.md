@@ -14,11 +14,11 @@ single-threaded native gameplay schedule:
   Entity array, and a sparse Entity-index-to-dense-index table.
 - `FWorldMeshComponent` is the first real storage consumer. It retains only
   typed 16-byte Mesh/Material runtime asset handles plus world-authored debug
-  name and sort key; no RAL or Renderer type crosses the World boundary.
+  name and sort key; no RHI or Renderer type crosses the World boundary.
 - `FWorldCameraComponent` is a logical `FWorldPrimitive` with active/priority,
   vertical FOV, near and far planes. Its built-in typed storage follows the same
   Reset/Destroy lifetime as mesh and Transform storage and contains no Renderer
-  or RAL types.
+  or RHI types.
 - `FTransform` is a standard-layout, trivially-copyable local TRS value. World
   owns its component storage privately and exposes only dirty-aware authored
   mutation and value-copy query APIs.
@@ -31,7 +31,7 @@ single-threaded native gameplay schedule:
 
 Scripts and jobs/Runnable execution are later roadmap tasks and intentionally
 absent here. WorldRenderer is a separate downstream module; World itself still
-does not know Renderer or RAL. Task 20 makes World depend only on the
+does not know Renderer or RHI. Task 20 makes World depend only on the
 Core-only Asset module: `FMeshAsset` and `FMaterialAsset` remain opaque here,
 while Renderer uniquely completes their GPU-facing payload definitions.
 Vertex count moved to the Mesh payload and prototype pass intent moved to the
@@ -329,7 +329,7 @@ The demo registers private `Demo.RotateTriangle` in Variable phase. After the
 bootstrap token resolves, the system reads the mesh Entity's local Transform,
 computes an absolute rotation from frame elapsed time, and records a Transform
 update. The old value remains visible until `EndTick`; Render then consumes the
-existing committed World snapshot. The callback has no renderer, RAL, asset, or
+existing committed World snapshot. The callback has no renderer, RHI, asset, or
 script dependency.
 
 The demo is the first real consumer: its render runtime owns one persistent

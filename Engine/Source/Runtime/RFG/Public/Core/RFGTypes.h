@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "RAL/RALTypes.h"
+#include "RHI/RHITypes.h"
 #include "Core/RFGHandles.h"
 
 
@@ -116,8 +116,8 @@ struct FRFGAccessDesc
 {
     ERFGAccessType Access = ERFGAccessType::Read;
     // Read/Write is used for dependency analysis. State describes the concrete
-    // RAL usage/layout required while the pass executes.
-    LE::ERALResourceState State = LE::ERALResourceState::Unknown;
+    // RHI usage/layout required while the pass executes.
+    LE::ERHIResourceState State = LE::ERHIResourceState::Unknown;
     LE::EShaderStage ShaderStage = LE::EShaderStage::AllStage;
     ERFGPipelineStage PipelineStage = ERFGPipelineStage::Graphics;
 

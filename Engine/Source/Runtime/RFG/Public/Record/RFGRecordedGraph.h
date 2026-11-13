@@ -8,8 +8,8 @@
 namespace LE
 {
 
-class FRALTexture;
-class FRALBuffer;
+class FRHITexture;
+class FRHIBuffer;
 class IRFGPassExecutor;
 
 struct FRFGPassResourceAccess
@@ -41,10 +41,10 @@ struct FRFGResourceNode
     LE::String Name;
     FRFGResourceDesc Desc;
     ERFGResourceFlags Flags = ERFGResourceFlags::None;
-    LE::ERALResourceState InitialState = LE::ERALResourceState::Undefined;
+    LE::ERHIResourceState InitialState = LE::ERHIResourceState::Undefined;
 
-    LE::FRALTexture* ImportedTexture = nullptr;
-    LE::FRALBuffer* ImportedBuffer = nullptr;
+    LE::FRHITexture* ImportedTexture = nullptr;
+    LE::FRHIBuffer* ImportedBuffer = nullptr;
 };
 
 class RFG_API FRFGRecordedGraph

@@ -8,6 +8,6 @@ export default class RendererBuild extends ModuleBuild {
     public readonly Name = "Renderer";
 
     public Configure(_Target: Target, Configuration: ModuleConfiguration): void {
-        Configuration.PublicDependencies.push("Core", "Asset", "RAL", "RFG");
+        Configuration.PublicDependencies.push("Core", "Asset", "RHI", "RFG");
     }
 }

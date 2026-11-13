@@ -6,12 +6,12 @@ Platform 提供 Runtime 的操作系统边界，并且只公开引擎自有类�
 暴露 `HWND`、`NSWindow`、`NSView` 或 `CAMetalLayer` 类型。
 
 ```text
-RAL ------> Platform ------> Core
+RHI ------> Platform ------> Core
 Launch ---> Platform
 ```
 
-Platform 定义 `FPlatformSurface`，RAL 消费它来创建图形 surface。这样 Platform
-无需了解 RAL，依赖方向保持单向且无环。
+Platform 定义 `FPlatformSurface`，RHI 消费它来创建图形 surface。这样 Platform
+无需了解 RHI，依赖方向保持单向且无环。
 
 ## 窗口与所有权
 

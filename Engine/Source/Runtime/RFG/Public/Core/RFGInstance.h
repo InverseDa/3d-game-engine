@@ -39,7 +39,7 @@ public:
         const FRFGRecordedGraph& RecordedGraph,
         const FRFGGraphSignature& Signature = {});
 
-    ERALQueueSubmitResult Execute(
+    ERHIQueueSubmitResult Execute(
         const FRFGCompileResult& CompileResult,
         const FRFGRecordedGraph& RecordedGraph,
         FRFGExecutionContext& ExecutionContext,

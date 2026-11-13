@@ -29,8 +29,8 @@ const APPROVED_NAMESPACES = new Set([
     "LE",
     "LE::Detail",
     "LE::Math",
-    "LE::RAL",
-    "LE::RAL::Vulkan",
+    "LE::RHI",
+    "LE::RHI::Vulkan",
     "LE::Demo::ShaderRuntimeCompiler",
 ]);
 const CONTROL_WORDS = new Set(["if", "for", "while", "switch", "catch"]);

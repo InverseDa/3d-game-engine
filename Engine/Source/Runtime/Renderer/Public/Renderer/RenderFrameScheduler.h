@@ -1,18 +1,18 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "RAL/RALQueue.h"
-#include "RAL/RALSwapchain.h"
+#include "RHI/RHIQueue.h"
+#include "RHI/RHISwapchain.h"
 
 namespace LE
 {
 
-class FRALCommandAllocator;
-class FRALCommandList;
-class FRALDevice;
-class FRALFence;
-class FRALResource;
-class FRALSemaphore;
+class FRHICommandAllocator;
+class FRHICommandList;
+class FRHIDevice;
+class FRHIFence;
+class FRHIResource;
+class FRHISemaphore;
 class FRenderFrameScheduler;
 
 enum class ERenderFrameAction : uint8
@@ -33,9 +33,9 @@ struct FRenderFrameResult
 {
     ERenderFrameAction Action = ERenderFrameAction::Exit;
     ERenderFrameRecordResult RecordResult = ERenderFrameRecordResult::InvalidArguments;
-    ERALSwapchainStatus AcquireStatus = ERALSwapchainStatus::Error;
-    ERALQueueSubmitResult SubmitResult = ERALQueueSubmitResult::InvalidArguments;
-    ERALSwapchainStatus PresentStatus = ERALSwapchainStatus::Error;
+    ERHISwapchainStatus AcquireStatus = ERHISwapchainStatus::Error;
+    ERHIQueueSubmitResult SubmitResult = ERHIQueueSubmitResult::InvalidArguments;
+    ERHISwapchainStatus PresentStatus = ERHISwapchainStatus::Error;
     uint64 FrameIndex = 0;
     uint32 SlotIndex = 0;
 };
@@ -47,19 +47,19 @@ struct FRenderFrameResult
 class RENDERER_API FRenderFrameScope final : public FNonCopyable
 {
 public:
-    FRALCommandList* GetCommandList() const noexcept { return CommandList; }
-    FRALTextureView* GetBackBufferView() const noexcept { return BackBufferView; }
+    FRHICommandList* GetCommandList() const noexcept { return CommandList; }
+    FRHITextureView* GetBackBufferView() const noexcept { return BackBufferView; }
     uint64 GetFrameIndex() const noexcept { return FrameIndex; }
     uint32 GetSlotIndex() const noexcept { return SlotIndex; }
 
-    bool DeferRelease(FRALResource* Resource);
+    bool DeferRelease(FRHIResource* Resource);
 
 private:
     friend class FRenderFrameScheduler;
 
     FRenderFrameScheduler* Scheduler = nullptr;
-    FRALCommandList* CommandList = nullptr;
-    FRALTextureView* BackBufferView = nullptr;
+    FRHICommandList* CommandList = nullptr;
+    FRHITextureView* BackBufferView = nullptr;
     uint64 FrameIndex = 0;
     uint64 Generation = 0;
     uint32 SlotIndex = 0;
@@ -76,12 +76,12 @@ public:
     ~FRenderFrameScheduler();
 
 public:
-    bool Initialize(FRALDevice* InDevice);
+    bool Initialize(FRHIDevice* InDevice);
     void Shutdown() noexcept;
     bool IsInitialized() const noexcept { return bInitialized; }
 
     /** Callback records only; the scheduler exclusively owns fence reset, queue submit, and present. */
-    FRenderFrameResult ExecuteFrame(FRALSwapchain* Swapchain, const FRenderFrameCallback& Callback);
+    FRenderFrameResult ExecuteFrame(FRHISwapchain* Swapchain, const FRenderFrameCallback& Callback);
     void WaitForAllFrames();
 
 private:
@@ -94,24 +94,24 @@ private:
 
     struct FFrameSlot
     {
-        FRALCommandAllocator* CommandAllocator = nullptr;
-        FRALCommandList* CommandList = nullptr;
-        FRALSemaphore* AcquireSemaphore = nullptr;
-        FRALSemaphore* RenderFinishedSemaphore = nullptr;
-        FRALFence* CompletionFence = nullptr;
-        LE::Array<FRALResource*> DeferredReleases;
+        FRHICommandAllocator* CommandAllocator = nullptr;
+        FRHICommandList* CommandList = nullptr;
+        FRHISemaphore* AcquireSemaphore = nullptr;
+        FRHISemaphore* RenderFinishedSemaphore = nullptr;
+        FRHIFence* CompletionFence = nullptr;
+        LE::Array<FRHIResource*> DeferredReleases;
         uint64 Generation = 0;
         ESlotState State = ESlotState::Ready;
         bool bCallbackActive = false;
     };
 
-    bool DeferReleaseFromScope(uint32 SlotIndex, uint64 Generation, FRALResource* Resource);
+    bool DeferReleaseFromScope(uint32 SlotIndex, uint64 Generation, FRHIResource* Resource);
     void FlushDeferredReleases(FFrameSlot& Slot) noexcept;
     void DestroySlots() noexcept;
 
     friend class FRenderFrameScope;
 
-    FRALDevice* Device = nullptr;
+    FRHIDevice* Device = nullptr;
     FFrameSlot Slots[FrameSlotCount];
     uint64 NextFrameIndex = 0;
     uint32 NextSlotIndex = 0;

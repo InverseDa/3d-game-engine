@@ -6,7 +6,7 @@
 #include "DemoSettings.h"
 
 #include "Platform/Platform.h"
-#include "RALMinimal.h"
+#include "RHIMinimal.h"
 #include "RFGMinimal.h"
 #include "Renderer/RendererMinimal.h"
 #include "ShaderRuntimeCompiler.h"
@@ -31,28 +31,28 @@ struct FSimpleVertex
 
 struct FDemoRenderResources
 {
-    LE::FRALTexture* SceneColorTexture = nullptr;
-    LE::FRALTextureView* SceneColorView = nullptr;
-    LE::FRALTexture* SceneDepthTexture = nullptr;
-    LE::FRALTextureView* SceneDepthView = nullptr;
-    LE::FRALSampler* Sampler = nullptr;
-    LE::FRALBindGroupLayout* BindGroupLayout = nullptr;
-    LE::FRALBindGroup* BindGroup = nullptr;
-    LE::FRALPipeline_Graphics* BasePassPipeline = nullptr;
-    LE::FRALPipeline_Graphics* CompositePipeline = nullptr;
+    LE::FRHITexture* SceneColorTexture = nullptr;
+    LE::FRHITextureView* SceneColorView = nullptr;
+    LE::FRHITexture* SceneDepthTexture = nullptr;
+    LE::FRHITextureView* SceneDepthView = nullptr;
+    LE::FRHISampler* Sampler = nullptr;
+    LE::FRHIBindGroupLayout* BindGroupLayout = nullptr;
+    LE::FRHIBindGroup* BindGroup = nullptr;
+    LE::FRHIPipeline_Graphics* BasePassPipeline = nullptr;
+    LE::FRHIPipeline_Graphics* CompositePipeline = nullptr;
 };
 
 static void DestroyDemoRenderResources(FDemoRenderResources& Resources)
 {
-    RAL::DestroyResource(Resources.CompositePipeline);
-    RAL::DestroyResource(Resources.BasePassPipeline);
-    RAL::DestroyResource(Resources.BindGroup);
-    RAL::DestroyResource(Resources.BindGroupLayout);
-    RAL::DestroyResource(Resources.Sampler);
-    RAL::DestroyResource(Resources.SceneDepthView);
-    RAL::DestroyResource(Resources.SceneDepthTexture);
-    RAL::DestroyResource(Resources.SceneColorView);
-    RAL::DestroyResource(Resources.SceneColorTexture);
+    RHI::DestroyResource(Resources.CompositePipeline);
+    RHI::DestroyResource(Resources.BasePassPipeline);
+    RHI::DestroyResource(Resources.BindGroup);
+    RHI::DestroyResource(Resources.BindGroupLayout);
+    RHI::DestroyResource(Resources.Sampler);
+    RHI::DestroyResource(Resources.SceneDepthView);
+    RHI::DestroyResource(Resources.SceneDepthTexture);
+    RHI::DestroyResource(Resources.SceneColorView);
+    RHI::DestroyResource(Resources.SceneColorTexture);
 
     Resources.CompositePipeline = nullptr;
     Resources.BasePassPipeline = nullptr;
@@ -65,30 +65,30 @@ static void DestroyDemoRenderResources(FDemoRenderResources& Resources)
     Resources.SceneColorTexture = nullptr;
 }
 
-static LE::FRALPipeline_Graphics* CreateBasePassPipeline(
-    LE::FRALDevice* Device,
-    LE::FRALShader* VertexShader,
-    LE::FRALShader* PixelShader)
+static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(
+    LE::FRHIDevice* Device,
+    LE::FRHIShader* VertexShader,
+    LE::FRHIShader* PixelShader)
 {
-    LE::FRALPipelineDesc_Graphics PipelineDesc;
+    LE::FRHIPipelineDesc_Graphics PipelineDesc;
     PipelineDesc.Name = "BasePassPipeline";
     PipelineDesc.VertexShader = VertexShader;
     PipelineDesc.PixelShader = PixelShader;
 
-    LE::FRALVertexInputBinding Binding;
+    LE::FRHIVertexInputBinding Binding;
     Binding.Binding = 0;
     Binding.Stride = sizeof(FSimpleVertex);
     Binding.bPerInstance = false;
     PipelineDesc.VertexBindings.PushBack(Binding);
 
-    LE::FRALVertexInputAttribute PosAttr;
+    LE::FRHIVertexInputAttribute PosAttr;
     PosAttr.Location = 0;
     PosAttr.Binding = 0;
     PosAttr.Format = LE::EPixelFormat::R32G32B32_FLOAT;
     PosAttr.Offset = offsetof(FSimpleVertex, Position);
     PipelineDesc.VertexAttributes.PushBack(PosAttr);
 
-    LE::FRALVertexInputAttribute ColorAttr;
+    LE::FRHIVertexInputAttribute ColorAttr;
     ColorAttr.Location = 1;
     ColorAttr.Binding = 0;
     ColorAttr.Format = LE::EPixelFormat::R32G32B32_FLOAT;
@@ -110,14 +110,14 @@ static LE::FRALPipeline_Graphics* CreateBasePassPipeline(
     return Device->CreateGraphicsPipeline(PipelineDesc);
 }
 
-static LE::FRALPipeline_Graphics* CreateCompositePipeline(
-    LE::FRALDevice* Device,
-    LE::FRALShader* VertexShader,
-    LE::FRALShader* PixelShader,
-    LE::FRALBindGroupLayout* BindGroupLayout,
+static LE::FRHIPipeline_Graphics* CreateCompositePipeline(
+    LE::FRHIDevice* Device,
+    LE::FRHIShader* VertexShader,
+    LE::FRHIShader* PixelShader,
+    LE::FRHIBindGroupLayout* BindGroupLayout,
     LE::EPixelFormat RenderTargetFormat)
 {
-    LE::FRALPipelineDesc_Graphics PipelineDesc;
+    LE::FRHIPipelineDesc_Graphics PipelineDesc;
     PipelineDesc.Name = "CompositePipeline";
     PipelineDesc.VertexShader = VertexShader;
     PipelineDesc.PixelShader = PixelShader;
@@ -135,11 +135,11 @@ static LE::FRALPipeline_Graphics* CreateCompositePipeline(
 }
 
 static bool TryCreateDemoRenderResources(
-    LE::FRALDevice* Device,
-    LE::FRALShader* BasePassVertexShader,
-    LE::FRALShader* BasePassPixelShader,
-    LE::FRALShader* CompositeVertexShader,
-    LE::FRALShader* CompositePixelShader,
+    LE::FRHIDevice* Device,
+    LE::FRHIShader* BasePassVertexShader,
+    LE::FRHIShader* BasePassPixelShader,
+    LE::FRHIShader* CompositeVertexShader,
+    LE::FRHIShader* CompositePixelShader,
     uint32 Width,
     uint32 Height,
     FDemoRenderResources& OutResources)
@@ -153,7 +153,7 @@ static bool TryCreateDemoRenderResources(
         return false;
     }
 
-    LE::FRALTextureDesc TextureDesc;
+    LE::FRHITextureDesc TextureDesc;
     TextureDesc.Name = "SceneColor";
     TextureDesc.Width = Width;
     TextureDesc.Height = Height;
@@ -171,7 +171,7 @@ static bool TryCreateDemoRenderResources(
         return false;
     }
 
-    LE::FRALTextureViewDesc TextureViewDesc;
+    LE::FRHITextureViewDesc TextureViewDesc;
     TextureViewDesc.Texture = OutResources.SceneColorTexture;
     TextureViewDesc.Format = TextureDesc.Format;
     TextureViewDesc.MipSlice = 0;
@@ -186,7 +186,7 @@ static bool TryCreateDemoRenderResources(
         return false;
     }
 
-    LE::FRALTextureDesc DepthDesc;
+    LE::FRHITextureDesc DepthDesc;
     DepthDesc.Name = "SceneDepth";
     DepthDesc.Width = Width;
     DepthDesc.Height = Height;
@@ -202,7 +202,7 @@ static bool TryCreateDemoRenderResources(
         DestroyDemoRenderResources(OutResources);
         return false;
     }
-    LE::FRALTextureViewDesc DepthViewDesc;
+    LE::FRHITextureViewDesc DepthViewDesc;
     DepthViewDesc.Texture = OutResources.SceneDepthTexture;
     DepthViewDesc.Format = DepthDesc.Format;
     OutResources.SceneDepthView = Device->CreateTextureView(DepthViewDesc);
@@ -213,7 +213,7 @@ static bool TryCreateDemoRenderResources(
         return false;
     }
 
-    LE::FRALSamplerDesc SamplerDesc;
+    LE::FRHISamplerDesc SamplerDesc;
     SamplerDesc.Name = "RFGSceneColorSampler";
     SamplerDesc.AddressU = LE::ESamplerAddressMode::ClampToEdge;
     SamplerDesc.AddressV = LE::ESamplerAddressMode::ClampToEdge;
@@ -226,19 +226,19 @@ static bool TryCreateDemoRenderResources(
         return false;
     }
 
-    LE::FRALBindGroupLayoutDesc BindGroupLayoutDesc;
+    LE::FRHIBindGroupLayoutDesc BindGroupLayoutDesc;
     BindGroupLayoutDesc.Name = "CompositeSceneColorLayout";
     BindGroupLayoutDesc.SetIndex = 0;
 
-    LE::FRALBindGroupLayoutItem LayoutItem;
+    LE::FRHIBindGroupLayoutItem LayoutItem;
     LayoutItem.Binding = 0;
     LayoutItem.Count = 1;
-    LayoutItem.Type = LE::ERALBindGroupItemType::SampledImage;
+    LayoutItem.Type = LE::ERHIBindGroupItemType::SampledImage;
     LayoutItem.StageFlags = LE::EShaderStage::Pixel;
     BindGroupLayoutDesc.Bindings.PushBack(LayoutItem);
 
     LayoutItem.Binding = 1;
-    LayoutItem.Type = LE::ERALBindGroupItemType::Sampler;
+    LayoutItem.Type = LE::ERHIBindGroupItemType::Sampler;
     BindGroupLayoutDesc.Bindings.PushBack(LayoutItem);
 
     OutResources.BindGroupLayout = Device->CreateBindGroupLayout(BindGroupLayoutDesc);
@@ -249,11 +249,11 @@ static bool TryCreateDemoRenderResources(
         return false;
     }
 
-    LE::FRALBindGroupDesc BindGroupDesc;
+    LE::FRHIBindGroupDesc BindGroupDesc;
     BindGroupDesc.Name = "CompositeSceneColorBindGroup";
     BindGroupDesc.Layout = OutResources.BindGroupLayout;
 
-    LE::FRALBindGroupItem BindGroupItem;
+    LE::FRHIBindGroupItem BindGroupItem;
     BindGroupItem.Binding = 0;
     BindGroupItem.TextureView = OutResources.SceneColorView;
     BindGroupDesc.Items.PushBack(BindGroupItem);
@@ -291,7 +291,7 @@ static bool TryCreateDemoRenderResources(
 }
 
 // Create triangle vertex buffer
-LE::FRALBuffer* CreateTriangleVertexBuffer(LE::FRALDevice* Device)
+LE::FRHIBuffer* CreateTriangleVertexBuffer(LE::FRHIDevice* Device)
 {
     FSimpleVertex Vertices[3] = {
         { LE::Math::Vector3f( 0.0f,  0.5f, 0.0f), LE::Math::Vector3f(1.0f, 0.0f, 0.0f) }, // Top - Red
@@ -301,13 +301,13 @@ LE::FRALBuffer* CreateTriangleVertexBuffer(LE::FRALDevice* Device)
 
     const uint64 BufferSize = sizeof(Vertices);
 
-    LE::FRALBufferDesc BufferDesc;
+    LE::FRHIBufferDesc BufferDesc;
     BufferDesc.Name = "TriangleVertexBuffer";
     BufferDesc.Size = BufferSize;
     BufferDesc.Usage = static_cast<uint32>(LE::EResourceUsage::Upload);
     BufferDesc.UsageFlag = static_cast<uint32>(LE::EBufferUsageFlags::VertexBuffer);
 
-    LE::FRALBuffer* Buffer = Device == nullptr ? nullptr : Device->CreateBuffer(BufferDesc);
+    LE::FRHIBuffer* Buffer = Device == nullptr ? nullptr : Device->CreateBuffer(BufferDesc);
     if (Buffer == nullptr)
     {
         return nullptr;
@@ -315,7 +315,7 @@ LE::FRALBuffer* CreateTriangleVertexBuffer(LE::FRALDevice* Device)
     void* MappedData = Buffer->Map(0, BufferSize);
     if (MappedData == nullptr)
     {
-        RAL::DestroyResource(Buffer);
+        RHI::DestroyResource(Buffer);
         return nullptr;
     }
     memcpy(MappedData, Vertices, BufferSize);
@@ -325,15 +325,15 @@ LE::FRALBuffer* CreateTriangleVertexBuffer(LE::FRALDevice* Device)
     return Buffer;
 }
 
-LE::FRALBuffer* CreateTriangleIndexBuffer(LE::FRALDevice* Device)
+LE::FRHIBuffer* CreateTriangleIndexBuffer(LE::FRHIDevice* Device)
 {
     const std::uint16_t Indices[3] = {0, 1, 2};
-    LE::FRALBufferDesc BufferDesc;
+    LE::FRHIBufferDesc BufferDesc;
     BufferDesc.Name = "TriangleIndexBuffer";
     BufferDesc.Size = sizeof(Indices);
     BufferDesc.Usage = static_cast<uint32>(LE::EResourceUsage::Upload);
     BufferDesc.UsageFlag = static_cast<uint32>(LE::EBufferUsageFlags::IndexBuffer);
-    LE::FRALBuffer* Buffer = Device == nullptr ? nullptr : Device->CreateBuffer(BufferDesc);
+    LE::FRHIBuffer* Buffer = Device == nullptr ? nullptr : Device->CreateBuffer(BufferDesc);
     if (Buffer == nullptr)
     {
         return nullptr;
@@ -341,7 +341,7 @@ LE::FRALBuffer* CreateTriangleIndexBuffer(LE::FRALDevice* Device)
     void* const MappedData = Buffer->Map(0, sizeof(Indices));
     if (MappedData == nullptr)
     {
-        RAL::DestroyResource(Buffer);
+        RHI::DestroyResource(Buffer);
         return nullptr;
     }
     memcpy(MappedData, Indices, sizeof(Indices));
@@ -351,7 +351,7 @@ LE::FRALBuffer* CreateTriangleIndexBuffer(LE::FRALDevice* Device)
 }
 
 static void GetBackBufferExtent(
-    LE::FRALSwapchain* Swapchain,
+    LE::FRHISwapchain* Swapchain,
     uint32 FallbackWidth,
     uint32 FallbackHeight,
     uint32& OutWidth,
@@ -365,13 +365,13 @@ static void GetBackBufferExtent(
         return;
     }
 
-    LE::FRALTextureView* BackBufferView = Swapchain->GetCurrentBackBufferView();
+    LE::FRHITextureView* BackBufferView = Swapchain->GetCurrentBackBufferView();
     if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
     {
         return;
     }
 
-    const LE::FRALTextureDesc& BackBufferDesc = BackBufferView->GetTexture()->GetDesc();
+    const LE::FRHITextureDesc& BackBufferDesc = BackBufferView->GetTexture()->GetDesc();
     OutWidth = BackBufferDesc.Width;
     OutHeight = BackBufferDesc.Height;
 }
@@ -562,14 +562,14 @@ public:
             return false;
         }
 
-        Device = LE::RAL::CreateDevice();
+        Device = LE::RHI::CreateDevice();
         if (Device == nullptr)
         {
-            LE_LOG(LogXBD, Error, "Failed to create RAL Device");
+            LE_LOG(LogXBD, Error, "Failed to create RHI Device");
             return false;
         }
 
-        LE::FRALSwapchainDesc SwapchainDesc;
+        LE::FRHISwapchainDesc SwapchainDesc;
         SwapchainDesc.Surface = Window->GetSurface();
         SwapchainDesc.Width = DefaultWindowWidth;
         SwapchainDesc.Height = DefaultWindowHeight;
@@ -732,22 +732,22 @@ public:
             bRendererInitialized = false;
         }
 
-        RAL::DestroyResource(VertexBuffer);
+        RHI::DestroyResource(VertexBuffer);
         VertexBuffer = nullptr;
-        RAL::DestroyResource(IndexBuffer);
+        RHI::DestroyResource(IndexBuffer);
         IndexBuffer = nullptr;
         DestroyDemoRenderResources(RenderResources);
-        RAL::DestroyResource(CompositePixelShader);
+        RHI::DestroyResource(CompositePixelShader);
         CompositePixelShader = nullptr;
-        RAL::DestroyResource(CompositeVertexShader);
+        RHI::DestroyResource(CompositeVertexShader);
         CompositeVertexShader = nullptr;
-        RAL::DestroyResource(BasePassPixelShader);
+        RHI::DestroyResource(BasePassPixelShader);
         BasePassPixelShader = nullptr;
-        RAL::DestroyResource(BasePassVertexShader);
+        RHI::DestroyResource(BasePassVertexShader);
         BasePassVertexShader = nullptr;
-        RAL::DestroyResource(Swapchain);
+        RHI::DestroyResource(Swapchain);
         Swapchain = nullptr;
-        RAL::DestroyResource(Device);
+        RHI::DestroyResource(Device);
         Device = nullptr;
     }
 
@@ -1025,7 +1025,7 @@ private:
         return true;
     }
 
-    bool ReplaceBasePassMaterial(FRALPipeline_Graphics* const NewPipeline) noexcept
+    bool ReplaceBasePassMaterial(FRHIPipeline_Graphics* const NewPipeline) noexcept
     {
         if (NewPipeline == nullptr || !bMaterialAssetRegistered ||
             World.GetTickState() != EWorldTickState::Idle)
@@ -1151,14 +1151,14 @@ private:
     FDeferredEntityToken BootstrapCameraToken;
     FEntity MeshEntity;
     FEntity CameraEntity;
-    FRALDevice* Device = nullptr;
-    FRALSwapchain* Swapchain = nullptr;
-    FRALShader* BasePassVertexShader = nullptr;
-    FRALShader* BasePassPixelShader = nullptr;
-    FRALShader* CompositeVertexShader = nullptr;
-    FRALShader* CompositePixelShader = nullptr;
-    FRALBuffer* VertexBuffer = nullptr;
-    FRALBuffer* IndexBuffer = nullptr;
+    FRHIDevice* Device = nullptr;
+    FRHISwapchain* Swapchain = nullptr;
+    FRHIShader* BasePassVertexShader = nullptr;
+    FRHIShader* BasePassPixelShader = nullptr;
+    FRHIShader* CompositeVertexShader = nullptr;
+    FRHIShader* CompositePixelShader = nullptr;
+    FRHIBuffer* VertexBuffer = nullptr;
+    FRHIBuffer* IndexBuffer = nullptr;
     FRenderFrameScheduler FrameScheduler;
     FDemoRenderResources RenderResources;
     FRenderer Renderer;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "RAL/RALDescription.h"
+#include "RHI/RHIDescription.h"
 #include "Renderer/RenderPass.h"
 #include "Renderer/RenderPipeline.h"
 #include "Renderer/RenderScene.h"
@@ -12,15 +12,15 @@
 namespace LE
 {
 
-class FRALTexture;
-class FRALTextureView;
+class FRHITexture;
+class FRHITextureView;
 
 struct FBasePassResources
 {
-    FRALTexture* SceneColorTexture = nullptr;
-    FRALTextureView* SceneColorView = nullptr;
-    FRALTexture* SceneDepthTexture = nullptr;
-    FRALTextureView* SceneDepthView = nullptr;
+    FRHITexture* SceneColorTexture = nullptr;
+    FRHITextureView* SceneColorView = nullptr;
+    FRHITexture* SceneDepthTexture = nullptr;
+    FRHITextureView* SceneDepthView = nullptr;
 };
 
 // Shader-visible bytes. Matrices follow LE::Math's row-major storage and the

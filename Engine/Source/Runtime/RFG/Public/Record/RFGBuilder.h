@@ -9,8 +9,8 @@
 namespace LE
 {
 
-class FRALTexture;
-class FRALBuffer;
+class FRHITexture;
+class FRHIBuffer;
 
 struct FRFGBuilderCreateInfo
 {
@@ -30,8 +30,8 @@ public:
 public:
     FRFGResourceHandle CreateTexture(const LE::String& ResourceName, const FRFGTextureDesc& Desc);
     FRFGResourceHandle CreateBuffer(const LE::String& ResourceName, const FRFGBufferDesc& Desc);
-    FRFGResourceHandle ImportTexture(const LE::String& ResourceName, LE::FRALTexture* ExternalTexture, LE::ERALResourceState InitialState);
-    FRFGResourceHandle ImportBuffer(const LE::String& ResourceName, LE::FRALBuffer* ExternalBuffer, LE::ERALResourceState InitialState);
+    FRFGResourceHandle ImportTexture(const LE::String& ResourceName, LE::FRHITexture* ExternalTexture, LE::ERHIResourceState InitialState);
+    FRFGResourceHandle ImportBuffer(const LE::String& ResourceName, LE::FRHIBuffer* ExternalBuffer, LE::ERHIResourceState InitialState);
 
 public:
     FRFGPassHandle AddPass(

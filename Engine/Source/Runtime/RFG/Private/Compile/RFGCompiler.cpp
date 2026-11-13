@@ -32,10 +32,10 @@ bool ValidateBarrierDeclarations(const FRFGRecordedGraph& RecordedGraph, const F
                 bValid = false;
             }
 
-            if (ResourceAccess.Access.State == LE::ERALResourceState::Unknown)
+            if (ResourceAccess.Access.State == LE::ERHIResourceState::Unknown)
             {
                 LE_LOG(LogRFG, Error,
-                    "RFG compile failed: pass '{}' uses resource {} without an explicit RAL resource state.",
+                    "RFG compile failed: pass '{}' uses resource {} without an explicit RHI resource state.",
                     PassNode.Name.GetData(),
                     ResourceAccess.Resource.Id);
                 bValid = false;

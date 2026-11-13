@@ -8,7 +8,7 @@ namespace LE
 {
 
 // Logical render-asset types are declared in Asset so World can retain typed
-// handles without depending on Renderer or RAL. Renderer owns their complete
+// handles without depending on Renderer or RHI. Renderer owns their complete
 // GPU-facing payload definitions.
 struct FMeshAsset;
 struct FMaterialAsset;

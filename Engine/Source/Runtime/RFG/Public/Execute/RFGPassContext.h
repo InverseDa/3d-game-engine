@@ -8,29 +8,29 @@
 namespace LE
 {
 
-class FRALDevice;
-class FRALQueue;
-class FRALCommandList;
-class FRALTexture;
-class FRALBuffer;
+class FRHIDevice;
+class FRHIQueue;
+class FRHICommandList;
+class FRHITexture;
+class FRHIBuffer;
 class FRFGRecordedGraph;
 class FRFGCompiledPlan;
 class IRFGDeferredReleaseSink;
 
 struct FRFGExecutionContext
 {
-    LE::FRALDevice* Device = nullptr;
+    LE::FRHIDevice* Device = nullptr;
 
-    LE::FRALQueue* GraphicsQueue  = nullptr;
-    LE::FRALQueue* ComputeQueue   = nullptr;
-    LE::FRALQueue* TransferQueue  = nullptr;
+    LE::FRHIQueue* GraphicsQueue  = nullptr;
+    LE::FRHIQueue* ComputeQueue   = nullptr;
+    LE::FRHIQueue* TransferQueue  = nullptr;
 
     // 当前阶段：单 CommandList，所有 Pass 共享
-    LE::FRALCommandList* CommandList = nullptr;
+    LE::FRHICommandList* CommandList = nullptr;
 
     // 多队列预留：根据 Pass 所属队列返回对应 CommandList
     // 当前实现统一返回 CommandList，后续多线程扩展时在此分发
-    LE::FRALCommandList* GetCommandList(ERFGQueueType /*Queue*/) const
+    LE::FRHICommandList* GetCommandList(ERFGQueueType /*Queue*/) const
     {
         return CommandList;
     }
@@ -38,10 +38,10 @@ struct FRFGExecutionContext
     void ResetTransientResources();
     bool TransferTransientResources(IRFGDeferredReleaseSink& DeferredReleaseSink) noexcept;
 
-    LE::HashMap<uint32, LE::FRALTexture*> TextureResources;
-    LE::HashMap<uint32, LE::FRALBuffer*> BufferResources;
-    LE::Array<LE::FRALTexture*> OwnedTextures;
-    LE::Array<LE::FRALBuffer*> OwnedBuffers;
+    LE::HashMap<uint32, LE::FRHITexture*> TextureResources;
+    LE::HashMap<uint32, LE::FRHIBuffer*> BufferResources;
+    LE::Array<LE::FRHITexture*> OwnedTextures;
+    LE::Array<LE::FRHIBuffer*> OwnedBuffers;
 };
 
 class RFG_API FRFGPassContext
@@ -57,12 +57,12 @@ public:
     void SetPassIndex(uint32 InPassIndex);
 
 public:
-    LE::FRALDevice* GetDevice() const;
-    LE::FRALCommandList* GetCommandList() const;
+    LE::FRHIDevice* GetDevice() const;
+    LE::FRHICommandList* GetCommandList() const;
 
 public:
-    LE::FRALTexture* ResolveTexture(FRFGResourceHandle ResourceHandle) const;
-    LE::FRALBuffer* ResolveBuffer(FRFGResourceHandle ResourceHandle) const;
+    LE::FRHITexture* ResolveTexture(FRFGResourceHandle ResourceHandle) const;
+    LE::FRHIBuffer* ResolveBuffer(FRFGResourceHandle ResourceHandle) const;
 
 public:
     uint32 GetPassIndex() const;

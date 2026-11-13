@@ -122,7 +122,7 @@ import { defineTarget, Platform, DevEnv, Optimization, TargetType } from "@limit
 
 export default defineTarget({
   name: "Limitless",
-  modules: ["Core", "RAL", "RFG", "Renderer", "World", "Launch"],
+  modules: ["Core", "RHI", "RFG", "Renderer", "World", "Launch"],
   entryModule: "Launch",  // 主可执行文件的源码模块
 
   matrix: [
@@ -435,7 +435,7 @@ Engine/Builder/
 
 # 用户的 Build.ts 文件（替代 .Build.cs）
 Engine/Source/Runtime/Core/Build.ts
-Engine/Source/Runtime/RAL/Build.ts
+Engine/Source/Runtime/RHI/Build.ts
 Engine/Source/Runtime/Launch/Build.ts
 Engine/Source/Runtime/Renderer/Build.ts
 Engine/Source/Runtime/RFG/Build.ts

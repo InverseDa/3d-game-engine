@@ -18,7 +18,7 @@ export default class BuilderTestsBuild extends ModuleBuild {
             "Asset",
             "Core",
             "Platform",
-            "RAL",
+            "RHI",
             "Reflection",
             "Renderer",
             "World",

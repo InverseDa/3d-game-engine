@@ -17,7 +17,7 @@ export default class DemoApplicationBuild extends ModuleBuild {
             "Core",
             "Platform",
             "Spdlog",
-            "RAL",
+            "RHI",
             "RFG",
             "Reflection",
             "Renderer",

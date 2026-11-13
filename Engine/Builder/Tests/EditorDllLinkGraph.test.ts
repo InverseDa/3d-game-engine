@@ -260,7 +260,7 @@ Test("World render assets preserve one-way module dependencies", () => {
     const RendererConfiguration = CreateModuleConfiguration();
     new RendererBuild().Configure(Target, RendererConfiguration);
     Assert.deepEqual(RendererConfiguration.PublicDependencies,
-        ["Core", "Asset", "RAL", "RFG"]);
+        ["Core", "Asset", "RHI", "RFG"]);
     Assert.deepEqual(RendererConfiguration.PrivateDependencies, []);
 
     const WorldRendererConfiguration = CreateModuleConfiguration();
@@ -280,7 +280,7 @@ Test("World render assets preserve one-way module dependencies", () => {
     Assert.equal(DemoConfiguration.PublicDependencies.includes("WorldRenderer"), true);
 });
 
-Test("World source tree has no RAL or Renderer surface", async () => {
+Test("World source tree has no RHI or Renderer surface", async () => {
     const WorldRoot = Path.resolve(
         import.meta.dirname, "..", "..", "Source", "Runtime", "World");
     const Pending = [WorldRoot];
@@ -296,9 +296,9 @@ Test("World source tree has no RAL or Renderer surface", async () => {
     Assert.ok(Sources.length > 0);
     for (const SourcePath of Sources) {
         const Source = await Fs.readFile(SourcePath, "utf-8");
-        Assert.doesNotMatch(Source, /#\s*include\s*[<"](?:RAL|Renderer)\//,
+        Assert.doesNotMatch(Source, /#\s*include\s*[<"](?:RHI|Renderer)\//,
             SourcePath);
-        Assert.doesNotMatch(Source, /\b(?:FRAL|FRender|ERender)[A-Za-z0-9_]*/,
+        Assert.doesNotMatch(Source, /\b(?:FRHI|FRender|ERender)[A-Za-z0-9_]*/,
             SourcePath);
     }
     await Assert.rejects(Fs.access(Path.join(
@@ -364,7 +364,7 @@ Test("Demo WorldRenderer bridge preserves frame and asset lifetime order", async
 
 Test("Vulkan buffer creation honors the usage bitmask used by indexed meshes", async () => {
     const SourcePath = Path.resolve(
-        import.meta.dirname, "..", "..", "Source", "Runtime", "RAL",
+        import.meta.dirname, "..", "..", "Source", "Runtime", "RHI",
         "Private", "Vulkan", "VulkanBuffer.cpp");
     const Source = await Fs.readFile(SourcePath, "utf-8");
     Assert.match(Source, /ToVkBufferUsage\(InDesc\.UsageFlag\)/,

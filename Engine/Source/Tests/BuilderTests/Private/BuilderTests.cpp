@@ -12,10 +12,10 @@
 #include "Math/Quaternion.h"
 #include "Math/Vector.h"
 #include "Platform/Platform.h"
-#include "RAL/RALBuffer.h"
-#include "RAL/RALCommandAllocator.h"
-#include "RAL/RALCommandList.h"
-#include "RAL/RALDevice.h"
+#include "RHI/RHIBuffer.h"
+#include "RHI/RHICommandAllocator.h"
+#include "RHI/RHICommandList.h"
+#include "RHI/RHIDevice.h"
 #include "RFGMinimal.h"
 #include "Renderer/RenderFrameScheduler.h"
 #include "Templates/Function.h"
@@ -51,10 +51,10 @@ struct FOtherStableIdTestDomain;
 struct FRuntimeHandleTestDomain;
 struct FOtherRuntimeHandleTestDomain;
 
-class FFakeRALCommandList final : public LE::FRALCommandList
+class FFakeRHICommandList final : public LE::FRHICommandList
 {
 public:
-    ~FFakeRALCommandList() override
+    ~FFakeRHICommandList() override
     {
         if (DestroyCount != nullptr) ++*DestroyCount;
         if (Events != nullptr) Events->PushBack(91);
@@ -62,15 +62,15 @@ public:
 
     void Begin() override { ++BeginCount; }
     void End() override { ++EndCount; }
-    void ResourceBarriers(const LE::FRALBarrierBatch&) override {}
-    void BeginRenderPass(const LE::FRALRenderPassDesc&) override {}
+    void ResourceBarriers(const LE::FRHIBarrierBatch&) override {}
+    void BeginRenderPass(const LE::FRHIRenderPassDesc&) override {}
     void EndRenderPass() override {}
-    void SetGraphicsPipeline(LE::FRALPipeline_Graphics*) override {}
-    void SetViewport(const LE::FRALViewport&) override {}
-    void SetScissorRect(const LE::FRALScissorRect&) override {}
-    void SetVertexBuffer(LE::uint32, LE::FRALBuffer*, LE::uint64) override {}
-    void SetIndexBuffer(LE::FRALBuffer*, LE::uint64, LE::EPixelFormat) override {}
-    void SetBindGroup(LE::uint32, LE::FRALBindGroup*) override {}
+    void SetGraphicsPipeline(LE::FRHIPipeline_Graphics*) override {}
+    void SetViewport(const LE::FRHIViewport&) override {}
+    void SetScissorRect(const LE::FRHIScissorRect&) override {}
+    void SetVertexBuffer(LE::uint32, LE::FRHIBuffer*, LE::uint64) override {}
+    void SetIndexBuffer(LE::FRHIBuffer*, LE::uint64, LE::EPixelFormat) override {}
+    void SetBindGroup(LE::uint32, LE::FRHIBindGroup*) override {}
     void SetPushConstants(LE::EShaderStage, const void*, LE::uint32) override {}
     void Draw(LE::uint32, LE::uint32, LE::uint32) override {}
     void DrawIndexed(LE::uint32, LE::uint32, LE::uint32, LE::int32, LE::uint32) override {}
@@ -81,10 +81,10 @@ public:
     int EndCount = 0;
 };
 
-class FFakeRALCommandAllocator final : public LE::FRALCommandAllocator
+class FFakeRHICommandAllocator final : public LE::FRHICommandAllocator
 {
 public:
-    ~FFakeRALCommandAllocator() override
+    ~FFakeRHICommandAllocator() override
     {
         if (DestroyCount != nullptr) ++*DestroyCount;
         if (Events != nullptr) Events->PushBack(92);
@@ -103,17 +103,17 @@ public:
     bool bResetSucceeds = true;
 };
 
-class FFakeRALSemaphore final : public LE::FRALSemaphore
+class FFakeRHISemaphore final : public LE::FRHISemaphore
 {
 public:
-    ~FFakeRALSemaphore() override { if (DestroyCount != nullptr) ++*DestroyCount; }
+    ~FFakeRHISemaphore() override { if (DestroyCount != nullptr) ++*DestroyCount; }
     int* DestroyCount = nullptr;
 };
 
-class FFakeRALFence final : public LE::FRALFence
+class FFakeRHIFence final : public LE::FRHIFence
 {
 public:
-    ~FFakeRALFence() override { if (DestroyCount != nullptr) ++*DestroyCount; }
+    ~FFakeRHIFence() override { if (DestroyCount != nullptr) ++*DestroyCount; }
 
     void Reset() override
     {
@@ -143,24 +143,24 @@ public:
     bool bSignaled = true;
 };
 
-class FFakeRALTexture final : public LE::FRALTexture
+class FFakeRHITexture final : public LE::FRHITexture
 {
 public:
-    ~FFakeRALTexture() override
+    ~FFakeRHITexture() override
     {
         if (DestroyCount != nullptr) ++*DestroyCount;
         if (Events != nullptr) Events->PushBack(8);
     }
-    const LE::FRALTextureDesc& GetDesc() const override { return Desc; }
-    LE::FRALTextureDesc Desc;
+    const LE::FRHITextureDesc& GetDesc() const override { return Desc; }
+    LE::FRHITextureDesc Desc;
     LE::Array<int>* Events = nullptr;
     int* DestroyCount = nullptr;
 };
 
-class FFakeRALBuffer final : public LE::FRALBuffer
+class FFakeRHIBuffer final : public LE::FRHIBuffer
 {
 public:
-    ~FFakeRALBuffer() override
+    ~FFakeRHIBuffer() override
     {
         if (DestroyCount != nullptr) ++*DestroyCount;
         if (Events != nullptr) Events->PushBack(9);
@@ -168,33 +168,33 @@ public:
 
     void* Map(LE::uint64, LE::uint64) override { return nullptr; }
     void Unmap() override {}
-    const LE::FRALBufferDesc& GetDesc() const override { return Desc; }
+    const LE::FRHIBufferDesc& GetDesc() const override { return Desc; }
 
-    LE::FRALBufferDesc Desc;
+    LE::FRHIBufferDesc Desc;
     LE::Array<int>* Events = nullptr;
     int* DestroyCount = nullptr;
 };
 
-class FFakeRALTextureView final : public LE::FRALTextureView
+class FFakeRHITextureView final : public LE::FRHITextureView
 {
 public:
-    explicit FFakeRALTextureView(LE::FRALTexture* const InTexture)
+    explicit FFakeRHITextureView(LE::FRHITexture* const InTexture)
         : Texture(InTexture)
     {
         Desc.Texture = InTexture;
     }
 
-    LE::FRALTexture* GetTexture() const override { return Texture; }
-    const LE::FRALTextureViewDesc& GetDesc() const override { return Desc; }
+    LE::FRHITexture* GetTexture() const override { return Texture; }
+    const LE::FRHITextureViewDesc& GetDesc() const override { return Desc; }
 
-    LE::FRALTexture* Texture = nullptr;
-    LE::FRALTextureViewDesc Desc;
+    LE::FRHITexture* Texture = nullptr;
+    LE::FRHITextureViewDesc Desc;
 };
 
-class FFakeRALQueue final : public LE::FRALQueue
+class FFakeRHIQueue final : public LE::FRHIQueue
 {
 public:
-    LE::ERALQueueSubmitResult Submit(const LE::FRALSubmitInfo& SubmitInfo) override
+    LE::ERHIQueueSubmitResult Submit(const LE::FRHISubmitInfo& SubmitInfo) override
     {
         ++SubmitCount;
         CapturedSubmitInfo = SubmitInfo;
@@ -209,21 +209,21 @@ public:
     LE::EQueueType GetType() const override { return LE::EQueueType::Graphics; }
 
     LE::Array<int>* Events = nullptr;
-    LE::ERALQueueSubmitResult Result = LE::ERALQueueSubmitResult::Success;
-    LE::FRALSubmitInfo CapturedSubmitInfo;
+    LE::ERHIQueueSubmitResult Result = LE::ERHIQueueSubmitResult::Success;
+    LE::FRHISubmitInfo CapturedSubmitInfo;
     int SubmitCount = 0;
     int WaitIdleCount = 0;
 };
 
-class FFakeRALSwapchain final : public LE::FRALSwapchain
+class FFakeRHISwapchain final : public LE::FRHISwapchain
 {
 public:
-    explicit FFakeRALSwapchain(LE::FRALTextureView* const InView)
+    explicit FFakeRHISwapchain(LE::FRHITextureView* const InView)
         : View(InView)
     {
     }
 
-    LE::FRALAcquireResult AcquireNextImage(LE::FRALSemaphore* SignalSemaphore, LE::uint64) override
+    LE::FRHIAcquireResult AcquireNextImage(LE::FRHISemaphore* SignalSemaphore, LE::uint64) override
     {
         ++AcquireCount;
         CapturedAcquireSemaphore = SignalSemaphore;
@@ -231,17 +231,17 @@ public:
         {
             Events->PushBack(3);
         }
-        bImageAcquired = AcquireStatus == LE::ERALSwapchainStatus::Success ||
-            AcquireStatus == LE::ERALSwapchainStatus::Suboptimal;
+        bImageAcquired = AcquireStatus == LE::ERHISwapchainStatus::Success ||
+            AcquireStatus == LE::ERHISwapchainStatus::Suboptimal;
         return { AcquireStatus, bImageAcquired ? View : nullptr };
     }
 
-    LE::FRALTextureView* GetCurrentBackBufferView() const override
+    LE::FRHITextureView* GetCurrentBackBufferView() const override
     {
         return bImageAcquired ? View : nullptr;
     }
 
-    LE::ERALSwapchainStatus Present(LE::FRALSemaphore* WaitSemaphore) override
+    LE::ERHISwapchainStatus Present(LE::FRHISemaphore* WaitSemaphore) override
     {
         ++PresentCount;
         CapturedPresentSemaphore = WaitSemaphore;
@@ -261,11 +261,11 @@ public:
     }
 
     LE::Array<int>* Events = nullptr;
-    LE::FRALTextureView* View = nullptr;
-    LE::FRALSemaphore* CapturedAcquireSemaphore = nullptr;
-    LE::FRALSemaphore* CapturedPresentSemaphore = nullptr;
-    LE::ERALSwapchainStatus AcquireStatus = LE::ERALSwapchainStatus::Success;
-    LE::ERALSwapchainStatus PresentStatus = LE::ERALSwapchainStatus::Success;
+    LE::FRHITextureView* View = nullptr;
+    LE::FRHISemaphore* CapturedAcquireSemaphore = nullptr;
+    LE::FRHISemaphore* CapturedPresentSemaphore = nullptr;
+    LE::ERHISwapchainStatus AcquireStatus = LE::ERHISwapchainStatus::Success;
+    LE::ERHISwapchainStatus PresentStatus = LE::ERHISwapchainStatus::Success;
     int AcquireCount = 0;
     int PresentCount = 0;
     int ResizeCount = 0;
@@ -273,76 +273,76 @@ public:
     bool bResizeSucceeds = true;
 };
 
-class FFakeRALDevice final : public LE::FRALDevice
+class FFakeRHIDevice final : public LE::FRHIDevice
 {
 public:
-    LE::FRALQueue* GetGraphicsQueue() const override { return const_cast<FFakeRALQueue*>(&Queue); }
-    LE::FRALBuffer* CreateBuffer(const LE::FRALBufferDesc& Desc) override
+    LE::FRHIQueue* GetGraphicsQueue() const override { return const_cast<FFakeRHIQueue*>(&Queue); }
+    LE::FRHIBuffer* CreateBuffer(const LE::FRHIBufferDesc& Desc) override
     {
         if (!bCreateOwnedBuffers) return nullptr;
-        auto* Buffer = new FFakeRALBuffer();
+        auto* Buffer = new FFakeRHIBuffer();
         Buffer->Desc = Desc;
         Buffer->Events = Events;
         Buffer->DestroyCount = &DestroyedBuffers;
         ++CreatedBuffers;
         return Buffer;
     }
-    LE::FRALTexture* CreateTexture(const LE::FRALTextureDesc& Desc) override
+    LE::FRHITexture* CreateTexture(const LE::FRHITextureDesc& Desc) override
     {
         if (!bCreateOwnedTextures) return nullptr;
-        auto* Texture = new FFakeRALTexture();
+        auto* Texture = new FFakeRHITexture();
         Texture->Desc = Desc;
         Texture->Events = Events;
         Texture->DestroyCount = &DestroyedTextures;
         ++CreatedTextures;
         return Texture;
     }
-    LE::FRALTextureView* CreateTextureView(const LE::FRALTextureViewDesc&) override { return nullptr; }
-    LE::FRALShader* CreateShaderFromFile(LE::EShaderStage, const void*, LE::uint64, const LE::String&) override { return nullptr; }
-    LE::FRALPipeline_Graphics* CreateGraphicsPipeline(const LE::FRALPipelineDesc_Graphics&) override { return nullptr; }
-    LE::FRALCommandAllocator* CreateCommandAllocator(LE::EQueueType) override
+    LE::FRHITextureView* CreateTextureView(const LE::FRHITextureViewDesc&) override { return nullptr; }
+    LE::FRHIShader* CreateShaderFromFile(LE::EShaderStage, const void*, LE::uint64, const LE::String&) override { return nullptr; }
+    LE::FRHIPipeline_Graphics* CreateGraphicsPipeline(const LE::FRHIPipelineDesc_Graphics&) override { return nullptr; }
+    LE::FRHICommandAllocator* CreateCommandAllocator(LE::EQueueType) override
     {
         if (ShouldFailCreation()) return nullptr;
-        auto* Allocator = new FFakeRALCommandAllocator();
+        auto* Allocator = new FFakeRHICommandAllocator();
         Allocator->Events = Events;
         Allocator->DestroyCount = &DestroyedAllocators;
         Allocators.PushBack(Allocator);
         return Allocator;
     }
-    LE::FRALCommandList* CreateCommandList(LE::FRALCommandAllocator*) override
+    LE::FRHICommandList* CreateCommandList(LE::FRHICommandAllocator*) override
     {
         if (ShouldFailCreation()) return nullptr;
         ++CreatedCommandLists;
-        auto* CommandList = new FFakeRALCommandList();
+        auto* CommandList = new FFakeRHICommandList();
         CommandList->Events = Events;
         CommandList->DestroyCount = &DestroyedCommandLists;
         return CommandList;
     }
-    LE::FRALSemaphore* CreateBinarySemaphore() override
+    LE::FRHISemaphore* CreateBinarySemaphore() override
     {
         if (ShouldFailCreation()) return nullptr;
-        auto* Semaphore = new FFakeRALSemaphore();
+        auto* Semaphore = new FFakeRHISemaphore();
         Semaphore->DestroyCount = &DestroyedSemaphores;
         Semaphores.PushBack(Semaphore);
         return Semaphore;
     }
-    LE::FRALFence* CreateFence(bool bInitiallySignaled) override
+    LE::FRHIFence* CreateFence(bool bInitiallySignaled) override
     {
         LastFenceInitiallySignaled = bInitiallySignaled;
         if (ShouldFailCreation()) return nullptr;
-        auto* Fence = new FFakeRALFence();
+        auto* Fence = new FFakeRHIFence();
         Fence->bSignaled = bInitiallySignaled;
         Fence->Events = Events;
         Fence->DestroyCount = &DestroyedFences;
         Fences.PushBack(Fence);
         return Fence;
     }
-    LE::FRALSwapchain* CreateSwapchain(const LE::FRALSwapchainDesc&) override { return nullptr; }
-    LE::FRALBindGroup* CreateBindGroup(const LE::FRALBindGroupDesc&) override { return nullptr; }
-    LE::FRALBindGroupLayout* CreateBindGroupLayout(const LE::FRALBindGroupLayoutDesc&) override { return nullptr; }
-    LE::FRALSampler* CreateSampler(const LE::FRALSamplerDesc&) override { return nullptr; }
+    LE::FRHISwapchain* CreateSwapchain(const LE::FRHISwapchainDesc&) override { return nullptr; }
+    LE::FRHIBindGroup* CreateBindGroup(const LE::FRHIBindGroupDesc&) override { return nullptr; }
+    LE::FRHIBindGroupLayout* CreateBindGroupLayout(const LE::FRHIBindGroupLayoutDesc&) override { return nullptr; }
+    LE::FRHISampler* CreateSampler(const LE::FRHISamplerDesc&) override { return nullptr; }
     void* GetBindlessHeapGPUDescriptor() const override { return nullptr; }
-    LE::uint32 AllocateBindlessIndex(LE::FRALResource*) override { return 0; }
+    LE::uint32 AllocateBindlessIndex(LE::FRHIResource*) override { return 0; }
 
 private:
     bool ShouldFailCreation()
@@ -352,10 +352,10 @@ private:
     }
 
 public:
-    FFakeRALQueue Queue;
-    LE::Array<FFakeRALCommandAllocator*> Allocators;
-    LE::Array<FFakeRALSemaphore*> Semaphores;
-    LE::Array<FFakeRALFence*> Fences;
+    FFakeRHIQueue Queue;
+    LE::Array<FFakeRHICommandAllocator*> Allocators;
+    LE::Array<FFakeRHISemaphore*> Semaphores;
+    LE::Array<FFakeRHIFence*> Fences;
     LE::Array<int>* Events = nullptr;
     int FailCreationCall = 0;
     int CreationCalls = 0;
@@ -407,26 +407,26 @@ struct FRenderFrameSchedulerFixture
     }
 
     LE::Array<int> Events;
-    FFakeRALTexture Texture;
-    FFakeRALTextureView View;
-    FFakeRALDevice Device;
-    FFakeRALSwapchain Swapchain;
+    FFakeRHITexture Texture;
+    FFakeRHITextureView View;
+    FFakeRHIDevice Device;
+    FFakeRHISwapchain Swapchain;
     LE::FRenderFrameScheduler Scheduler;
     LE::ERenderFrameRecordResult RecordResult = LE::ERenderFrameRecordResult::Success;
-    LE::FRALResource* DeferredResource = nullptr;
-    LE::FRALTextureView* CapturedBackBufferView = nullptr;
-    LE::FRALCommandList* CapturedCommandList = nullptr;
+    LE::FRHIResource* DeferredResource = nullptr;
+    LE::FRHITextureView* CapturedBackBufferView = nullptr;
+    LE::FRHICommandList* CapturedCommandList = nullptr;
     LE::uint64 CapturedFrameIndex = 0;
     LE::uint32 CapturedSlotIndex = 0;
     int RecordCount = 0;
     bool bDeferredAccepted = false;
 };
 
-class FTrackedRALResource final : public LE::FRALResource
+class FTrackedRHIResource final : public LE::FRHIResource
 {
 public:
-    explicit FTrackedRALResource(int* const InDestroyCount) : DestroyCount(InDestroyCount) {}
-    ~FTrackedRALResource() override { if (DestroyCount != nullptr) ++*DestroyCount; }
+    explicit FTrackedRHIResource(int* const InDestroyCount) : DestroyCount(InDestroyCount) {}
+    ~FTrackedRHIResource() override { if (DestroyCount != nullptr) ++*DestroyCount; }
 
 private:
     int* DestroyCount = nullptr;
@@ -435,7 +435,7 @@ private:
 class FFakeRFGDeferredReleaseSink final : public LE::IRFGDeferredReleaseSink
 {
 public:
-    bool DeferRelease(LE::FRALResource* const Resource) noexcept override
+    bool DeferRelease(LE::FRHIResource* const Resource) noexcept override
     {
         ++CallCount;
         if (Resource == nullptr || (RejectCall != 0 && CallCount == RejectCall))
@@ -448,14 +448,14 @@ public:
 
     void DestroyAccepted() noexcept
     {
-        for (LE::FRALResource* const Resource : Resources)
+        for (LE::FRHIResource* const Resource : Resources)
         {
-            LE::RAL::DestroyResource(Resource);
+            LE::RHI::DestroyResource(Resource);
         }
         Resources.Clear();
     }
 
-    LE::Array<LE::FRALResource*> Resources;
+    LE::Array<LE::FRHIResource*> Resources;
     int RejectCall = 0;
     int CallCount = 0;
 };
@@ -468,7 +468,7 @@ public:
     {
     }
 
-    bool DeferRelease(LE::FRALResource* const Resource) noexcept override
+    bool DeferRelease(LE::FRHIResource* const Resource) noexcept override
     {
         return FrameScope.DeferRelease(Resource);
     }
@@ -2063,26 +2063,26 @@ int RunExplicitFrameLifecycleTests()
     int Failures = 0;
 
     {
-        FFakeRALTexture Texture;
-        FFakeRALTextureView View(&Texture);
+        FFakeRHITexture Texture;
+        FFakeRHITextureView View(&Texture);
         Failures += Expect(
-            LE::FRALAcquireResult{ LE::ERALSwapchainStatus::Success, &View }.HasImage() &&
-                LE::FRALAcquireResult{ LE::ERALSwapchainStatus::Suboptimal, &View }.HasImage() &&
-                !LE::FRALAcquireResult{ LE::ERALSwapchainStatus::OutOfDate, nullptr }.HasImage() &&
-                !LE::FRALAcquireResult{ LE::ERALSwapchainStatus::Error, nullptr }.HasImage() &&
-                !LE::FRALAcquireResult{ LE::ERALSwapchainStatus::Success, nullptr }.HasImage(),
+            LE::FRHIAcquireResult{ LE::ERHISwapchainStatus::Success, &View }.HasImage() &&
+                LE::FRHIAcquireResult{ LE::ERHISwapchainStatus::Suboptimal, &View }.HasImage() &&
+                !LE::FRHIAcquireResult{ LE::ERHISwapchainStatus::OutOfDate, nullptr }.HasImage() &&
+                !LE::FRHIAcquireResult{ LE::ERHISwapchainStatus::Error, nullptr }.HasImage() &&
+                !LE::FRHIAcquireResult{ LE::ERHISwapchainStatus::Success, nullptr }.HasImage(),
             "Acquire result exposes images only for successful and suboptimal acquisitions");
     }
 
     {
-        FFakeRALCommandList CommandList;
-        FFakeRALSemaphore Semaphore;
-        FFakeRALFence Fence;
-        LE::FRALSubmitInfo EmptySubmitInfo;
-        LE::FRALSubmitInfo NullWaitSubmitInfo;
+        FFakeRHICommandList CommandList;
+        FFakeRHISemaphore Semaphore;
+        FFakeRHIFence Fence;
+        LE::FRHISubmitInfo EmptySubmitInfo;
+        LE::FRHISubmitInfo NullWaitSubmitInfo;
         NullWaitSubmitInfo.CmdList = &CommandList;
         NullWaitSubmitInfo.WaitSemaphores.PushBack(nullptr);
-        LE::FRALSubmitInfo ValidSubmitInfo;
+        LE::FRHISubmitInfo ValidSubmitInfo;
         ValidSubmitInfo.CmdList = &CommandList;
         ValidSubmitInfo.WaitSemaphores.PushBack(&Semaphore);
         ValidSubmitInfo.SignalSemaphores.PushBack(&Semaphore);
@@ -2102,9 +2102,9 @@ int RunExplicitFrameLifecycleTests()
         Failures += Expect(
             bInitialized && Result.Action == LE::ERenderFrameAction::Continue &&
                 Result.RecordResult == LE::ERenderFrameRecordResult::Success &&
-                Result.AcquireStatus == LE::ERALSwapchainStatus::Success &&
-                Result.SubmitResult == LE::ERALQueueSubmitResult::Success &&
-                Result.PresentStatus == LE::ERALSwapchainStatus::Success &&
+                Result.AcquireStatus == LE::ERHISwapchainStatus::Success &&
+                Result.SubmitResult == LE::ERHIQueueSubmitResult::Success &&
+                Result.PresentStatus == LE::ERHISwapchainStatus::Success &&
                 Result.FrameIndex == 0 && Result.SlotIndex == 0 &&
                 ExplicitFrameEventsEqual(Fixture.Events, ExpectedEvents, 7) &&
                 Fixture.Device.Fences[0]->WaitCount == 1 && Fixture.Device.Fences[0]->ResetCount == 1 &&
@@ -2127,7 +2127,7 @@ int RunExplicitFrameLifecycleTests()
     {
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
-        Fixture.Swapchain.AcquireStatus = LE::ERALSwapchainStatus::Suboptimal;
+        Fixture.Swapchain.AcquireStatus = LE::ERHISwapchainStatus::Suboptimal;
         const LE::FRenderFrameResult Result = Fixture.Execute();
         Failures += Expect(
             Result.Action == LE::ERenderFrameAction::RecreateSwapchain &&
@@ -2136,9 +2136,9 @@ int RunExplicitFrameLifecycleTests()
             "Suboptimal acquire renders and presents the valid image before requesting recreation");
     }
 
-    for (const LE::ERALSwapchainStatus AcquireStatus : {
-        LE::ERALSwapchainStatus::OutOfDate,
-        LE::ERALSwapchainStatus::Error })
+    for (const LE::ERHISwapchainStatus AcquireStatus : {
+        LE::ERHISwapchainStatus::OutOfDate,
+        LE::ERHISwapchainStatus::Error })
     {
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
@@ -2147,14 +2147,14 @@ int RunExplicitFrameLifecycleTests()
         const int AcquireCountBeforeIgnoredRetry = Fixture.Swapchain.AcquireCount;
         const LE::FRenderFrameResult IgnoredRetry = Fixture.Execute();
         Failures += Expect(
-            Result.Action == (AcquireStatus == LE::ERALSwapchainStatus::OutOfDate
+            Result.Action == (AcquireStatus == LE::ERHISwapchainStatus::OutOfDate
                 ? LE::ERenderFrameAction::RecreateSwapchain
                 : LE::ERenderFrameAction::Exit) &&
                 Fixture.Device.Fences[0]->ResetCount == 0 &&
                 Fixture.RecordCount == 0 && Fixture.Device.Queue.SubmitCount == 0 &&
                 Fixture.Swapchain.PresentCount == 0 &&
                 Fixture.Swapchain.GetCurrentBackBufferView() == nullptr &&
-                (AcquireStatus == LE::ERALSwapchainStatus::OutOfDate ||
+                (AcquireStatus == LE::ERHISwapchainStatus::OutOfDate ||
                     (IgnoredRetry.Action == LE::ERenderFrameAction::Exit &&
                      Fixture.Swapchain.AcquireCount == AcquireCountBeforeIgnoredRetry)),
             "Acquire without an image skips record submit and present");
@@ -2163,7 +2163,7 @@ int RunExplicitFrameLifecycleTests()
     {
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
-        Fixture.Swapchain.AcquireStatus = LE::ERALSwapchainStatus::Success;
+        Fixture.Swapchain.AcquireStatus = LE::ERHISwapchainStatus::Success;
         Fixture.Swapchain.View = nullptr;
         const LE::FRenderFrameResult Result = Fixture.Execute();
         const int AcquireCount = Fixture.Swapchain.AcquireCount;
@@ -2176,9 +2176,9 @@ int RunExplicitFrameLifecycleTests()
             "Successful status without an image is terminal and ignored retries perform no work");
     }
 
-    for (const LE::ERALQueueSubmitResult SubmitResult : {
-        LE::ERALQueueSubmitResult::InvalidArguments,
-        LE::ERALQueueSubmitResult::Error })
+    for (const LE::ERHIQueueSubmitResult SubmitResult : {
+        LE::ERHIQueueSubmitResult::InvalidArguments,
+        LE::ERHIQueueSubmitResult::Error })
     {
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
@@ -2217,17 +2217,17 @@ int RunExplicitFrameLifecycleTests()
             "Record failure is terminal before fence reset and submission");
     }
 
-    for (const LE::ERALSwapchainStatus PresentStatus : {
-        LE::ERALSwapchainStatus::Suboptimal,
-        LE::ERALSwapchainStatus::OutOfDate,
-        LE::ERALSwapchainStatus::Error })
+    for (const LE::ERHISwapchainStatus PresentStatus : {
+        LE::ERHISwapchainStatus::Suboptimal,
+        LE::ERHISwapchainStatus::OutOfDate,
+        LE::ERHISwapchainStatus::Error })
     {
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
         Fixture.Swapchain.PresentStatus = PresentStatus;
         const LE::FRenderFrameResult Result = Fixture.Execute();
         Failures += Expect(
-            Result.Action == (PresentStatus == LE::ERALSwapchainStatus::Error
+            Result.Action == (PresentStatus == LE::ERHISwapchainStatus::Error
                 ? LE::ERenderFrameAction::Exit
                 : LE::ERenderFrameAction::RecreateSwapchain) &&
                 Fixture.RecordCount == 1 && Fixture.Device.Queue.SubmitCount == 1 &&
@@ -2239,10 +2239,10 @@ int RunExplicitFrameLifecycleTests()
     {
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
-        Fixture.Swapchain.AcquireStatus = LE::ERALSwapchainStatus::OutOfDate;
+        Fixture.Swapchain.AcquireStatus = LE::ERHISwapchainStatus::OutOfDate;
         const LE::FRenderFrameResult FirstResult = Fixture.Execute();
         const bool bResized = Fixture.Swapchain.Resize(1280, 720);
-        Fixture.Swapchain.AcquireStatus = LE::ERALSwapchainStatus::Success;
+        Fixture.Swapchain.AcquireStatus = LE::ERHISwapchainStatus::Success;
         const LE::FRenderFrameResult RetryResult = Fixture.Execute();
         Failures += Expect(
             FirstResult.Action == LE::ERenderFrameAction::RecreateSwapchain &&
@@ -2275,7 +2275,7 @@ int RunExplicitFrameLifecycleTests()
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
         int DeferredDestroyCount = 0;
-        Fixture.DeferredResource = new FTrackedRALResource(&DeferredDestroyCount);
+        Fixture.DeferredResource = new FTrackedRHIResource(&DeferredDestroyCount);
         const LE::FRenderFrameResult First = Fixture.Execute();
         const bool bAccepted = Fixture.bDeferredAccepted;
         const LE::FRenderFrameResult Second = Fixture.Execute();
@@ -2291,7 +2291,7 @@ int RunExplicitFrameLifecycleTests()
 
     {
         LE::Array<int> DestructionEvents;
-        FFakeRALDevice Device;
+        FFakeRHIDevice Device;
         Device.Events = &DestructionEvents;
         Device.FailCreationCall = 7;
         LE::FRenderFrameScheduler Scheduler;
@@ -2320,8 +2320,8 @@ int RunRFGTransientSlotLifetimeTests()
 
     auto ExecuteGraph = [](
         const bool bImported,
-        FFakeRALDevice& Device,
-        FFakeRALCommandList& CommandList,
+        FFakeRHIDevice& Device,
+        FFakeRHICommandList& CommandList,
         int& RecordCount,
         LE::IRFGDeferredReleaseSink* const DeferredReleaseSink)
     {
@@ -2332,33 +2332,33 @@ int RunRFGTransientSlotLifetimeTests()
         TextureDesc.Format = LE::EPixelFormat::B8G8R8A8_SRGB;
         TextureDesc.UsageMask = 1u << 1;
 
-        FFakeRALTexture ImportedTexture;
+        FFakeRHITexture ImportedTexture;
         ImportedTexture.Desc.Width = 16;
         ImportedTexture.Desc.Height = 16;
         ImportedTexture.Desc.Format = LE::EPixelFormat::B8G8R8A8_SRGB;
         const LE::FRFGResourceHandle Texture = bImported
-            ? Builder.ImportTexture("Imported", &ImportedTexture, LE::ERALResourceState::Undefined)
+            ? Builder.ImportTexture("Imported", &ImportedTexture, LE::ERHIResourceState::Undefined)
             : Builder.CreateTexture("Transient", TextureDesc);
 
         LE::FRFGBufferDesc BufferDesc;
         BufferDesc.Size = 256;
         BufferDesc.Usage = LE::EResourceUsage::Local;
         BufferDesc.UsageMask = 1u;
-        FFakeRALBuffer ImportedBuffer;
+        FFakeRHIBuffer ImportedBuffer;
         ImportedBuffer.Desc.Size = BufferDesc.Size;
         const LE::FRFGResourceHandle Buffer = bImported
-            ? Builder.ImportBuffer("ImportedBuffer", &ImportedBuffer, LE::ERALResourceState::Undefined)
+            ? Builder.ImportBuffer("ImportedBuffer", &ImportedBuffer, LE::ERHIResourceState::Undefined)
             : Builder.CreateBuffer("TransientBuffer", BufferDesc);
 
         const LE::FRFGPassHandle Pass = Builder.AddPass(
             "TransientLifetime", "TransientLifetime", {}, LE::ERFGPassFlags::NeverCull);
         LE::FRFGAccessDesc TextureWrite;
         TextureWrite.Access = LE::ERFGAccessType::Write;
-        TextureWrite.State = LE::ERALResourceState::RenderTarget;
+        TextureWrite.State = LE::ERHIResourceState::RenderTarget;
         Builder.Write(Pass, Texture, TextureWrite);
         LE::FRFGAccessDesc BufferWrite;
         BufferWrite.Access = LE::ERFGAccessType::Write;
-        BufferWrite.State = LE::ERALResourceState::CopyDestination;
+        BufferWrite.State = LE::ERHIResourceState::CopyDestination;
         Builder.Write(Pass, Buffer, BufferWrite);
         Builder.MarkOutput(Texture);
         Builder.MarkOutput(Buffer);
@@ -2369,7 +2369,7 @@ int RunRFGTransientSlotLifetimeTests()
             Builder.GetRecordedGraph(), Builder.BuildSignature());
         if (!CompileResult.Plan)
         {
-            return LE::ERALQueueSubmitResult::Error;
+            return LE::ERHIQueueSubmitResult::Error;
         }
 
         LE::FRFGExecutionContext Context;
@@ -2381,23 +2381,23 @@ int RunRFGTransientSlotLifetimeTests()
         Options.bWaitForCompletion = false;
         Options.DeferredReleaseSink = DeferredReleaseSink;
         LE::FRFGExecutor Executor;
-        const LE::ERALQueueSubmitResult Result =
+        const LE::ERHIQueueSubmitResult Result =
             Executor.Execute(*CompileResult.Plan, Builder.GetRecordedGraph(), Context, Options);
         return Context.TextureResources.IsEmpty() && Context.BufferResources.IsEmpty() &&
             Context.OwnedTextures.IsEmpty() && Context.OwnedBuffers.IsEmpty()
             ? Result
-            : LE::ERALQueueSubmitResult::Error;
+            : LE::ERHIQueueSubmitResult::Error;
     };
 
     {
-        FFakeRALDevice Device;
+        FFakeRHIDevice Device;
         Device.bCreateOwnedTextures = true;
         Device.bCreateOwnedBuffers = true;
-        FFakeRALCommandList CommandList;
+        FFakeRHICommandList CommandList;
         int RecordCount = 0;
-        const LE::ERALQueueSubmitResult Result = ExecuteGraph(false, Device, CommandList, RecordCount, nullptr);
+        const LE::ERHIQueueSubmitResult Result = ExecuteGraph(false, Device, CommandList, RecordCount, nullptr);
         Failures += Expect(
-            Result == LE::ERALQueueSubmitResult::InvalidArguments &&
+            Result == LE::ERHIQueueSubmitResult::InvalidArguments &&
                 Device.CreatedTextures == 1 && Device.DestroyedTextures == 1 &&
                 Device.CreatedBuffers == 1 && Device.DestroyedBuffers == 1 &&
                 CommandList.BeginCount == 0 && CommandList.EndCount == 0 &&
@@ -2406,12 +2406,12 @@ int RunRFGTransientSlotLifetimeTests()
     }
 
     {
-        FFakeRALDevice Device;
-        FFakeRALCommandList CommandList;
+        FFakeRHIDevice Device;
+        FFakeRHICommandList CommandList;
         int RecordCount = 0;
-        const LE::ERALQueueSubmitResult Result = ExecuteGraph(true, Device, CommandList, RecordCount, nullptr);
+        const LE::ERHIQueueSubmitResult Result = ExecuteGraph(true, Device, CommandList, RecordCount, nullptr);
         Failures += Expect(
-            Result == LE::ERALQueueSubmitResult::Success &&
+            Result == LE::ERHIQueueSubmitResult::Success &&
                 Device.CreatedTextures == 0 && Device.DestroyedTextures == 0 &&
                 Device.CreatedBuffers == 0 && Device.DestroyedBuffers == 0 &&
                 CommandList.BeginCount == 1 && CommandList.EndCount == 1 &&
@@ -2420,15 +2420,15 @@ int RunRFGTransientSlotLifetimeTests()
     }
 
     {
-        FFakeRALDevice Device;
+        FFakeRHIDevice Device;
         Device.bCreateOwnedTextures = true;
         Device.bCreateOwnedBuffers = true;
-        FFakeRALCommandList CommandList;
+        FFakeRHICommandList CommandList;
         FFakeRFGDeferredReleaseSink Sink;
         int RecordCount = 0;
-        const LE::ERALQueueSubmitResult Result = ExecuteGraph(false, Device, CommandList, RecordCount, &Sink);
+        const LE::ERHIQueueSubmitResult Result = ExecuteGraph(false, Device, CommandList, RecordCount, &Sink);
         const bool bTransferredWithoutDestroy =
-            Result == LE::ERALQueueSubmitResult::Success && Sink.Resources.Size() == 2 &&
+            Result == LE::ERHIQueueSubmitResult::Success && Sink.Resources.Size() == 2 &&
             Device.DestroyedTextures == 0 && Device.DestroyedBuffers == 0;
         Sink.DestroyAccepted();
         Failures += Expect(
@@ -2438,16 +2438,16 @@ int RunRFGTransientSlotLifetimeTests()
     }
 
     {
-        FFakeRALDevice Device;
+        FFakeRHIDevice Device;
         Device.bCreateOwnedTextures = true;
         Device.bCreateOwnedBuffers = true;
-        FFakeRALCommandList CommandList;
+        FFakeRHICommandList CommandList;
         FFakeRFGDeferredReleaseSink Sink;
         Sink.RejectCall = 2;
         int RecordCount = 0;
-        const LE::ERALQueueSubmitResult Result = ExecuteGraph(false, Device, CommandList, RecordCount, &Sink);
+        const LE::ERHIQueueSubmitResult Result = ExecuteGraph(false, Device, CommandList, RecordCount, &Sink);
         const bool bRejectedRemainderDestroyed =
-            Result == LE::ERALQueueSubmitResult::InvalidArguments && Sink.Resources.Size() == 1 &&
+            Result == LE::ERHIQueueSubmitResult::InvalidArguments && Sink.Resources.Size() == 1 &&
             Device.DestroyedTextures == 0 && Device.DestroyedBuffers == 1;
         Sink.DestroyAccepted();
         Failures += Expect(
@@ -2471,7 +2471,7 @@ int RunRFGTransientSlotLifetimeTests()
                 {
                 public:
                     explicit FRejectSecondScopeSink(LE::FRenderFrameScope& InFrame) noexcept : Frame(InFrame) {}
-                    bool DeferRelease(LE::FRALResource* const Resource) noexcept override
+                    bool DeferRelease(LE::FRHIResource* const Resource) noexcept override
                     {
                         ++CallCount;
                         return CallCount != 2 && Frame.DeferRelease(Resource);
@@ -2479,19 +2479,19 @@ int RunRFGTransientSlotLifetimeTests()
                     LE::FRenderFrameScope& Frame;
                     int CallCount = 0;
                 } Sink(Frame);
-                const LE::ERALQueueSubmitResult Result = ExecuteGraph(
-                    false, Fixture.Device, *static_cast<FFakeRALCommandList*>(Frame.GetCommandList()),
+                const LE::ERHIQueueSubmitResult Result = ExecuteGraph(
+                    false, Fixture.Device, *static_cast<FFakeRHICommandList*>(Frame.GetCommandList()),
                     RecordCount, &Sink);
-                return Result == LE::ERALQueueSubmitResult::Success
+                return Result == LE::ERHIQueueSubmitResult::Success
                     ? LE::ERenderFrameRecordResult::Success
                     : LE::ERenderFrameRecordResult::InvalidArguments;
             }
 
             FFrameScopeRFGDeferredReleaseSink Sink(Frame);
-            const LE::ERALQueueSubmitResult Result = ExecuteGraph(
-                false, Fixture.Device, *static_cast<FFakeRALCommandList*>(Frame.GetCommandList()),
+            const LE::ERHIQueueSubmitResult Result = ExecuteGraph(
+                false, Fixture.Device, *static_cast<FFakeRHICommandList*>(Frame.GetCommandList()),
                 RecordCount, &Sink);
-            return Result == LE::ERALQueueSubmitResult::Success
+            return Result == LE::ERHIQueueSubmitResult::Success
                 ? LE::ERenderFrameRecordResult::Success
                 : LE::ERenderFrameRecordResult::InvalidArguments;
         };
@@ -2536,11 +2536,11 @@ int RunRFGTransientSlotLifetimeTests()
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Device.bCreateOwnedTextures = true;
         Fixture.Device.bCreateOwnedBuffers = true;
-        Fixture.Device.Queue.Result = LE::ERALQueueSubmitResult::Error;
+        Fixture.Device.Queue.Result = LE::ERHIQueueSubmitResult::Error;
         Fixture.Initialize();
         const LE::FRenderFrameResult Result = ExecuteScheduledGraph(Fixture, false);
         const bool bHeldAfterSubmitFailure =
-            Result.SubmitResult == LE::ERALQueueSubmitResult::Error &&
+            Result.SubmitResult == LE::ERHIQueueSubmitResult::Error &&
             Fixture.Device.DestroyedTextures == 0 && Fixture.Device.DestroyedBuffers == 0 &&
             Fixture.Swapchain.PresentCount == 0;
         Fixture.Scheduler.Shutdown();
@@ -3041,8 +3041,8 @@ int RunEngineLoopTests()
 {
     int Failures = 0;
 
-    LE::RAL::DestroyResource(nullptr);
-    Failures += Expect(true, "RAL creator-side destruction accepts null resources");
+    LE::RHI::DestroyResource(nullptr);
+    Failures += Expect(true, "RHI creator-side destruction accepts null resources");
 
     {
         const double Clock[] = { 10.0, 10.25 };

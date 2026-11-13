@@ -8,6 +8,6 @@ export default class RFGBuild extends ModuleBuild {
     public readonly Name = "RFG";
 
     public Configure(_Target: Target, Configuration: ModuleConfiguration): void {
-        Configuration.PublicDependencies.push("Core", "Spdlog", "RAL");
+        Configuration.PublicDependencies.push("Core", "Spdlog", "RHI");
     }
 }

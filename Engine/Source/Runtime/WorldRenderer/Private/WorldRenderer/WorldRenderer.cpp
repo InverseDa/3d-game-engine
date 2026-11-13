@@ -485,9 +485,9 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidBounds, Index, PrimitiveId);
         }
-        FRALBuffer* const VertexBuffer = ResolvedMesh->VertexBuffer;
+        FRHIBuffer* const VertexBuffer = ResolvedMesh->VertexBuffer;
         const uint32 VertexCount = ResolvedMesh->VertexCount;
-        FRALBuffer* const IndexBuffer = ResolvedMesh->IndexBuffer;
+        FRHIBuffer* const IndexBuffer = ResolvedMesh->IndexBuffer;
         const uint32 IndexCount = ResolvedMesh->IndexCount;
         const EPixelFormat IndexFormat = ResolvedMesh->IndexFormat;
         const FRenderBounds LocalBounds = ResolvedMesh->LocalBounds;
@@ -504,7 +504,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidMaterialPayload, Index, PrimitiveId);
         }
-        FRALPipeline_Graphics* const GraphicsPipeline = ResolvedMaterial->GraphicsPipeline;
+        FRHIPipeline_Graphics* const GraphicsPipeline = ResolvedMaterial->GraphicsPipeline;
         const ERenderMeshPassMask PassMask = ResolvedMaterial->PassMask;
         const Math::Vector4f BaseColor = ResolvedMaterial->BaseColor;
         FAssetId MaterialAssetId;

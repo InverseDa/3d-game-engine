@@ -3,19 +3,19 @@
 #include "CoreMinimal.h"
 #include "PlatformRenderProfile.h"
 #include "ShadingPath.h"
-#include "RAL/RALCommandList.h"
+#include "RHI/RHICommandList.h"
 
 
 namespace LE
 {
 
-class FRALSwapchain;
-class FRALTextureView;
+class FRHISwapchain;
+class FRHITextureView;
 
 struct FRenderView
 {
     uint32 ViewId = 0;
-    LE::FRALViewport Viewport;
+    LE::FRHIViewport Viewport;
     ERenderPlatformProfile Profile = ERenderPlatformProfile::Desktop;
     EShadingPath ShadingPath = EShadingPath::Deferred;
     bool bIsEditorView = false;
@@ -23,15 +23,15 @@ struct FRenderView
 
 struct FRenderTargetBinding
 {
-    LE::FRALTextureView* BackBuffer = nullptr;
-    LE::FRALTextureView* SceneColor = nullptr;
-    LE::FRALTextureView* DepthStencil = nullptr;
+    LE::FRHITextureView* BackBuffer = nullptr;
+    LE::FRHITextureView* SceneColor = nullptr;
+    LE::FRHITextureView* DepthStencil = nullptr;
 };
 
 struct FRenderViewFamily
 {
     LE::Array<FRenderView> Views;
-    LE::FRALSwapchain* PrimarySwapchain = nullptr;
+    LE::FRHISwapchain* PrimarySwapchain = nullptr;
     FRenderTargetBinding RenderTargets;
 };
 

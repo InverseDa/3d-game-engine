@@ -1,7 +1,7 @@
 #include "Record/RFGBuilder.h"
 
-#include "RAL/RALBuffer.h"
-#include "RAL/RALTexture.h"
+#include "RHI/RHIBuffer.h"
+#include "RHI/RHITexture.h"
 
 namespace LE
 {
@@ -79,7 +79,7 @@ FRFGResourceHandle FRFGBuilder::CreateBuffer(const LE::String& ResourceName, con
     return Handle;
 }
 
-FRFGResourceHandle FRFGBuilder::ImportTexture(const LE::String& ResourceName, LE::FRALTexture* ExternalTexture, LE::ERALResourceState InitialState)
+FRFGResourceHandle FRFGBuilder::ImportTexture(const LE::String& ResourceName, LE::FRHITexture* ExternalTexture, LE::ERHIResourceState InitialState)
 {
     FRFGResourceNode ResourceNode;
     ResourceNode.Name = ResourceName;
@@ -89,7 +89,7 @@ FRFGResourceHandle FRFGBuilder::ImportTexture(const LE::String& ResourceName, LE
     ResourceNode.ImportedTexture = ExternalTexture;
     if (ExternalTexture != nullptr)
     {
-        const LE::FRALTextureDesc& TextureDesc = ExternalTexture->GetDesc();
+        const LE::FRHITextureDesc& TextureDesc = ExternalTexture->GetDesc();
         ResourceNode.Desc.Texture.Width = TextureDesc.Width;
         ResourceNode.Desc.Texture.Height = TextureDesc.Height;
         ResourceNode.Desc.Texture.Depth = TextureDesc.Depth;
@@ -108,7 +108,7 @@ FRFGResourceHandle FRFGBuilder::ImportTexture(const LE::String& ResourceName, LE
     return Handle;
 }
 
-FRFGResourceHandle FRFGBuilder::ImportBuffer(const LE::String& ResourceName, LE::FRALBuffer* ExternalBuffer, LE::ERALResourceState InitialState)
+FRFGResourceHandle FRFGBuilder::ImportBuffer(const LE::String& ResourceName, LE::FRHIBuffer* ExternalBuffer, LE::ERHIResourceState InitialState)
 {
     FRFGResourceNode ResourceNode;
     ResourceNode.Name = ResourceName;
@@ -118,7 +118,7 @@ FRFGResourceHandle FRFGBuilder::ImportBuffer(const LE::String& ResourceName, LE:
     ResourceNode.ImportedBuffer = ExternalBuffer;
     if (ExternalBuffer != nullptr)
     {
-        const LE::FRALBufferDesc& BufferDesc = ExternalBuffer->GetDesc();
+        const LE::FRHIBufferDesc& BufferDesc = ExternalBuffer->GetDesc();
         ResourceNode.Desc.Buffer.Size = BufferDesc.Size;
         ResourceNode.Desc.Buffer.Usage = static_cast<LE::EResourceUsage>(BufferDesc.Usage);
         ResourceNode.Desc.Buffer.UsageMask = BufferDesc.UsageFlag;

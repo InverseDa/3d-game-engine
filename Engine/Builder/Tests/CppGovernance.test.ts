@@ -66,7 +66,7 @@ namespace LE { using namespace Math; class FGood {}; }
 });
 
 test("approved namespace scopes pass and an unapproved shallow namespace fails", () => {
-    for (const namespace of ["LE", "LE::Detail", "LE::Math", "LE::RAL", "LE::RAL::Vulkan", "LE::Demo::ShaderRuntimeCompiler"]) {
+    for (const namespace of ["LE", "LE::Detail", "LE::Math", "LE::RHI", "LE::RHI::Vulkan", "LE::Demo::ShaderRuntimeCompiler"]) {
         assert.deepEqual(scan("Engine/Source/Runtime/Demo/Private/Scope.cpp", `namespace ${namespace} { struct FValue {}; }`), [], namespace);
     }
     assert.equal(scan("Engine/Source/Runtime/Demo/Private/Scope.cpp", "namespace LE::Deep { struct FValue {}; }").some((value) => value.rule === "namespace-scope"), true);

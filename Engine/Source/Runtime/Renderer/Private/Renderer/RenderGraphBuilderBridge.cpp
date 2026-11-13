@@ -10,7 +10,7 @@ FRenderGraphBuilderBridge::FRenderGraphBuilderBridge(LE::FRFGBuilder& InBuilder)
 
 FRenderGraphBuilderBridge::~FRenderGraphBuilderBridge() = default;
 
-LE::FRFGResourceHandle FRenderGraphBuilderBridge::ImportTexture(const LE::String& ResourceName, LE::FRALTexture* Texture, LE::ERALResourceState InitialState)
+LE::FRFGResourceHandle FRenderGraphBuilderBridge::ImportTexture(const LE::String& ResourceName, LE::FRHITexture* Texture, LE::ERHIResourceState InitialState)
 {
     if (Texture == nullptr)
     {
@@ -24,12 +24,12 @@ LE::FRFGResourceHandle FRenderGraphBuilderBridge::ImportTexture(const LE::String
     }
 
     const LE::FRFGResourceHandle Handle = Builder->ImportTexture(ResourceName, Texture, InitialState);
-    const LE::FRALTexture* const TextureKey = Texture;
+    const LE::FRHITexture* const TextureKey = Texture;
     ImportedTextures.Insert(TextureKey, Handle);
     return Handle;
 }
 
-LE::FRFGResourceHandle FRenderGraphBuilderBridge::ImportBuffer(const LE::String& ResourceName, LE::FRALBuffer* Buffer, LE::ERALResourceState InitialState)
+LE::FRFGResourceHandle FRenderGraphBuilderBridge::ImportBuffer(const LE::String& ResourceName, LE::FRHIBuffer* Buffer, LE::ERHIResourceState InitialState)
 {
     if (Buffer == nullptr)
     {
@@ -43,7 +43,7 @@ LE::FRFGResourceHandle FRenderGraphBuilderBridge::ImportBuffer(const LE::String&
     }
 
     const LE::FRFGResourceHandle Handle = Builder->ImportBuffer(ResourceName, Buffer, InitialState);
-    const LE::FRALBuffer* const BufferKey = Buffer;
+    const LE::FRHIBuffer* const BufferKey = Buffer;
     ImportedBuffers.Insert(BufferKey, Handle);
     return Handle;
 }

@@ -131,21 +131,21 @@ struct FWorldRendererFixture
             return false;
         }
 
-        MeshAsset.VertexBuffer = reinterpret_cast<FRALBuffer*>(
+        MeshAsset.VertexBuffer = reinterpret_cast<FRHIBuffer*>(
             static_cast<std::uintptr_t>(0x1000));
         MeshAsset.VertexCount = 3;
-        MeshAsset.IndexBuffer = reinterpret_cast<FRALBuffer*>(
+        MeshAsset.IndexBuffer = reinterpret_cast<FRHIBuffer*>(
             static_cast<std::uintptr_t>(0x1100));
         MeshAsset.IndexCount = 3;
         MeshAsset.IndexFormat = EPixelFormat::R32_UINT;
         MeshAsset.LocalBounds = FRenderBounds(
             Math::Vector3f(-1.0f, -2.0f, -0.5f),
             Math::Vector3f(1.0f, 2.0f, 0.5f));
-        MaterialAssets[0].GraphicsPipeline = reinterpret_cast<FRALPipeline_Graphics*>(
+        MaterialAssets[0].GraphicsPipeline = reinterpret_cast<FRHIPipeline_Graphics*>(
             static_cast<std::uintptr_t>(0x2000));
         MaterialAssets[0].PassMask = ERenderMeshPassMask::SceneColor;
         MaterialAssets[0].BaseColor = Math::Vector4f(1.0f, 0.5f, 0.25f, 0.0f);
-        MaterialAssets[1].GraphicsPipeline = reinterpret_cast<FRALPipeline_Graphics*>(
+        MaterialAssets[1].GraphicsPipeline = reinterpret_cast<FRHIPipeline_Graphics*>(
             static_cast<std::uintptr_t>(0x3000));
         MaterialAssets[1].PassMask = ERenderMeshPassMask::SceneColor;
         MaterialAssets[1].BaseColor = Math::Vector4f(2.0f, 1.0f, 0.5f, 7.0f);
@@ -299,10 +299,10 @@ int RunSnapshotStabilityAndReplacementTests()
     const FRenderPrimitiveId StableId = bFirstBuilt
         ? BeforeReplace.GetRenderScene().Meshes[0].PrimitiveId
         : FRenderPrimitiveId{};
-    FRALPipeline_Graphics* const OldPipeline = bFirstBuilt
+    FRHIPipeline_Graphics* const OldPipeline = bFirstBuilt
         ? BeforeReplace.GetRenderScene().Meshes[0].GraphicsPipeline
         : nullptr;
-    FRALBuffer* const OldIndexBuffer = bFirstBuilt
+    FRHIBuffer* const OldIndexBuffer = bFirstBuilt
         ? BeforeReplace.GetRenderScene().Meshes[0].IndexBuffer
         : nullptr;
 
@@ -326,7 +326,7 @@ int RunSnapshotStabilityAndReplacementTests()
     }
 
     FMeshAsset ReplacementMesh = Fixture.MeshAsset;
-    ReplacementMesh.IndexBuffer = reinterpret_cast<FRALBuffer*>(
+    ReplacementMesh.IndexBuffer = reinterpret_cast<FRHIBuffer*>(
         static_cast<std::uintptr_t>(0x1200));
     ReplacementMesh.IndexCount = 6;
     ReplacementMesh.IndexFormat = EPixelFormat::R16_UINT;
@@ -779,7 +779,7 @@ int RunSnapshotPayloadAndStaleTests()
             Fixture.World, Fixture.Assets, MakeBuildContext(513), Snapshot) ==
             EWorldRenderSnapshotBuildResult::InvalidMeshPayload &&
         !Snapshot.IsPublished(),
-        "non-index RAL format is rejected before publication");
+        "non-index RHI format is rejected before publication");
 
     MeshReplacement.Object = &Fixture.MeshAsset;
     FMeshAssetHandle RestoredMeshHandle;

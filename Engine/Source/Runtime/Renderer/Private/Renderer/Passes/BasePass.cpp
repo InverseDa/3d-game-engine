@@ -1,10 +1,10 @@
 #include "Renderer/BasePass.h"
 
 #include "Execute/RFGPassContext.h"
-#include "RAL/RALBuffer.h"
-#include "RAL/RALCommandList.h"
-#include "RAL/RALPipeline.h"
-#include "RAL/RALTexture.h"
+#include "RHI/RHIBuffer.h"
+#include "RHI/RHICommandList.h"
+#include "RHI/RHIPipeline.h"
+#include "RHI/RHITexture.h"
 #include "Renderer/RenderGraphBuilderBridge.h"
 
 #include <cmath>
@@ -44,9 +44,9 @@ bool IsFiniteNonNegativeRgb(const Math::Vector4f& Color) noexcept
     return true;
 }
 
-bool IsPipelineValid(const FRALPipeline_Graphics& Pipeline) noexcept
+bool IsPipelineValid(const FRHIPipeline_Graphics& Pipeline) noexcept
 {
-    const FRALPipelineDesc_Graphics& Desc = Pipeline.GetDesc();
+    const FRHIPipelineDesc_Graphics& Desc = Pipeline.GetDesc();
     return Desc.RenderTargetCount == 1 &&
         Desc.RenderTargetFormats[0] == SceneColorFormat &&
         Desc.DepthStencilFormat == SceneDepthFormat &&
@@ -63,7 +63,7 @@ bool IsPipelineValid(const FRALPipeline_Graphics& Pipeline) noexcept
         Desc.PushConstants.IsValid();
 }
 
-bool HasBufferUsage(const FRALBuffer& Buffer, const EBufferUsageFlags Usage) noexcept
+bool HasBufferUsage(const FRHIBuffer& Buffer, const EBufferUsageFlags Usage) noexcept
 {
     return (Buffer.GetDesc().UsageFlag & static_cast<uint32>(Usage)) != 0;
 }
@@ -90,10 +90,10 @@ bool IsTextureContractValid(
         return false;
     }
 
-    const FRALTextureDesc& Color = Resources.SceneColorTexture->GetDesc();
-    const FRALTextureDesc& Depth = Resources.SceneDepthTexture->GetDesc();
-    const FRALTextureViewDesc& ColorView = Resources.SceneColorView->GetDesc();
-    const FRALTextureViewDesc& DepthView = Resources.SceneDepthView->GetDesc();
+    const FRHITextureDesc& Color = Resources.SceneColorTexture->GetDesc();
+    const FRHITextureDesc& Depth = Resources.SceneDepthTexture->GetDesc();
+    const FRHITextureViewDesc& ColorView = Resources.SceneColorView->GetDesc();
+    const FRHITextureViewDesc& DepthView = Resources.SceneDepthView->GetDesc();
     if (Color.Width == 0 || Color.Height == 0 || Color.Width != Depth.Width ||
         Color.Height != Depth.Height || Color.Format != SceneColorFormat ||
         Depth.Format != SceneDepthFormat || ColorView.Format != SceneColorFormat ||
@@ -147,7 +147,7 @@ bool FBasePass::IsConfigurationValid(
         {
             return false;
         }
-        const FRALPipelineDesc_Graphics& PipelineDesc = Mesh.GraphicsPipeline->GetDesc();
+        const FRHIPipelineDesc_Graphics& PipelineDesc = Mesh.GraphicsPipeline->GetDesc();
         const uint32 VertexStride = PipelineDesc.VertexBindings[0].Stride;
         const uint32 IndexStride = Mesh.IndexFormat == EPixelFormat::R16_UINT ? 2u : 4u;
         if (!HasBufferUsage(*Mesh.VertexBuffer, EBufferUsageFlags::VertexBuffer) ||
@@ -186,15 +186,15 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
 
     FRFGAccessDesc ColorWrite;
     ColorWrite.Access = ERFGAccessType::Write;
-    ColorWrite.State = ERALResourceState::RenderTarget;
+    ColorWrite.State = ERHIResourceState::RenderTarget;
     ColorWrite.PipelineStage = ERFGPipelineStage::Graphics;
     FRFGAccessDesc DepthAccess = ColorWrite;
-    DepthAccess.State = ERALResourceState::DepthStencilWrite;
+    DepthAccess.State = ERHIResourceState::DepthStencilWrite;
 
     const FRFGResourceHandle SceneColor = Context.GraphBridge->ImportTexture(
-        "SceneColor", Resources.SceneColorTexture, ERALResourceState::Undefined);
+        "SceneColor", Resources.SceneColorTexture, ERHIResourceState::Undefined);
     const FRFGResourceHandle SceneDepth = Context.GraphBridge->ImportTexture(
-        "Depth", Resources.SceneDepthTexture, ERALResourceState::Undefined);
+        "Depth", Resources.SceneDepthTexture, ERHIResourceState::Undefined);
     Context.GraphBridge->Write(Context.PassHandle, SceneColor, ColorWrite);
     Context.GraphBridge->Write(Context.PassHandle, SceneDepth, DepthAccess);
     Context.GraphBridge->MarkOutput(SceneColor);
@@ -202,17 +202,17 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
 
     FRFGAccessDesc VertexRead;
     VertexRead.Access = ERFGAccessType::Read;
-    VertexRead.State = ERALResourceState::VertexBuffer;
+    VertexRead.State = ERHIResourceState::VertexBuffer;
     VertexRead.ShaderStage = EShaderStage::Vertex;
     VertexRead.PipelineStage = ERFGPipelineStage::Graphics;
     FRFGAccessDesc IndexRead = VertexRead;
-    IndexRead.State = ERALResourceState::IndexBuffer;
+    IndexRead.State = ERHIResourceState::IndexBuffer;
     for (const FRenderMeshProxy& Mesh : Context.RenderScene->Meshes)
     {
         const FRFGResourceHandle VertexBuffer = Context.GraphBridge->ImportBuffer(
-            "BasePassVertexBuffer", Mesh.VertexBuffer, ERALResourceState::VertexBuffer);
+            "BasePassVertexBuffer", Mesh.VertexBuffer, ERHIResourceState::VertexBuffer);
         const FRFGResourceHandle IndexBuffer = Context.GraphBridge->ImportBuffer(
-            "BasePassIndexBuffer", Mesh.IndexBuffer, ERALResourceState::IndexBuffer);
+            "BasePassIndexBuffer", Mesh.IndexBuffer, ERHIResourceState::IndexBuffer);
         Context.GraphBridge->Read(Context.PassHandle, VertexBuffer, VertexRead);
         Context.GraphBridge->Read(Context.PassHandle, IndexBuffer, IndexRead);
     }
@@ -225,7 +225,7 @@ void FBasePass::Record(FRenderPassRecordContext& Context)
     {
         return;
     }
-    FRALCommandList* const CommandList = Context.PassContext->GetCommandList();
+    FRHICommandList* const CommandList = Context.PassContext->GetCommandList();
     if (CommandList == nullptr)
     {
         return;
@@ -240,8 +240,8 @@ void FBasePass::Record(FRenderPassRecordContext& Context)
         CommandList->SetGraphicsPipeline(RenderScene.Meshes.Front().GraphicsPipeline);
     }
 
-    const FRALTextureDesc& ColorDesc = Resources.SceneColorTexture->GetDesc();
-    FRALRenderPassDesc RenderPass;
+    const FRHITextureDesc& ColorDesc = Resources.SceneColorTexture->GetDesc();
+    FRHIRenderPassDesc RenderPass;
     RenderPass.RenderArea.Width = ColorDesc.Width;
     RenderPass.RenderArea.Height = ColorDesc.Height;
     RenderPass.ColorAttachmentCount = 1;
@@ -260,11 +260,11 @@ void FBasePass::Record(FRenderPassRecordContext& Context)
     RenderPass.DepthStencilAttachment.ClearStencil = 0;
     CommandList->BeginRenderPass(RenderPass);
 
-    FRALViewport Viewport;
+    FRHIViewport Viewport;
     Viewport.Width = static_cast<float>(ColorDesc.Width);
     Viewport.Height = static_cast<float>(ColorDesc.Height);
     CommandList->SetViewport(Viewport);
-    FRALScissorRect Scissor;
+    FRHIScissorRect Scissor;
     Scissor.Width = static_cast<int32>(ColorDesc.Width);
     Scissor.Height = static_cast<int32>(ColorDesc.Height);
     CommandList->SetScissorRect(Scissor);

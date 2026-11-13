@@ -2,7 +2,7 @@
 
 #include "Asset/AssetTypes.h"
 #include "CoreMinimal.h"
-#include "RAL/RALTypes.h"
+#include "RHI/RHITypes.h"
 
 #include <cmath>
 #include <cstddef>
@@ -12,8 +12,8 @@
 namespace LE
 {
 
-class FRALBuffer;
-class FRALPipeline_Graphics;
+class FRHIBuffer;
+class FRHIPipeline_Graphics;
 
 enum class ERenderMeshPassMask : uint8
 {
@@ -130,10 +130,10 @@ struct FRenderMeshProxy : public FRenderPrimitive
     }
 
     Math::Matrix4f LocalToWorld = Math::Matrix4f::Identity();
-    LE::FRALPipeline_Graphics* GraphicsPipeline = nullptr;
-    LE::FRALBuffer* VertexBuffer = nullptr;
+    LE::FRHIPipeline_Graphics* GraphicsPipeline = nullptr;
+    LE::FRHIBuffer* VertexBuffer = nullptr;
     uint32 VertexCount = 0;
-    LE::FRALBuffer* IndexBuffer = nullptr;
+    LE::FRHIBuffer* IndexBuffer = nullptr;
     uint32 IndexCount = 0;
     EPixelFormat IndexFormat = EPixelFormat::Unknown;
     ERenderMeshPassMask PassMask = ERenderMeshPassMask::All;

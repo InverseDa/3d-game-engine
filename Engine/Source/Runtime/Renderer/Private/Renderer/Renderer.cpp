@@ -4,8 +4,8 @@
 #include "Renderer/RenderPass.h"
 #include "Renderer/RenderPipeline.h"
 #include "Renderer/RenderScene.h"
-#include "RAL/RALDevice.h"
-#include "RAL/RALQueue.h"
+#include "RHI/RHIDevice.h"
+#include "RHI/RHIQueue.h"
 
 namespace LE
 {
@@ -20,7 +20,7 @@ public:
     {
     }
 
-    bool DeferRelease(FRALResource* const Resource) noexcept override
+    bool DeferRelease(FRHIResource* const Resource) noexcept override
     {
         return FrameScope.DeferRelease(Resource);
     }
@@ -152,13 +152,13 @@ ERenderFrameRecordResult FRenderer::RenderFrame(
     ExecuteOptions.bWaitForCompletion = false;
     FRFGFrameSlotReleaseSink DeferredReleaseSink(*FrameContext.FrameScope);
     ExecuteOptions.DeferredReleaseSink = &DeferredReleaseSink;
-    const ERALQueueSubmitResult RecordResult = GraphInstance.Execute(
+    const ERHIQueueSubmitResult RecordResult = GraphInstance.Execute(
         CompileResult, Builder.GetRecordedGraph(), ExecutionContext, ExecuteOptions);
-    if (RecordResult == ERALQueueSubmitResult::Success)
+    if (RecordResult == ERHIQueueSubmitResult::Success)
     {
         return ERenderFrameRecordResult::Success;
     }
-    return RecordResult == ERALQueueSubmitResult::InvalidArguments
+    return RecordResult == ERHIQueueSubmitResult::InvalidArguments
         ? ERenderFrameRecordResult::InvalidArguments
         : ERenderFrameRecordResult::Error;
 }

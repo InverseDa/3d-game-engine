@@ -47,12 +47,12 @@ E:\Projects\3d-game-engine
 | **Application** | Application | `FEngineLoop`、Application 生命周期、确定性 runtime module registry、显式帧阶段与时间上下文 | 7 | Core, Platform |
 | **Asset** | Asset | 持久 Asset/Type ID、typed runtime handle、虚拟 soft path 与同步 registry；定义 opaque Mesh/Material 逻辑类型，不持有 GPU payload | 8 | Core |
 | **Reflection** | Reflection | 稳定 type/property IDs、owned runtime metadata registry、property bag、结构化二进制序列化与显式 provider 生命周期 | 14 | Core |
-| **RAL** | Render Abstraction Layer | 渲染抽象层，封装 Vulkan 底层对象 (Buffer、Texture、Pipeline、Swapchain、CommandList 等) | 27 | Core, Platform, Spdlog, Vulkan |
-| **RFG** | Render Frame Graph | 渲染帧图系统，负责 Pass 编排、资源屏障规划、依赖分析与执行调度 | 42 | Core, RAL |
-| **Renderer** | Renderer | 高层渲染器，定义 RenderPass / RenderPipeline / RenderView、Mesh/Material GPU payload 与正式 BasePass→Composite 管线，对接 Asset、Frame Graph 与 RAL | 22 | Core, Asset, RAL, RFG |
+| **RHI** | Render Hardware Interface | 渲染硬件接口，封装 Vulkan 底层对象 (Buffer、Texture、Pipeline、Swapchain、CommandList 等) | 27 | Core, Platform, Spdlog, Vulkan |
+| **RFG** | Render Frame Graph | 渲染帧图系统，负责 Pass 编排、资源屏障规划、依赖分析与执行调度 | 42 | Core, RHI |
+| **Renderer** | Renderer | 高层渲染器，定义 RenderPass / RenderPipeline / RenderView、Mesh/Material GPU payload 与正式 BasePass→Composite 管线，对接 Asset、Frame Graph 与 RHI | 22 | Core, Asset, RHI, RFG |
 | **World** | World | Entity 生命周期、typed contiguous component storage、Transform hierarchy/dirty world-matrix cache、确定性 tick/deferred command boundary、单线程 native fixed/variable system schedule、Mesh/Material typed handles、primary camera 逻辑组件，以及显式 `FWorld` Reflection P0 provider | 10 | Core, Asset, Reflection |
 | **WorldRenderer** | World Renderer | 从 committed World 与同步 Asset registry 构建 frame-owned immutable render snapshot，选择相机、剔除并确定性排序 indexed mesh proxies | 4 | Core, Asset, Renderer, World |
-| **DemoApplication** | Demo Application | Phase 6 BasePass vertical slice；持有同步 asset registry 和 borrowed Renderer payload，通过 WorldRenderer 构建帧快照并事务化处理 SceneColor/depth resize Replace | 4 | Application, Asset, Core, Platform, Spdlog, RAL, RFG, Reflection, Renderer, World, WorldRenderer |
+| **DemoApplication** | Demo Application | Phase 6 BasePass vertical slice；持有同步 asset registry 和 borrowed Renderer payload，通过 WorldRenderer 构建帧快照并事务化处理 SceneColor/depth resize Replace | 4 | Application, Asset, Core, Platform, Spdlog, RHI, RFG, Reflection, Renderer, World, WorldRenderer |
 | **Launch** | Launch | `WinMain` / `main` 与通用 lifecycle bootstrap | 2 | Core, DemoApplication |
 
 > **注**：文件数统计包含 `.cpp` / `.h` / `.hpp` / `.mm` 等源码文件。
@@ -118,9 +118,9 @@ Spdlog ---> Core ---> Platform ---> Application
                                          | \
                               Renderer --+--> WorldRenderer
 
-Core + Platform + Spdlog + Vulkan ---> RAL ---> RFG ---> Renderer
+Core + Platform + Spdlog + Vulkan ---> RHI ---> RFG ---> Renderer
 
-Application / Platform / Asset / RAL / RFG / Reflection / Renderer / World / WorldRenderer / Spdlog
+Application / Platform / Asset / RHI / RFG / Reflection / Renderer / World / WorldRenderer / Spdlog
                          |
                          v
                   DemoApplication
@@ -145,13 +145,13 @@ Application / Platform / Asset / RAL / RFG / Reflection / Renderer / World / Wor
 | Platform | Core |
 | Application | Core, Platform |
 | Asset | Core |
-| RAL | Core, Platform, Spdlog, Vulkan |
-| RFG | Core, RAL |
-| Renderer | Core, Asset, RAL, RFG |
+| RHI | Core, Platform, Spdlog, Vulkan |
+| RFG | Core, RHI |
+| Renderer | Core, Asset, RHI, RFG |
 | Reflection | Core |
 | World | Core, Asset, Reflection |
 | WorldRenderer | Core, Asset, Renderer, World |
-| DemoApplication | Application, Asset, Core, Platform, Spdlog, RAL, RFG, Reflection, Renderer, World, WorldRenderer |
+| DemoApplication | Application, Asset, Core, Platform, Spdlog, RHI, RFG, Reflection, Renderer, World, WorldRenderer |
 | Launch | Core, DemoApplication |
 | LimitlessEngine (主工程) | 由 Launch 入口沿 public link graph 到达全部运行时依赖 |
 
@@ -171,10 +171,10 @@ P0 的语言、namespace、Core 类型、ownership 与容器规范由
 
 | 前缀 | 含义 | 示例 |
 |------|------|------|
-| `F` | 普通 native/value/RAII 类型（非 tracing GC） | `FNonCopyable`、`FPlatformWindow`、`FRALBuffer` |
+| `F` | 普通 native/value/RAII 类型（非 tracing GC） | `FNonCopyable`、`FPlatformWindow`、`FRHIBuffer` |
 | `L` | 未来 managed lifecycle / tracing GC 对象 | 暂不随意新增 |
 | `T` | **Template** (模板类 / 泛型) | `TVulkanResourceBase` |
-| `E` | **Enum** (枚举类型) | `ERALPlatform`、`EPixelFormat`、`EQueueType` |
+| `E` | **Enum** (枚举类型) | `ERHIPlatform`、`EPixelFormat`、`EQueueType` |
 | `I` | Interface (接口，项目中暂未广泛使用) | — |
 
 其中 `F` 表示不参与未来 tracing GC 的普通 native/value/RAII 类型；`L` 保留给将来受
@@ -185,5 +185,5 @@ managed lifecycle/GC 契约机械约束的对象。P0 保留既有类型、函�
 
 - 类型别名：使用 `int8`、`int32`、`uint32`、`float32` 等明确位宽的别名。
 - 宏命名：全大写 + 下划线，如 `LE_SMALL_NUMBER`、`LE_KINDA_SMALL_NUMBER`。
-- 模块 API 宏：由构建系统自动生成，格式为 `[MODULE_NAME]_API` (如 `CORE_API`、`RAL_API`)。
-- 文件/目录：模块内按 `Public/` 与 `Private/` 分离接口与实现；头文件按子系统分目录存放 (如 `RAL/`、`Renderer/`)。
+- 模块 API 宏：由构建系统自动生成，格式为 `[MODULE_NAME]_API` (如 `CORE_API`、`RHI_API`)。
+- 文件/目录：模块内按 `Public/` 与 `Private/` 分离接口与实现；头文件按子系统分目录存放 (如 `RHI/`、`Renderer/`)。

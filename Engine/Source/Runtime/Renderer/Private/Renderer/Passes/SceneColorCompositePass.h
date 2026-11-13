@@ -1,10 +1,10 @@
 #pragma once
 
 #include "Execute/RFGPassContext.h"
-#include "RAL/RALBindGroup.h"
-#include "RAL/RALCommandList.h"
-#include "RAL/RALPipeline.h"
-#include "RAL/RALTexture.h"
+#include "RHI/RHIBindGroup.h"
+#include "RHI/RHICommandList.h"
+#include "RHI/RHIPipeline.h"
+#include "RHI/RHITexture.h"
 #include "Renderer/BasePassCompositePipeline.h"
 #include "Renderer/RenderGraphBuilderBridge.h"
 #include "Renderer/RenderPass.h"
@@ -24,12 +24,12 @@ inline bool IsSceneColorCompositeConfigurationValid(
     {
         return false;
     }
-    const FRALTextureDesc& BackBuffer = Desc.BackBufferView->GetTexture()->GetDesc();
-    const FRALTextureDesc& SceneColor =
+    const FRHITextureDesc& BackBuffer = Desc.BackBufferView->GetTexture()->GetDesc();
+    const FRHITextureDesc& SceneColor =
         Desc.BasePassResources.SceneColorTexture->GetDesc();
-    const FRALTextureViewDesc& BackBufferView = Desc.BackBufferView->GetDesc();
-    const FRALPipelineDesc_Graphics& Pipeline = Desc.CompositePipeline->GetDesc();
-    const FRALBindGroupDesc& BindGroup = Desc.CompositeBindGroup->GetDesc();
+    const FRHITextureViewDesc& BackBufferView = Desc.BackBufferView->GetDesc();
+    const FRHIPipelineDesc_Graphics& Pipeline = Desc.CompositePipeline->GetDesc();
+    const FRHIBindGroupDesc& BindGroup = Desc.CompositeBindGroup->GetDesc();
     const EPixelFormat BackBufferViewFormat = BackBufferView.Format == EPixelFormat::Unknown
         ? BackBuffer.Format
         : BackBufferView.Format;
@@ -74,22 +74,22 @@ public:
         }
         FRFGAccessDesc GraphicsRead;
         GraphicsRead.Access = ERFGAccessType::Read;
-        GraphicsRead.State = ERALResourceState::ShaderResource;
+        GraphicsRead.State = ERHIResourceState::ShaderResource;
         GraphicsRead.ShaderStage = EShaderStage::Pixel;
         GraphicsRead.PipelineStage = ERFGPipelineStage::Graphics;
         FRFGAccessDesc GraphicsWrite;
         GraphicsWrite.Access = ERFGAccessType::Write;
-        GraphicsWrite.State = ERALResourceState::RenderTarget;
+        GraphicsWrite.State = ERHIResourceState::RenderTarget;
         GraphicsWrite.PipelineStage = ERFGPipelineStage::Graphics;
 
         const FRFGResourceHandle SceneColor = Context.GraphBridge->ImportTexture(
             "SceneColor",
             Desc.BasePassResources.SceneColorTexture,
-            ERALResourceState::Undefined);
+            ERHIResourceState::Undefined);
         const FRFGResourceHandle BackBuffer = Context.GraphBridge->ImportTexture(
             "BackBuffer",
             Desc.BackBufferView->GetTexture(),
-            ERALResourceState::Undefined);
+            ERHIResourceState::Undefined);
         Context.GraphBridge->Read(Context.PassHandle, SceneColor, GraphicsRead);
         Context.GraphBridge->Write(Context.PassHandle, BackBuffer, GraphicsWrite);
         Context.GraphBridge->MarkOutput(BackBuffer);
@@ -102,7 +102,7 @@ public:
         {
             return;
         }
-        FRALCommandList* const CommandList = Context.PassContext->GetCommandList();
+        FRHICommandList* const CommandList = Context.PassContext->GetCommandList();
         if (CommandList == nullptr)
         {
             return;
@@ -110,9 +110,9 @@ public:
         CommandList->SetGraphicsPipeline(Desc.CompositePipeline);
         CommandList->SetBindGroup(0, Desc.CompositeBindGroup);
 
-        const FRALTextureDesc& BackBuffer =
+        const FRHITextureDesc& BackBuffer =
             Desc.BackBufferView->GetTexture()->GetDesc();
-        FRALRenderPassDesc RenderPass;
+        FRHIRenderPassDesc RenderPass;
         RenderPass.RenderArea.Width = BackBuffer.Width;
         RenderPass.RenderArea.Height = BackBuffer.Height;
         RenderPass.ColorAttachmentCount = 1;
@@ -122,11 +122,11 @@ public:
         RenderPass.ColorAttachments[0].ClearColor[3] = 1.0f;
         CommandList->BeginRenderPass(RenderPass);
 
-        FRALViewport Viewport;
+        FRHIViewport Viewport;
         Viewport.Width = static_cast<float>(BackBuffer.Width);
         Viewport.Height = static_cast<float>(BackBuffer.Height);
         CommandList->SetViewport(Viewport);
-        FRALScissorRect Scissor;
+        FRHIScissorRect Scissor;
         Scissor.Width = static_cast<int32>(BackBuffer.Width);
         Scissor.Height = static_cast<int32>(BackBuffer.Height);
         CommandList->SetScissorRect(Scissor);

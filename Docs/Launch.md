@@ -9,7 +9,7 @@ Launch 现在只负责最终 OS 入口和通用 bootstrap：
 - 从 `DemoApplication` 工厂取得带 creator-side deleter 的 Application owner。
 - 初始化并驱动 `FEngineLoop`，最后显式 Shutdown。
 
-Launch 不再包含窗口实现、平台消息循环、shader compiler、RAL/RFG/Renderer/World demo
+Launch 不再包含窗口实现、平台消息循环、shader compiler、RHI/RFG/Renderer/World demo
 资源或平台分叉的主循环。
 
 ```text
@@ -32,7 +32,7 @@ WinMain / main
 Launch -> Core
        -> DemoApplication -> Application
                           -> Platform
-                          -> RAL / RFG / Renderer / World
+                          -> RHI / RFG / Renderer / World
 ```
 
 Launch 对 Application 只有 bootstrap 层的依赖，不包含上述实现类型。Application 生命周期、

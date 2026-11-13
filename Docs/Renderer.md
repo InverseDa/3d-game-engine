@@ -2,11 +2,11 @@
 
 ## 1. 模块职责
 
-Renderer 是引擎的高层渲染模块，基于 **RFG（Render Frame Graph）** + **RAL（Render Abstraction Layer）** 构建可扩展的渲染管线。
+Renderer 是引擎的高层渲染模块，基于 **RFG（Render Frame Graph）** + **RHI（Render Hardware Interface）** 构建可扩展的渲染管线。
 
 Renderer is the sole owner of the complete `FMeshAsset` and `FMaterialAsset`
 GPU payload definitions. Asset owns only their stable logical type IDs, while
-World stores opaque typed handles and has no Renderer/RAL dependency. The
+World stores opaque typed handles and has no Renderer/RHI dependency. The
 separate WorldRenderer module resolves those handles into an immutable,
 frame-owned `FRenderScene` snapshot for synchronous command recording.
 
@@ -15,7 +15,7 @@ frame-owned `FRenderScene` snapshot for synchronous command recording.
 - 接收游戏线程提交的场景描述（`FRenderScene`）和视图参数（`FRenderView`）。
 - 通过可插拔的 `IRenderPipeline` 将高层渲染意图转换为有序的 `IRenderPass` 序列。
 - 借助 `FRenderGraphBuilderBridge` 将 Pass 的资源依赖声明转译为 RFG 的图节点与边。
-- 驱动 RFG 完成图的编译与执行，最终输出到 `FRALSwapchain`。
+- 驱动 RFG 完成图的编译与执行，最终输出到 `FRHISwapchain`。
 
 简而言之，Renderer 是 **场景逻辑 → 渲染指令 → GPU 提交** 之间的 orchestration 层。
 
@@ -41,11 +41,11 @@ frame-owned `FRenderScene` snapshot for synchronous command recording.
 
 | 结构/成员 | 说明 |
 |-----------|------|
-| `FRenderView::Viewport` | `FRALViewport`，视口矩形与深度范围 |
+| `FRenderView::Viewport` | `FRHIViewport`，视口矩形与深度范围 |
 | `FRenderView::Profile` | `ERenderPlatformProfile`（`Desktop` / `Mobile`） |
 | `FRenderView::ShadingPath` | `EShadingPath`（`Deferred` / `Forward`） |
 | `FRenderView::bIsEditorView` | 是否为编辑器视图 |
-| `FRenderTargetBinding` | BackBuffer、SceneColor、DepthStencil 的 `FRALTextureView*` 绑定 |
+| `FRenderTargetBinding` | BackBuffer、SceneColor、DepthStencil 的 `FRHITextureView*` 绑定 |
 | `FRenderViewFamily` | 视图数组 + 主 Swapchain + 渲染目标绑定 |
 
 ### 2.3 RenderPass
@@ -53,7 +53,7 @@ frame-owned `FRenderScene` snapshot for synchronous command recording.
 `IRenderPass` 是渲染通道的最小可执行单元，采用 **两阶段模型**：
 
 - **Setup 阶段**：声明资源读写依赖（通过 `FRenderGraphBuilderBridge`），RFG 据此构建依赖图。
-- **Record 阶段**：在 RFG 执行回调中录制具体的 RAL 命令（`FRALCommandList`）。
+- **Record 阶段**：在 RFG 执行回调中录制具体的 RHI 命令（`FRHICommandList`）。
 
 ```cpp
 class IRenderPass {
@@ -100,7 +100,7 @@ class IRenderPipeline {
 |    RFG (Frame Graph)     |  <- FRFGInstance / FRFGBuilder
 |  图构建 / 编译 / 调度 / 执行 |
 +--------------------------+
-|    RAL (Abstraction)     |  <- FRALCommandList / FRALDevice
+|    RHI (Abstraction)     |  <- FRHICommandList / FRHIDevice
 |  跨平台 GPU 指令抽象      |
 +--------------------------+
 |    Platform Backend      |  <- Vulkan / D3D12 / Metal ...
@@ -108,9 +108,9 @@ class IRenderPipeline {
 ```
 
 - **Renderer**：面向场景，定义高层概念。
-- **RFG Bridge**：解耦 Renderer 与 RFG，避免 Renderer 直接依赖 RFG 内部类型；同时缓存已导入的 RAL 资源句柄，防止重复导入。
+- **RFG Bridge**：解耦 Renderer 与 RFG，避免 Renderer 直接依赖 RFG 内部类型；同时缓存已导入的 RHI 资源句柄，防止重复导入。
 - **RFG**：负责资源生命周期、同步屏障、执行顺序优化。
-- **RAL**：负责命令列表、管线状态、资源描述的跨平台抽象。
+- **RHI**：负责命令列表、管线状态、资源描述的跨平台抽象。
 
 ---
 
@@ -164,7 +164,7 @@ Pipeline.AddPass(&PassB);
 
 桥接 Renderer 与 RFG 的关键类，职责：
 
-- `ImportTexture` / `ImportBuffer`：将 `FRALTexture*` / `FRALBuffer*` 导入 RFG，返回 `FRFGResourceHandle`；重复导入会返回已缓存的句柄。
+- `ImportTexture` / `ImportBuffer`：将 `FRHITexture*` / `FRHIBuffer*` 导入 RFG，返回 `FRFGResourceHandle`；重复导入会返回已缓存的句柄。
 - `Read` / `Write`：在 Pass 的 Setup 阶段声明资源访问。
 - `MarkOutput`：标记图的外部输出资源（如 BackBuffer）。
 
@@ -196,7 +196,7 @@ Pipeline.AddPass(&PassB);
 
 - Setup 只读取同一 SceneColor 并写/输出 BackBuffer，因此真实的 BasePass→Composite
   依赖和 RenderTarget→ShaderRead barrier 完全由 RFG 推导；Composite 不读取 depth。
-- Record 仅使用 RAL render pass、pipeline、bind group 与 fullscreen draw，不含 Vulkan API。
+- Record 仅使用 RHI render pass、pipeline、bind group 与 fullscreen draw，不含 Vulkan API。
 - 即使 BasePass 零可见 mesh，Composite 仍采样并输出 clear SceneColor。
 
 ### 5.2 SimpleRenderPipeline
@@ -228,7 +228,7 @@ enum class ERenderPlatformProfile : uint8 {
 |------|------|
 | **Core** | 基础类型（`LE::String`、`LE::FNonCopyable`、平台宏） |
 | **Asset** | persistent asset IDs 与 opaque Mesh/Material logical identities |
-| **RAL** | 渲染抽象层（`FRALCommandList`、`FRALDevice`、`FRALSwapchain`、`FRALTexture`、`FRALBuffer` 等） |
+| **RHI** | 渲染硬件接口（`FRHICommandList`、`FRHIDevice`、`FRHISwapchain`、`FRHITexture`、`FRHIBuffer` 等） |
 | **RFG** | 渲染帧图（`FRFGInstance`、`FRFGBuilder`、`FRFGPassHandle`、`FRFGResourceHandle`、`FRFGPassContext` 等） |
 
 Renderer 自身被更高层模块（如 Game、Editor）依赖，作为渲染调用的统一入口。
@@ -274,7 +274,7 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 
 ### 9.2 材质系统
 - 引入 `FMaterial` / `FMaterialInstance` 抽象，管理 Shader、纹理采样器、常量缓冲。
-- 在 `FRenderMeshProxy` 中替换裸 `FRALPipeline_Graphics*` 为材质引用。
+- 在 `FRenderMeshProxy` 中替换裸 `FRHIPipeline_Graphics*` 为材质引用。
 - 支持 Shader 变体（Keyword / Feature Level）和运行时热重载。
 
 ### 9.3 后处理
@@ -313,6 +313,6 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 | `Private/Renderer/Renderer.cpp` | `FRenderer` 实现 |
 | `Private/Renderer/RenderFrameScheduler.cpp` | 两槽 Acquire/record/Submit/Present 状态机 |
 | `Private/Renderer/RenderGraphBuilderBridge.cpp` | `FRenderGraphBuilderBridge` 实现 |
-| `Private/Renderer/Passes/BasePass.cpp` | BasePass preflight、RFG Setup 与 RAL Record |
+| `Private/Renderer/Passes/BasePass.cpp` | BasePass preflight、RFG Setup 与 RHI Record |
 | `Private/Renderer/Passes/SceneColorCompositePass.h` | backend-neutral SceneColor composite pass |
 | `Private/Renderer/Pipelines/BasePassCompositePipeline.cpp` | 正式双 Pass pipeline 实现 |

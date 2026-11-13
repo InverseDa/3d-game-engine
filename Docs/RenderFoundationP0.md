@@ -2,13 +2,13 @@
 
 ## 冻结范围
 
-RFG/RAL P0 于 2026-08-06 关闭并冻结。冻结面为现有 RFG Record/Compile/Execute 路径及其 Vulkan RAL Dynamic Rendering 后端，包括 single-RT、最多 8 路 MRT、可选 `D32_FLOAT` / `D24_UNORM_S8_UINT` 深度模板，以及双 Pass 的 offscreen-composite 演示。
+RFG/RHI P0 于 2026-08-06 关闭并冻结。冻结面为现有 RFG Record/Compile/Execute 路径及其 Vulkan RHI Dynamic Rendering 后端，包括 single-RT、最多 8 路 MRT、可选 `D32_FLOAT` / `D24_UNORM_S8_UINT` 深度模板，以及双 Pass 的 offscreen-composite 演示。
 
 本次收口不增加新的 Renderer 特性。Swapchain 帧调度、移除逐帧 `WaitIdle`、按 frame slot 管理瞬态资源，以及真实 BasePass 均保留给 Roadmap 后续阶段。
 
 ## 必须保持的约束
 
-- `FRALPipelineDesc_Graphics` 与 `FRALRenderPassDesc` 的颜色附件数量、格式，以及深度模板附件的存在性和格式必须一致。
+- `FRHIPipelineDesc_Graphics` 与 `FRHIRenderPassDesc` 的颜色附件数量、格式，以及深度模板附件的存在性和格式必须一致。
 - 一个 rendering scope 至少包含一个颜色或深度模板附件；颜色附件不得超过 8 个。
 - 同一 scope 的全部附件必须具有相同的有效 mip 尺寸，RenderArea 必须位于该尺寸内。
 - Dynamic Rendering 不做隐式 layout transition。颜色写入必须在 Pass 中声明 `RenderTarget`；当前可写深度模板用法必须在 Begin 前声明并转换到 `DepthStencilWrite`。
@@ -29,11 +29,11 @@ Engine\Builder\LimitlessBuilder.bat build --platform Win64 --config Debug --type
 @(Select-String -Path Firefly.log -SimpleMatch '[VK Validation][Error]').Count
 ```
 
-不得接受 Validation 不可用，或 RAL 销毁前被强制终止的进程结果。
+不得接受 Validation 不可用，或 RHI 销毁前被强制终止的进程结果。
 
 ## 验证变体复现
 
-默认 checkout 同时覆盖 offscreen single-RT 与 composite。MRT 和 depth/stencil 是同一演示的验证专用变体，必须在隔离 worktree 中运行，不能留在冻结源码中。
+冻结基线 `b2ed297` 默认覆盖 offscreen single-RT 与 composite。MRT 和 depth/stencil 是同一演示的验证专用变体，必须在隔离 worktree 中运行，不能留在冻结源码中。
 
 ### dual-MRT + composite
 
@@ -55,8 +55,8 @@ Engine\Builder\LimitlessBuilder.bat build --platform Win64 --config Debug --type
 git worktree add --detach C:\tmp\limitless-phase0-depth b2ed297
 git diff --binary b2ed297 85649c3c2af4f053b7f1edd3748f93498bf2f370 -- `
   Engine/Source/Runtime/Launch/Private/Windows/LaunchWindows.cpp `
-  Engine/Source/Runtime/RAL/Private/Vulkan/VulkanCommandList.cpp `
-  Engine/Source/Runtime/RAL/Private/Vulkan/VulkanPipeline.cpp `
+  ':(glob)Engine/Source/Runtime/*/Private/Vulkan/VulkanCommandList.cpp' `
+  ':(glob)Engine/Source/Runtime/*/Private/Vulkan/VulkanPipeline.cpp' `
   Engine/Source/Runtime/Renderer/Private/Renderer/Passes/TriangleCompositePasses.h `
   Engine/Source/Runtime/Renderer/Public/Renderer/DemoRenderPipelines.h |
   git -C C:\tmp\limitless-phase0-depth apply --whitespace=nowarn -

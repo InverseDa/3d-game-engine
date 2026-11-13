@@ -18,8 +18,8 @@ struct FRFGDependencyEdge
 struct FRFGBarrierTransition
 {
     FRFGResourceHandle Resource;
-    LE::ERALResourceState BeforeState = LE::ERALResourceState::Unknown;
-    LE::ERALResourceState AfterState  = LE::ERALResourceState::Unknown;
+    LE::ERHIResourceState BeforeState = LE::ERHIResourceState::Unknown;
+    LE::ERHIResourceState AfterState  = LE::ERHIResourceState::Unknown;
     LE::EShaderStage BeforeShaderStage = LE::EShaderStage::None;
     LE::EShaderStage AfterShaderStage  = LE::EShaderStage::None;
     ERFGPipelineStage BeforeStage = ERFGPipelineStage::None;

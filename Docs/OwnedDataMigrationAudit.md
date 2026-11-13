@@ -19,7 +19,7 @@ permission to use an STL owner for ordinary engine state.
 ## Module batch results
 
 - Core: public logger STL ownership removed; exact spdlog adapters listed above.
-- RAL: public descriptions and all Vulkan temporary arrays use engine arrays.
+- RHI: public descriptions and all Vulkan temporary arrays use engine arrays.
 - RFG: plans, callbacks, registries, caches, graphs, and compiler temporaries use engine owners.
 - Renderer: scene/view/pipeline storage, callbacks, bridge maps, PImpls, and draw lists use engine owners.
 - World: world component and extracted render-scene storage use engine arrays.

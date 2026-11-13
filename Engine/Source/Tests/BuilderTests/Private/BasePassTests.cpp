@@ -4,11 +4,11 @@
 #include "Compile/RFGCompiledPlan.h"
 #include "Compile/RFGCompiler.h"
 #include "Execute/RFGPassContext.h"
-#include "RAL/RALBindGroup.h"
-#include "RAL/RALBuffer.h"
-#include "RAL/RALCommandList.h"
-#include "RAL/RALPipeline.h"
-#include "RAL/RALTexture.h"
+#include "RHI/RHIBindGroup.h"
+#include "RHI/RHIBuffer.h"
+#include "RHI/RHICommandList.h"
+#include "RHI/RHIPipeline.h"
+#include "RHI/RHITexture.h"
 #include "Record/RFGBuilder.h"
 #include "Record/RFGRecordedGraph.h"
 #include "Renderer/RenderGraphBuilderBridge.h"
@@ -38,55 +38,55 @@ constexpr EShaderStage BasePassStages = static_cast<EShaderStage>(
     static_cast<uint8>(EShaderStage::Vertex) |
     static_cast<uint8>(EShaderStage::Pixel));
 
-class FBasePassTestBuffer final : public FRALBuffer
+class FBasePassTestBuffer final : public FRHIBuffer
 {
 public:
     void* Map(uint64, uint64) override { return nullptr; }
     void Unmap() override {}
-    const FRALBufferDesc& GetDesc() const override { return Desc; }
+    const FRHIBufferDesc& GetDesc() const override { return Desc; }
 
-    FRALBufferDesc Desc;
+    FRHIBufferDesc Desc;
 };
 
-class FBasePassTestTexture final : public FRALTexture
+class FBasePassTestTexture final : public FRHITexture
 {
 public:
-    const FRALTextureDesc& GetDesc() const override { return Desc; }
+    const FRHITextureDesc& GetDesc() const override { return Desc; }
 
-    FRALTextureDesc Desc;
+    FRHITextureDesc Desc;
 };
 
-class FBasePassTestTextureView final : public FRALTextureView
+class FBasePassTestTextureView final : public FRHITextureView
 {
 public:
-    FRALTexture* GetTexture() const override { return Desc.Texture; }
-    const FRALTextureViewDesc& GetDesc() const override { return Desc; }
+    FRHITexture* GetTexture() const override { return Desc.Texture; }
+    const FRHITextureViewDesc& GetDesc() const override { return Desc; }
 
-    FRALTextureViewDesc Desc;
+    FRHITextureViewDesc Desc;
 };
 
-class FBasePassTestPipeline final : public FRALPipeline_Graphics
+class FBasePassTestPipeline final : public FRHIPipeline_Graphics
 {
 public:
-    const FRALPipelineDesc_Graphics& GetDesc() const override { return Desc; }
+    const FRHIPipelineDesc_Graphics& GetDesc() const override { return Desc; }
 
-    FRALPipelineDesc_Graphics Desc;
+    FRHIPipelineDesc_Graphics Desc;
 };
 
-class FBasePassTestBindGroupLayout final : public FRALBindGroupLayout
+class FBasePassTestBindGroupLayout final : public FRHIBindGroupLayout
 {
 public:
-    const FRALBindGroupLayoutDesc& GetDesc() const override { return Desc; }
+    const FRHIBindGroupLayoutDesc& GetDesc() const override { return Desc; }
 
-    FRALBindGroupLayoutDesc Desc;
+    FRHIBindGroupLayoutDesc Desc;
 };
 
-class FBasePassTestBindGroup final : public FRALBindGroup
+class FBasePassTestBindGroup final : public FRHIBindGroup
 {
 public:
-    const FRALBindGroupDesc& GetDesc() const override { return Desc; }
+    const FRHIBindGroupDesc& GetDesc() const override { return Desc; }
 
-    FRALBindGroupDesc Desc;
+    FRHIBindGroupDesc Desc;
 };
 
 enum class EBasePassCommandEvent : uint8
@@ -104,7 +104,7 @@ enum class EBasePassCommandEvent : uint8
 
 struct FRecordedIndexBinding
 {
-    FRALBuffer* Buffer = nullptr;
+    FRHIBuffer* Buffer = nullptr;
     EPixelFormat Format = EPixelFormat::Unknown;
 };
 
@@ -115,14 +115,14 @@ struct FRecordedPushConstants
     uint8 Bytes[sizeof(FBasePassObjectConstants)]{};
 };
 
-class FBasePassTestCommandList final : public FRALCommandList
+class FBasePassTestCommandList final : public FRHICommandList
 {
 public:
     void Begin() override {}
     void End() override {}
-    void ResourceBarriers(const FRALBarrierBatch&) override {}
+    void ResourceBarriers(const FRHIBarrierBatch&) override {}
 
-    void BeginRenderPass(const FRALRenderPassDesc& Desc) override
+    void BeginRenderPass(const FRHIRenderPassDesc& Desc) override
     {
         Events.PushBack(EBasePassCommandEvent::BeginRenderPass);
         RenderPass = Desc;
@@ -133,32 +133,32 @@ public:
         Events.PushBack(EBasePassCommandEvent::EndRenderPass);
         ++EndRenderPassCount;
     }
-    void SetGraphicsPipeline(FRALPipeline_Graphics* Pipeline) override
+    void SetGraphicsPipeline(FRHIPipeline_Graphics* Pipeline) override
     {
         Events.PushBack(EBasePassCommandEvent::BindPipeline);
         Pipelines.PushBack(Pipeline);
     }
-    void SetViewport(const FRALViewport& InViewport) override
+    void SetViewport(const FRHIViewport& InViewport) override
     {
         Events.PushBack(EBasePassCommandEvent::SetViewport);
         Viewport = InViewport;
     }
-    void SetScissorRect(const FRALScissorRect& InScissor) override
+    void SetScissorRect(const FRHIScissorRect& InScissor) override
     {
         Events.PushBack(EBasePassCommandEvent::SetScissor);
         Scissor = InScissor;
     }
-    void SetVertexBuffer(uint32, FRALBuffer* Buffer, uint64) override
+    void SetVertexBuffer(uint32, FRHIBuffer* Buffer, uint64) override
     {
         Events.PushBack(EBasePassCommandEvent::SetVertex);
         VertexBuffers.PushBack(Buffer);
     }
-    void SetIndexBuffer(FRALBuffer* Buffer, uint64, EPixelFormat Format) override
+    void SetIndexBuffer(FRHIBuffer* Buffer, uint64, EPixelFormat Format) override
     {
         Events.PushBack(EBasePassCommandEvent::SetIndex);
         IndexBuffers.PushBack(FRecordedIndexBinding{Buffer, Format});
     }
-    void SetBindGroup(uint32, FRALBindGroup*) override {}
+    void SetBindGroup(uint32, FRHIBindGroup*) override {}
     void SetPushConstants(EShaderStage Stage, const void* Data, uint32 Size) override
     {
         Events.PushBack(EBasePassCommandEvent::PushConstants);
@@ -179,14 +179,14 @@ public:
     }
 
     Array<EBasePassCommandEvent> Events;
-    Array<FRALPipeline_Graphics*> Pipelines;
-    Array<FRALBuffer*> VertexBuffers;
+    Array<FRHIPipeline_Graphics*> Pipelines;
+    Array<FRHIBuffer*> VertexBuffers;
     Array<FRecordedIndexBinding> IndexBuffers;
     Array<FRecordedPushConstants> Pushes;
     Array<uint32> DrawIndexCounts;
-    FRALRenderPassDesc RenderPass;
-    FRALViewport Viewport;
-    FRALScissorRect Scissor;
+    FRHIRenderPassDesc RenderPass;
+    FRHIViewport Viewport;
+    FRHIScissorRect Scissor;
     uint32 BeginRenderPassCount = 0;
     uint32 EndRenderPassCount = 0;
 };
@@ -623,7 +623,7 @@ bool HasAccess(
     const FRFGPassNode& Pass,
     const FRFGResourceHandle Resource,
     const ERFGAccessType Access,
-    const ERALResourceState State) noexcept
+    const ERHIResourceState State) noexcept
 {
     for (const FRFGPassResourceAccess& Candidate : Pass.ResourceAccesses)
     {
@@ -639,8 +639,8 @@ bool HasAccess(
 bool HasTransition(
     const FRFGCompiledPass& Pass,
     const FRFGResourceHandle Resource,
-    const ERALResourceState Before,
-    const ERALResourceState After) noexcept
+    const ERHIResourceState Before,
+    const ERHIResourceState After) noexcept
 {
     for (const FRFGBarrierTransition& Barrier : Pass.PreBarriers)
     {
@@ -669,13 +669,13 @@ int RunBasePassGraphContractTests()
     Pass.Setup(Setup);
 
     const FRFGResourceHandle SceneColor = Bridge.ImportTexture(
-        "SceneColor", &Fixture.Color, ERALResourceState::Undefined);
+        "SceneColor", &Fixture.Color, ERHIResourceState::Undefined);
     const FRFGResourceHandle SceneDepth = Bridge.ImportTexture(
-        "Depth", &Fixture.Depth, ERALResourceState::Undefined);
+        "Depth", &Fixture.Depth, ERHIResourceState::Undefined);
     const FRFGResourceHandle Vertex0 = Bridge.ImportBuffer(
-        "BasePassVertexBuffer", &Fixture.VertexBuffers[0], ERALResourceState::VertexBuffer);
+        "BasePassVertexBuffer", &Fixture.VertexBuffers[0], ERHIResourceState::VertexBuffer);
     const FRFGResourceHandle Index0 = Bridge.ImportBuffer(
-        "BasePassIndexBuffer", &Fixture.IndexBuffers[0], ERALResourceState::IndexBuffer);
+        "BasePassIndexBuffer", &Fixture.IndexBuffers[0], ERHIResourceState::IndexBuffer);
 
     const FRFGPassHandle CompositeHandle = Builder.AddPass(
         "Composite", "Composite", {}, ERFGPassFlags::None, ERFGQueueType::Graphics);
@@ -685,30 +685,30 @@ int RunBasePassGraphContractTests()
     BackBuffer.Desc.Format = EPixelFormat::B8G8R8A8_SRGB;
     BackBuffer.Desc.bIsRenderTarget = true;
     const FRFGResourceHandle BackBufferHandle = Bridge.ImportTexture(
-        "BackBuffer", &BackBuffer, ERALResourceState::Undefined);
+        "BackBuffer", &BackBuffer, ERHIResourceState::Undefined);
     FRFGAccessDesc ColorRead;
     ColorRead.Access = ERFGAccessType::Read;
-    ColorRead.State = ERALResourceState::ShaderResource;
+    ColorRead.State = ERHIResourceState::ShaderResource;
     ColorRead.ShaderStage = EShaderStage::Pixel;
     ColorRead.PipelineStage = ERFGPipelineStage::Graphics;
     Bridge.Read(CompositeHandle, SceneColor, ColorRead);
     FRFGAccessDesc BackBufferWrite = ColorRead;
     BackBufferWrite.Access = ERFGAccessType::Write;
-    BackBufferWrite.State = ERALResourceState::RenderTarget;
+    BackBufferWrite.State = ERHIResourceState::RenderTarget;
     Bridge.Write(CompositeHandle, BackBufferHandle, BackBufferWrite);
     Bridge.MarkOutput(BackBufferHandle);
 
     const FRFGRecordedGraph& Graph = Builder.GetRecordedGraph();
     const FRFGPassNode& BaseNode = Graph.GetPassNode(BaseHandle);
     Failures += Expect(
-        Graph.GetResourceNode(SceneColor).InitialState == ERALResourceState::Undefined &&
-        Graph.GetResourceNode(SceneDepth).InitialState == ERALResourceState::Undefined &&
-        Graph.GetResourceNode(Vertex0).InitialState == ERALResourceState::VertexBuffer &&
-        Graph.GetResourceNode(Index0).InitialState == ERALResourceState::IndexBuffer &&
-        HasAccess(BaseNode, SceneColor, ERFGAccessType::Write, ERALResourceState::RenderTarget) &&
-        HasAccess(BaseNode, SceneDepth, ERFGAccessType::Write, ERALResourceState::DepthStencilWrite) &&
-        HasAccess(BaseNode, Vertex0, ERFGAccessType::Read, ERALResourceState::VertexBuffer) &&
-        HasAccess(BaseNode, Index0, ERFGAccessType::Read, ERALResourceState::IndexBuffer) &&
+        Graph.GetResourceNode(SceneColor).InitialState == ERHIResourceState::Undefined &&
+        Graph.GetResourceNode(SceneDepth).InitialState == ERHIResourceState::Undefined &&
+        Graph.GetResourceNode(Vertex0).InitialState == ERHIResourceState::VertexBuffer &&
+        Graph.GetResourceNode(Index0).InitialState == ERHIResourceState::IndexBuffer &&
+        HasAccess(BaseNode, SceneColor, ERFGAccessType::Write, ERHIResourceState::RenderTarget) &&
+        HasAccess(BaseNode, SceneDepth, ERFGAccessType::Write, ERHIResourceState::DepthStencilWrite) &&
+        HasAccess(BaseNode, Vertex0, ERFGAccessType::Read, ERHIResourceState::VertexBuffer) &&
+        HasAccess(BaseNode, Index0, ERFGAccessType::Read, ERHIResourceState::IndexBuffer) &&
         Graph.IsOutputResource(SceneDepth),
         "BasePass RFG setup imports exact attachment, vertex, and index states");
 
@@ -734,20 +734,20 @@ int RunBasePassGraphContractTests()
             bIncomingBase |= Edge.SourcePass == BaseHandle;
         }
         bDependencyAndBarriers = bIncomingBase &&
-            HasTransition(*CompiledBase, SceneColor, ERALResourceState::Undefined, ERALResourceState::RenderTarget) &&
-            HasTransition(*CompiledBase, SceneDepth, ERALResourceState::Undefined, ERALResourceState::DepthStencilWrite) &&
-            HasTransition(*CompiledComposite, SceneColor, ERALResourceState::RenderTarget, ERALResourceState::ShaderResource);
+            HasTransition(*CompiledBase, SceneColor, ERHIResourceState::Undefined, ERHIResourceState::RenderTarget) &&
+            HasTransition(*CompiledBase, SceneDepth, ERHIResourceState::Undefined, ERHIResourceState::DepthStencilWrite) &&
+            HasTransition(*CompiledComposite, SceneColor, ERHIResourceState::RenderTarget, ERHIResourceState::ShaderResource);
     }
     Failures += Expect(bDependencyAndBarriers,
         "SceneColor alone carries BasePass to Composite dependency while depth remains a stored output");
     return Failures;
 }
 
-int RunRALIndexedAndPushConstantContractTests()
+int RunRHIIndexedAndPushConstantContractTests()
 {
     int Failures = 0;
-    FRALBufferDesc DefaultBuffer;
-    FRALPipelineDesc_Graphics DefaultPipeline;
+    FRHIBufferDesc DefaultBuffer;
+    FRHIPipelineDesc_Graphics DefaultPipeline;
     bool bDefaultRenderTargetsUnknown = true;
     for (const EPixelFormat Format : DefaultPipeline.RenderTargetFormats)
     {
@@ -755,35 +755,35 @@ int RunRALIndexedAndPushConstantContractTests()
     }
     Failures += Expect(DefaultBuffer.Usage == 0 && DefaultBuffer.UsageFlag == 0 &&
         DefaultPipeline.RenderTargetCount == 0 && bDefaultRenderTargetsUnknown,
-        "default RAL descriptors expose deterministic zero usage and attachment formats");
+        "default RHI descriptors expose deterministic zero usage and attachment formats");
 
-    FRALPushConstantRangeDesc Disabled;
-    FRALPushConstantRangeDesc Valid;
+    FRHIPushConstantRangeDesc Disabled;
+    FRHIPushConstantRangeDesc Valid;
     Valid.StageFlags = BasePassStages;
     Valid.Size = 80;
-    FRALPushConstantRangeDesc Misaligned = Valid;
+    FRHIPushConstantRangeDesc Misaligned = Valid;
     Misaligned.Size = 78;
-    FRALPushConstantRangeDesc Oversized = Valid;
+    FRHIPushConstantRangeDesc Oversized = Valid;
     Oversized.Size = 132;
-    FRALPushConstantRangeDesc MissingStage = Valid;
+    FRHIPushConstantRangeDesc MissingStage = Valid;
     MissingStage.StageFlags = EShaderStage::None;
     Failures += Expect(Disabled.IsDisabled() && !Disabled.IsValid() && Valid.IsValid() &&
         Valid.AcceptsWrite(BasePassStages, 80) &&
         !Valid.AcceptsWrite(EShaderStage::Vertex, 80) &&
         !Valid.AcceptsWrite(BasePassStages, 64) &&
         !Misaligned.IsValid() && !Oversized.IsValid() && !MissingStage.IsValid(),
-        "RAL push constant contract accepts only staged aligned ranges up to 128 bytes");
+        "RHI push constant contract accepts only staged aligned ranges up to 128 bytes");
     Failures += Expect(IsValidIndexFormat(EPixelFormat::R16_UINT) &&
         IsValidIndexFormat(EPixelFormat::R32_UINT) &&
         !IsValidIndexFormat(EPixelFormat::R8_UINT) &&
         !IsValidIndexFormat(EPixelFormat::Unknown),
-        "RAL index contract accepts only R16_UINT and R32_UINT");
+        "RHI index contract accepts only R16_UINT and R32_UINT");
 
-    FRALPipelineDesc_Graphics AttachmentPipeline;
+    FRHIPipelineDesc_Graphics AttachmentPipeline;
     AttachmentPipeline.RenderTargetCount = 1;
     AttachmentPipeline.RenderTargetFormats[0] = EPixelFormat::B8G8R8A8_SRGB;
     AttachmentPipeline.DepthStencilFormat = EPixelFormat::D32_FLOAT;
-    FRALRenderingAttachmentSignature Signature;
+    FRHIRenderingAttachmentSignature Signature;
     Signature.RenderTargetCount = 1;
     Signature.RenderTargetFormats[0] = EPixelFormat::B8G8R8A8_SRGB;
     Signature.DepthStencilFormat = EPixelFormat::D32_FLOAT;
@@ -811,7 +811,7 @@ int RunBasePassTests()
 {
     static_assert(sizeof(FBasePassObjectConstants) == 80);
     int Failures = 0;
-    Failures += RunRALIndexedAndPushConstantContractTests();
+    Failures += RunRHIIndexedAndPushConstantContractTests();
     Failures += RunBasePassPlanValidationTests();
     Failures += RunBasePassCompositePipelineTests();
     Failures += RunBasePassRecordTests();

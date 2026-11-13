@@ -7,16 +7,16 @@
 namespace LE
 {
 
-class FRALBindGroup;
-class FRALPipeline_Graphics;
-class FRALTextureView;
+class FRHIBindGroup;
+class FRHIPipeline_Graphics;
+class FRHITextureView;
 
 struct FBasePassCompositePipelineDesc
 {
     FBasePassResources BasePassResources;
-    FRALTextureView* BackBufferView = nullptr;
-    FRALPipeline_Graphics* CompositePipeline = nullptr;
-    FRALBindGroup* CompositeBindGroup = nullptr;
+    FRHITextureView* BackBufferView = nullptr;
+    FRHIPipeline_Graphics* CompositePipeline = nullptr;
+    FRHIBindGroup* CompositeBindGroup = nullptr;
 };
 
 class FBasePassCompositePipelineImpl;

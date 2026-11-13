@@ -4,7 +4,7 @@
 
 WorldRenderer is the downstream bridge between committed gameplay state and
 Renderer data. Its public dependency set is exactly Core, Asset, Renderer, and
-World. World remains unaware of Renderer/RAL, Renderer remains unaware of
+World. World remains unaware of Renderer/RHI, Renderer remains unaware of
 World, and Asset remains Core-only.
 
 `FWorldRenderer::BuildSnapshot` accepts an Idle `FWorld`, the synchronous

@@ -2,7 +2,7 @@
 
 ## 职责边界
 
-`Application` 模块提供运行时生命周期 kernel，不包含窗口后端、RAL backend 或 demo
+`Application` 模块提供运行时生命周期 kernel，不包含窗口后端、RHI backend 或 demo
 资源。公共接口包含 `IApplication`、`FEngineLoop`、按值传递的帧上下文，以及
 `FRuntimeModuleRegistry`。
 `FEngineLoop` 只借用 `IApplication`；它会调用生命周期函数，但不会销毁对象。
@@ -22,7 +22,7 @@ Launch (entry/bootstrap)
          -> IApplication::Shutdown
          -> FRuntimeModuleRegistry::ShutdownAll
 
-DemoApplication -> Platform / RAL / RFG / Renderer / World
+DemoApplication -> Platform / RHI / RFG / Renderer / World
 Application     -> Core / PlatformTime implementation
 ```
 
@@ -89,7 +89,7 @@ Elapsed。
 
 - `Demo.Window`：真实 Startup 创建 Platform window；负责消息泵和关闭请求；Shutdown 释放
   window 和 event queue。
-- `Demo.Render`：依赖 `Demo.Window`；真实 Startup 创建 RAL/swapchain/shader/pipeline/
+- `Demo.Render`：依赖 `Demo.Window`；真实 Startup 创建 RHI/swapchain/shader/pipeline/
   renderer 与两槽 `FRenderFrameScheduler`。每槽拥有 allocator、command list、acquire/
   render-finished semaphore、initially-signaled fence 和 deferred releases。Update 负责 minimize
   与显式 resize/retry；Render 驱动两槽 Acquire/record/Submit/Present 并处理
@@ -105,11 +105,11 @@ Elapsed。
 - Resize 先构造完整的候选 SceneColor/depth/views/sampler/bind group/pipelines，再 Replace
   inactive Material payload、切换 Idle World handle、交换资源并销毁旧资源。vertex/index buffer
   不随 resize 重建；候选失败不会破坏旧可用状态。
-- 所有 RAL 对象通过 `RAL::DestroyResource` 回到 RAL 模块走 virtual destructor；上层 DLL
+- 所有 RHI 对象通过 `RHI::DestroyResource` 回到 RHI 模块走 virtual destructor；上层 DLL
   不直接 delete backend 分配的对象。
 
 自动化 C++ 测试覆盖确定性 branched DAG、深拷贝 descriptor、invalid/duplicate/missing/
 cycle 零启动、失败 module partial cleanup、严格 rollback/逆序关闭、重复调用状态、
 EngineLoop 与 module/application 的相对顺序、各阶段短路、失败后零额外 Tick/clock、
-  frame/time 契约、倒退时钟、null RAL destroy contract，以及显式帧同步的状态分支、调用顺序、
+  frame/time 契约、倒退时钟、null RHI destroy contract，以及显式帧同步的状态分支、调用顺序、
   精确 wait/signal/fence 传递和 RFG transient 的 frame-slot 回收顺序。

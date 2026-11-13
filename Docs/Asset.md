@@ -13,7 +13,7 @@ registry foundation. It depends only on Core and provides:
 
 It does **not** perform file I/O, asynchronous loading, importing, dependency
 loading, filesystem watching, serialization, or hot reload. It has no World,
-Reflection, RAL, Renderer, or GPU dependency.
+Reflection, RHI, Renderer, or GPU dependency.
 
 ## Persistent identity and runtime handles
 
@@ -156,7 +156,7 @@ Task 20 adds `RenderAssetTypes.h`, which declares opaque `FMeshAsset` and
 `FMaterialAsset` logical types, their 16-byte typed handle aliases, and two
 fixed UUID-backed type traits. The exported type-ID accessors ensure every DLL
 observes the same value identity. Asset remains Core-only: it never completes
-either payload and contains no RAL or Renderer fields.
+either payload and contains no RHI or Renderer fields.
 
 Renderer uniquely completes the GPU-facing payload definitions. World depends
 only on Asset and stores the typed handles; Demo owns the synchronous registry
@@ -167,5 +167,5 @@ R16/R32 index buffer/count/format, and local bounds. The minimum Material payloa
 provides a borrowed graphics pipeline, SceneColor pass mask, and finite
 non-negative RGB base color. SortKey remains World-authored on the mesh component
 and is copied into the render proxy. These remain Renderer-owned definitions; Asset does
-not gain RAL knowledge. Task 22 owns the first real BasePass, not a general asset
+not gain RHI knowledge. Task 22 owns the first real BasePass, not a general asset
 loader or material system.

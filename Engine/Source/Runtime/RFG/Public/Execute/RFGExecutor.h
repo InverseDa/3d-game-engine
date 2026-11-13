@@ -9,14 +9,14 @@ namespace LE
 class FRFGRecordedGraph;
 class FRFGCompiledPlan;
 struct FRFGExecutionContext;
-struct FRALSubmitInfo;
-enum class ERALQueueSubmitResult : uint8;
+struct FRHISubmitInfo;
+enum class ERHIQueueSubmitResult : uint8;
 
 struct FRFGExecuteOptions
 {
     bool bSubmitImmediately = true;
     bool bWaitForCompletion = false;
-    const FRALSubmitInfo* SubmitInfo = nullptr;
+    const FRHISubmitInfo* SubmitInfo = nullptr;
     /** Borrowed only for the duration of Execute; RFG never retains or deletes it. */
     IRFGDeferredReleaseSink* DeferredReleaseSink = nullptr;
 };
@@ -28,7 +28,7 @@ public:
     ~FRFGExecutor() = default;
 
 public:
-    ERALQueueSubmitResult Execute(
+    ERHIQueueSubmitResult Execute(
         const FRFGCompiledPlan& CompiledPlan,
         const FRFGRecordedGraph& RecordedGraph,
         FRFGExecutionContext& ExecutionContext,

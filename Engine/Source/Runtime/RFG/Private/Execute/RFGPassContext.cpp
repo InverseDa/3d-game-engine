@@ -2,9 +2,9 @@
 
 #include "Compile/RFGCompiledPlan.h"
 #include "Execute/RFGDeferredReleaseSink.h"
-#include "RAL/RALBuffer.h"
-#include "RAL/RALDevice.h"
-#include "RAL/RALTexture.h"
+#include "RHI/RHIBuffer.h"
+#include "RHI/RHIDevice.h"
+#include "RHI/RHITexture.h"
 #include "Record/RFGRecordedGraph.h"
 
 namespace LE
@@ -12,14 +12,14 @@ namespace LE
 
 void FRFGExecutionContext::ResetTransientResources()
 {
-    for (LE::FRALTexture* Texture : OwnedTextures)
+    for (LE::FRHITexture* Texture : OwnedTextures)
     {
-        RAL::DestroyResource(Texture);
+        RHI::DestroyResource(Texture);
     }
 
-    for (LE::FRALBuffer* Buffer : OwnedBuffers)
+    for (LE::FRHIBuffer* Buffer : OwnedBuffers)
     {
-        RAL::DestroyResource(Buffer);
+        RHI::DestroyResource(Buffer);
     }
 
     TextureResources.Clear();
@@ -32,7 +32,7 @@ bool FRFGExecutionContext::TransferTransientResources(
     IRFGDeferredReleaseSink& DeferredReleaseSink) noexcept
 {
     bool bAcceptedAll = true;
-    for (LE::FRALTexture*& Texture : OwnedTextures)
+    for (LE::FRHITexture*& Texture : OwnedTextures)
     {
         if (Texture != nullptr && DeferredReleaseSink.DeferRelease(Texture))
         {
@@ -47,7 +47,7 @@ bool FRFGExecutionContext::TransferTransientResources(
 
     if (bAcceptedAll)
     {
-        for (LE::FRALBuffer*& Buffer : OwnedBuffers)
+        for (LE::FRHIBuffer*& Buffer : OwnedBuffers)
         {
             if (Buffer != nullptr && DeferredReleaseSink.DeferRelease(Buffer))
             {
@@ -87,12 +87,12 @@ void FRFGPassContext::SetPassIndex(uint32 InPassIndex)
     PassIndex = InPassIndex;
 }
 
-LE::FRALDevice* FRFGPassContext::GetDevice() const
+LE::FRHIDevice* FRFGPassContext::GetDevice() const
 {
     return ExecutionContext != nullptr ? ExecutionContext->Device : nullptr;
 }
 
-LE::FRALCommandList* FRFGPassContext::GetCommandList() const
+LE::FRHICommandList* FRFGPassContext::GetCommandList() const
 {
     if (ExecutionContext == nullptr || CompiledPlan == nullptr)
     {
@@ -108,25 +108,25 @@ LE::FRALCommandList* FRFGPassContext::GetCommandList() const
     return ExecutionContext->GetCommandList(Passes[PassIndex].Queue);
 }
 
-LE::FRALTexture* FRFGPassContext::ResolveTexture(FRFGResourceHandle ResourceHandle) const
+LE::FRHITexture* FRFGPassContext::ResolveTexture(FRFGResourceHandle ResourceHandle) const
 {
     if (ExecutionContext == nullptr)
     {
         return nullptr;
     }
 
-    LE::FRALTexture* const* const Found = ExecutionContext->TextureResources.Find(ResourceHandle.Id);
+    LE::FRHITexture* const* const Found = ExecutionContext->TextureResources.Find(ResourceHandle.Id);
     return Found != nullptr ? *Found : nullptr;
 }
 
-LE::FRALBuffer* FRFGPassContext::ResolveBuffer(FRFGResourceHandle ResourceHandle) const
+LE::FRHIBuffer* FRFGPassContext::ResolveBuffer(FRFGResourceHandle ResourceHandle) const
 {
     if (ExecutionContext == nullptr)
     {
         return nullptr;
     }
 
-    LE::FRALBuffer* const* const Found = ExecutionContext->BufferResources.Find(ResourceHandle.Id);
+    LE::FRHIBuffer* const* const Found = ExecutionContext->BufferResources.Find(ResourceHandle.Id);
     return Found != nullptr ? *Found : nullptr;
 }
 

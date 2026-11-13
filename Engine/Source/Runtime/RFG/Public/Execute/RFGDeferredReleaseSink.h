@@ -5,7 +5,7 @@
 namespace LE
 {
 
-class FRALResource;
+class FRHIResource;
 
 /**
  * Borrowed, non-owning destination for RFG-owned transient resources.
@@ -16,7 +16,7 @@ class FRALResource;
 class RFG_API IRFGDeferredReleaseSink
 {
 public:
-    virtual bool DeferRelease(FRALResource* Resource) noexcept = 0;
+    virtual bool DeferRelease(FRHIResource* Resource) noexcept = 0;
 
 protected:
     ~IRFGDeferredReleaseSink() = default;

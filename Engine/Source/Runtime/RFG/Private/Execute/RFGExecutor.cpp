@@ -2,13 +2,13 @@
 
 #include "Compile/RFGCompiledPlan.h"
 #include "Execute/RFGPassContext.h"
-#include "RAL/RALBuffer.h"
-#include "RAL/RALCommandList.h"
-#include "RAL/RALDescription.h"
-#include "RAL/RALDevice.h"
-#include "RAL/RALQueue.h"
-#include "RAL/RALSyncPrimitives.h"
-#include "RAL/RALTexture.h"
+#include "RHI/RHIBuffer.h"
+#include "RHI/RHICommandList.h"
+#include "RHI/RHIDescription.h"
+#include "RHI/RHIDevice.h"
+#include "RHI/RHIQueue.h"
+#include "RHI/RHISyncPrimitives.h"
+#include "RHI/RHITexture.h"
 #include "Record/RFGPassRegistry.h"
 #include "Record/RFGRecordedGraph.h"
 
@@ -19,9 +19,9 @@ LE_DECLARE_LOG_CATEGORY(LogRFGExecute);
 
 namespace
 {
-LE::FRALTextureDesc MakeTextureDesc(const FRFGResourceNode& ResourceNode)
+LE::FRHITextureDesc MakeTextureDesc(const FRFGResourceNode& ResourceNode)
 {
-    LE::FRALTextureDesc Desc;
+    LE::FRHITextureDesc Desc;
     Desc.Name = ResourceNode.Name;
     Desc.Width = ResourceNode.Desc.Texture.Width;
     Desc.Height = ResourceNode.Desc.Texture.Height;
@@ -36,9 +36,9 @@ LE::FRALTextureDesc MakeTextureDesc(const FRFGResourceNode& ResourceNode)
     return Desc;
 }
 
-LE::FRALBufferDesc MakeBufferDesc(const FRFGResourceNode& ResourceNode)
+LE::FRHIBufferDesc MakeBufferDesc(const FRFGResourceNode& ResourceNode)
 {
-    LE::FRALBufferDesc Desc;
+    LE::FRHIBufferDesc Desc;
     Desc.Name = ResourceNode.Name;
     Desc.Size = ResourceNode.Desc.Buffer.Size;
     Desc.Usage = static_cast<uint32>(ResourceNode.Desc.Buffer.Usage);
@@ -59,7 +59,7 @@ void PrepareResources(const FRFGRecordedGraph& RecordedGraph, FRFGExecutionConte
     {
         if (ResourceNode.Desc.Type == ERFGResourceType::Texture)
         {
-            LE::FRALTexture* Texture = ResourceNode.ImportedTexture;
+            LE::FRHITexture* Texture = ResourceNode.ImportedTexture;
             if (Texture == nullptr)
             {
                 Texture = ExecutionContext.Device->CreateTexture(MakeTextureDesc(ResourceNode));
@@ -73,7 +73,7 @@ void PrepareResources(const FRFGRecordedGraph& RecordedGraph, FRFGExecutionConte
         }
         else
         {
-            LE::FRALBuffer* Buffer = ResourceNode.ImportedBuffer;
+            LE::FRHIBuffer* Buffer = ResourceNode.ImportedBuffer;
             if (Buffer == nullptr)
             {
                 Buffer = ExecutionContext.Device->CreateBuffer(MakeBufferDesc(ResourceNode));
@@ -92,14 +92,14 @@ void ApplyBarriers(
     const LE::Array<FRFGBarrierTransition>& Transitions,
     const FRFGRecordedGraph& RecordedGraph,
     FRFGExecutionContext& ExecutionContext,
-    LE::FRALCommandList* CommandList)
+    LE::FRHICommandList* CommandList)
 {
     if (Transitions.IsEmpty() || CommandList == nullptr)
     {
         return;
     }
 
-    LE::FRALBarrierBatch BarrierBatch;
+    LE::FRHIBarrierBatch BarrierBatch;
     BarrierBatch.TextureBarriers.Reserve(Transitions.Size());
     BarrierBatch.BufferBarriers.Reserve(Transitions.Size());
 
@@ -117,8 +117,8 @@ void ApplyBarriers(
             continue;
         }
 
-        if (Transition.BeforeState == LE::ERALResourceState::Unknown ||
-            Transition.AfterState == LE::ERALResourceState::Unknown)
+        if (Transition.BeforeState == LE::ERHIResourceState::Unknown ||
+            Transition.AfterState == LE::ERHIResourceState::Unknown)
         {
             LE_LOG(LogRFGExecute, Error,
                 "RFG barrier skipped: resource state is Unknown. ResourceId={}, BeforeState={}, AfterState={}.",
@@ -131,7 +131,7 @@ void ApplyBarriers(
         const FRFGResourceNode& ResourceNode = RecordedGraph.GetResourceNode(Transition.Resource);
         if (ResourceNode.Desc.Type == ERFGResourceType::Texture)
         {
-            LE::FRALTexture* const* const Texture = ExecutionContext.TextureResources.Find(Transition.Resource.Id);
+            LE::FRHITexture* const* const Texture = ExecutionContext.TextureResources.Find(Transition.Resource.Id);
             if (Texture == nullptr || *Texture == nullptr)
             {
                 LE_LOG(LogRFGExecute, Error,
@@ -140,7 +140,7 @@ void ApplyBarriers(
                 continue;
             }
 
-            LE::FRALTextureBarrierDesc Barrier;
+            LE::FRHITextureBarrierDesc Barrier;
             Barrier.Texture = *Texture;
             Barrier.BeforeState = Transition.BeforeState;
             Barrier.AfterState = Transition.AfterState;
@@ -154,7 +154,7 @@ void ApplyBarriers(
         }
         else
         {
-            LE::FRALBuffer* const* const Buffer = ExecutionContext.BufferResources.Find(Transition.Resource.Id);
+            LE::FRHIBuffer* const* const Buffer = ExecutionContext.BufferResources.Find(Transition.Resource.Id);
             if (Buffer == nullptr || *Buffer == nullptr)
             {
                 LE_LOG(LogRFGExecute, Error,
@@ -163,7 +163,7 @@ void ApplyBarriers(
                 continue;
             }
 
-            LE::FRALBufferBarrierDesc Barrier;
+            LE::FRHIBufferBarrierDesc Barrier;
             Barrier.Buffer = *Buffer;
             Barrier.BeforeState = Transition.BeforeState;
             Barrier.AfterState = Transition.AfterState;
@@ -180,13 +180,13 @@ void ApplyBarriers(
 }
 }
 
-ERALQueueSubmitResult FRFGExecutor::Execute(
+ERHIQueueSubmitResult FRFGExecutor::Execute(
     const FRFGCompiledPlan& CompiledPlan,
     const FRFGRecordedGraph& RecordedGraph,
     FRFGExecutionContext& ExecutionContext,
     const FRFGExecuteOptions& ExecuteOptions) const
 {
-    ERALQueueSubmitResult SubmitResult = ERALQueueSubmitResult::Success;
+    ERHIQueueSubmitResult SubmitResult = ERHIQueueSubmitResult::Success;
     PrepareResources(RecordedGraph, ExecutionContext);
 
     const bool bHasOwnedTransientResources =
@@ -199,30 +199,30 @@ ERALQueueSubmitResult FRFGExecutor::Execute(
         LE_LOG(LogRFGExecute, Error,
             "Asynchronous RFG execution rejected: owned transients require a deferred-release sink.");
         ExecutionContext.ResetTransientResources();
-        return ERALQueueSubmitResult::InvalidArguments;
+        return ERHIQueueSubmitResult::InvalidArguments;
     }
 
-    LE::FRALCommandList* const CommandList = ExecutionContext.CommandList;
-    LE::FRALQueue* const SubmitQueue = ExecutionContext.GraphicsQueue;
+    LE::FRHICommandList* const CommandList = ExecutionContext.CommandList;
+    LE::FRHIQueue* const SubmitQueue = ExecutionContext.GraphicsQueue;
     if (CommandList == nullptr)
     {
         LE_LOG(LogRFGExecute, Error, "RFG execution requires a command list.");
         ExecutionContext.ResetTransientResources();
-        return ERALQueueSubmitResult::InvalidArguments;
+        return ERHIQueueSubmitResult::InvalidArguments;
     }
 
-    LE::FRALSubmitInfo SubmitInfo;
+    LE::FRHISubmitInfo SubmitInfo;
     if (ExecuteOptions.bSubmitImmediately)
     {
         if (SubmitQueue == nullptr)
         {
             LE_LOG(LogRFGExecute, Error, "Immediate RFG execution requires a submit queue.");
             ExecutionContext.ResetTransientResources();
-            return ERALQueueSubmitResult::InvalidArguments;
+            return ERHIQueueSubmitResult::InvalidArguments;
         }
         SubmitInfo = ExecuteOptions.SubmitInfo != nullptr
             ? *ExecuteOptions.SubmitInfo
-            : LE::FRALSubmitInfo{};
+            : LE::FRHISubmitInfo{};
         if (ExecuteOptions.SubmitInfo == nullptr)
         {
             SubmitInfo.CmdList = CommandList;
@@ -232,7 +232,7 @@ ERALQueueSubmitResult FRFGExecutor::Execute(
             LE_LOG(LogRFGExecute, Error,
                 "RFG submit info must be structurally valid and reference the execution command list.");
             ExecutionContext.ResetTransientResources();
-            return ERALQueueSubmitResult::InvalidArguments;
+            return ERHIQueueSubmitResult::InvalidArguments;
         }
     }
 
@@ -247,7 +247,7 @@ ERALQueueSubmitResult FRFGExecutor::Execute(
     for (uint32 PassIndex = 0; PassIndex < Passes.Size(); ++PassIndex)
     {
         PassContext.SetPassIndex(PassIndex);
-        LE::FRALCommandList* PassCommandList = ExecutionContext.GetCommandList(Passes[PassIndex].Queue);
+        LE::FRHICommandList* PassCommandList = ExecutionContext.GetCommandList(Passes[PassIndex].Queue);
         ApplyBarriers(Passes[PassIndex].PreBarriers, RecordedGraph, ExecutionContext, PassCommandList);
 
         const FRFGPassNode& PassNode = RecordedGraph.GetPassNode(Passes[PassIndex].Handle);
@@ -270,7 +270,7 @@ ERALQueueSubmitResult FRFGExecutor::Execute(
     {
         LE_LOG(LogRFGExecute, Error,
             "Asynchronous RFG execution rejected: deferred-release sink refused an owned transient.");
-        return ERALQueueSubmitResult::InvalidArguments;
+        return ERHIQueueSubmitResult::InvalidArguments;
     }
 
     if (ExecuteOptions.bSubmitImmediately)
@@ -285,7 +285,7 @@ ERALQueueSubmitResult FRFGExecutor::Execute(
     }
 
     if (ExecuteOptions.bSubmitImmediately && ExecuteOptions.bWaitForCompletion &&
-        SubmitResult == ERALQueueSubmitResult::Success)
+        SubmitResult == ERHIQueueSubmitResult::Success)
     {
         SubmitQueue->WaitIdle();
     }

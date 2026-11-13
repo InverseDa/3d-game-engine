@@ -24,7 +24,7 @@ RFG 采用 **四阶段管线** 架构：
 1. **Authoring**：通过 `FRFGTemplate` 定义资源、Pass 节点与边的数据驱动描述；经 `FRFGTemplateInstancer` 验证并生成图签名。
 2. **Record**：运行时通过 `FRFGBuilder` 以声明式 API 创建资源、注册 Pass、声明读写依赖，产出 `FRFGRecordedGraph`。
 3. **Compile**：`FRFGCompiler` 对记录图进行依赖分析、Pass 裁剪、屏障规划与拓扑排序，产出 `FRFGCompiledPlan`。`FRFGPlanCache` 支持按签名命中缓存。
-4. **Execute**：`FRFGExecutor` 根据编译计划创建/绑定实际 RAL 资源，遍历 Pass 并执行回调或 `IRFGPassExecutor`，最终提交 CommandList 到队列。
+4. **Execute**：`FRFGExecutor` 根据编译计划创建/绑定实际 RHI 资源，遍历 Pass 并执行回调或 `IRFGPassExecutor`，最终提交 CommandList 到队列。
 
 ## 3. 子系统详细说明
 
@@ -98,7 +98,7 @@ RFG 采用 **四阶段管线** 架构：
   - 依赖声明：`ResourceAccesses`（资源+访问描述数组）、`ExplicitDependencies`（显式 Pass 依赖句柄数组）
 - `FRFGResourceNode`：
   - `Handle`、`Name`、`Desc`、`Flags`
-  - 外部资源指针：`ImportedTexture` / `ImportedBuffer`（来自 RAL）
+  - 外部资源指针：`ImportedTexture` / `ImportedBuffer`（来自 RHI）
 - 存储结构：
   - `std::vector<FRFGPassNode> PassNodes`：线性数组，Handle.Id 即数组下标。
   - `std::vector<FRFGResourceNode> ResourceNodes`：同上。
@@ -111,7 +111,7 @@ RFG 采用 **四阶段管线** 架构：
 
 - **资源创建**：
   - `CreateTexture(Name, FRFGTextureDesc)` / `CreateBuffer(Name, FRFGBufferDesc)`：生成 Transient 资源节点。
-  - `ImportTexture(Name, FRALTexture*)` / `ImportBuffer(Name, FRALBuffer*)`：导入外部已有资源，自动读取 RAL 描述填充 `FRFGResourceDesc`。
+  - `ImportTexture(Name, FRHITexture*)` / `ImportBuffer(Name, FRHIBuffer*)`：导入外部已有资源，自动读取 RHI 描述填充 `FRFGResourceDesc`。
 - **Pass 注册**：
   - `AddPass(Name, PassTypeName, ParameterBlock, Flags, QueueType, SourceLocation)`：添加 Pass 节点；若 `QueueType` 为默认 Graphics 且注册表中有该类型，则自动继承 `PreferredQueue` 与 `DefaultFlags`。
   - `SetPassCallback(PassHandle, Callback)`：绑定 Lambda 执行体。
@@ -195,22 +195,22 @@ RFG 采用 **四阶段管线** 架构：
 
 1. `PrepareResources`：遍历 `FRFGRecordedGraph` 的所有资源节点：
    - Imported 资源直接绑定指针；
-   - Transient 资源通过 `FRALDevice::CreateTexture/CreateBuffer` 创建，存入 `ExecutionContext.OwnedTextures/OwnedBuffers`。
+   - Transient 资源通过 `FRHIDevice::CreateTexture/CreateBuffer` 创建，存入 `ExecutionContext.OwnedTextures/OwnedBuffers`。
 2. `CommandList->Begin()`。
 3. 遍历 `FRFGCompiledPlan::GetPasses()`：
    - 设置 `FRFGPassContext`（PassIndex、ExecutionContext、RecordedGraph、CompiledPlan）。
    - 优先调用 `PassNode.ExecuteCallback`（Lambda）；若未设置，则回退到 `PassNode.Executor->Execute(...)`（注册表模式）。
-   - 注意：当前实现中 **Barrier 由执行器在 Pass 回调内部或 RAL 层实际插入**，`PreBarriers` 数据已在编译阶段完成推导，供执行侧参考或未来自动提交。
+   - 注意：当前实现中 **Barrier 由执行器在 Pass 回调内部或 RHI 层实际插入**，`PreBarriers` 数据已在编译阶段完成推导，供执行侧参考或未来自动提交。
 4. `CommandList->End()`。
 5. 若 `bSubmitImmediately`，通过 `GraphicsQueue->Submit(...)` 提交。
 6. 若 `bWaitForCompletion`，执行 `Queue->WaitIdle()`。
-7. `ResetTransientResources`：销毁本帧创建的 Transient RAL 资源。
+7. `ResetTransientResources`：销毁本帧创建的 Transient RHI 资源。
 
 #### 3.4.2 Pass 上下文（`RFGPassContext.h` / `.cpp`）
 
 - `GetDevice()` / `GetCommandList()`：访问当前 GPU 设备与 CommandList。
   - `GetCommandList` 会根据当前 Pass 的 `Queue` 类型从 `FRFGExecutionContext` 中分发（当前统一返回单 CommandList，预留多队列扩展）。
-- `ResolveTexture(ResourceHandle)` / `ResolveBuffer(ResourceHandle)`：将 RFG 句柄解析为实际 RAL 资源指针。
+- `ResolveTexture(ResourceHandle)` / `ResolveBuffer(ResourceHandle)`：将 RFG 句柄解析为实际 RHI 资源指针。
 - `GetPassIndex()`：获取当前在编译计划中的索引。
 
 #### 3.4.3 执行上下文（`RFGPassContext.h`）
@@ -218,7 +218,7 @@ RFG 采用 **四阶段管线** 架构：
 `FRFGExecutionContext`：
 - 设备与队列指针：`Device`、`GraphicsQueue`、`ComputeQueue`、`TransferQueue`
 - CommandList：当前单线程实现共用一份 `CommandList`；`GetCommandList(ERFGQueueType)` 预留多队列分发。
-- 资源映射：`TextureResources` / `BufferResources`（`unordered_map<uint32, RAL*>`，Key 为 Handle.Id）
+- 资源映射：`TextureResources` / `BufferResources`（`unordered_map<uint32, RHI*>`，Key 为 Handle.Id）
 - 所有权数组：`OwnedTextures` / `OwnedBuffers`，用于帧末统一销毁。
 - `ResetTransientResources()`：释放所有权数组中的资源并清空映射。
 
@@ -270,7 +270,7 @@ RFG 采用 **四阶段管线** 架构：
 
 - `FRFGCompiledResourceLife` 精确记录了每个 Transient 资源在编译后 Pass 序列中的 `[FirstPassIndex, LastPassIndex]`。
 - 生命周期不重叠的 Transient 资源可复用同一块 GPU 显存，降低显存峰值。
-- 当前 RFG 本身不直接管理物理内存分配，而是将生命周期数据暴露给上层或 RAL 的内存分配器；Executor 在 `PrepareResources` 中按节点创建独立资源，未来可在该层接入 Aliasing Allocator。
+- 当前 RFG 本身不直接管理物理内存分配，而是将生命周期数据暴露给上层或 RHI 的内存分配器；Executor 在 `PrepareResources` 中按节点创建独立资源，未来可在该层接入 Aliasing Allocator。
 
 ### 4.2 自动屏障推导
 
@@ -306,24 +306,23 @@ RFG 模块所有公共类型均以 `FRFG` 为前缀，核心示例如下：
 
 根据 `Build.ts`：
 
-```csharp
-conf.AddPublicDependency<CoreProject>(target);
-conf.AddPublicDependency<RALProject>(target);
+```typescript
+Configuration.PublicDependencies.push("Core", "Spdlog", "RHI");
 ```
 
 - **Core**：使用 `CoreMinimal.h`、`LE::String`、`LE::FNonCopyable`、日志宏（`LE_LOG` / `LE_DECLARE_LOG_CATEGORY`）等基础设施。
-- **RAL（Render Abstraction Layer）**：
-  - `FRALDevice`、`FRALQueue`、`FRALCommandList`
-  - `FRALTexture`、`FRALBuffer` 及其描述符
-  - RFG 本身不直接调用底层 Graphics API（Vulkan/D3D12），而是通过 RAL 抽象完成资源创建与提交。
+- **RHI（Render Hardware Interface）**：
+  - `FRHIDevice`、`FRHIQueue`、`FRHICommandList`
+  - `FRHITexture`、`FRHIBuffer` 及其描述符
+  - RFG 本身不直接调用底层 Graphics API（Vulkan/D3D12），而是通过 RHI 抽象完成资源创建与提交。
 
 模块内部子系统依赖关系（高层依赖低层）：
 
 ```
 Authoring --> Core
-Record    --> Core + RAL
+Record    --> Core + RHI
 Compile   --> Core + Record
-Execute   --> Core + Record + Compile + RAL
+Execute   --> Core + Record + Compile + RHI
 Debug     --> Record + Compile
 ```
 
@@ -387,7 +386,7 @@ FRFGCompileResult Result = Instance.Compile(Builder.GetRecordedGraph(), Builder.
 
 // 5. Execute
 FRFGExecutionContext ExecCtx;
-ExecCtx.Device = RALDevice;
+ExecCtx.Device = RHIDevice;
 ExecCtx.GraphicsQueue = GraphicsQueue;
 ExecCtx.CommandList = CmdList;
 Instance.Execute(Result, Builder.GetRecordedGraph(), ExecCtx);
@@ -396,10 +395,10 @@ Instance.Execute(Result, Builder.GetRecordedGraph(), ExecCtx);
 ## 8. 扩展方向
 
 - **AsyncCompute**：当前 `DependencyLevel` 已划分无依赖 Pass 批次，未来可在 `FRFGExecutor` 中为 Compute Queue 分配独立 `CommandList`，按 Level 批量提交。
-- **Resource Aliasing Allocator**：在 `PrepareResources` 中引入基于 `FRFGCompiledResourceLife` 的内存别名分配器，复用 `FRALDevice` 的 Heap/Pool 接口。
+- **Resource Aliasing Allocator**：在 `PrepareResources` 中引入基于 `FRFGCompiledResourceLife` 的内存别名分配器，复用 `FRHIDevice` 的 Heap/Pool 接口。
 - **子资源屏障细化**：当前 `FRFGBarrierTransition` 已携带 `BaseMipLevel` / `MipCount` / `BaseArrayLayer` / `LayerCount`，但 `BuildBarriers` 尚未按子资源拆分，未来可扩展为细粒度 Mip/Slice 级屏障。
-- **自动根签名/描述符推导**：结合 RAL 的 PipelineState，从 `FRFGPassNode::ResourceAccesses` 自动生成 DescriptorSet / RootSignature 绑定。
+- **自动根签名/描述符推导**：结合 RHI 的 PipelineState，从 `FRFGPassNode::ResourceAccesses` 自动生成 DescriptorSet / RootSignature 绑定。
 
 ## 9. P0 冻结状态
 
-RFG/RAL P0 已于 2026-08-06 关闭并冻结。当前执行路径已通过 single-RT、dual-MRT、depth/stencil 与 offscreen-composite 的 Vulkan Validation 验收；深度模板写入必须在 Pass 资源声明中使用 `ERALResourceState::DepthStencilWrite`，由 BarrierPlanner 在 Dynamic Rendering 开始前生成显式转换。验收记录与复现步骤见 [RenderFoundationP0.md](RenderFoundationP0.md)。
+RFG/RHI P0 已于 2026-08-06 关闭并冻结。当前执行路径已通过 single-RT、dual-MRT、depth/stencil 与 offscreen-composite 的 Vulkan Validation 验收；深度模板写入必须在 Pass 资源声明中使用 `ERHIResourceState::DepthStencilWrite`，由 BarrierPlanner 在 Dynamic Rendering 开始前生成显式转换。验收记录与复现步骤见 [RenderFoundationP0.md](RenderFoundationP0.md)。
