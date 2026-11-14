@@ -1,0 +1,6 @@
+P3
+# Top-left red, top-right mid green, bottom-left blue, bottom-right yellow.
+2 2
+255
+255 0 0    0 128 0
+0 0 255    255 255 0

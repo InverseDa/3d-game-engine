@@ -26,6 +26,7 @@ EAssetLoadResult Report(FAssetLoadDiagnostic* Diagnostic, EAssetLoadResult Resul
     {
         Diagnostic->Result = Result;
         Diagnostic->Id = Id;
+        Diagnostic->DependencyId = {};
         Diagnostic->FileResult = FileResult;
         Diagnostic->FormatResult = FormatResult;
         Diagnostic->RegistrationResult = RegistrationResult;
@@ -357,6 +358,47 @@ EAssetLoadResult FAssetCatalog::Read(FAssetId Id, Array<uint8>& Out,
     return EAssetLoadResult::Success;
 }
 
+template <typename Asset, typename Data>
+EAssetLoadResult FAssetCatalog::DecodeTyped(FAssetId Id, Data& Out, FAssetLoadDiagnostic* Diagnostic) const noexcept
+{
+    FAssetCatalogEntry Entry;
+    const auto Found = Find(Id, Entry);
+    if (Found != EAssetLoadResult::Success)
+    {
+        return Report(Diagnostic, Found, Id);
+    }
+    if (Entry.Type != GetAssetTypeId<Asset>())
+    {
+        return Report(Diagnostic, EAssetLoadResult::TypeMismatch, Id, Entry.Path);
+    }
+    Array<uint8> Bytes(Allocator);
+    const auto ReadResult = Read(Id, Bytes, Diagnostic);
+    if (ReadResult != EAssetLoadResult::Success)
+    {
+        return ReadResult;
+    }
+    const auto FormatResult = DecodeAssetFile(Bytes.AsSpan(), Out);
+    const EAssetLoadResult Result = FormatResult == EAssetFormatResult::Success ? EAssetLoadResult::Success :
+        FormatResult == EAssetFormatResult::AllocationFailed ? EAssetLoadResult::AllocationFailed :
+        EAssetLoadResult::FormatError;
+    return Report(Diagnostic, Result, Id, Entry.Path, EContentIOResult::Success, FormatResult);
+}
+
+EAssetLoadResult FAssetCatalog::Decode(FAssetId Id, FMeshAssetData& Out, FAssetLoadDiagnostic* Diagnostic) const noexcept
+{
+    return DecodeTyped<FMeshAsset>(Id, Out, Diagnostic);
+}
+
+EAssetLoadResult FAssetCatalog::Decode(FAssetId Id, FMaterialAssetData& Out, FAssetLoadDiagnostic* Diagnostic) const noexcept
+{
+    return DecodeTyped<FMaterialAsset>(Id, Out, Diagnostic);
+}
+
+EAssetLoadResult FAssetCatalog::Decode(FAssetId Id, FCpuTextureAsset& Out, FAssetLoadDiagnostic* Diagnostic) const noexcept
+{
+    return DecodeTyped<FCpuTextureAsset>(Id, Out, Diagnostic);
+}
+
 FAssetLoadSession::FAssetLoadSession(const FAssetCatalog& InCatalog,
     FAssetLoadProviders InProviders, IAllocator& InAllocator) noexcept
     : Catalog(InCatalog), Providers(InProviders), Allocator(InAllocator), Registry(InAllocator) {}
@@ -382,6 +424,13 @@ EAssetLoadResult FAssetLoadSession::LoadAsset(FAssetId Id, TAssetHandle<Asset>& 
         return Report(Diagnostic, EAssetLoadResult::ReentrantLoad, Id);
     }
     FLoadingScope Loading(bLoading);
+    return LoadAssetInternal(Id, Out, Provider, Diagnostic);
+}
+
+template <typename Asset, typename Data>
+EAssetLoadResult FAssetLoadSession::LoadAssetInternal(FAssetId Id, TAssetHandle<Asset>& Out,
+    const TAssetLoadProvider<Asset, Data>& Provider, FAssetLoadDiagnostic* Diagnostic) noexcept
+{
     FAssetCatalogEntry Entry;
     const auto FindResult = Catalog.Find(Id, Entry);
     if (FindResult != EAssetLoadResult::Success)
@@ -407,22 +456,35 @@ EAssetLoadResult FAssetLoadSession::LoadAsset(FAssetId Id, TAssetHandle<Asset>& 
             return Report(Diagnostic, EAssetLoadResult::ProviderUnavailable, Id, Entry.Path);
         }
     }
-    Array<uint8> Bytes(Allocator);
-    const auto ReadResult = Catalog.Read(Id, Bytes, Diagnostic);
-    if (ReadResult != EAssetLoadResult::Success)
-    {
-        return ReadResult;
-    }
     auto DecodeAndRegister = [&](Data& Payload) noexcept
     {
-        const auto FormatResult = DecodeAssetFile({Bytes.Data(), Bytes.Size()}, Payload);
-        if (FormatResult != EAssetFormatResult::Success)
+        const auto DecodeResult = Catalog.Decode(Id, Payload, Diagnostic);
+        if (DecodeResult != EAssetLoadResult::Success)
         {
-            const auto Result = FormatResult == EAssetFormatResult::AllocationFailed
-                ? EAssetLoadResult::AllocationFailed : EAssetLoadResult::FormatError;
-            return Report(Diagnostic, Result, Id, Entry.Path, EContentIOResult::Success, FormatResult);
+            return DecodeResult;
         }
 
+        FCpuTextureAssetHandle Texture;
+        FAssetId TextureId;
+        bool bOwnTextureEntry = false;
+        const auto RollbackTexture = [&]() noexcept
+        {
+            if (bOwnTextureEntry)
+            {
+                static_cast<void>(Registry.Unregister(Texture));
+            }
+        };
+        const auto ReportMaterial = [&](EAssetLoadResult Result,
+            EAssetRegisterResult RegisterResult = EAssetRegisterResult::Success) noexcept
+        {
+            Report(Diagnostic, Result, Id, Entry.Path, EContentIOResult::Success,
+                EAssetFormatResult::Success, RegisterResult);
+            if (Diagnostic != nullptr && Result != EAssetLoadResult::Success)
+            {
+                Diagnostic->DependencyId = TextureId;
+            }
+            return Result;
+        };
         TAssetRegistration<Asset> Registration;
         Registration.Id = Id;
         Registration.SoftPath = Entry.Path;
@@ -441,10 +503,39 @@ EAssetLoadResult FAssetLoadSession::LoadAsset(FAssetId Id, TAssetHandle<Asset>& 
         }
         else
         {
-            Registration.Object = Provider.Create(Provider.Context, Payload);
+            if constexpr (std::is_same<Asset, FMaterialAsset>::value)
+            {
+                TextureId = Payload.BaseColorTexture;
+                const FCpuTextureAsset* Pixels = nullptr;
+                if (TextureId.IsValid())
+                {
+                    bOwnTextureEntry = Registry.TryFindById(TextureId, Texture) == EAssetFindResult::NotFound;
+                    FAssetLoadDiagnostic Dependency(Allocator);
+                    const auto LoadResult = LoadAssetInternal(TextureId, Texture,
+                        TAssetLoadProvider<FCpuTextureAsset, FCpuTextureAsset>{}, &Dependency);
+                    if (LoadResult != EAssetLoadResult::Success)
+                    {
+                        Report(Diagnostic, LoadResult, Id, Entry.Path,
+                            Dependency.FileResult, Dependency.FormatResult, Dependency.RegistrationResult);
+                        if (Diagnostic != nullptr) Diagnostic->DependencyId = TextureId;
+                        return LoadResult;
+                    }
+                    if (Registry.Resolve(Texture, Pixels) != EAssetResolveResult::Success)
+                    {
+                        RollbackTexture();
+                        return ReportMaterial(EAssetLoadResult::ProviderFailed);
+                    }
+                }
+                Registration.Object = Provider.Create(Provider.Context, Payload, Pixels);
+            }
+            else
+            {
+                Registration.Object = Provider.Create(Provider.Context, Payload);
+            }
             if (Registration.Object == nullptr)
             {
-                return Report(Diagnostic, EAssetLoadResult::ProviderFailed, Id, Entry.Path);
+                RollbackTexture();
+                return ReportMaterial(EAssetLoadResult::ProviderFailed);
             }
             Registration.ProviderContext = Provider.Context;
             Registration.Destroy = Provider.Destroy;
@@ -453,8 +544,8 @@ EAssetLoadResult FAssetLoadSession::LoadAsset(FAssetId Id, TAssetHandle<Asset>& 
         if (RegisterResult != EAssetRegisterResult::Success)
         {
             Registration.Destroy(Registration.ProviderContext, Registration.Object);
-            return Report(Diagnostic, EAssetLoadResult::RegistrationFailed, Id, Entry.Path,
-                EContentIOResult::Success, EAssetFormatResult::Success, RegisterResult);
+            RollbackTexture();
+            return ReportMaterial(EAssetLoadResult::RegistrationFailed, RegisterResult);
         }
         return Report(Diagnostic, EAssetLoadResult::Success, Id, Entry.Path);
     };

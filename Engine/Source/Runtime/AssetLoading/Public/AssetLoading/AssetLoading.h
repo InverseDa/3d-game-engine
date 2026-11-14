@@ -39,6 +39,7 @@ struct FAssetLoadDiagnostic
     EAssetFormatResult FormatResult = EAssetFormatResult::Success;
     EAssetRegisterResult RegistrationResult = EAssetRegisterResult::Success;
     FAssetId Id;
+    FAssetId DependencyId;
     String Path;
 };
 
@@ -66,6 +67,12 @@ public:
         FAssetLoadDiagnostic* Diagnostic = nullptr) noexcept;
     EAssetLoadResult Find(FAssetId Id, FAssetCatalogEntry& Out) const noexcept;
     EAssetLoadResult Find(StringView Path, FAssetCatalogEntry& Out) const noexcept;
+    EAssetLoadResult Decode(FAssetId Id, FMeshAssetData& Out,
+        FAssetLoadDiagnostic* Diagnostic = nullptr) const noexcept;
+    EAssetLoadResult Decode(FAssetId Id, FMaterialAssetData& Out,
+        FAssetLoadDiagnostic* Diagnostic = nullptr) const noexcept;
+    EAssetLoadResult Decode(FAssetId Id, FCpuTextureAsset& Out,
+        FAssetLoadDiagnostic* Diagnostic = nullptr) const noexcept;
     std::size_t GetEntryCount() const noexcept;
 
 private:
@@ -73,6 +80,8 @@ private:
     struct FIndex;
     EAssetLoadResult Read(FAssetId Id, Array<uint8>& Out,
         FAssetLoadDiagnostic* Diagnostic) const noexcept;
+    template <typename Asset, typename Data>
+    EAssetLoadResult DecodeTyped(FAssetId Id, Data& Out, FAssetLoadDiagnostic* Diagnostic) const noexcept;
 
     IAllocator& Allocator;
     UniquePtr<FIndex> Index;
@@ -83,6 +92,15 @@ struct TAssetLoadProvider
 {
     void* Context = nullptr;
     Asset* (*Create)(void*, const Data&) noexcept = nullptr;
+    FAssetDestroyThunk Destroy = nullptr;
+};
+
+template <>
+struct TAssetLoadProvider<FMaterialAsset, FMaterialAssetData>
+{
+    void* Context = nullptr;
+    // Pixels are borrowed for this callback only, and null for a solid material.
+    FMaterialAsset* (*Create)(void*, const FMaterialAssetData&, const FCpuTextureAsset*) noexcept = nullptr;
     FAssetDestroyThunk Destroy = nullptr;
 };
 
@@ -123,6 +141,9 @@ private:
 
     template <typename Asset, typename Data>
     EAssetLoadResult LoadAsset(FAssetId Id, TAssetHandle<Asset>& Out,
+        const TAssetLoadProvider<Asset, Data>& Provider, FAssetLoadDiagnostic* Diagnostic) noexcept;
+    template <typename Asset, typename Data>
+    EAssetLoadResult LoadAssetInternal(FAssetId Id, TAssetHandle<Asset>& Out,
         const TAssetLoadProvider<Asset, Data>& Provider, FAssetLoadDiagnostic* Diagnostic) noexcept;
 
     const FAssetCatalog& Catalog;

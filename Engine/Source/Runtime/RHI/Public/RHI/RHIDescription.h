@@ -49,6 +49,7 @@ struct FRHITextureDesc
     bool bIsRenderTarget = false;
     bool bIsDepthStencil = false;
     bool bIsShaderResource = false;
+    bool bIsTransferDestination = false;
 };
 
 struct FRHISwapchainDesc

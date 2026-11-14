@@ -1,0 +1,3 @@
+# Editable sources, separate from compiler-produced .obj files.
+Engine/Content/**/*.obj text diff
+Engine/Content/**/*.material text diff

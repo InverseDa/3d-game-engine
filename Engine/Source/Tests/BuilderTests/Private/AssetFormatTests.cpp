@@ -70,7 +70,8 @@ bool TestMaterial(const FAssetId Id)
         "fixed inputs produce the same bytes");
     Result &= ExpectFormat(ReadAssetFileHeader(Bytes.AsSpan().First(HeaderSize), Bytes.Size(), Header)
         == EAssetFormatResult::Success && Header.Id == Id && Header.TypeId == GetMaterialAssetTypeId()
-        && Header.Path == Path && Header.PayloadOffset == HeaderSize && Header.PayloadSize == 12,
+        && Header.Path == Path && Header.PayloadOffset == HeaderSize && Header.PayloadSize == 12
+        && Header.Version == AssetFileVersion,
         "catalog parses a prefix without reading the payload");
     constexpr uint8 ExpectedPrefix[] = {'L', 'E', 'A', 'S', 1, 0, 0, 0};
     constexpr uint8 ExpectedRgb[] = {0, 0, 0x80, 0x3E, 0, 0, 0, 0, 0, 0, 0, 0x40};
@@ -111,7 +112,7 @@ bool TestMaterial(const FAssetId Id)
     Result &= ExpectFormat(EncodeAssetFile(Id, Path, Material, Repeat) == EAssetFormatResult::InvalidPayload,
         "negative colors are rejected");
 
-    Bytes[4] = 2;
+    Bytes[4] = 3;
     Result &= ExpectFormat(ReadAssetFileHeader(Bytes.AsSpan(), Header) == EAssetFormatResult::UnsupportedVersion
         && Header.Path.Size() == MaxAssetPathBytes, "unknown version preserves header output");
     Bytes[4] = 1;
@@ -177,6 +178,74 @@ bool TestMesh(const FAssetId Id)
     return Result;
 }
 
+bool TestTexturedPayloads(const FAssetId Id)
+{
+    FAssetId TextureId;
+    if (!FAssetId::TryParse("e8000000-0000-4000-8000-000000000002", TextureId))
+    {
+        return false;
+    }
+    FMaterialAssetData Material;
+    Material.BaseColor = Math::Vector3f{0.5f, 1.0f, 0.25f};
+    Material.BaseColorTexture = TextureId;
+    Array<uint8> Bytes;
+    FAssetFileHeaderView Header;
+    FMaterialAssetData DecodedMaterial;
+    const StringView MaterialPath = "Game/Materials/Test";
+    if (!ExpectFormat(EncodeAssetFile(Id, MaterialPath, Material, Bytes) == EAssetFormatResult::Success
+        && ReadAssetFileHeader(Bytes.AsSpan(), Header) == EAssetFormatResult::Success
+        && Header.Version == TexturedAssetFileVersion && Header.PayloadSize == 28
+        && DecodeAssetFile(Bytes.AsSpan(), DecodedMaterial) == EAssetFormatResult::Success
+        && DecodedMaterial.BaseColor == Material.BaseColor && DecodedMaterial.BaseColorTexture == TextureId,
+        "v2 material round trips its linear tint and UUID"))
+    {
+        return false;
+    }
+    bool Result = ExpectFormat(std::memcmp(Bytes.Data() + Header.PayloadOffset + 12,
+        TextureId.GetUuid().GetBytes().Data(), FUuid::ByteCount) == 0, "material uses canonical UUID byte order");
+    std::memset(Bytes.Data() + Header.PayloadOffset + 12, 0, FUuid::ByteCount);
+    Result &= ExpectFormat(DecodeAssetFile(Bytes.AsSpan(), DecodedMaterial) == EAssetFormatResult::InvalidPayload
+        && DecodedMaterial.BaseColorTexture == TextureId, "nil v2 material dependency preserves output");
+    Material.BaseColorTexture = {};
+    Result &= ExpectFormat(EncodeAssetFile(Id, MaterialPath, Material, Bytes) == EAssetFormatResult::Success
+        && DecodeAssetFile(Bytes.AsSpan(), DecodedMaterial) == EAssetFormatResult::Success
+        && !DecodedMaterial.BaseColorTexture.IsValid(), "v1 material resets a previous texture dependency");
+
+    FMeshAssetData Mesh;
+    Mesh.Positions = {Math::Vector3f{0, 0, 0}, Math::Vector3f{1, 0, 0}, Math::Vector3f{0, 1, 0}};
+    Mesh.Indices = {2, 0, 1};
+    Mesh.UVs = {Math::Vector2f{0, 0}, Math::Vector2f{1, 0}, Math::Vector2f{0, 1}};
+    const StringView MeshPath = "Game/Meshes/Test";
+    FMeshAssetData DecodedMesh;
+    if (!ExpectFormat(EncodeAssetFile(Id, MeshPath, Mesh, Bytes) == EAssetFormatResult::Success
+        && ReadAssetFileHeader(Bytes.AsSpan(), Header) == EAssetFormatResult::Success
+        && Header.Version == TexturedAssetFileVersion && Header.PayloadSize == 80
+        && DecodeAssetFile(Bytes.AsSpan(), DecodedMesh) == EAssetFormatResult::Success
+        && DecodedMesh.UVs.Size() == 3 && DecodedMesh.UVs[2] == Mesh.UVs[2]
+        && DecodedMesh.Indices[0] == 2 && DecodedMesh.BoundsMax == Math::Vector3f{1, 1, 0},
+        "v2 mesh round trips UVs, positions, indices and derived bounds"))
+    {
+        return false;
+    }
+    Result &= ExpectFormat(DecodeAssetFile(Bytes.AsSpan().First(Bytes.Size() - 1), DecodedMesh)
+        == EAssetFormatResult::InvalidHeader && DecodedMesh.UVs.Size() == 3, "truncated v2 file preserves output");
+    constexpr uint8 Infinity[] = {0, 0, 0x80, 0x7f};
+    std::memcpy(Bytes.Data() + Header.PayloadOffset + 8 + 3 * 12, Infinity, sizeof(Infinity));
+    Result &= ExpectFormat(DecodeAssetFile(Bytes.AsSpan(), DecodedMesh) == EAssetFormatResult::InvalidPayload
+        && DecodedMesh.UVs[2] == Mesh.UVs[2], "non-finite disk UV preserves output");
+    Mesh.UVs[0][1] = (std::numeric_limits<float>::infinity)();
+    Result &= ExpectFormat(EncodeAssetFile(Id, MeshPath, Mesh, Bytes) == EAssetFormatResult::InvalidPayload,
+        "non-finite authored UV is rejected");
+    Mesh.UVs = {Math::Vector2f{0, 0}};
+    Result &= ExpectFormat(EncodeAssetFile(Id, MeshPath, Mesh, Bytes) == EAssetFormatResult::InvalidPayload,
+        "mesh must have an entire UV channel");
+    Mesh.UVs.Clear();
+    Result &= ExpectFormat(EncodeAssetFile(Id, MeshPath, Mesh, Bytes) == EAssetFormatResult::Success
+        && DecodeAssetFile(Bytes.AsSpan(), DecodedMesh) == EAssetFormatResult::Success
+        && DecodedMesh.UVs.IsEmpty(), "v1 mesh replaces previous UV data with an empty channel");
+    return Result;
+}
+
 bool TestTexture(const FAssetId Id)
 {
     FCpuTextureAsset Texture;
@@ -212,6 +281,10 @@ bool TestTexture(const FAssetId Id)
     {
         return false;
     }
+    Bytes[4] = 2;
+    Result &= ExpectFormat(ReadAssetFileHeader(Bytes.AsSpan(), Header) == EAssetFormatResult::UnsupportedVersion
+        && Header.Version == AssetFileVersion, "v2 is unsupported for texture and preserves header output");
+    Bytes[4] = 1;
     std::memset(Bytes.Data() + Header.PayloadOffset, 0xff, 8);
     Result &= ExpectFormat(DecodeAssetFile(Bytes.AsSpan(), Decoded) == EAssetFormatResult::LimitExceeded
         && Decoded.Width == 2 && Decoded.Height == 1 && Decoded.Pixels.Size() == 8,
@@ -228,6 +301,7 @@ bool TestAllocationFailure(const FAssetId Id)
         Math::Vector3f{0.0f, 1.0f, 0.0f},
     };
     Mesh.Indices = {0, 1, 2};
+    Mesh.UVs = {Math::Vector2f{0, 0}, Math::Vector2f{1, 0}, Math::Vector2f{0, 1}};
     const StringView Path = "Game/LongerThanSmallStringAssetPath/Oom.leasset";
     Array<uint8> Bytes;
     if (!ExpectFormat(EncodeAssetFile(Id, Path, Mesh, Bytes) == EAssetFormatResult::Success,
@@ -275,7 +349,7 @@ bool TestAllocationFailure(const FAssetId Id)
                 break;
             }
             Result &= ExpectFormat(Status == EAssetFormatResult::AllocationFailed
-                && Decoded.Positions.IsEmpty() && Decoded.Indices.IsEmpty()
+                && Decoded.Positions.IsEmpty() && Decoded.Indices.IsEmpty() && Decoded.UVs.IsEmpty()
                 && Decoded.BoundsMin == Math::Vector3f{19.0f} && Allocator.Live == 0,
                 "decode allocation failure preserves payload and releases candidate");
         }
@@ -296,6 +370,7 @@ bool RunAssetFormatTests()
     }
     bool Result = TestMaterial(Id);
     Result &= TestMesh(Id);
+    Result &= TestTexturedPayloads(Id);
     Result &= TestTexture(Id);
     Result &= TestAllocationFailure(Id);
     return Result;

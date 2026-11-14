@@ -4,7 +4,7 @@ Win64 Game 和 Editor 构建会读取样例导入清单，运行 AssetImport 和
 
 1. 修改 `Engine/Content/Examples/AssetImport/` 内的 `Triangle.obj`、`Palette.ppm`、`WarmOrange.material`、`Scene.json` 或导入清单 `Imports.json`。实体和资产用稳定 UUID 交叉引用。代码、资产与场景都可通过常规 Git diff 和命令行验证。
 2. 运行 `Engine/Builder/LimitlessBuilder.bat build --platform Win64 --config Debug --type Game`。非法输入会让构建报错并显示出错位置，成功时重新生成可运行的样例。
-3. 启动 `Engine/Binaries/Win64/Debug/Limitless/Game/LimitlessGame.exe`。日志应出现 5 个实体、2 个可见网格，以及 `BasePass → CompositeToBackBufferPass`。样例的两个网格共享资产，纹理样例可在 CPU 端加载。
+3. 启动 `Engine/Binaries/Win64/Debug/Limitless/Game/LimitlessGame.exe`。当前样例有 7 个实体及 4 个可见网格，在现有 BasePass 中混合显示贴图和纯色材质。纹理工作流和验收见 [TextureSampling.md](TextureSampling.md)。
 
 无需打开窗口即可运行校验。先构建 `SceneTool` Program，随后传入场景文件、mount 名称和已导入资产的绝对根目录。单个资产源可用 [AssetImport](AssetImport.md) 的 `--check`。JSON 字段及示例见 [SceneFormat](SceneFormat.md)。
 
@@ -20,7 +20,7 @@ $content = (Resolve-Path 'Engine/Binaries/Win64/Debug/Limitless/Game/DemoContent
 $game = (Resolve-Path 'Engine/Binaries/Win64/Debug/Limitless/Game/LimitlessGame.exe').Path
 $save = Join-Path (Resolve-Path 'Engine/Intermediate').Path 'M1SavedScene.json'
 $env:LIMITLESS_DEMO_EDIT_ENTITY = '8a0a5d74-17ef-48e0-a46b-f7105518e702'
-$env:LIMITLESS_DEMO_EDIT_X = '-0.8'
+$env:LIMITLESS_DEMO_EDIT_X = '-1.78'
 $env:LIMITLESS_DEMO_SAVE_SCENE = $save
 Start-Process -FilePath $game -WorkingDirectory (Get-Location).Path -Wait
 Remove-Item Env:LIMITLESS_DEMO_EDIT_ENTITY, Env:LIMITLESS_DEMO_EDIT_X, Env:LIMITLESS_DEMO_SAVE_SCENE

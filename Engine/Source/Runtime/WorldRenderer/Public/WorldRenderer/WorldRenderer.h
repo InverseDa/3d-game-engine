@@ -30,6 +30,7 @@ enum class EWorldRenderSnapshotBuildResult : uint8
     InvalidBounds,
     InvalidClipCoordinates,
     AllocationFailed,
+    MissingMeshUV,
 };
 
 struct FWorldRenderSnapshotBuildContext

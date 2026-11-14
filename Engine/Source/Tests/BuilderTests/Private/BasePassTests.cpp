@@ -8,6 +8,7 @@
 #include "RHI/RHIBuffer.h"
 #include "RHI/RHICommandList.h"
 #include "RHI/RHIPipeline.h"
+#include "RHI/RHISampler.h"
 #include "RHI/RHITexture.h"
 #include "Record/RFGBuilder.h"
 #include "Record/RFGRecordedGraph.h"
@@ -89,12 +90,22 @@ public:
     FRHIBindGroupDesc Desc;
 };
 
+class FBasePassTestSampler final : public FRHISampler
+{
+public:
+    const FRHISamplerDesc& GetDesc() const override { return Desc; }
+
+private:
+    FRHISamplerDesc Desc;
+};
+
 enum class EBasePassCommandEvent : uint8
 {
     BindPipeline,
     BeginRenderPass,
     SetViewport,
     SetScissor,
+    BindMaterial,
     SetVertex,
     SetIndex,
     PushConstants,
@@ -158,7 +169,12 @@ public:
         Events.PushBack(EBasePassCommandEvent::SetIndex);
         IndexBuffers.PushBack(FRecordedIndexBinding{Buffer, Format});
     }
-    void SetBindGroup(uint32, FRHIBindGroup*) override {}
+    void SetBindGroup(uint32 SetIndex, FRHIBindGroup* BindGroup) override
+    {
+        Events.PushBack(EBasePassCommandEvent::BindMaterial);
+        MaterialSets.PushBack(SetIndex);
+        Materials.PushBack(BindGroup);
+    }
     void SetPushConstants(EShaderStage Stage, const void* Data, uint32 Size) override
     {
         Events.PushBack(EBasePassCommandEvent::PushConstants);
@@ -180,6 +196,8 @@ public:
 
     Array<EBasePassCommandEvent> Events;
     Array<FRHIPipeline_Graphics*> Pipelines;
+    Array<FRHIBindGroup*> Materials;
+    Array<uint32> MaterialSets;
     Array<FRHIBuffer*> VertexBuffers;
     Array<FRecordedIndexBinding> IndexBuffers;
     Array<FRecordedPushConstants> Pushes;
@@ -217,6 +235,27 @@ struct FBasePassFixture
 
         ConfigurePipeline(Pipelines[0]);
         ConfigurePipeline(Pipelines[1]);
+        Layout.Desc.SetIndex = 0;
+        for (std::size_t Index = 0; Index < 2; ++Index)
+        {
+            Pipelines[Index].Desc.BindGroupLayouts.PushBack(&Layout);
+        }
+        for (std::size_t Index = 0; Index < 3; ++Index)
+        {
+            Samples[Index].Desc.Format = EPixelFormat::R8G8B8A8_SRGB;
+            Samples[Index].Desc.bIsShaderResource = true;
+            SampleViews[Index].Desc.Texture = &Samples[Index];
+            SampleViews[Index].Desc.Format = EPixelFormat::R8G8B8A8_SRGB;
+            Groups[Index].Desc.Layout = &Layout;
+            FRHIBindGroupItem Image;
+            Image.TextureView = &SampleViews[Index];
+            Groups[Index].Desc.Items.PushBack(Image);
+            FRHIBindGroupItem SamplerItem;
+            SamplerItem.Binding = 1;
+            SamplerItem.Sampler = &Sampler;
+            Groups[Index].Desc.Items.PushBack(SamplerItem);
+        }
+        Groups[3].Desc = Groups[0].Desc;
 
         VertexBuffers[0].Desc.Size = 256;
         VertexBuffers[1].Desc.Size = 512;
@@ -281,6 +320,8 @@ struct FBasePassFixture
         Mesh.MaterialAssetId = MaterialIds[ResourceIndex];
         Mesh.PassMask = ERenderMeshPassMask::SceneColor;
         Mesh.LocalToWorld = Math::Matrix4f::Identity();
+        Mesh.BaseColorTexture = &Samples[ResourceIndex];
+        Mesh.MaterialBindGroup = &Groups[ResourceIndex];
     }
 
     FBasePassTestTexture Color;
@@ -288,6 +329,11 @@ struct FBasePassFixture
     FBasePassTestTextureView ColorView;
     FBasePassTestTextureView DepthView;
     FBasePassResources Resources;
+    FBasePassTestBindGroupLayout Layout;
+    FBasePassTestSampler Sampler;
+    FBasePassTestTexture Samples[3];
+    FBasePassTestTextureView SampleViews[3];
+    FBasePassTestBindGroup Groups[4];
     FBasePassTestPipeline Pipelines[2];
     FBasePassTestBuffer VertexBuffers[2];
     FBasePassTestBuffer IndexBuffers[2];
@@ -399,11 +445,13 @@ int RunBasePassRecordTests()
         EBasePassCommandEvent::SetViewport,
         EBasePassCommandEvent::SetScissor,
         EBasePassCommandEvent::BindPipeline,
+        EBasePassCommandEvent::BindMaterial,
         EBasePassCommandEvent::SetVertex,
         EBasePassCommandEvent::SetIndex,
         EBasePassCommandEvent::PushConstants,
         EBasePassCommandEvent::DrawIndexed,
         EBasePassCommandEvent::BindPipeline,
+        EBasePassCommandEvent::BindMaterial,
         EBasePassCommandEvent::SetVertex,
         EBasePassCommandEvent::SetIndex,
         EBasePassCommandEvent::PushConstants,
@@ -417,6 +465,25 @@ int RunBasePassRecordTests()
     }
     Failures += Expect(bEventOrder,
         "BasePass records attachment, state, per-object binding, push, and indexed draw order");
+
+    Fixture.Scene.Meshes.PushBack(Fixture.Scene.Meshes[0]);
+    Fixture.Scene.Meshes.Back().PrimitiveId = {7, 4};
+    Fixture.Scene.Meshes.Back().BaseColorTexture = &Fixture.Samples[2];
+    Fixture.Scene.Meshes.Back().MaterialBindGroup = &Fixture.Groups[2];
+    Fixture.Scene.Meshes.PushBack(Fixture.Scene.Meshes[0]);
+    Fixture.Scene.Meshes.Back().PrimitiveId = {7, 5};
+    Fixture.Scene.Meshes.Back().MaterialBindGroup = &Fixture.Groups[3];
+    FBasePassTestCommandList MixedMaterialCommands;
+    RecordBasePass(Pass, Fixture.Scene, MixedMaterialCommands);
+    bool bMixBound = MixedMaterialCommands.Materials.Size() == 4 &&
+        MixedMaterialCommands.DrawIndexCounts.Size() == 4;
+    for (std::size_t Index = 0; bMixBound && Index < 4; ++Index)
+    {
+        bMixBound = MixedMaterialCommands.Materials[Index] == &Fixture.Groups[Index] &&
+            MixedMaterialCommands.MaterialSets[Index] == 0;
+    }
+    Failures += Expect(bMixBound,
+        "BasePass rebinds each material across texture A, white, texture B and shared texture A");
 
     Fixture.Scene.Meshes.Clear();
     FBasePassTestCommandList EmptyCommands;
@@ -623,12 +690,14 @@ bool HasAccess(
     const FRFGPassNode& Pass,
     const FRFGResourceHandle Resource,
     const ERFGAccessType Access,
-    const ERHIResourceState State) noexcept
+    const ERHIResourceState State,
+    const EShaderStage ExpectedStage = EShaderStage::None) noexcept
 {
     for (const FRFGPassResourceAccess& Candidate : Pass.ResourceAccesses)
     {
         if (Candidate.Resource == Resource && Candidate.Access.Access == Access &&
-            Candidate.Access.State == State)
+            Candidate.Access.State == State &&
+            (ExpectedStage == EShaderStage::None || Candidate.Access.ShaderStage == ExpectedStage))
         {
             return true;
         }
@@ -661,6 +730,8 @@ int RunBasePassGraphContractTests()
     Fixture.Scene.Meshes[1].IndexBuffer = Fixture.Scene.Meshes[0].IndexBuffer;
     Fixture.Scene.Meshes[1].IndexFormat = Fixture.Scene.Meshes[0].IndexFormat;
     Fixture.Scene.Meshes[1].IndexCount = Fixture.Scene.Meshes[0].IndexCount;
+    Fixture.Scene.Meshes[1].BaseColorTexture = Fixture.Scene.Meshes[0].BaseColorTexture;
+    Fixture.Scene.Meshes[1].MaterialBindGroup = &Fixture.Groups[3];
     FBasePass Pass(Fixture.Resources);
     FRFGBuilder Builder;
     FRenderGraphBuilderBridge Bridge(Builder);
@@ -680,6 +751,8 @@ int RunBasePassGraphContractTests()
         "BasePassVertexBuffer", &Fixture.VertexBuffers[0], ERHIResourceState::VertexBuffer);
     const FRFGResourceHandle Index0 = Bridge.ImportBuffer(
         "BasePassIndexBuffer", &Fixture.IndexBuffers[0], ERHIResourceState::IndexBuffer);
+    const FRFGResourceHandle Sample = Bridge.ImportTexture(
+        "BasePassColorTexture", &Fixture.Samples[0], ERHIResourceState::ShaderResource);
 
     const FRFGPassHandle CompositeHandle = Builder.AddPass(
         "Composite", "Composite", {}, ERFGPassFlags::None, ERFGQueueType::Graphics);
@@ -709,12 +782,14 @@ int RunBasePassGraphContractTests()
         Graph.GetResourceNode(SceneDepth).InitialState == ERHIResourceState::Undefined &&
         Graph.GetResourceNode(Vertex0).InitialState == ERHIResourceState::VertexBuffer &&
         Graph.GetResourceNode(Index0).InitialState == ERHIResourceState::IndexBuffer &&
+        Graph.GetResourceNode(Sample).InitialState == ERHIResourceState::ShaderResource &&
         HasAccess(BaseNode, SceneColor, ERFGAccessType::Write, ERHIResourceState::RenderTarget) &&
         HasAccess(BaseNode, SceneDepth, ERFGAccessType::Write, ERHIResourceState::DepthStencilWrite) &&
         HasAccess(BaseNode, Vertex0, ERFGAccessType::Read, ERHIResourceState::VertexBuffer) &&
         HasAccess(BaseNode, Index0, ERFGAccessType::Read, ERHIResourceState::IndexBuffer) &&
-        Graph.IsOutputResource(SceneDepth) && BaseNode.ResourceAccesses.Size() == 4,
-        "BasePass declares each shared mesh buffer once alongside color and depth");
+        HasAccess(BaseNode, Sample, ERFGAccessType::Read, ERHIResourceState::ShaderResource, EShaderStage::Pixel) &&
+        Graph.IsOutputResource(SceneDepth) && BaseNode.ResourceAccesses.Size() == 5,
+        "BasePass declares shared mesh buffers and sampled image once alongside color and depth");
 
     FRFGCompiler Compiler;
     const FRFGCompileResult Compiled = Compiler.Compile(Graph, Builder.BuildSignature());

@@ -210,12 +210,22 @@ RHI 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 
 ---
 
+### 5.4 同步纹理上传
+
+上传目标使用 `bIsTransferDestination` 和 `bIsShaderResource`，目前支持单层、单 mip 的 2D RGBA8 UNORM/sRGB 图像。源缓冲使用 `TransferSrc`。调用方在提交前写入和解除映射。数据按行紧密排列，拷贝完整 mip 0 和 layer 0，源偏移必须是 4 的倍数，数据范围必须能容纳全部 texel。
+
+在独立 Graphics command list 上依序调用 `BeginChecked`、`TextureUploadBarrier(Undefined, CopyDestination)`、`CopyBufferToTexture2D`、`TextureUploadBarrier(CopyDestination, ShaderResource)` 和 `EndChecked`，逐步检查结果。Vulkan 校验设备归属、资源句柄、有效内存和录制状态。完成屏障面向像素着色器读取。该命令序列在渲染作用域外录制，一份命令列表对应一次完整上传。
+
+队列提交使用未触发的专用 fence。只有 `WaitChecked` 返回 `Success` 后才能发布纹理及释放 staging、命令列表和分配器。 `Timeout` 和 `Error` 不代表 GPU 已完成，调用方须继续持有提交使用的资源。设备丢失后进入终止清理路径。后续帧以 `ShaderResource` 导入纹理。
+
+`LimitlessTests` 默认验证拷贝描述符。在本机可启用 `LIMITLESS_TEST_VULKAN_UPLOAD=1` 额外运行真实 Vulkan 命令录制、提交和 fence 验证。
+
 ## 6. 同步原语
 
 | 类型 | 接口 | 说明 |
 |-----|------|------|
 | **FRHISemaphore** | 纯标记接口 | GPU-GPU 同步信号量。 |
-| **FRHIFence** | `Reset()` / `Wait(uint64 Timeout)` / `IsSignaled()` | GPU-CPU 同步围栏。 |
+| **FRHIFence** | `Reset()` / `Wait(uint64 Timeout)` / `WaitChecked(uint64 Timeout)` / `IsSignaled()` | GPU-CPU 同步围栏，受检等待区分成功、超时、设备丢失及其他错误。 |
 
 - **Vulkan 实现**：`FVulkanRHISemaphore` 封装 `VkSemaphore`；`FVulkanRHIFence` 封装 `VkFence`，`Wait` 默认超时为 `UINT64_MAX`。
 

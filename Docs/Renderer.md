@@ -182,20 +182,30 @@ Pipeline.AddPass(&PassB);
 
 #### `FBasePass`
 
-`FRenderAssetProvider` 将已解码的 CPU 网格与纯色材质转换为 BasePass 可用的 payload。
-网格 provider 使用 Upload 内存写入位置、白色顶点颜色和 R32 索引，销毁回调负责释放两个
-RHI buffer。材质借用应用持有的共享 pipeline，只参与 SceneColor Pass。
-应用在所有引用这些资源的帧完成后释放资产，随后释放共享 pipeline 和设备。
-固定附件格式和动态 viewport/scissor 使 BasePass pipeline 可以跨窗口尺寸复用。
+`FRenderAssetProvider` 将已解码的 CPU 网格与材质转换为 BasePass payload。
+网格上传位置、白色顶点色、UV 和 R32 索引。v1 网格使用默认 UV，只有带源 UV
+的网格可以与引用颜色纹理的材质组合。应用持有共享的 pipeline 和 set 0 layout。
+
+首次请求一个纹理 ID 时，provider 创建 host-visible staging 和单 mip RGBA8 sRGB
+图像，在 Graphics queue 录制 `Undefined → CopyDestination → Copy → ShaderResource`
+并等待专用 fence。确认完成后才创建 view、加入会话缓存并构造材质绑定。若完成状态
+不可确认，提交所用的 staging、命令列表、allocator、fence 与图像保持存活。后续
+上传会先查询是否完成，结束会话时通过受检 fence/终止队列等待回收。
+
+同一会话的材质按纹理 UUID 共享 image/view，各有独立的 bind group。无纹理引用的材质
+绑定共享白纹理，共用 nearest / clamp-to-edge sampler 和 LOD 0。先释放材质绑定再释放
+需要的纹理引用，最后一个引用释放时回收纹理。应用在提交帧完成后销毁会话，再销毁
+pipeline、layout 和设备。固定附件格式支持在 resize 时复用材质与 pipeline。
 
 - Preflight 在产生计划前验证唯一 primary camera、B8G8R8A8_SRGB SceneColor、D32_FLOAT
   depth、extent、opaque blend/depth contract、slot0 vertex binding、VB/IB usage/size、R16/R32
-  index format，以及有效的 persistent Material asset ID。
-- Setup 导入 SceneColor/depth 及全部可见 VB/IB；声明 `Undefined -> RenderTarget`、
-  `Undefined -> DepthStencilWrite`、`VertexBuffer` 与 `IndexBuffer` 读取，并保留两个附件输出。
+  index format、有效的持久 Material ID、与 pipeline 匹配的材质 bind group 及 sRGB sampled image。
+- Setup 导入 SceneColor/depth、VB/IB 和采样纹理。对共享纹理声明一次 Pixel ShaderResource 读取，
+  导入初始状态也是 ShaderResource。附件和 VB/IB 保持各自的状态。
 - Record 不再分配或排序；严格按 immutable snapshot 顺序清除 color/depth、设置 viewport/scissor，
-  绑定 pipeline/VB/IB，上传精确 80-byte `row_major LocalToClip + BaseColor` push constants，
-  并调用 `DrawIndexed`。BaseColor alpha 固定为 1。
+  每次绘制绑定 pipeline、材质、VB/IB，上传 80 字节的 LocalToClip 四行和 BaseColor。
+  顶点着色器逐行点乘计算 clip position。像素着色器线性乘以顶点色、材质色和 sRGB 解码
+  后的采样颜色，输出 alpha 为 1。
 - 零可见 mesh 仍是有效计划，BasePass 仍清除 SceneColor/depth。
 
 #### `FSceneColorCompositePass`
@@ -314,7 +324,7 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 | `Public/Renderer/SimpleRenderPass.h` | `FSimpleRenderPass` |
 | `Public/Renderer/SimpleRenderPipeline.h` | `FSimpleRenderPipeline` |
 | `Public/Renderer/BasePass.h` | 正式 BasePass attachment、indexed draw 与 80-byte object constants 契约 |
-| `Public/Renderer/RenderAssetProvider.h` | CPU 网格和纯色材质的 BasePass provider 与顶点布局 |
+| `Public/Renderer/RenderAssetProvider.h` | BasePass 网格、材质、同步纹理上传及会话缓存 |
 | `Public/Renderer/BasePassCompositePipeline.h` | 正式 BasePass→Composite 双 Pass pipeline |
 | `Public/Renderer/RendererMinimal.h` | 模块统一头文件（聚合包含） |
 | `Private/Renderer/Renderer.cpp` | `FRenderer` 实现 |

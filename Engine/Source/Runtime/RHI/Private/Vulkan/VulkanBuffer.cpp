@@ -16,7 +16,7 @@ namespace
             if ((TypeBits & (1u << i)) && (MemProps.memoryTypes[i].propertyFlags & Props) == Props)
                 return i;
         }
-        return 0;
+        return VK_MAX_MEMORY_TYPES;
     }
 
     VkBufferUsageFlags ToVkBufferUsage(uint32 UsageFlags)
@@ -62,6 +62,11 @@ FVulkanRHIBuffer::FVulkanRHIBuffer(FVulkanRHIDevice* InDevice, const FRHIBufferD
         BufferInfo.usage = ToVkBufferUsage(InDesc.UsageFlag);
         BufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // TODO: kodak
     }
+    if (BufferInfo.size == 0 || BufferInfo.usage == 0)
+    {
+        LE_LOG(LogRHI, Error, "Buffer creation rejected an empty size or usage.");
+        return;
+    }
     VkResult Result = vkCreateBuffer(Device->VkContext.LogicalDevice, &BufferInfo, nullptr, &this->Buffer);
     if (Result != VK_SUCCESS)
     {
@@ -81,6 +86,13 @@ FVulkanRHIBuffer::FVulkanRHIBuffer(FVulkanRHIDevice* InDevice, const FRHIBufferD
         AllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         AllocateInfo.allocationSize = Requirements.size;
         AllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(Device->VkContext.PhysicalDevice, Requirements.memoryTypeBits, ToVkMemoryProps(static_cast<EResourceUsage>(Desc.Usage)));
+    }
+    if (AllocateInfo.memoryTypeIndex == VK_MAX_MEMORY_TYPES)
+    {
+        LE_LOG(LogRHI, Error, "Buffer creation failed: no compatible memory type.");
+        vkDestroyBuffer(Device->VkContext.LogicalDevice, this->Buffer, nullptr);
+        this->Buffer = VK_NULL_HANDLE;
+        return;
     }
     Result = vkAllocateMemory(Device->VkContext.LogicalDevice, &AllocateInfo, nullptr, &this->Memory);
     if (Result != VK_SUCCESS)
@@ -139,6 +151,13 @@ void* FVulkanRHIBuffer::Map(uint64 Offset, uint64 Size)
         return nullptr;
     }
 
+    const auto Usage = static_cast<EResourceUsage>(Desc.Usage);
+    if (this->MappedPtr != nullptr || Offset >= Desc.Size || Size > Desc.Size - Offset ||
+        (Usage != EResourceUsage::Upload && Usage != EResourceUsage::Readback))
+    {
+        LE_LOG(LogRHI, Error, "Buffer map rejected an invalid range or resource usage.");
+        return nullptr;
+    }
     void* Data = nullptr;
     const VkResult Result = vkMapMemory(Device->VkContext.LogicalDevice, Memory, Offset, Size == 0 ? VK_WHOLE_SIZE : Size, 0, &Data);
     if (Result != VK_SUCCESS)

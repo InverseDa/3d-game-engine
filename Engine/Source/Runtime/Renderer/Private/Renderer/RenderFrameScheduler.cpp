@@ -70,6 +70,7 @@ bool FRenderFrameScheduler::Initialize(FRHIDevice* const InDevice)
     NextFrameIndex = 0;
     NextSlotIndex = 0;
     bTerminal = false;
+    bDeviceLost = false;
     bInitialized = true;
     return true;
 }
@@ -82,35 +83,13 @@ void FRenderFrameScheduler::Shutdown() noexcept
         return;
     }
 
-    bool bHasUnsignaledFailedSlot = false;
-    for (const FFrameSlot& Slot : Slots)
-    {
-        bHasUnsignaledFailedSlot |= Slot.State == ESlotState::UnsignaledAfterSubmitFailure;
-    }
-
-    if (bHasUnsignaledFailedSlot && Device->GetGraphicsQueue() != nullptr)
-    {
-        // A failed submit may leave its reset fence permanently unsignaled. Queue
-        // idle is an exceptional terminal recovery path; never wait that fence.
-        Device->GetGraphicsQueue()->WaitIdle();
-        for (FFrameSlot& Slot : Slots)
-        {
-            if (Slot.State == ESlotState::InFlight)
-            {
-                Slot.State = ESlotState::Ready;
-            }
-        }
-    }
-    else
-    {
-        WaitForAllFrames();
-    }
-
+    WaitForAllFrames();
     DestroySlots();
     Device = nullptr;
     NextFrameIndex = 0;
     NextSlotIndex = 0;
     bTerminal = false;
+    bDeviceLost = false;
     bInitialized = false;
 }
 
@@ -133,7 +112,13 @@ FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(
         return Result;
     }
 
-    Slot.CompletionFence->Wait();
+    const auto Completion = Slot.CompletionFence->WaitChecked();
+    if (Completion != ERHIFenceWaitResult::Success)
+    {
+        bDeviceLost = Completion == ERHIFenceWaitResult::DeviceLost;
+        bTerminal = true;
+        return Result;
+    }
     Slot.State = ESlotState::Ready;
     FlushDeferredReleases(Slot);
     if (!Slot.CommandAllocator->Reset())
@@ -182,6 +167,7 @@ FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(
     if (Result.SubmitResult != ERHIQueueSubmitResult::Success)
     {
         Slot.State = ESlotState::UnsignaledAfterSubmitFailure;
+        bDeviceLost = Result.SubmitResult == ERHIQueueSubmitResult::DeviceLost;
         bTerminal = true;
         return Result;
     }
@@ -212,17 +198,58 @@ void FRenderFrameScheduler::WaitForAllFrames()
         return;
     }
 
+    bool bNeedQueueDrain = bDeviceLost;
+    for (const FFrameSlot& Slot : Slots)
+    {
+        bNeedQueueDrain |= Slot.State == ESlotState::UnsignaledAfterSubmitFailure;
+    }
+    if (bNeedQueueDrain)
+    {
+        DrainQueueForRetirement();
+    }
+
     for (FFrameSlot& Slot : Slots)
     {
         if (Slot.State == ESlotState::InFlight)
         {
-            Slot.CompletionFence->Wait();
+            const auto Completion = Slot.CompletionFence->WaitChecked();
+            if (Completion != ERHIFenceWaitResult::Success)
+            {
+                bDeviceLost = Completion == ERHIFenceWaitResult::DeviceLost;
+                DrainQueueForRetirement();
+                break;
+            }
             Slot.State = ESlotState::Ready;
         }
+    }
+    for (FFrameSlot& Slot : Slots)
+    {
         if (Slot.State == ESlotState::Ready)
         {
             FlushDeferredReleases(Slot);
         }
+    }
+}
+
+void FRenderFrameScheduler::DrainQueueForRetirement()
+{
+    // A submit failure may leave the reset fence unsignaled. A failed wait
+    // likewise cannot authorize release. Confirm queue completion or device
+    // loss before releasing recorded resources and scene assets.
+    if (!bDeviceLost)
+    {
+        FRHIQueue* const Queue = Device->GetGraphicsQueue();
+        const auto Completion = Queue == nullptr ? ERHIFenceWaitResult::Error : Queue->WaitIdleChecked();
+        if (Completion != ERHIFenceWaitResult::Success && Completion != ERHIFenceWaitResult::DeviceLost)
+        {
+            HandleContractViolation("could not safely retire submitted render frames", __FILE__, __LINE__);
+        }
+        bDeviceLost = Completion == ERHIFenceWaitResult::DeviceLost;
+    }
+    bTerminal |= bDeviceLost;
+    for (FFrameSlot& Slot : Slots)
+    {
+        Slot.State = ESlotState::Ready;
     }
 }
 

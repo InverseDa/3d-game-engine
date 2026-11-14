@@ -1,5 +1,6 @@
 #include "CoreMinimal.h"
 #include "Vulkan/VulkanRHI.h"
+#include <new>
 
 #include <algorithm>
 #include <cstdio>
@@ -839,7 +840,13 @@ FRHIBuffer* FVulkanRHIDevice::CreateBuffer(const FRHIBufferDesc& Desc)
         LE_LOG(LogRHI, Error, "CreateBuffer failed: logical device is null.");
         return nullptr;
     }
-    return new FVulkanRHIBuffer(this, Desc);
+    auto* const Buffer = new (std::nothrow) FVulkanRHIBuffer(this, Desc);
+    if (Buffer == nullptr || Buffer->Buffer == VK_NULL_HANDLE || Buffer->Memory == VK_NULL_HANDLE)
+    {
+        delete Buffer;
+        return nullptr;
+    }
+    return Buffer;
 }
 
 FRHITexture* FVulkanRHIDevice::CreateTexture(const FRHITextureDesc& Desc)
@@ -849,7 +856,13 @@ FRHITexture* FVulkanRHIDevice::CreateTexture(const FRHITextureDesc& Desc)
         LE_LOG(LogRHI, Error, "CreateTexture failed: logical device is null.");
         return nullptr;
     }
-    return new FVulkanRHITexture(this, Desc);
+    auto* const Texture = new (std::nothrow) FVulkanRHITexture(this, Desc);
+    if (Texture == nullptr || Texture->Image == VK_NULL_HANDLE || Texture->Memory == VK_NULL_HANDLE)
+    {
+        delete Texture;
+        return nullptr;
+    }
+    return Texture;
 }
 
 FRHITextureView* FVulkanRHIDevice::CreateTextureView(const FRHITextureViewDesc& Desc)
@@ -860,8 +873,13 @@ FRHITextureView* FVulkanRHIDevice::CreateTextureView(const FRHITextureViewDesc& 
         return nullptr;
     }
 
-    FVulkanRHITextureView* TextureView = new FVulkanRHITextureView(this, Desc);
-    if (TextureView->View == VK_NULL_HANDLE)
+    const auto* Texture = dynamic_cast<FVulkanRHITexture*>(Desc.Texture);
+    if (Texture == nullptr || Texture->Device != this || Texture->Image == VK_NULL_HANDLE)
+    {
+        return nullptr;
+    }
+    FVulkanRHITextureView* TextureView = new (std::nothrow) FVulkanRHITextureView(this, Desc);
+    if (TextureView == nullptr || TextureView->View == VK_NULL_HANDLE)
     {
         LE_LOG(LogRHI, Error, "CreateTextureView failed: Vulkan image view creation returned null.");
         delete TextureView;
@@ -878,8 +896,8 @@ FRHICommandAllocator* FVulkanRHIDevice::CreateCommandAllocator(const EQueueType 
         return nullptr;
     }
 
-    FVulkanRHICommandAllocator* const Allocator = new FVulkanRHICommandAllocator(this, Type);
-    if (Allocator->Pool == VK_NULL_HANDLE)
+    FVulkanRHICommandAllocator* const Allocator = new (std::nothrow) FVulkanRHICommandAllocator(this, Type);
+    if (Allocator == nullptr || Allocator->Pool == VK_NULL_HANDLE)
     {
         delete Allocator;
         return nullptr;
@@ -895,15 +913,15 @@ FRHICommandList* FVulkanRHIDevice::CreateCommandList(FRHICommandAllocator* const
         return nullptr;
     }
 
-    FVulkanRHICommandAllocator* const VulkanAllocator = static_cast<FVulkanRHICommandAllocator*>(Allocator);
-    if (VulkanAllocator->Device != this || VulkanAllocator->Pool == VK_NULL_HANDLE)
+    FVulkanRHICommandAllocator* const VulkanAllocator = dynamic_cast<FVulkanRHICommandAllocator*>(Allocator);
+    if (VulkanAllocator == nullptr || VulkanAllocator->Device != this || VulkanAllocator->Pool == VK_NULL_HANDLE)
     {
         LE_LOG(LogRHI, Error, "CreateCommandList failed: allocator belongs to another or invalid device.");
         return nullptr;
     }
 
-    FVulkanRHICommandList* const CommandList = new FVulkanRHICommandList(VulkanAllocator);
-    if (CommandList->Handle == VK_NULL_HANDLE)
+    FVulkanRHICommandList* const CommandList = new (std::nothrow) FVulkanRHICommandList(VulkanAllocator);
+    if (CommandList == nullptr || CommandList->Handle == VK_NULL_HANDLE)
     {
         delete CommandList;
         return nullptr;
@@ -936,8 +954,8 @@ FRHIFence* FVulkanRHIDevice::CreateFence(const bool bInitiallySignaled)
         return nullptr;
     }
 
-    FVulkanRHIFence* const Fence = new FVulkanRHIFence(this, bInitiallySignaled);
-    if (Fence->Handle == VK_NULL_HANDLE)
+    FVulkanRHIFence* const Fence = new (std::nothrow) FVulkanRHIFence(this, bInitiallySignaled);
+    if (Fence == nullptr || Fence->Handle == VK_NULL_HANDLE)
     {
         delete Fence;
         return nullptr;

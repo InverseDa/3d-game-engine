@@ -1,18 +1,26 @@
 struct FBasePassConstants
 {
-    row_major float4x4 LocalToClip;
+    float4 LocalToClipRow0;
+    float4 LocalToClipRow1;
+    float4 LocalToClipRow2;
+    float4 LocalToClipRow3;
     float4 BaseColor;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<FBasePassConstants> ObjectConstants;
 
+Texture2D BaseColorTexture : register(t0, space0);
+SamplerState BaseColorSampler : register(s1, space0);
+
 struct PSInput
 {
     [[vk::location(0)]] float3 Color : COLOR0;
+    [[vk::location(1)]] float2 UV : TEXCOORD0;
 };
 
 float4 MainPS(PSInput input) : SV_Target0
 {
-    return float4(input.Color * ObjectConstants.BaseColor.rgb, 1.0);
+    const float3 sampled = BaseColorTexture.SampleLevel(BaseColorSampler, input.UV, 0.0).rgb;
+    return float4(input.Color * ObjectConstants.BaseColor.rgb * sampled, 1.0);
 }

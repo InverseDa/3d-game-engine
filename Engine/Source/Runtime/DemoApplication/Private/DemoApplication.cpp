@@ -64,7 +64,8 @@ static void DestroyDemoRenderResources(FDemoRenderResources& Resources)
 static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(
     LE::FRHIDevice* Device,
     LE::FRHIShader* VertexShader,
-    LE::FRHIShader* PixelShader)
+    LE::FRHIShader* PixelShader,
+    LE::FRHIBindGroupLayout* MaterialLayout)
 {
     LE::FRHIPipelineDesc_Graphics PipelineDesc;
     PipelineDesc.Name = "BasePassPipeline";
@@ -91,6 +92,14 @@ static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(
     ColorAttr.Offset = offsetof(FBasePassVertex, Color);
     PipelineDesc.VertexAttributes.PushBack(ColorAttr);
 
+    LE::FRHIVertexInputAttribute UVAttr;
+    UVAttr.Location = 2;
+    UVAttr.Binding = 0;
+    UVAttr.Format = LE::EPixelFormat::R32G32_FLOAT;
+    UVAttr.Offset = offsetof(FBasePassVertex, UV);
+    PipelineDesc.VertexAttributes.PushBack(UVAttr);
+    PipelineDesc.BindGroupLayouts.PushBack(MaterialLayout);
+
     PipelineDesc.RenderTargetCount = 1;
     PipelineDesc.RenderTargetFormats[0] = LE::EPixelFormat::B8G8R8A8_SRGB;
     PipelineDesc.DepthStencilFormat = LE::EPixelFormat::D32_FLOAT;
@@ -105,6 +114,18 @@ static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(
     PipelineDesc.PushConstants.Size = sizeof(LE::FBasePassObjectConstants);
     return Device->CreateGraphicsPipeline(PipelineDesc);
 }
+
+struct FDemoSceneAssets final
+{
+    explicit FDemoSceneAssets(const FAssetCatalog& Catalog) noexcept
+        : Session(Catalog, {{&Provider, &FRenderAssetProvider::CreateMesh, &FRenderAssetProvider::DestroyMesh},
+            {&Provider, &FRenderAssetProvider::CreateMaterial, &FRenderAssetProvider::DestroyMaterial}}) {}
+
+    const FAssetRegistry& GetRegistry() const noexcept { return Session.GetRegistry(); }
+
+    FRenderAssetProvider Provider;
+    FAssetLoadSession Session;
+};
 
 static LE::FRHIPipeline_Graphics* CreateCompositePipeline(
     LE::FRHIDevice* Device,
@@ -516,7 +537,12 @@ public:
             return false;
         }
 
-        BasePassPipeline = CreateBasePassPipeline(Device, BasePassVertexShader, BasePassPixelShader);
+        MaterialLayout = CreateBasePassMaterialLayout(*Device);
+        if (MaterialLayout == nullptr)
+        {
+            return false;
+        }
+        BasePassPipeline = CreateBasePassPipeline(Device, BasePassVertexShader, BasePassPixelShader, MaterialLayout);
         if (BasePassPipeline == nullptr)
         {
             LE_LOG(LogXBD, Error, "Failed to create BasePass pipeline.");
@@ -542,7 +568,6 @@ public:
             LE_LOG(LogXBD, Error, "Failed to initialize demo frame scheduler.");
             return false;
         }
-        RenderAssetProvider = {Device, BasePassPipeline};
         if (!InitializeContent())
         {
             return false;
@@ -577,6 +602,8 @@ public:
         DestroyDemoRenderResources(RenderResources);
         RHI::DestroyResource(BasePassPipeline);
         BasePassPipeline = nullptr;
+        RHI::DestroyResource(MaterialLayout);
+        MaterialLayout = nullptr;
         RHI::DestroyResource(CompositePixelShader);
         CompositePixelShader = nullptr;
         RHI::DestroyResource(CompositeVertexShader);
@@ -620,6 +647,8 @@ public:
             FrameScheduler.WaitForAllFrames();
             LE_LOG(LogXBD, Info, "Explicitly recreating swapchain at {}x{}.",
                 WindowSize.Width, WindowSize.Height);
+            LE_LOG(LogXBD, Info, "Scene texture uploads at resize: {}.",
+                Assets->Provider.GetTextureUploadCount());
             if (!Swapchain->Resize(WindowSize.Width, WindowSize.Height))
             {
                 bCanRender = false;
@@ -761,6 +790,22 @@ public:
                 static_cast<uint32>(FrameResult.PresentStatus));
             return EApplicationTickResult::Exit;
         }
+        if (!bSceneSwitchAttempted && FrameResult.PresentStatus == ERHISwapchainStatus::Success)
+        {
+            bSceneSwitchAttempted = true;
+            const char* const NextScene = std::getenv("LIMITLESS_DEMO_NEXT_SCENE");
+            if (NextScene != nullptr && !PublishScene(NextScene))
+            {
+                LE_LOG(LogXBD, Info, "Keeping the active scene after replacement failed.");
+                bReportPreservedScene = true;
+            }
+        }
+        else if (bReportPreservedScene && FrameResult.PresentStatus == ERHISwapchainStatus::Success)
+        {
+            bReportPreservedScene = false;
+            LE_LOG(LogXBD, Info, "Presented the preserved scene with {} texture uploads.",
+                Assets->Provider.GetTextureUploadCount());
+        }
         return EApplicationTickResult::Continue;
     }
 
@@ -778,7 +823,7 @@ private:
     static bool ResolveMesh(void* Context, FAssetId Id, FMeshAssetHandle& Out) noexcept
     {
         FAssetLoadDiagnostic Diagnostic;
-        const auto Result = static_cast<FAssetLoadSession*>(Context)->Load(Id, Out, &Diagnostic);
+        const auto Result = static_cast<FDemoSceneAssets*>(Context)->Session.Load(Id, Out, &Diagnostic);
         if (Result != EAssetLoadResult::Success)
         {
             LogAssetFailure(Diagnostic);
@@ -789,18 +834,25 @@ private:
     static bool ResolveMaterial(void* Context, FAssetId Id, FMaterialAssetHandle& Out) noexcept
     {
         FAssetLoadDiagnostic Diagnostic;
-        const auto Result = static_cast<FAssetLoadSession*>(Context)->Load(Id, Out, &Diagnostic);
+        auto& Assets = *static_cast<FDemoSceneAssets*>(Context);
+        const auto Result = Assets.Session.Load(Id, Out, &Diagnostic);
         if (Result != EAssetLoadResult::Success)
         {
             LogAssetFailure(Diagnostic);
+            if (Result == EAssetLoadResult::ProviderFailed)
+            {
+                LE_LOG(LogXBD, Error, "Material GPU construction: {}.",
+                    DescribeTextureUploadResult(Assets.Provider.GetLastTextureUploadResult()));
+            }
         }
         return Result == EAssetLoadResult::Success;
     }
 
     static void LogAssetFailure(const FAssetLoadDiagnostic& Diagnostic) noexcept
     {
-        LE_LOG(LogXBD, Error, "Content asset '{}' ({}): load={}, file={}, format={}.",
+        LE_LOG(LogXBD, Error, "Content asset '{}' ({}), dependency {}: load={}, file={}, format={}.",
             Diagnostic.Path.Data(), Diagnostic.Id.ToString().Data(),
+            Diagnostic.DependencyId.ToString().Data(),
             static_cast<uint32>(Diagnostic.Result), DescribeContentIOResult(Diagnostic.FileResult),
             static_cast<uint32>(Diagnostic.FormatResult));
     }
@@ -901,17 +953,18 @@ private:
 
     bool PublishScene(StringView Path) noexcept
     {
-        FAssetLoadProviders Providers;
-        Providers.Mesh = {&RenderAssetProvider, &FRenderAssetProvider::CreateMesh, &FRenderAssetProvider::DestroyMesh};
-        Providers.Material = {&RenderAssetProvider,
-            &FRenderAssetProvider::CreateMaterial, &FRenderAssetProvider::DestroyMaterial};
-        auto CandidateAssets = TryMakeUnique<FAssetLoadSession>(Catalog, Providers, GetDefaultAllocator());
+        auto CandidateAssets = TryMakeUnique<FDemoSceneAssets>(Catalog);
         UniquePtr<FScene> Candidate;
         FSceneOperationDiagnostic Diagnostic;
         const String PrintablePath(Path);
         if (!CandidateAssets)
         {
             LE_LOG(LogXBD, Error, "Could not allocate a scene asset session for '{}'.", PrintablePath.Data());
+            return false;
+        }
+        if (!CandidateAssets->Provider.Initialize(Device, BasePassPipeline, MaterialLayout))
+        {
+            LE_LOG(LogXBD, Error, "Could not initialize material GPU resources for '{}'.", PrintablePath.Data());
             return false;
         }
         const FSceneAssetResolver Resolver{CandidateAssets.Get(), &CandidateAssets->GetRegistry(),
@@ -941,8 +994,26 @@ private:
         if (WorldRenderer.BuildSnapshot(CandidateWorld, CandidateAssets->GetRegistry(),
                 PreviewContext, Preview, &PreviewReport) != EWorldRenderSnapshotBuildResult::Success)
         {
-            LE_LOG(LogXBD, Error, "Scene '{}' is not renderable: {}.",
-                PrintablePath.Data(), static_cast<uint32>(PreviewReport.Result));
+            if (PreviewReport.Result == EWorldRenderSnapshotBuildResult::MissingMeshUV)
+            {
+                const auto* Meshes = CandidateWorld.GetMeshComponents();
+                if (Meshes != nullptr && PreviewReport.MeshIndex < Meshes->GetEntities().Size())
+                {
+                    FSceneEntityId EntityId;
+                    FAssetId MeshId;
+                    FAssetId MaterialId;
+                    const auto& Mesh = Meshes->GetComponents()[PreviewReport.MeshIndex];
+                    Candidate->TryGetEntityId(Meshes->GetEntities()[PreviewReport.MeshIndex], EntityId);
+                    CandidateAssets->GetRegistry().TryGetAssetId(Mesh.Mesh, MeshId);
+                    CandidateAssets->GetRegistry().TryGetAssetId(Mesh.Material, MaterialId);
+                    LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has no UVs for material {}.",
+                        PrintablePath.Data(), EntityId.ToString().Data(), MeshId.ToString().Data(),
+                        MaterialId.ToString().Data());
+                    return false;
+                }
+            }
+            LE_LOG(LogXBD, Error, "Scene '{}' is not renderable: {} (mesh {}).",
+                PrintablePath.Data(), static_cast<uint32>(PreviewReport.Result), PreviewReport.MeshIndex);
             return false;
         }
 
@@ -958,6 +1029,7 @@ private:
         Assets = std::move(CandidateAssets);
         LE_LOG(LogXBD, Info, "Loaded scene '{}' with {} entities and {} visible meshes.",
             PrintablePath.Data(), Scene->GetWorld().GetEntityCount(), Preview.GetRenderScene().Meshes.Size());
+        LE_LOG(LogXBD, Info, "Scene texture uploads at publication: {}.", Assets->Provider.GetTextureUploadCount());
         return true;
     }
 
@@ -965,9 +1037,8 @@ private:
     static constexpr uint32 DefaultWindowHeight = 720;
 
     FDemoWindowRuntimeModule& WindowModule;
-    FRenderAssetProvider RenderAssetProvider;
     FAssetCatalog Catalog;
-    UniquePtr<FAssetLoadSession> Assets;
+    UniquePtr<FDemoSceneAssets> Assets;
     UniquePtr<FScene> Scene;
     FWorldRenderer WorldRenderer;
     FRHIDevice* Device = nullptr;
@@ -977,12 +1048,15 @@ private:
     FRHIShader* CompositeVertexShader = nullptr;
     FRHIShader* CompositePixelShader = nullptr;
     FRHIPipeline_Graphics* BasePassPipeline = nullptr;
+    FRHIBindGroupLayout* MaterialLayout = nullptr;
     FRenderFrameScheduler FrameScheduler;
     FDemoRenderResources RenderResources;
     FRenderer Renderer;
     uint32 CachedWindowWidth = DefaultWindowWidth;
     uint32 CachedWindowHeight = DefaultWindowHeight;
     bool bCanRender = false;
+    bool bSceneSwitchAttempted = false;
+    bool bReportPreservedScene = false;
     bool bRenderingSuspended = false;
     bool bSwapchainRecreateRequested = false;
     bool bRendererInitialized = false;

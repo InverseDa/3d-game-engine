@@ -2,6 +2,7 @@ import * as Assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import * as Path from "node:path";
 import * as Fs from "node:fs/promises";
+import * as Os from "node:os";
 import { spawnSync } from "node:child_process";
 import Test from "node:test";
 
@@ -64,6 +65,56 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         Path.join(GameRoot, "LimitlessGame.exe"),
     ];
     const GameBeforeEditor = await HashFiles(GameArtifacts);
+    const Demo = Path.join(GameRoot, "DemoContent");
+    const SceneTool = Path.join(GameIntermediate,
+        "Generated/DemoApplication/ContentTools/Binaries/Win64/Debug/SceneTool/Program/SceneTool.exe");
+    const Scratch = await Fs.mkdtemp(Path.join(Os.tmpdir(), "limitless-textured-scene-"));
+    try {
+        await Fs.cp(Demo, Scratch, { recursive: true });
+        const SceneFile = Path.join(Scratch, "Scene.json");
+        const AssetRoot = Path.join(Scratch, "Assets");
+        const Check = () => spawnSync(SceneTool, ["check", SceneFile, "Game", AssetRoot], {
+            cwd: Scratch, encoding: "utf-8",
+        });
+        const Valid = Check();
+        Assert.equal(Valid.status, 0, Valid.stderr);
+        const SceneText = await Fs.readFile(SceneFile, "utf-8");
+        const Scene = JSON.parse(SceneText);
+        const TexturedEntity = Scene.entities.find((Entity: { mesh?: { sortKey: string } }) =>
+            Entity.mesh?.sortKey === "0");
+        TexturedEntity.mesh.mesh = "62fdc991-27a8-4a81-a077-647b47fd1f7b";
+        await Fs.writeFile(SceneFile, JSON.stringify(Scene));
+        const NoUV = Check();
+        Assert.equal(NoUV.status, 1, NoUV.stderr);
+        Assert.match(NoUV.stderr, /17ef-48e0-a46b-f7105518e702.*has no UVs/);
+        await Fs.writeFile(SceneFile, SceneText);
+
+        const Texture = Path.join(AssetRoot, "Textures/TextureCorners.leasset");
+        const Bytes = await Fs.readFile(Texture);
+        const BadBytes = Buffer.from(Bytes);
+        BadBytes.writeUInt32LE(0, 48 + BadBytes.readUInt32LE(40));
+        await Fs.writeFile(Texture, BadBytes);
+        const Corrupt = Check();
+        Assert.equal(Corrupt.status, 1, Corrupt.stderr);
+        Assert.match(Corrupt.stderr, /mesh\.material\.baseColorTexture.*47fd1f7f/);
+        await Fs.unlink(Texture);
+        const Missing = Check();
+        Assert.equal(Missing.status, 1, Missing.stderr);
+        Assert.match(Missing.stderr, /mesh\.material\.baseColorTexture.*47fd1f7f/);
+
+        const CookedMaterial = Path.join(AssetRoot, "Materials/TextureCorners.leasset");
+        const MaterialBytes = await Fs.readFile(CookedMaterial);
+        const OtherMaterialId = Buffer.from("62fdc99127a84a81a077647b47fd1f7c", "hex");
+        OtherMaterialId.copy(MaterialBytes, 48 + MaterialBytes.readUInt32LE(40) + 12);
+        await Fs.writeFile(CookedMaterial, MaterialBytes);
+        const WrongType = Check();
+        Assert.equal(WrongType.status, 1, WrongType.stderr);
+        Assert.match(WrongType.stderr, /mesh\.material\.baseColorTexture.*47fd1f7c/);
+    } finally {
+        if (Path.dirname(Path.resolve(Scratch)) === Path.resolve(Os.tmpdir())) {
+            await Fs.rm(Scratch, { recursive: true, force: true });
+        }
+    }
 
     const EditorBuild = RunBuild(Builder, Root, "Limitless", "Editor");
     Assert.equal(EditorBuild.status, 0, `${EditorBuild.stdout}\n${EditorBuild.stderr}`);

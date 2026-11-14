@@ -25,16 +25,23 @@ FVulkanRHIQueue::FVulkanRHIQueue(FVulkanRHIDevice* InDevice, uint32 FamilyIndex,
 
 void FVulkanRHIQueue::WaitIdle()
 {
+    static_cast<void>(WaitIdleChecked());
+}
+
+ERHIFenceWaitResult FVulkanRHIQueue::WaitIdleChecked()
+{
     if (this->Handle == VK_NULL_HANDLE)
     {
         LE_LOG(LogRHI, Warn, "WaitIdle skipped: queue handle is null.");
-        return;
+        return ERHIFenceWaitResult::Error;
     }
     const VkResult Result = vkQueueWaitIdle(this->Handle);
-    if (Result != VK_SUCCESS)
+    if (Result == VK_SUCCESS)
     {
-        LE_LOG(LogRHI, Error, "vkQueueWaitIdle failed. VkResult={}", static_cast<int32>(Result));
+        return ERHIFenceWaitResult::Success;
     }
+    LE_LOG(LogRHI, Error, "vkQueueWaitIdle failed. VkResult={}", static_cast<int32>(Result));
+    return Result == VK_ERROR_DEVICE_LOST ? ERHIFenceWaitResult::DeviceLost : ERHIFenceWaitResult::Error;
 }
 
 ERHIQueueSubmitResult FVulkanRHIQueue::Submit(const FRHISubmitInfo& SubmitInfo)
@@ -51,60 +58,61 @@ ERHIQueueSubmitResult FVulkanRHIQueue::Submit(const FRHISubmitInfo& SubmitInfo)
     }
 
     VkCommandBuffer CmdBufferHandle = VK_NULL_HANDLE;
-    if (SubmitInfo.CmdList)
+    auto* const CommandList = dynamic_cast<FVulkanRHICommandList*>(SubmitInfo.CmdList);
+    if (SubmitInfo.CmdList != nullptr)
     {
-        CmdBufferHandle = static_cast<FVulkanRHICommandList*>(SubmitInfo.CmdList)->Handle;
-        if (CmdBufferHandle == VK_NULL_HANDLE)
+        if (CommandList == nullptr || CommandList->Device != Device ||
+            CommandList->Handle == VK_NULL_HANDLE || !CommandList->bExecutable)
         {
-            LE_LOG(LogRHI, Error, "Submit rejected a command list with a null Vulkan handle.");
+            LE_LOG(LogRHI, Error, "Submit rejected an invalid or non-executable command list.");
             return ERHIQueueSubmitResult::InvalidArguments;
         }
+        CmdBufferHandle = CommandList->Handle;
     }
 
     LE::Array<VkSemaphore> WaitSemaphores;
     LE::Array<VkPipelineStageFlags> WaitStages;
     for (auto* Semaphore : SubmitInfo.WaitSemaphores)
     {
-        if (Semaphore == nullptr)
+        const auto* VulkanSemaphore = dynamic_cast<FVulkanRHISemaphore*>(Semaphore);
+        if (VulkanSemaphore == nullptr || VulkanSemaphore->Device != Device ||
+            VulkanSemaphore->Handle == VK_NULL_HANDLE)
         {
-            LE_LOG(LogRHI, Error, "Submit rejected a null wait semaphore.");
+            LE_LOG(LogRHI, Error, "Submit rejected an invalid wait semaphore.");
             return ERHIQueueSubmitResult::InvalidArguments;
         }
-        VkSemaphore Handle = static_cast<FVulkanRHISemaphore*>(Semaphore)->Handle;
-        if (Handle == VK_NULL_HANDLE)
+        if (!WaitSemaphores.TryPushBack(VulkanSemaphore->Handle) ||
+            !WaitStages.TryPushBack(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT))
         {
-            LE_LOG(LogRHI, Error, "Submit rejected a wait semaphore with a null Vulkan handle.");
-            return ERHIQueueSubmitResult::InvalidArguments;
+            return ERHIQueueSubmitResult::Error;
         }
-        WaitSemaphores.PushBack(Handle);
-        WaitStages.PushBack(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
     }
     LE::Array<VkSemaphore> SignalSemaphores;
     for (auto* Semaphore : SubmitInfo.SignalSemaphores)
     {
-        if (Semaphore == nullptr)
+        const auto* VulkanSemaphore = dynamic_cast<FVulkanRHISemaphore*>(Semaphore);
+        if (VulkanSemaphore == nullptr || VulkanSemaphore->Device != Device ||
+            VulkanSemaphore->Handle == VK_NULL_HANDLE)
         {
-            LE_LOG(LogRHI, Error, "Submit rejected a null signal semaphore.");
+            LE_LOG(LogRHI, Error, "Submit rejected an invalid signal semaphore.");
             return ERHIQueueSubmitResult::InvalidArguments;
         }
-        VkSemaphore Handle = static_cast<FVulkanRHISemaphore*>(Semaphore)->Handle;
-        if (Handle == VK_NULL_HANDLE)
+        if (!SignalSemaphores.TryPushBack(VulkanSemaphore->Handle))
         {
-            LE_LOG(LogRHI, Error, "Submit rejected a signal semaphore with a null Vulkan handle.");
-            return ERHIQueueSubmitResult::InvalidArguments;
+            return ERHIQueueSubmitResult::Error;
         }
-        SignalSemaphores.PushBack(Handle);
     }
 
     VkFence FenceHandle = VK_NULL_HANDLE;
     if (SubmitInfo.FenceToSignal)
     {
-        FenceHandle = static_cast<FVulkanRHIFence*>(SubmitInfo.FenceToSignal)->Handle;
-        if (FenceHandle == VK_NULL_HANDLE)
+        const auto* Fence = dynamic_cast<FVulkanRHIFence*>(SubmitInfo.FenceToSignal);
+        if (Fence == nullptr || Fence->Device != Device || Fence->Handle == VK_NULL_HANDLE)
         {
-            LE_LOG(LogRHI, Error, "Submit rejected a fence with a null Vulkan handle.");
+            LE_LOG(LogRHI, Error, "Submit rejected an invalid fence.");
             return ERHIQueueSubmitResult::InvalidArguments;
         }
+        FenceHandle = Fence->Handle;
     }
 
     VkSubmitInfo Info{};
@@ -133,7 +141,12 @@ ERHIQueueSubmitResult FVulkanRHIQueue::Submit(const FRHISubmitInfo& SubmitInfo)
     if (Result != VK_SUCCESS)
     {
         LE_LOG(LogRHI, Error, "vkQueueSubmit failed. VkResult={}", static_cast<int32>(Result));
-        return ERHIQueueSubmitResult::Error;
+        return Result == VK_ERROR_DEVICE_LOST ? ERHIQueueSubmitResult::DeviceLost : ERHIQueueSubmitResult::Error;
+    }
+    if (CommandList != nullptr)
+    {
+        // BeginChecked uses ONE_TIME_SUBMIT_BIT.
+        CommandList->bExecutable = false;
     }
     return ERHIQueueSubmitResult::Success;
 }

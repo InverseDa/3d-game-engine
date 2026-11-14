@@ -21,6 +21,7 @@ enum class ERHIQueueSubmitResult : uint8
     Success,
     InvalidArguments,
     Error,
+    DeviceLost,
 };
 
 struct FRHISubmitInfo
@@ -65,6 +66,7 @@ public:
 public:
     virtual ERHIQueueSubmitResult Submit(const FRHISubmitInfo& SubmitInfo) = 0;
     virtual void WaitIdle() = 0;
+    virtual ERHIFenceWaitResult WaitIdleChecked() { return ERHIFenceWaitResult::Error; }
     virtual EQueueType GetType() const = 0;
 };
 

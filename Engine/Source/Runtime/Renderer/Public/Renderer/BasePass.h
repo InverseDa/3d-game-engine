@@ -23,8 +23,8 @@ struct FBasePassResources
     FRHITextureView* SceneDepthView = nullptr;
 };
 
-// Shader-visible bytes. Matrices follow LE::Math's row-major storage and the
-// BasePass shader declares the matrix row_major explicitly.
+// Shader-visible bytes. The vertex shader reads the four row-major vectors
+// explicitly and dots each row with the local position.
 struct alignas(16) FBasePassObjectConstants
 {
     Math::Matrix4f LocalToClip = Math::Matrix4f::Identity();

@@ -100,16 +100,25 @@ void FVulkanRHIFence::Reset()
 
 void FVulkanRHIFence::Wait(uint64 Timeout)
 {
+    static_cast<void>(WaitChecked(Timeout));
+}
+
+ERHIFenceWaitResult FVulkanRHIFence::WaitChecked(uint64 Timeout)
+{
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE || this->Handle == VK_NULL_HANDLE)
     {
         LE_LOG(LogRHI, Warn, "Fence wait skipped: invalid fence/device.");
-        return;
+        return ERHIFenceWaitResult::Error;
     }
     const VkResult Result = vkWaitForFences(this->Device->VkContext.LogicalDevice, 1, &this->Handle, VK_TRUE, Timeout);
-    if (Result != VK_SUCCESS)
+    switch (Result)
     {
-        LE_LOG(LogRHI, Error, "vkWaitForFences failed. VkResult={}", static_cast<int32>(Result));
+    case VK_SUCCESS: return ERHIFenceWaitResult::Success;
+    case VK_TIMEOUT: return ERHIFenceWaitResult::Timeout;
+    default: break;
     }
+    LE_LOG(LogRHI, Error, "vkWaitForFences failed. VkResult={}", static_cast<int32>(Result));
+    return Result == VK_ERROR_DEVICE_LOST ? ERHIFenceWaitResult::DeviceLost : ERHIFenceWaitResult::Error;
 }
 
 bool FVulkanRHIFence::IsSignaled()

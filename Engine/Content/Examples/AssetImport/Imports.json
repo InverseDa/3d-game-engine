@@ -18,6 +18,36 @@
       "source": "Palette.ppm",
       "id": "62fdc991-27a8-4a81-a077-647b47fd1f7d",
       "path": "Game/Textures/Palette"
+    },
+    {
+      "kind": "mesh",
+      "source": "TextureQuad.obj",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd1f7e",
+      "path": "Game/Meshes/TextureQuad"
+    },
+    {
+      "kind": "texture",
+      "source": "TextureCorners.ppm",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd1f7f",
+      "path": "Game/Textures/TextureCorners"
+    },
+    {
+      "kind": "material",
+      "source": "TextureCorners.material",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd1f80",
+      "path": "Game/Materials/TextureCorners"
+    },
+    {
+      "kind": "material",
+      "source": "TextureBlue.material",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd1f81",
+      "path": "Game/Materials/TextureBlue"
+    },
+    {
+      "kind": "material",
+      "source": "TextureTint.material",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd1f82",
+      "path": "Game/Materials/TextureTint"
     }
   ]
 }

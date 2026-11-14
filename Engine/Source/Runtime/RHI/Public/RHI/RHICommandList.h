@@ -15,6 +15,30 @@ class FRHIPipeline_Graphics;
 class FRHIBindGroup;
 class FRHITextureView;
 
+// This upload operation writes a whole tightly packed color image at mip 0,
+// layer 0. It is deliberately limited to one-layer, one-mip RGBA8 textures.
+inline bool IsTextureUploadDestination(const FRHITextureDesc& Desc) noexcept
+{
+    return Desc.bIsTransferDestination && Desc.bIsShaderResource && !Desc.bIsDepthStencil &&
+        Desc.Width != 0 && Desc.Height != 0 && Desc.Depth == 1 &&
+        Desc.MipLevels == 1 && Desc.ArrayLayers == 1 &&
+        (Desc.Format == EPixelFormat::R8G8B8A8_UNORM || Desc.Format == EPixelFormat::R8G8B8A8_SRGB);
+}
+
+inline bool IsBufferToTexture2DCopyValid(
+    const FRHIBufferDesc& Source, const FRHITextureDesc& Destination, uint64 SourceOffset = 0) noexcept
+{
+    constexpr uint64 TexelBytes = 4;
+    if (!IsTextureUploadDestination(Destination) ||
+        (Source.UsageFlag & static_cast<uint32>(EBufferUsageFlags::TransferSrc)) == 0 ||
+        SourceOffset > Source.Size || SourceOffset % TexelBytes != 0)
+    {
+        return false;
+    }
+    const uint64 TexelCount = static_cast<uint64>(Destination.Width) * Destination.Height;
+    return TexelCount <= (Source.Size - SourceOffset) / TexelBytes;
+}
+
 struct FRHIViewport
 {
     float X = 0.0f;
@@ -43,6 +67,14 @@ public:
     virtual void End() = 0;
 
     virtual void ResourceBarriers(const FRHIBarrierBatch& Barriers) = 0;
+
+    // Checked upload recording is optional for backends. A supported command
+    // list records one complete Undefined -> CopyDestination -> ShaderResource
+    // (Pixel) sequence outside rendering before EndChecked().
+    virtual bool BeginChecked() { return false; }
+    virtual bool EndChecked() { return false; }
+    virtual bool TextureUploadBarrier(FRHITexture*, ERHIResourceState, ERHIResourceState) { return false; }
+    virtual bool CopyBufferToTexture2D(FRHIBuffer*, FRHITexture*, uint64 = 0) { return false; }
 
 public:
     virtual void BeginRenderPass(const FRHIRenderPassDesc& Desc) = 0;

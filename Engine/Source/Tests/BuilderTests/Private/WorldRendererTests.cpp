@@ -202,6 +202,44 @@ struct FWorldRendererFixture
     FEntity Entity;
 };
 
+int RunTexturedMeshContractTests()
+{
+    FWorldRendererFixture Fixture;
+    if (!Fixture.Initialize())
+    {
+        return Expect(false, "create textured world fixture");
+    }
+    FMaterialAsset& Material = Fixture.MaterialAssets[0];
+    Material.bRequiresUV = true;
+    Material.BaseColorTexture = reinterpret_cast<FRHITexture*>(static_cast<std::uintptr_t>(0x4100));
+    Material.MaterialBindGroup = reinterpret_cast<FRHIBindGroup*>(static_cast<std::uintptr_t>(0x4200));
+    FTransform Outside;
+    Outside.Translation = Math::Vector3f(1000.0f, 0.0f, 0.0f);
+    if (Fixture.World.SetLocalTransform(Fixture.Entity, Outside) != ETransformUpdateResult::Updated)
+    {
+        return Expect(false, "place textured entity outside the camera");
+    }
+    FWorldRenderer Renderer;
+    FWorldRenderSnapshot Snapshot;
+    FWorldRenderSnapshotBuildReport Report;
+    int Failures = Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, MakeBuildContext(1),
+        Snapshot, &Report) == EWorldRenderSnapshotBuildResult::MissingMeshUV &&
+        !Snapshot.IsPublished() && Report.PrimitiveId.IsValid(),
+        "textured material rejects absent authored UV before culling");
+    Fixture.MeshAsset.bHasUV = true;
+    FTransform Visible;
+    Visible.Translation = Math::Vector3f(4.0f, 5.0f, 6.0f);
+    const bool bRestored = Fixture.World.SetLocalTransform(Fixture.Entity, Visible) ==
+        ETransformUpdateResult::Updated;
+    Failures += Expect(bRestored && Renderer.BuildSnapshot(Fixture.World, Fixture.Assets,
+        MakeBuildContext(2), Snapshot, &Report) == EWorldRenderSnapshotBuildResult::Success &&
+        Snapshot.GetRenderScene().Meshes.Size() == 1 &&
+        Snapshot.GetRenderScene().Meshes[0].BaseColorTexture == Material.BaseColorTexture &&
+        Snapshot.GetRenderScene().Meshes[0].MaterialBindGroup == Material.MaterialBindGroup,
+        "valid visible UV mesh copies material sampling references into the snapshot");
+    return Failures;
+}
+
 int RunSnapshotSuccessAndIdentityTests()
 {
     int Failures = 0;
@@ -1206,6 +1244,7 @@ int RunWorldRendererTests()
     static_assert(sizeof(FRenderPrimitiveId) == sizeof(uint64) * 2);
 
     int Failures = 0;
+    Failures += RunTexturedMeshContractTests();
     Failures += RunSnapshotSuccessAndIdentityTests();
     Failures += RunSnapshotStabilityAndReplacementTests();
     Failures += RunSnapshotFailureTests();

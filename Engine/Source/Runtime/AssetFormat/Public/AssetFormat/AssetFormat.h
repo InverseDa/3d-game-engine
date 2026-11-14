@@ -10,6 +10,7 @@ namespace LE
 {
 
 inline constexpr uint32 AssetFileVersion = 1;
+inline constexpr uint32 TexturedAssetFileVersion = 2;
 inline constexpr std::size_t MaxAssetFileBytes = 128 * 1024 * 1024;
 inline constexpr std::size_t MaxAssetPathBytes = 1024;
 inline constexpr std::size_t MaxAssetFileHeaderBytes = 48 + MaxAssetPathBytes;
@@ -24,15 +25,18 @@ struct FAssetFileHeaderView
     StringView Path;
     std::size_t PayloadOffset = 0;
     std::size_t PayloadSize = 0;
+    uint32 Version = 0;
 };
 
 struct FMeshAssetData
 {
     explicit FMeshAssetData(IAllocator& Allocator = GetDefaultAllocator()) noexcept
-        : Positions(Allocator), Indices(Allocator) {}
+        : Positions(Allocator), Indices(Allocator), UVs(Allocator) {}
 
     Array<Math::Vector3f> Positions;
     Array<uint32> Indices;
+    // Empty for v1, or one top-left-origin coordinate per vertex.
+    Array<Math::Vector2f> UVs;
     Math::Vector3f BoundsMin;
     Math::Vector3f BoundsMax;
 };
@@ -40,6 +44,7 @@ struct FMeshAssetData
 struct FMaterialAssetData
 {
     Math::Vector3f BaseColor{1.0f};
+    FAssetId BaseColorTexture;
 };
 
 struct FCpuTextureAsset

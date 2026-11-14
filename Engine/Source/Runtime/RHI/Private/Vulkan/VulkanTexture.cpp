@@ -19,7 +19,7 @@ namespace
                 return i;
             }
         }
-        return 0;
+        return VK_MAX_MEMORY_TYPES;
     }
 
     VkFormat ToVkFormat(EPixelFormat Format)
@@ -57,7 +57,7 @@ namespace
         if (Desc.bIsDepthStencil)   Flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         if (Desc.bIsShaderResource) Flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
         if (Desc.bIsUAV)            Flags |= VK_IMAGE_USAGE_STORAGE_BIT;
-        Flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT; // 先预留上传
+        if (Desc.bIsTransferDestination) Flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         return Flags;
     }
 
@@ -131,6 +131,33 @@ FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextu
         Info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         Info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     }
+    if (Info.usage == 0 || Desc.Width == 0 || Desc.Height == 0 || Desc.Depth == 0 ||
+        Desc.MipLevels == 0 || Desc.ArrayLayers == 0)
+    {
+        LE_LOG(LogRHI, Error, "Texture creation rejected an empty extent, mip/layer count or usage.");
+        return;
+    }
+    if (Desc.bIsTransferDestination)
+    {
+        VkFormatProperties FormatProperties{};
+        vkGetPhysicalDeviceFormatProperties(Device->VkContext.PhysicalDevice, Info.format, &FormatProperties);
+        VkFormatFeatureFlags Required = VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+        if (Desc.bIsShaderResource)
+        {
+            Required |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+        }
+        VkImageFormatProperties ImageProperties{};
+        if ((FormatProperties.optimalTilingFeatures & Required) != Required ||
+            vkGetPhysicalDeviceImageFormatProperties(Device->VkContext.PhysicalDevice, Info.format,
+                Info.imageType, Info.tiling, Info.usage, Info.flags, &ImageProperties) != VK_SUCCESS ||
+            Desc.Width > ImageProperties.maxExtent.width || Desc.Height > ImageProperties.maxExtent.height ||
+            Desc.Depth > ImageProperties.maxExtent.depth || Desc.MipLevels > ImageProperties.maxMipLevels ||
+            Desc.ArrayLayers > ImageProperties.maxArrayLayers)
+        {
+            LE_LOG(LogRHI, Error, "Texture creation rejected an unsupported transfer destination.");
+            return;
+        }
+    }
     VkResult Result = vkCreateImage(Device->VkContext.LogicalDevice, &Info, nullptr, &this->Image);
     if (Result != VK_SUCCESS)
     {
@@ -147,6 +174,13 @@ FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextu
         AllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         AllocInfo.allocationSize = Req.size;
         AllocInfo.memoryTypeIndex = FindMemoryTypeIndex(Device->VkContext.PhysicalDevice, Req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    }
+    if (AllocInfo.memoryTypeIndex == VK_MAX_MEMORY_TYPES)
+    {
+        LE_LOG(LogRHI, Error, "Texture creation failed: no compatible device-local memory type.");
+        vkDestroyImage(Device->VkContext.LogicalDevice, this->Image, nullptr);
+        this->Image = VK_NULL_HANDLE;
+        return;
     }
     Result = vkAllocateMemory(Device->VkContext.LogicalDevice, &AllocInfo, nullptr, &this->Memory);
     if (Result != VK_SUCCESS)

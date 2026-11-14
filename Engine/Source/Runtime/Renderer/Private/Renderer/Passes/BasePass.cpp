@@ -2,6 +2,7 @@
 #include "Containers/HashSet.h"
 
 #include "Execute/RFGPassContext.h"
+#include "RHI/RHIBindGroup.h"
 #include "RHI/RHIBuffer.h"
 #include "RHI/RHICommandList.h"
 #include "RHI/RHIPipeline.h"
@@ -17,6 +18,7 @@ namespace
 
 constexpr EPixelFormat SceneColorFormat = EPixelFormat::B8G8R8A8_SRGB;
 constexpr EPixelFormat SceneDepthFormat = EPixelFormat::D32_FLOAT;
+constexpr uint32 MaterialSet = 0;
 constexpr EShaderStage BasePassPushStages = static_cast<EShaderStage>(
     static_cast<uint8>(EShaderStage::Vertex) |
     static_cast<uint8>(EShaderStage::Pixel));
@@ -62,6 +64,34 @@ bool IsPipelineValid(const FRHIPipeline_Graphics& Pipeline) noexcept
         Desc.PushConstants.StageFlags == BasePassPushStages &&
         Desc.PushConstants.Size == sizeof(FBasePassObjectConstants) &&
         Desc.PushConstants.IsValid();
+}
+
+bool IsMaterialBindingValid(const FRenderMeshProxy& Mesh) noexcept
+{
+    if (Mesh.MaterialBindGroup == nullptr || Mesh.BaseColorTexture == nullptr)
+    {
+        return false;
+    }
+    const auto& Texture = Mesh.BaseColorTexture->GetDesc();
+    if (!Texture.bIsShaderResource || Texture.Format != EPixelFormat::R8G8B8A8_SRGB ||
+        Texture.Depth != 1 || Texture.MipLevels != 1 || Texture.ArrayLayers != 1 ||
+        Texture.Width == 0 || Texture.Height == 0)
+    {
+        return false;
+    }
+    const auto& Layouts = Mesh.GraphicsPipeline->GetDesc().BindGroupLayouts;
+    const auto& BindGroup = Mesh.MaterialBindGroup->GetDesc();
+    if (Layouts.Size() != 1 || BindGroup.Layout == nullptr || BindGroup.Layout != Layouts[MaterialSet] ||
+        BindGroup.Layout->GetDesc().SetIndex != MaterialSet || BindGroup.Items.Size() != 2)
+    {
+        return false;
+    }
+    const auto& Image = BindGroup.Items[0];
+    const auto& Sampler = BindGroup.Items[1];
+    return Image.Binding == 0 && Image.TextureView != nullptr &&
+        Image.TextureView->GetTexture() == Mesh.BaseColorTexture &&
+        Image.TextureView->GetDesc().Format == Texture.Format &&
+        Sampler.Binding == 1 && Sampler.Sampler != nullptr;
 }
 
 bool HasBufferUsage(const FRHIBuffer& Buffer, const EBufferUsageFlags Usage) noexcept
@@ -144,7 +174,9 @@ bool FBasePass::IsConfigurationValid(
             Mesh.VertexCount == 0 || Mesh.IndexBuffer == nullptr ||
             Mesh.IndexCount == 0 || !IsValidIndexFormat(Mesh.IndexFormat) ||
             !IsFiniteMatrix(Mesh.LocalToWorld) || !IsFiniteNonNegativeRgb(Mesh.BaseColor) ||
-            !IsPipelineValid(*Mesh.GraphicsPipeline))
+            !IsPipelineValid(*Mesh.GraphicsPipeline) || !IsMaterialBindingValid(Mesh) ||
+            Mesh.BaseColorTexture == InResources.SceneColorTexture ||
+            Mesh.BaseColorTexture == InResources.SceneDepthTexture)
         {
             return false;
         }
@@ -208,8 +240,12 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
     VertexRead.PipelineStage = ERFGPipelineStage::Graphics;
     FRFGAccessDesc IndexRead = VertexRead;
     IndexRead.State = ERHIResourceState::IndexBuffer;
+    FRFGAccessDesc TextureRead = VertexRead;
+    TextureRead.State = ERHIResourceState::ShaderResource;
+    TextureRead.ShaderStage = EShaderStage::Pixel;
     HashSet<FRHIBuffer*> VertexBuffers;
     HashSet<FRHIBuffer*> IndexBuffers;
+    HashSet<FRHITexture*> SampledTextures;
     for (const FRenderMeshProxy& Mesh : Context.RenderScene->Meshes)
     {
         if (VertexBuffers.Insert(Mesh.VertexBuffer))
@@ -223,6 +259,12 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
             const FRFGResourceHandle IndexBuffer = Context.GraphBridge->ImportBuffer(
                 "BasePassIndexBuffer", Mesh.IndexBuffer, ERHIResourceState::IndexBuffer);
             Context.GraphBridge->Read(Context.PassHandle, IndexBuffer, IndexRead);
+        }
+        if (SampledTextures.Insert(Mesh.BaseColorTexture))
+        {
+            const FRFGResourceHandle Texture = Context.GraphBridge->ImportTexture(
+                "BasePassColorTexture", Mesh.BaseColorTexture, ERHIResourceState::ShaderResource);
+            Context.GraphBridge->Read(Context.PassHandle, Texture, TextureRead);
         }
     }
 }
@@ -287,6 +329,7 @@ void FBasePass::Record(FRenderPassRecordContext& Context)
             Mesh.BaseColor.Values[0], Mesh.BaseColor.Values[1],
             Mesh.BaseColor.Values[2], 1.0f);
         CommandList->SetGraphicsPipeline(Mesh.GraphicsPipeline);
+        CommandList->SetBindGroup(MaterialSet, Mesh.MaterialBindGroup);
         CommandList->SetVertexBuffer(0, Mesh.VertexBuffer, 0);
         CommandList->SetIndexBuffer(Mesh.IndexBuffer, 0, Mesh.IndexFormat);
         CommandList->SetPushConstants(

@@ -30,7 +30,12 @@ Each mesh proxy copies:
 - `LocalToWorld` and a validated world-space AABB;
 - the persistent Material asset ID used by deterministic ordering;
 - resolved vertex/index buffers, vertex/index counts, R16/R32 index format,
-  graphics pipeline, minimum opaque base color, and pass mask.
+  graphics pipeline, opaque base color, sampled image, material binding, and pass mask.
+
+A material with an authored color texture requires authored mesh UVs.
+Snapshot extraction rejects incompatible pairs before culling and reports
+the mesh index and primitive ID. GPU pointers remain borrowed through the
+scene's renderer provider.
 
 Mesh assets provide validated local-space AABBs. WorldRenderer transforms them
 with the absolute linear matrix, so rotation and non-uniform scale remain

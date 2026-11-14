@@ -2,6 +2,7 @@
 
 #include "Asset/SoftAssetPath.h"
 #include "AssetFormat/AssetFormat.h"
+#include "Containers/HashMap.h"
 #include "ContentIO/ContentIO.h"
 
 #include <cerrno>
@@ -11,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <locale.h>
+#include <utility>
 
 #if PLATFORM_MAC
 #include <xlocale.h>
@@ -52,12 +54,13 @@ class FTokenCursor
 public:
     explicit FTokenCursor(const StringView InText) noexcept : Text(InText) {}
 
-    StringView Next() noexcept
+    StringView Next(std::size_t* OutLine = nullptr) noexcept
     {
         while (Offset < Text.Size())
         {
             if (IsWhitespace(Text[Offset]))
             {
+                if (Text[Offset] == '\n') { ++Line; }
                 ++Offset;
             }
             else if (Text[Offset] == '#')
@@ -70,6 +73,7 @@ public:
             }
         }
 
+        if (OutLine != nullptr) { *OutLine = Line; }
         const std::size_t Start = Offset;
         while (Offset < Text.Size() && !IsWhitespace(Text[Offset]) && Text[Offset] != '#') { ++Offset; }
         return Text.Substr(Start, Offset - Start);
@@ -96,6 +100,7 @@ private:
 
     StringView Text;
     std::size_t Offset = 0;
+    std::size_t Line = 1;
 };
 
 class FDecimalParser
@@ -165,16 +170,58 @@ bool ParseUnsigned(const StringView Token, uint32& OutValue) noexcept
     return Result.ec == std::errc{} && Result.ptr == End;
 }
 
-bool ParseVector(FTokenCursor& Tokens, const FDecimalParser& Decimal, Math::Vector3f& Out) noexcept
+template <typename Vector>
+bool ParseVector(FTokenCursor& Tokens, const FDecimalParser& Decimal, Vector& Out) noexcept
 {
-    return Decimal.Parse(Tokens.Next(), Out[0]) && Decimal.Parse(Tokens.Next(), Out[1]) &&
-        Decimal.Parse(Tokens.Next(), Out[2]) && Tokens.Next().IsEmpty();
+    for (float& Component : Out.Values)
+    {
+        if (!Decimal.Parse(Tokens.Next(), Component))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 StringView TextWithoutBom(const StringView Source) noexcept
 {
     constexpr StringView Bom("\xef\xbb\xbf", 3);
     return Source.Substr(0, Bom.Size()) == Bom ? Source.Substr(Bom.Size(), Source.Size()) : Source;
+}
+
+StringView TakeLine(const StringView Text, std::size_t& Offset) noexcept
+{
+    const std::size_t Start = Offset;
+    while (Offset < Text.Size() && Text[Offset] != '\n') { ++Offset; }
+    const StringView Line = Text.Substr(Start, Offset - Start);
+    if (Offset < Text.Size()) { ++Offset; }
+    return Line;
+}
+
+struct FMeshCorner
+{
+    uint32 Position = 0;
+    uint32 UV = 0;
+};
+
+struct FMeshTriangle
+{
+    FMeshCorner Corners[3];
+    std::size_t Line = 0;
+};
+
+bool ParseCorner(const StringView Token, FMeshCorner& Corner) noexcept
+{
+    std::size_t Separator = 0;
+    while (Separator < Token.Size() && Token[Separator] != '/') { ++Separator; }
+    if (!ParseUnsigned(Token.Substr(0, Separator), Corner.Position)
+        || Corner.Position == 0 || Corner.Position > MaxAssetMeshVertices)
+    {
+        return false;
+    }
+    return Separator == Token.Size()
+        || (ParseUnsigned(Token.Substr(Separator + 1, Token.Size()), Corner.UV)
+            && Corner.UV != 0 && Corner.UV <= MaxAssetMeshVertices);
 }
 
 FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
@@ -186,71 +233,146 @@ FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
     }
 
     const StringView Text = TextWithoutBom(Source);
-    uint32 MaxIndex = 0;
-    std::size_t MaxIndexLine = 0;
+    Array<Math::Vector3f> SourcePositions;
+    Array<Math::Vector2f> SourceUVs;
+    Array<FMeshTriangle> Triangles;
+    bool bTextured = false;
     for (std::size_t Offset = 0, Line = 1; Offset < Text.Size(); ++Line)
     {
-        const std::size_t Start = Offset;
-        while (Offset < Text.Size() && Text[Offset] != '\n') { ++Offset; }
-        FTokenCursor Tokens(Text.Substr(Start, Offset - Start));
-        if (Offset < Text.Size()) { ++Offset; }
-
+        FTokenCursor Tokens(TakeLine(Text, Offset));
         const StringView Kind = Tokens.Next();
         if (Kind == StringView("v"))
         {
             Math::Vector3f Position;
-            if (!ParseVector(Tokens, Decimal, Position))
+            if (!ParseVector(Tokens, Decimal, Position) || !Tokens.Next().IsEmpty())
             {
                 return {"expected three finite decimal vertex coordinates", Line};
             }
-            if (Mesh.Positions.Size() >= MaxAssetMeshVertices)
+            if (SourcePositions.Size() >= MaxAssetMeshVertices)
             {
                 return {"vertex limit exceeded", Line};
             }
-            if (!Mesh.Positions.TryPushBack(Position))
+            if (!SourcePositions.TryPushBack(Position))
             {
                 return {"could not allocate a mesh vertex", Line};
             }
         }
+        else if (Kind == StringView("vt"))
+        {
+            Math::Vector2f UV;
+            if (!ParseVector(Tokens, Decimal, UV) || !Tokens.Next().IsEmpty())
+            {
+                return {"expected two finite decimal UV coordinates", Line};
+            }
+            if (SourceUVs.Size() >= MaxAssetMeshVertices)
+            {
+                return {"UV coordinate limit exceeded", Line};
+            }
+            UV[1] = 1.0f - UV[1];
+            if (!SourceUVs.TryPushBack(UV))
+            {
+                return {"could not allocate a UV coordinate", Line};
+            }
+        }
         else if (Kind == StringView("f"))
         {
-            if (Mesh.Indices.Size() > MaxAssetMeshIndices - 3)
+            if (Triangles.Size() >= MaxAssetMeshIndices / 3)
             {
                 return {"index limit exceeded", Line};
             }
-            for (int Component = 0; Component < 3; ++Component)
+            FMeshTriangle Triangle;
+            Triangle.Line = Line;
+            for (FMeshCorner& Corner : Triangle.Corners)
             {
-                uint32 Index = 0;
-                if (!ParseUnsigned(Tokens.Next(), Index) || Index == 0 || Index > MaxAssetMeshVertices)
+                if (!ParseCorner(Tokens.Next(), Corner))
                 {
-                    return {"expected three positive position indices within v1 limits", Line};
-                }
-                if (Index > MaxIndex)
-                {
-                    MaxIndex = Index;
-                    MaxIndexLine = Line;
-                }
-                if (!Mesh.Indices.TryPushBack(Index - 1))
-                {
-                    return {"could not allocate a mesh index", Line};
+                    return {"expected three positive position or position/UV indices", Line};
                 }
             }
             if (!Tokens.Next().IsEmpty())
             {
                 return {"only triangular faces are supported", Line};
             }
+            if (Triangles.IsEmpty())
+            {
+                bTextured = Triangle.Corners[0].UV != 0;
+            }
+            for (const FMeshCorner& Corner : Triangle.Corners)
+            {
+                if ((Corner.UV != 0) != bTextured)
+                {
+                    return {"cannot mix position-only and position/UV face indices", Line};
+                }
+            }
+            if (!Triangles.TryPushBack(Triangle))
+            {
+                return {"could not allocate a mesh triangle", Line};
+            }
         }
         else if (!Kind.IsEmpty())
         {
-            return {"unsupported OBJ record; expected v or f", Line};
+            return {"unsupported OBJ record; expected v, vt or f", Line};
         }
     }
-    if (Mesh.Indices.IsEmpty())
+    if (Triangles.IsEmpty())
     {
         return {"expected at least one triangle"};
     }
-    return MaxIndex > Mesh.Positions.Size()
-        ? FSourceError{"face index exceeds vertex count", MaxIndexLine} : FSourceError{};
+    if (!Mesh.Indices.TryReserve(Triangles.Size() * 3))
+    {
+        return {"could not allocate mesh indices"};
+    }
+    HashMap<uint64, uint32> ExpandedVertices;
+    for (const FMeshTriangle& Triangle : Triangles)
+    {
+        for (const FMeshCorner& Corner : Triangle.Corners)
+        {
+            if (Corner.Position > SourcePositions.Size())
+            {
+                return {"face index exceeds vertex count", Triangle.Line};
+            }
+            uint32 Index = Corner.Position - 1;
+            if (bTextured)
+            {
+                if (Corner.UV > SourceUVs.Size())
+                {
+                    return {"face UV index exceeds UV coordinate count", Triangle.Line};
+                }
+                const uint64 Key = (static_cast<uint64>(Corner.Position) << 32) | Corner.UV;
+                const uint32* const Existing = ExpandedVertices.Find(Key);
+                if (Existing != nullptr)
+                {
+                    Index = *Existing;
+                }
+                else
+                {
+                    if (Mesh.Positions.Size() >= MaxAssetMeshVertices)
+                    {
+                        return {"expanded vertex limit exceeded", Triangle.Line};
+                    }
+                    Index = static_cast<uint32>(Mesh.Positions.Size());
+                    if (!Mesh.Positions.TryPushBack(SourcePositions[Corner.Position - 1])
+                        || !Mesh.UVs.TryPushBack(SourceUVs[Corner.UV - 1]))
+                    {
+                        return {"could not allocate an expanded mesh vertex", Triangle.Line};
+                    }
+                    if (ExpandedVertices.TryInsert(Key, Index) != EHashInsertResult::Inserted)
+                    {
+                        return {"could not index an expanded mesh vertex", Triangle.Line};
+                    }
+                }
+            }
+            if (!Mesh.Indices.TryPushBack(Index))
+            {
+                return {"could not append a mesh index", Triangle.Line};
+            }
+        }
+    }
+    if (!bTextured)
+    {
+        Mesh.Positions = std::move(SourcePositions);
+    }
+    return {};
 }
 
 FSourceError ParseTexture(const StringView Source, FCpuTextureAsset& Texture) noexcept
@@ -321,12 +443,40 @@ FSourceError ParseMaterial(const StringView Source, FMaterialAssetData& Material
     }
 
     FTokenCursor Tokens(TextWithoutBom(Source));
-    if (Tokens.Next() != StringView("base-color") || !ParseVector(Tokens, Decimal, Material.BaseColor) ||
-        Material.BaseColor[0] < 0.0f || Material.BaseColor[1] < 0.0f || Material.BaseColor[2] < 0.0f)
+    bool bHasColor = false;
+    std::size_t Line = 0;
+    for (StringView Kind = Tokens.Next(&Line); !Kind.IsEmpty(); Kind = Tokens.Next(&Line))
     {
-        return {"expected base-color followed by three finite non-negative decimal components"};
+        if (Kind == StringView("base-color"))
+        {
+            if (bHasColor)
+            {
+                return {"duplicate base-color directive", Line};
+            }
+            if (!ParseVector(Tokens, Decimal, Material.BaseColor) || Material.BaseColor[0] < 0.0f
+                || Material.BaseColor[1] < 0.0f || Material.BaseColor[2] < 0.0f)
+            {
+                return {"expected base-color followed by three finite non-negative decimal components", Line};
+            }
+            bHasColor = true;
+        }
+        else if (Kind == StringView("base-color-texture"))
+        {
+            if (Material.BaseColorTexture.IsValid())
+            {
+                return {"duplicate base-color-texture directive", Line};
+            }
+            if (!FAssetId::TryParse(Tokens.Next(), Material.BaseColorTexture))
+            {
+                return {"expected base-color-texture followed by a non-nil lowercase canonical UUID", Line};
+            }
+        }
+        else
+        {
+            return {"unsupported material directive; expected base-color or base-color-texture", Line};
+        }
     }
-    return {};
+    return bHasColor ? FSourceError{} : FSourceError{"material requires a base-color directive"};
 }
 
 bool ParseArguments(const Span<const StringView> Arguments, FImportArguments& Out) noexcept

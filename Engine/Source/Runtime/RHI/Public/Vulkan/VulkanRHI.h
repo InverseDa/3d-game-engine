@@ -247,6 +247,7 @@ public:
     VkSemaphore Handle = VK_NULL_HANDLE;
 
 private:
+    friend class FVulkanRHIQueue;
     FVulkanRHIDevice* Device;
 };
 
@@ -259,12 +260,14 @@ public:
 public:
     void Reset() override;
     void Wait(uint64 Timeout) override;
+    ERHIFenceWaitResult WaitChecked(uint64 Timeout) override;
     bool IsSignaled() override;
 
 public:
     VkFence Handle = VK_NULL_HANDLE;
 
 private:
+    friend class FVulkanRHIQueue;
     FVulkanRHIDevice* Device;
 };
 
@@ -280,6 +283,7 @@ public:
 public:
     ERHIQueueSubmitResult Submit(const FRHISubmitInfo& SubmitInfo) override;
     void WaitIdle() override;
+    ERHIFenceWaitResult WaitIdleChecked() override;
     EQueueType GetType() const override { return EQueueType::Graphics; }
 
 public:
@@ -318,6 +322,10 @@ public:
     void Begin() override;
     void End() override;
     void ResourceBarriers(const FRHIBarrierBatch& Barriers) override;
+    bool BeginChecked() override;
+    bool EndChecked() override;
+    bool TextureUploadBarrier(FRHITexture* Texture, ERHIResourceState Before, ERHIResourceState After) override;
+    bool CopyBufferToTexture2D(FRHIBuffer* Source, FRHITexture* Destination, uint64 SourceOffset) override;
 
 public:
     void BeginRenderPass(const FRHIRenderPassDesc& Desc) override;
@@ -344,12 +352,18 @@ public:
     VkCommandBuffer Handle = VK_NULL_HANDLE;
 
 private:
+    friend class FVulkanRHIQueue;
     FVulkanRHIDevice* Device = nullptr;
     FVulkanRHICommandAllocator* Allocator = nullptr;
 
 private:
     FVulkanRHIPipeline_Graphics* CurrentPipeline = nullptr;
     bool bInsideRendering = false;
+    bool bRecording = false;
+    bool bExecutable = false;
+    bool bUploadCopied = false;
+    bool bUploadComplete = false;
+    FVulkanRHITexture* UploadTexture = nullptr;
     FRHIRenderingAttachmentSignature ActiveRenderingSignature;
     LE::Array<VkImage> PendingPresentTransitionImages;
 };
@@ -459,6 +473,7 @@ public:
     VkDeviceMemory Memory = VK_NULL_HANDLE;
 
 private:
+    friend class FVulkanRHICommandList;
     void* MappedPtr = nullptr;
 };
 
@@ -477,6 +492,8 @@ public:
     VkDeviceMemory Memory = VK_NULL_HANDLE;
 
 private:
+    friend class FVulkanRHICommandList;
+    friend class FVulkanRHIDevice;
     bool bOwnsImage = true;
 };
 class FVulkanRHITextureView : public FRHITextureView, public TVulkanResourceBase<FRHITextureViewDesc>

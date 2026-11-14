@@ -235,14 +235,23 @@ FVulkanRHICommandList::~FVulkanRHICommandList()
 
 void FVulkanRHICommandList::Begin()
 {
-    if (this->Handle == VK_NULL_HANDLE)
+    static_cast<void>(BeginChecked());
+}
+
+bool FVulkanRHICommandList::BeginChecked()
+{
+    if (this->Handle == VK_NULL_HANDLE || bRecording)
     {
-        LE_LOG(LogRHI, Error, "CommandList Begin failed: command buffer handle is null.");
-        return;
+        LE_LOG(LogRHI, Error, "CommandList Begin rejected an invalid or active command buffer.");
+        return false;
     }
 
+    bExecutable = false;
     CurrentPipeline = nullptr;
     bInsideRendering = false;
+    bUploadCopied = false;
+    bUploadComplete = false;
+    UploadTexture = nullptr;
     ActiveRenderingSignature.Reset();
     PendingPresentTransitionImages.Clear();
     VkCommandBufferBeginInfo BeginInfo{};
@@ -254,21 +263,101 @@ void FVulkanRHICommandList::Begin()
     if (Result != VK_SUCCESS)
     {
         LE_LOG(LogRHI, Error, "vkBeginCommandBuffer failed. VkResult={}", static_cast<int32>(Result));
+        return false;
     }
+    bRecording = true;
+    return true;
 }
 
 void FVulkanRHICommandList::End()
 {
-    if (this->Handle == VK_NULL_HANDLE)
+    static_cast<void>(EndChecked());
+}
+
+bool FVulkanRHICommandList::EndChecked()
+{
+    if (!bRecording || this->Handle == VK_NULL_HANDLE || bInsideRendering || UploadTexture != nullptr)
     {
-        LE_LOG(LogRHI, Error, "CommandList End failed: command buffer handle is null.");
-        return;
+        LE_LOG(LogRHI, Error, "CommandList End rejected an inactive buffer or an unfinished scope.");
+        return false;
     }
+    bRecording = false;
     const VkResult Result = vkEndCommandBuffer(this->Handle);
     if (Result != VK_SUCCESS)
     {
         LE_LOG(LogRHI, Error, "vkEndCommandBuffer failed. VkResult={}", static_cast<int32>(Result));
+        return false;
     }
+    bExecutable = true;
+    return true;
+}
+
+bool FVulkanRHICommandList::TextureUploadBarrier(
+    FRHITexture* Texture, ERHIResourceState Before, ERHIResourceState After)
+{
+    auto* const Image = dynamic_cast<FVulkanRHITexture*>(Texture);
+    if (!bRecording || bInsideRendering || bUploadComplete || Image == nullptr ||
+        Image->Device != Device || Image->Image == VK_NULL_HANDLE || Image->Memory == VK_NULL_HANDLE ||
+        !Image->bOwnsImage || !IsTextureUploadDestination(Image->GetDesc()))
+    {
+        return false;
+    }
+
+    const bool bStart = Before == ERHIResourceState::Undefined &&
+        After == ERHIResourceState::CopyDestination && UploadTexture == nullptr;
+    const bool bFinish = Before == ERHIResourceState::CopyDestination &&
+        After == ERHIResourceState::ShaderResource && UploadTexture == Image && bUploadCopied;
+    if (!bStart && !bFinish)
+    {
+        return false;
+    }
+
+    FVulkanResourceStateMapping Source;
+    FVulkanResourceStateMapping Destination;
+    if (!MapResourceState(Before, EShaderStage::None, true, Source) ||
+        !MapResourceState(After, EShaderStage::Pixel, true, Destination))
+    {
+        return false;
+    }
+    VkImageMemoryBarrier Barrier{};
+    Barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    Barrier.srcAccessMask = Source.AccessMask;
+    Barrier.dstAccessMask = Destination.AccessMask;
+    Barrier.oldLayout = Source.ImageLayout;
+    Barrier.newLayout = Destination.ImageLayout;
+    Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    Barrier.image = Image->Image;
+    Barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    vkCmdPipelineBarrier(Handle, Source.PipelineStages, Destination.PipelineStages, 0,
+        0, nullptr, 0, nullptr, 1, &Barrier);
+    UploadTexture = bStart ? Image : nullptr;
+    bUploadComplete = bFinish;
+    return true;
+}
+
+bool FVulkanRHICommandList::CopyBufferToTexture2D(
+    FRHIBuffer* Source, FRHITexture* Destination, uint64 SourceOffset)
+{
+    auto* const Buffer = dynamic_cast<FVulkanRHIBuffer*>(Source);
+    auto* const Image = dynamic_cast<FVulkanRHITexture*>(Destination);
+    if (!bRecording || bInsideRendering || bUploadCopied || Image == nullptr || Image != UploadTexture ||
+        Buffer == nullptr || Buffer->Device != Device || Buffer->Buffer == VK_NULL_HANDLE ||
+        Buffer->Memory == VK_NULL_HANDLE || Buffer->MappedPtr != nullptr ||
+        !IsBufferToTexture2DCopyValid(Buffer->GetDesc(), Image->GetDesc(), SourceOffset))
+    {
+        return false;
+    }
+
+    const FRHITextureDesc& Desc = Image->GetDesc();
+    VkBufferImageCopy Region{};
+    Region.bufferOffset = SourceOffset;
+    Region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    Region.imageExtent = {Desc.Width, Desc.Height, 1};
+    vkCmdCopyBufferToImage(Handle, Buffer->Buffer, Image->Image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &Region);
+    bUploadCopied = true;
+    return true;
 }
 
 void FVulkanRHICommandList::ResourceBarriers(const FRHIBarrierBatch& Barriers)
@@ -380,7 +469,8 @@ void FVulkanRHICommandList::ResourceBarriers(const FRHIBarrierBatch& Barriers)
 
 void FVulkanRHICommandList::BeginRenderPass(const FRHIRenderPassDesc& Desc)
 {
-    if (this->Handle == VK_NULL_HANDLE || this->Device == nullptr || !this->Device->VkContext.bDynamicRenderingEnabled ||
+    if (!bRecording || UploadTexture != nullptr || this->Handle == VK_NULL_HANDLE ||
+        this->Device == nullptr || !this->Device->VkContext.bDynamicRenderingEnabled ||
         this->Device->VkContext.CmdBeginRendering == nullptr)
     {
         LE_LOG(LogRHI, Error, "BeginRenderPass failed: dynamic rendering is unavailable.");

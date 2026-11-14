@@ -48,11 +48,23 @@ struct FMaterialProviderState
     int Destroyed = 0;
     bool bFailCreate = false;
     FRegistrationAllocator* FailRegistration = nullptr;
+    FAssetLoadSession* Session = nullptr;
+    FAssetId ObservedTexture;
+    uint8 FirstPixel = 0;
+    EAssetLoadResult Reentrant = EAssetLoadResult::Success;
 };
 
-FMaterialAsset* CreateMaterial(void* Context, const FMaterialAssetData& Data) noexcept
+FMaterialAsset* CreateMaterial(void* Context, const FMaterialAssetData& Data,
+    const FCpuTextureAsset* Texture) noexcept
 {
     auto& State = *static_cast<FMaterialProviderState*>(Context);
+    State.ObservedTexture = Data.BaseColorTexture;
+    State.FirstPixel = Texture != nullptr && !Texture->Pixels.IsEmpty() ? Texture->Pixels[0] : 0;
+    if (State.Session != nullptr && Texture != nullptr)
+    {
+        FCpuTextureAssetHandle Handle;
+        State.Reentrant = State.Session->Load(Data.BaseColorTexture, Handle);
+    }
     if (State.bFailCreate)
     {
         return nullptr;
@@ -271,6 +283,72 @@ int RunAssetLoadingTests()
             Material == Repeat && Provider.Created == 2, "retry publishes and repeated loads reuse the handle");
     }
     Failures += Check(Provider.Destroyed == 2, "session releases the cached provider object once");
+
+    FMaterialAssetData Textured;
+    Textured.BaseColorTexture = TextureId;
+    const auto WriteMaterial = [&](FAssetId Id, StringView Path, const String& File)
+    {
+        Array<uint8> Bytes;
+        return EncodeAssetFile(Id, Path, Textured, Bytes) == EAssetFormatResult::Success &&
+            WriteContentFileAtomically(File.View(), Bytes.AsSpan()) == EContentIOResult::Success;
+    };
+    if (!WriteMaterial(MaterialId, "Game/Material", Files.Material) ||
+        !WriteMaterial(OtherId, "Game/Other", Files.Other) ||
+        Catalog.Rebuild({&Mount, 1}) != EAssetLoadResult::Success)
+    {
+        return Failures + Check(false, "write textured material fixtures");
+    }
+    {
+        FAssetLoadSession Session(Catalog, Providers, Allocator);
+        Provider.Session = &Session;
+        FMaterialAssetHandle Material;
+        FMaterialAssetHandle OtherMaterial;
+        FCpuTextureAssetHandle TextureHandle;
+        Provider.bFailCreate = true;
+        Failures += Check(Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::ProviderFailed &&
+            Diagnostic.Id == MaterialId && Diagnostic.DependencyId == TextureId &&
+            !Material.IsValid() && Session.GetRegistry().GetAssetCount() == 0,
+            "provider failure rolls back its newly registered CPU dependency");
+        Provider.bFailCreate = false;
+        Provider.FailRegistration = &Allocator;
+        Failures += Check(Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::RegistrationFailed &&
+            Diagnostic.DependencyId == TextureId && Session.GetRegistry().GetAssetCount() == 0,
+            "failure at material publication rolls back dependency even under allocation failure");
+        Allocator.bFail = false;
+        Provider.FailRegistration = nullptr;
+        Failures += Check(Session.Load(MaterialId, Material) == EAssetLoadResult::Success &&
+            Session.Load(TextureId, TextureHandle) == EAssetLoadResult::Success &&
+            Provider.FirstPixel == 32 && Provider.ObservedTexture == TextureId &&
+            Provider.Reentrant == EAssetLoadResult::ReentrantLoad,
+            "material provider receives valid pixels while public reentrancy remains rejected");
+        Provider.bFailCreate = true;
+        Failures += Check(Session.Load(OtherId, OtherMaterial) == EAssetLoadResult::ProviderFailed &&
+            Session.GetRegistry().GetAssetCount() == 2 &&
+            Session.GetRegistry().TryFindById(TextureId, TextureHandle) == EAssetFindResult::Success,
+            "failed material does not unregister a previously cached dependency");
+        Provider.bFailCreate = false;
+        Failures += Check(Session.Load(OtherId, OtherMaterial) == EAssetLoadResult::Success &&
+            Session.GetRegistry().GetAssetCount() == 3, "two materials share one CPU dependency entry");
+        Provider.Session = nullptr;
+    }
+    {
+        FAssetLoadSession Session(Catalog, Providers);
+        FMaterialAssetHandle Material;
+        Failures += Check(WriteContentFileAtomically(Files.Texture.View(), {TextureBytes.Data(), 2}) ==
+                EContentIOResult::Success &&
+            Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::FormatError &&
+            Diagnostic.Id == MaterialId && Diagnostic.DependencyId == TextureId &&
+            Session.GetRegistry().GetAssetCount() == 0, "corrupt dependency identifies both assets");
+        std::remove(Files.Texture.Data());
+        Failures += Check(Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::FileError &&
+            Diagnostic.FileResult == EContentIOResult::NotFound && Diagnostic.DependencyId == TextureId,
+            "missing dependency file is diagnosed");
+        Textured.BaseColorTexture = OtherId;
+        Failures += Check(WriteMaterial(MaterialId, "Game/Material", Files.Material) &&
+            Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::TypeMismatch &&
+            Diagnostic.DependencyId == OtherId && !Material.IsValid(),
+            "a material cannot satisfy a texture dependency");
+    }
 
     {
         FAssetLoadSession Session(Catalog, Providers);

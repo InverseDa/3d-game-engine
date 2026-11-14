@@ -16,14 +16,14 @@
       "id": "8a0a5d74-17ef-48e0-a46b-f7105518e702",
       "parent": "8a0a5d74-17ef-48e0-a46b-f7105518e701",
       "transform": {
-        "translation": [-0.7, 0, 0],
+        "translation": [-1.8, 0, 0],
         "rotation": [0, 0, 0, 1],
-        "scale": [0.75, 0.75, 0.75]
+        "scale": [1, 1, 1]
       },
       "mesh": {
-        "mesh": "62fdc991-27a8-4a81-a077-647b47fd1f7b",
-        "material": "62fdc991-27a8-4a81-a077-647b47fd1f7c",
-        "debugName": "Left triangle",
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd1f7e",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd1f80",
+        "debugName": "Asymmetric 2x2 texture",
         "sortKey": "0"
       }
     },
@@ -31,15 +31,45 @@
       "id": "8a0a5d74-17ef-48e0-a46b-f7105518e703",
       "parent": "8a0a5d74-17ef-48e0-a46b-f7105518e701",
       "transform": {
-        "translation": [0.7, 0, 0],
+        "translation": [-0.6, 0, 0],
         "rotation": [0, 0, 0, 1],
-        "scale": [0.75, 0.75, 0.75]
+        "scale": [0.65, 0.65, 0.65]
       },
       "mesh": {
         "mesh": "62fdc991-27a8-4a81-a077-647b47fd1f7b",
         "material": "62fdc991-27a8-4a81-a077-647b47fd1f7c",
-        "debugName": "Right triangle",
+        "debugName": "Legacy solid triangle",
         "sortKey": "1"
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e705",
+      "parent": "8a0a5d74-17ef-48e0-a46b-f7105518e701",
+      "transform": {
+        "translation": [0.6, 0, 0],
+        "rotation": [0, 0, 0, 1],
+        "scale": [1, 1, 1]
+      },
+      "mesh": {
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd1f7e",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd1f81",
+        "debugName": "M1 palette texture",
+        "sortKey": "2"
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e706",
+      "parent": "8a0a5d74-17ef-48e0-a46b-f7105518e701",
+      "transform": {
+        "translation": [1.8, 0, 0],
+        "rotation": [0, 0, 0, 1],
+        "scale": [1, 1, 1]
+      },
+      "mesh": {
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd1f7e",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd1f82",
+        "debugName": "Shared 2x2 texture with linear tint",
+        "sortKey": "3"
       }
     },
     {

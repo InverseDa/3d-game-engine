@@ -14,6 +14,8 @@ namespace LE
 
 class FRHIBuffer;
 class FRHIPipeline_Graphics;
+class FRHIBindGroup;
+class FRHITexture;
 
 enum class ERenderMeshPassMask : uint8
 {
@@ -140,6 +142,8 @@ struct FRenderMeshProxy : public FRenderPrimitive
     uint64 SortKey = 0;
     FAssetId MaterialAssetId;
     Math::Vector4f BaseColor{1.0f};
+    FRHITexture* BaseColorTexture = nullptr;
+    FRHIBindGroup* MaterialBindGroup = nullptr;
 };
 
 struct FRenderLightProxy : public FRenderPrimitive

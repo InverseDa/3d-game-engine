@@ -6,32 +6,67 @@ namespace LE
 {
 
 class FRHIDevice;
+class FRHIBindGroupLayout;
 struct FMeshAssetData;
 struct FMaterialAssetData;
+struct FCpuTextureAsset;
 
 struct FBasePassVertex
 {
     Math::Vector3f Position;
     Math::Vector3f Color;
+    Math::Vector2f UV;
 };
 
 static_assert(std::is_standard_layout<FBasePassVertex>::value
     && std::is_trivially_copyable<FBasePassVertex>::value);
 
-// The application supplies a device and the shared opaque BasePass pipeline.
-// It must keep both alive until all assets and frames using them are retired.
-struct RENDERER_API FRenderAssetProvider
+enum class ETextureUploadResult : uint8
 {
-    FRHIDevice* Device = nullptr;
-    FRHIPipeline_Graphics* BasePassPipeline = nullptr;
+    Success,
+    InvalidInput,
+    StagingCreationFailed,
+    StagingMappingFailed,
+    TextureCreationFailed,
+    CommandCreationFailed,
+    RecordingFailed,
+    SubmissionFailed,
+    CompletionFailed,
+    DeviceLost,
+    ViewCreationFailed,
+    CacheAllocationFailed,
+    BindingCreationFailed,
+};
 
-    // These callbacks accept decoded CPU data and match the AssetLoading
-    // provider signature. The mesh owns its buffers. The material borrows
-    // the pipeline. Each payload must be returned through its destroy callback.
+RENDERER_API const char* DescribeTextureUploadResult(ETextureUploadResult Result) noexcept;
+RENDERER_API FRHIBindGroupLayout* CreateBasePassMaterialLayout(FRHIDevice& Device) noexcept;
+
+// Owns a scene's GPU texture cache and sampler. The device, pipeline and layout
+// outlive the provider. Drain submitted frames then release registry objects
+// before shutting down the provider.
+class RENDERER_API FRenderAssetProvider final : public FNonCopyable
+{
+public:
+    FRenderAssetProvider() noexcept = default;
+    ~FRenderAssetProvider() noexcept;
+
+    bool Initialize(FRHIDevice* Device, FRHIPipeline_Graphics* Pipeline, FRHIBindGroupLayout* Layout) noexcept;
+    void Shutdown() noexcept;
+    ETextureUploadResult GetLastTextureUploadResult() const noexcept { return LastResult; }
+    // Counts completed uploads for authored asset IDs during this session.
+    std::size_t GetTextureUploadCount() const noexcept { return TextureUploads; }
+
     static FMeshAsset* CreateMesh(void* Context, const FMeshAssetData& Data) noexcept;
     static void DestroyMesh(void* Context, void* Object) noexcept;
-    static FMaterialAsset* CreateMaterial(void* Context, const FMaterialAssetData& Data) noexcept;
+    static FMaterialAsset* CreateMaterial(void* Context, const FMaterialAssetData& Data,
+        const FCpuTextureAsset* Texture) noexcept;
     static void DestroyMaterial(void* Context, void* Object) noexcept;
+
+private:
+    struct FSession;
+    FSession* Session = nullptr;
+    ETextureUploadResult LastResult = ETextureUploadResult::Success;
+    std::size_t TextureUploads = 0;
 };
 
 } // namespace LE

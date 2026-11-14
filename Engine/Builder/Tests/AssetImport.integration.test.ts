@@ -12,9 +12,9 @@ const Id = "62fdc991-27a8-4a81-a077-647b47fd1f7b";
 const OtherId = "62fdc991-27a8-4a81-a077-647b47fd1f7c";
 const Virtual = "Game/Meshes/Triangle";
 
-function Payload(File: Buffer): Buffer {
+function Payload(File: Buffer, Version = 1): Buffer {
     Assert.equal(File.toString("ascii", 0, 4), "LEAS");
-    Assert.equal(File.readUInt32LE(4), 1);
+    Assert.equal(File.readUInt32LE(4), Version);
     const Offset = 48 + File.readUInt32LE(40);
     Assert.equal(File.length, Offset + File.readUInt32LE(44));
     return File.subarray(Offset);
@@ -38,7 +38,7 @@ Test("AssetImport validates, converts and safely publishes editable sources", {
     Context.after(async () => Fs.rm(Temp, { recursive: true, force: true }));
     const Output = Path.join(Temp, "资产 with spaces.leasset");
     const Source = Path.join(Temp, "可编辑 source.obj");
-    const OriginalSource = await Fs.readFile(Path.join(Examples, "Triangle.obj"), "utf8");
+    const OriginalSource = "v -0.75 -0.5 0\nv 0.75 -0.5 0\nv 0 0.75 0\nf 1 2 3\n";
     await Fs.writeFile(Source, OriginalSource);
     function Import(
         Kind: string, File: string, Destination = Output, AssetId = Id, AssetPath = Virtual,
@@ -83,7 +83,7 @@ Test("AssetImport validates, converts and safely publishes editable sources", {
         ["f 1 2 4\n", /face index exceeds vertex count/],
         ["f 1 2 3 1\n", /only triangular faces/],
         ["v nan 0 0\n", /finite decimal/],
-        ["vt 0 0\n", /unsupported OBJ record/],
+        ["vn 0 0 1\n", /unsupported OBJ record/],
     ] as const) {
         await Fs.writeFile(Source, OriginalSource + Record);
         const Invalid = Import("mesh", Source);
@@ -106,7 +106,47 @@ Test("AssetImport validates, converts and safely publishes editable sources", {
     Assert.equal(Edited.status, 0, Edited.stderr);
     Assert.notDeepEqual(await Fs.readFile(Output), Bytes);
 
-    const P3 = Path.join(Examples, "Palette.ppm");
+    const TexturedMesh = [
+        "v 0 0 0", "v 1 0 0", "v 1 1 0", "v 0 1 0",
+        "vt 0 0", "vt 1 0", "vt 1 1", "vt 0 1", "vt 0.25 0.75",
+        "f 1/1 2/2 3/3", "f 1/5 3/3 4/4", "",
+    ].join("\n");
+    await Fs.writeFile(Source, TexturedMesh);
+    const Textured = Import("mesh", Source);
+    Assert.equal(Textured.status, 0, Textured.stderr);
+    const MeshV2Bytes = await Fs.readFile(Output);
+    const MeshV2 = Payload(MeshV2Bytes, 2);
+    Assert.deepEqual([MeshV2.readUInt32LE(0), MeshV2.readUInt32LE(4)], [5, 6]);
+    Assert.deepEqual(
+        Array.from({ length: 15 }, (_, Index) => MeshV2.readFloatLE(8 + 4 * Index)),
+        [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0],
+    );
+    Assert.deepEqual(
+        Array.from({ length: 10 }, (_, Index) => MeshV2.readFloatLE(68 + 4 * Index)),
+        [0, 1, 1, 1, 1, 0, 0.25, 0.25, 0, 0],
+    );
+    Assert.deepEqual(
+        Array.from({ length: 6 }, (_, Index) => MeshV2.readUInt32LE(108 + 4 * Index)),
+        [0, 1, 2, 3, 2, 4],
+    );
+    Assert.equal(Import("mesh", Source).status, 0);
+    Assert.deepEqual(await Fs.readFile(Output), MeshV2Bytes);
+    for (const [Face, Error] of [
+        ["f 1/6 2/2 3/3", /UV index exceeds UV coordinate count/],
+        ["f 1//1 2/2 3/3", /positive position or position\/UV/],
+        ["f 1/1 2 3/3", /cannot mix/],
+        ["f 1 2 3", /cannot mix/],
+    ] as const) {
+        await Fs.writeFile(Source, `${TexturedMesh}${Face}\n`);
+        const Rejected = Import("mesh", Source);
+        Assert.equal(Rejected.status, 1, Rejected.stderr);
+        Assert.match(Rejected.stderr, Error);
+        Assert.match(Rejected.stderr, /source\.obj:12:/);
+        Assert.deepEqual(await Fs.readFile(Output), MeshV2Bytes);
+    }
+
+    const P3 = Path.join(Temp, "ascii.ppm");
+    await Fs.writeFile(P3, "P3\n2 1\n255\n32 35 10 128 64 192\n");
     const P6 = Path.join(Temp, "binary.ppm");
     const Pixels = Buffer.from([32, 35, 10, 128, 64, 192]);
     const P6Header = Buffer.from("P6\n# preserve first whitespace pixel\n2 1\n255\n", "ascii");
@@ -137,8 +177,43 @@ Test("AssetImport validates, converts and safely publishes editable sources", {
         [1, Math.fround(0.35), Math.fround(0.12)],
     );
     const InvalidMaterial = Path.join(Temp, "invalid.material");
+    await Fs.writeFile(InvalidMaterial, "base-color # v1 allows whitespace between components\n1 0.35 \n0.12\n");
+    const Continued = Import("material", InvalidMaterial, MaterialPath, OtherId, MaterialVirtual);
+    Assert.equal(Continued.status, 0, Continued.stderr);
+    Assert.deepEqual(Payload(await Fs.readFile(MaterialPath)), Color);
     await Fs.writeFile(InvalidMaterial, "base-color 0 -1 0\n");
     const Invalid = Import("material", InvalidMaterial, "");
     Assert.equal(Invalid.status, 1, Invalid.stderr);
     Assert.match(Invalid.stderr, /finite non-negative decimal/);
+
+    const TexturedMaterial = Path.join(Temp, "textured.material");
+    const WithTexture = `base-color 0.5 1 0.5\nbase-color-texture ${Id}\n`;
+    await Fs.writeFile(TexturedMaterial, WithTexture);
+    const CheckedMaterial = Import("material", TexturedMaterial, "", OtherId, MaterialVirtual);
+    Assert.equal(CheckedMaterial.status, 0, CheckedMaterial.stderr);
+    Assert.deepEqual(Payload(await Fs.readFile(MaterialPath)), Color);
+    const Upgraded = Import("material", TexturedMaterial, MaterialPath, OtherId, MaterialVirtual);
+    Assert.equal(Upgraded.status, 0, Upgraded.stderr);
+    const TexturedBytes = await Fs.readFile(MaterialPath);
+    const TexturedColor = Payload(TexturedBytes, 2);
+    Assert.deepEqual(
+        Array.from({ length: 3 }, (_, Index) => TexturedColor.readFloatLE(4 * Index)), [0.5, 1, 0.5],
+    );
+    Assert.equal(TexturedColor.subarray(12).toString("hex"), Id.replaceAll("-", ""));
+    Assert.equal(Import("material", TexturedMaterial, MaterialPath, OtherId, MaterialVirtual).status, 0);
+    Assert.deepEqual(await Fs.readFile(MaterialPath), TexturedBytes);
+    for (const [Contents, Error] of [
+        [`base-color 1 1 1\nbase-color-texture BAD\n`, /:2: expected base-color-texture/],
+        [`${WithTexture}base-color-texture ${Id}\n`, /:3: duplicate base-color-texture/],
+        [`${WithTexture}base-color 1 1 1\n`, /:3: duplicate base-color directive/],
+    ] as const) {
+        await Fs.writeFile(TexturedMaterial, Contents);
+        const Rejected = Import("material", TexturedMaterial, MaterialPath, OtherId, MaterialVirtual);
+        Assert.equal(Rejected.status, 1, Rejected.stderr);
+        Assert.match(Rejected.stderr, Error);
+        Assert.deepEqual(await Fs.readFile(MaterialPath), TexturedBytes);
+    }
+    const Downgraded = Import("material", MaterialSource, MaterialPath, OtherId, MaterialVirtual);
+    Assert.equal(Downgraded.status, 0, Downgraded.stderr);
+    Assert.deepEqual(Payload(await Fs.readFile(MaterialPath)), Color);
 });

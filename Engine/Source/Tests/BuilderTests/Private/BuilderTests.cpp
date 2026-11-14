@@ -43,6 +43,7 @@ bool RunContentIOTests();
 bool RunAssetFormatTests();
 int RunAssetLoadingTests();
 bool RunRenderAssetProviderTests();
+int RunRHICopyTests();
 bool RunSceneTests();
 int RunSceneDocumentTests();
 int RunWorldRendererTests();
@@ -141,12 +142,18 @@ public:
     }
 
     bool IsSignaled() override { return bSignaled; }
+    LE::ERHIFenceWaitResult WaitChecked(LE::uint64 Timeout) override
+    {
+        Wait(Timeout);
+        return WaitResult;
+    }
 
     LE::Array<int>* Events = nullptr;
     int* DestroyCount = nullptr;
     int WaitCount = 0;
     int ResetCount = 0;
     bool bSignaled = true;
+    LE::ERHIFenceWaitResult WaitResult = LE::ERHIFenceWaitResult::Success;
 };
 
 class FFakeRHITexture final : public LE::FRHITexture
@@ -212,6 +219,11 @@ public:
     }
 
     void WaitIdle() override { ++WaitIdleCount; }
+    LE::ERHIFenceWaitResult WaitIdleChecked() override
+    {
+        WaitIdle();
+        return LE::ERHIFenceWaitResult::Success;
+    }
     LE::EQueueType GetType() const override { return LE::EQueueType::Graphics; }
 
     LE::Array<int>* Events = nullptr;
@@ -2142,6 +2154,25 @@ int RunExplicitFrameLifecycleTests()
             "Suboptimal acquire renders and presents the valid image before requesting recreation");
     }
 
+    {
+        FRenderFrameSchedulerFixture Fixture;
+        Fixture.Initialize();
+        const auto First = Fixture.Execute();
+        const auto Second = Fixture.Execute();
+        Fixture.Device.Fences[0]->WaitResult = LE::ERHIFenceWaitResult::Error;
+        const auto Failed = Fixture.Execute();
+        Failures += Expect(
+            First.Action == LE::ERenderFrameAction::Continue &&
+                Second.Action == LE::ERenderFrameAction::Continue &&
+                Failed.Action == LE::ERenderFrameAction::Exit &&
+                Fixture.Device.Allocators[0]->ResetCount == 1 &&
+                Fixture.Device.Queue.SubmitCount == 2 && Fixture.Device.Queue.WaitIdleCount == 0,
+            "An unconfirmed in-flight slot is neither reused nor marked ready");
+        Fixture.Scheduler.Shutdown();
+        Failures += Expect(Fixture.Device.Queue.WaitIdleCount == 1,
+            "Shutdown confirms queue completion when a submitted frame fence cannot be confirmed");
+    }
+
     for (const LE::ERHISwapchainStatus AcquireStatus : {
         LE::ERHISwapchainStatus::OutOfDate,
         LE::ERHISwapchainStatus::Error })
@@ -3405,6 +3436,7 @@ int main(const int ArgCount, char** Arguments)
     FailureCount += LE::RunAssetFormatTests() ? 0 : 1;
     FailureCount += LE::RunAssetLoadingTests();
     FailureCount += LE::RunRenderAssetProviderTests() ? 0 : 1;
+    FailureCount += LE::RunRHICopyTests();
     FailureCount += LE::RunSceneTests() ? 0 : 1;
     FailureCount += LE::RunSceneDocumentTests();
     FailureCount += LE::RunWorldRendererTests();

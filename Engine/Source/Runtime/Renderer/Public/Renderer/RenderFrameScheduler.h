@@ -106,6 +106,7 @@ private:
     };
 
     bool DeferReleaseFromScope(uint32 SlotIndex, uint64 Generation, FRHIResource* Resource);
+    void DrainQueueForRetirement();
     void FlushDeferredReleases(FFrameSlot& Slot) noexcept;
     void DestroySlots() noexcept;
 
@@ -117,6 +118,7 @@ private:
     uint32 NextSlotIndex = 0;
     bool bInitialized = false;
     bool bTerminal = false;
+    bool bDeviceLost = false;
 };
 
 } // namespace LE

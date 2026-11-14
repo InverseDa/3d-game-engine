@@ -500,7 +500,17 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         }
         if (ResolvedMaterial == nullptr || ResolvedMaterial->GraphicsPipeline == nullptr ||
             ResolvedMaterial->PassMask == ERenderMeshPassMask::None ||
+            ((ResolvedMaterial->BaseColorTexture == nullptr) !=
+                (ResolvedMaterial->MaterialBindGroup == nullptr)) ||
             !IsFiniteNonNegativeRgb(ResolvedMaterial->BaseColor))
+        {
+            return Fail(EWorldRenderSnapshotBuildResult::InvalidMaterialPayload, Index, PrimitiveId);
+        }
+        if (ResolvedMaterial->bRequiresUV && !ResolvedMesh->bHasUV)
+        {
+            return Fail(EWorldRenderSnapshotBuildResult::MissingMeshUV, Index, PrimitiveId);
+        }
+        if (ResolvedMaterial->bRequiresUV && ResolvedMaterial->BaseColorTexture == nullptr)
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidMaterialPayload, Index, PrimitiveId);
         }
@@ -562,6 +572,8 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         Proxy.SortKey = Component.SortKey;
         Proxy.MaterialAssetId = MaterialAssetId;
         Proxy.BaseColor = BaseColor;
+        Proxy.BaseColorTexture = ResolvedMaterial->BaseColorTexture;
+        Proxy.MaterialBindGroup = ResolvedMaterial->MaterialBindGroup;
         ++Report.VisibleMeshCount;
     }
 
