@@ -182,6 +182,12 @@ Pipeline.AddPass(&PassB);
 
 #### `FBasePass`
 
+`FRenderAssetProvider` 将已解码的 CPU 网格与纯色材质转换为 BasePass 可用的 payload。
+网格 provider 使用 Upload 内存写入位置、白色顶点颜色和 R32 索引，销毁回调负责释放两个
+RHI buffer。材质借用应用持有的共享 pipeline，只参与 SceneColor Pass。
+应用在所有引用这些资源的帧完成后释放资产，随后释放共享 pipeline 和设备。
+固定附件格式和动态 viewport/scissor 使 BasePass pipeline 可以跨窗口尺寸复用。
+
 - Preflight 在产生计划前验证唯一 primary camera、B8G8R8A8_SRGB SceneColor、D32_FLOAT
   depth、extent、opaque blend/depth contract、slot0 vertex binding、VB/IB usage/size、R16/R32
   index format，以及有效的 persistent Material asset ID。
@@ -308,6 +314,7 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 | `Public/Renderer/SimpleRenderPass.h` | `FSimpleRenderPass` |
 | `Public/Renderer/SimpleRenderPipeline.h` | `FSimpleRenderPipeline` |
 | `Public/Renderer/BasePass.h` | 正式 BasePass attachment、indexed draw 与 80-byte object constants 契约 |
+| `Public/Renderer/RenderAssetProvider.h` | CPU 网格和纯色材质的 BasePass provider 与顶点布局 |
 | `Public/Renderer/BasePassCompositePipeline.h` | 正式 BasePass→Composite 双 Pass pipeline |
 | `Public/Renderer/RendererMinimal.h` | 模块统一头文件（聚合包含） |
 | `Private/Renderer/Renderer.cpp` | `FRenderer` 实现 |

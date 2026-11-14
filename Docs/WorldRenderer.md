@@ -56,12 +56,13 @@ pointer, registry pointer, resolved asset-object pointer, or borrowed
 only by the next build; an already published CPU snapshot is not rewritten.
 
 GPU resource pointers are provider-borrowed, not snapshot-owned. Providers must
-keep them alive until submitted frames finish. The Demo waits all frame fences
-only for resize/shutdown, builds every replacement attachment/binding/pipeline
-as a candidate, Replace-publishes the inactive Material payload, switches the
-Idle World handle, swaps candidates, and only then destroys old resources.
-Shutdown clears World, unregisters assets, stops frame slots, and only then
-destroys GPU resources.
+keep them alive until submitted frames finish. During resize, the Demo waits
+for submitted frames, builds replacement attachments and Composite resources,
+and publishes the complete replacement before destroying the old resources.
+The shared BasePass pipeline uses dynamic viewport and scissor, so the same
+material handle remains usable for every entity across viewport sizes.
+Shutdown stops frame slots, releases the active scene and asset session,
+then destroys the shared pipeline and device.
 
 ## Deliberate exclusions
 

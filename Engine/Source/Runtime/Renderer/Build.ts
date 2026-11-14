@@ -9,5 +9,6 @@ export default class RendererBuild extends ModuleBuild {
 
     public Configure(_Target: Target, Configuration: ModuleConfiguration): void {
         Configuration.PublicDependencies.push("Core", "Asset", "RHI", "RFG");
+        Configuration.PrivateDependencies.push("AssetFormat");
     }
 }

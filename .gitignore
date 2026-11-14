@@ -434,6 +434,9 @@ FodyWeavers.xsd
 ################################################################
 # Following is Limitless namespace
 
+# Wavefront mesh sources under Content use the same suffix as object files.
+!Engine/Content/**/*.obj
+
 .claude/
 Engine/binaries/
 Intermediate/

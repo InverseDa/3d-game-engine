@@ -1,4 +1,5 @@
 #include "Renderer/BasePass.h"
+#include "Containers/HashSet.h"
 
 #include "Execute/RFGPassContext.h"
 #include "RHI/RHIBuffer.h"
@@ -207,14 +208,22 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
     VertexRead.PipelineStage = ERFGPipelineStage::Graphics;
     FRFGAccessDesc IndexRead = VertexRead;
     IndexRead.State = ERHIResourceState::IndexBuffer;
+    HashSet<FRHIBuffer*> VertexBuffers;
+    HashSet<FRHIBuffer*> IndexBuffers;
     for (const FRenderMeshProxy& Mesh : Context.RenderScene->Meshes)
     {
-        const FRFGResourceHandle VertexBuffer = Context.GraphBridge->ImportBuffer(
-            "BasePassVertexBuffer", Mesh.VertexBuffer, ERHIResourceState::VertexBuffer);
-        const FRFGResourceHandle IndexBuffer = Context.GraphBridge->ImportBuffer(
-            "BasePassIndexBuffer", Mesh.IndexBuffer, ERHIResourceState::IndexBuffer);
-        Context.GraphBridge->Read(Context.PassHandle, VertexBuffer, VertexRead);
-        Context.GraphBridge->Read(Context.PassHandle, IndexBuffer, IndexRead);
+        if (VertexBuffers.Insert(Mesh.VertexBuffer))
+        {
+            const FRFGResourceHandle VertexBuffer = Context.GraphBridge->ImportBuffer(
+                "BasePassVertexBuffer", Mesh.VertexBuffer, ERHIResourceState::VertexBuffer);
+            Context.GraphBridge->Read(Context.PassHandle, VertexBuffer, VertexRead);
+        }
+        if (IndexBuffers.Insert(Mesh.IndexBuffer))
+        {
+            const FRFGResourceHandle IndexBuffer = Context.GraphBridge->ImportBuffer(
+                "BasePassIndexBuffer", Mesh.IndexBuffer, ERHIResourceState::IndexBuffer);
+            Context.GraphBridge->Read(Context.PassHandle, IndexBuffer, IndexRead);
+        }
     }
 }
 

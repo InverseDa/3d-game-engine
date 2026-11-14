@@ -331,7 +331,19 @@ async function ResolveCommandTarget(
 
 async function Main(): Promise<void> {
     const Arguments = ParseArguments(process.argv);
-    const Paths = new EnginePaths(FindProjectRoot(process.cwd()));
+    const Root = FindProjectRoot(process.cwd());
+    const OutputRootFlag = Arguments.Flags["program-output-root"];
+    let ProgramOutputRoot: string | undefined;
+    if (OutputRootFlag !== undefined) {
+        const Intermediate = Path.join(Root, "Engine", "Intermediate");
+        ProgramOutputRoot = Path.resolve(OutputRootFlag);
+        const Relative = Path.relative(Intermediate, ProgramOutputRoot);
+        if (Arguments.Command !== "build" || Arguments.Flags.type !== TargetType.Program ||
+            !Relative || Relative === ".." || Relative.startsWith(`..${Path.sep}`) || Path.isAbsolute(Relative)) {
+            throw new Error("--program-output-root requires a Program build and a path inside Engine/Intermediate.");
+        }
+    }
+    const Paths = new EnginePaths(Root, ProgramOutputRoot);
     switch (Arguments.Command) {
         case "list":
             if (Arguments.Subcommand === "modules") {

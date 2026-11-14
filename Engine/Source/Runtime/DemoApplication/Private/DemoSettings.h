@@ -19,7 +19,7 @@ struct FDemoSettings
     uint32 WindowHeight = 720;
 
     LE_PROPERTY("72000000-0000-4000-8000-000000000004")
-    String WindowTitle = "Limitless Engine - RFG Composite Triangle Demo";
+    String WindowTitle = "Limitless Engine - Content Demo";
 };
 
 EReflectionRegisterResult RegisterDemoApplicationReflection(

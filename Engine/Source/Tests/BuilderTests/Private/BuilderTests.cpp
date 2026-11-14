@@ -39,6 +39,12 @@ int RunReflectionMacroTests();
 int RunPropertySerializationTests();
 int RunWorldTests();
 int RunAssetTests();
+bool RunContentIOTests();
+bool RunAssetFormatTests();
+int RunAssetLoadingTests();
+bool RunRenderAssetProviderTests();
+bool RunSceneTests();
+int RunSceneDocumentTests();
 int RunWorldRendererTests();
 int RunBasePassTests();
 }
@@ -3395,6 +3401,12 @@ int main(const int ArgCount, char** Arguments)
     FailureCount += LE::RunPropertySerializationTests();
     FailureCount += LE::RunWorldTests();
     FailureCount += LE::RunAssetTests();
+    FailureCount += LE::RunContentIOTests() ? 0 : 1;
+    FailureCount += LE::RunAssetFormatTests() ? 0 : 1;
+    FailureCount += LE::RunAssetLoadingTests();
+    FailureCount += LE::RunRenderAssetProviderTests() ? 0 : 1;
+    FailureCount += LE::RunSceneTests() ? 0 : 1;
+    FailureCount += LE::RunSceneDocumentTests();
     FailureCount += LE::RunWorldRendererTests();
     FailureCount += LE::RunBasePassTests();
     FailureCount += RunOwnershipTests();

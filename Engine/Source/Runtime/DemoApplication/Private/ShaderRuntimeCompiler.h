@@ -92,14 +92,27 @@ inline LE::String GetExecutableDirectory()
 
     return GetParentPath(LE::String(Buffer.Data()));
 #elif PLATFORM_WINDOWS
-    char ModulePath[MAX_PATH] = {};
-    const DWORD PathLength = GetModuleFileNameA(nullptr, ModulePath, static_cast<DWORD>(sizeof(ModulePath)));
-    if (PathLength == 0 || PathLength >= sizeof(ModulePath))
+    LE::Array<wchar_t> ModulePath;
+    if (!ModulePath.TryResize(32768))
+    {
+        return {};
+    }
+    const DWORD PathLength = GetModuleFileNameW(nullptr, ModulePath.Data(), static_cast<DWORD>(ModulePath.Size()));
+    if (PathLength == 0 || PathLength >= ModulePath.Size())
     {
         return {};
     }
 
-    return GetParentPath(LE::String(ModulePath, PathLength));
+    const int ByteCount = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+        ModulePath.Data(), static_cast<int>(PathLength), nullptr, 0, nullptr, nullptr);
+    LE::Array<char> Bytes;
+    if (ByteCount <= 0 || !Bytes.TryResize(static_cast<std::size_t>(ByteCount)) ||
+        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, ModulePath.Data(), static_cast<int>(PathLength),
+            Bytes.Data(), ByteCount, nullptr, nullptr) != ByteCount)
+    {
+        return {};
+    }
+    return GetParentPath(LE::String(Bytes.Data(), Bytes.Size()));
 #else
     return {};
 #endif

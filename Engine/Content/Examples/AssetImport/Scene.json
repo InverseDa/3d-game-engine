@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "entities": [
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e700"
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e701",
+      "transform": {
+        "translation": [0, 0, 0],
+        "rotation": [0, 0, 0, 1],
+        "scale": [1, 1, 1]
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e702",
+      "parent": "8a0a5d74-17ef-48e0-a46b-f7105518e701",
+      "transform": {
+        "translation": [-0.7, 0, 0],
+        "rotation": [0, 0, 0, 1],
+        "scale": [0.75, 0.75, 0.75]
+      },
+      "mesh": {
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd1f7b",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd1f7c",
+        "debugName": "Left triangle",
+        "sortKey": "0"
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e703",
+      "parent": "8a0a5d74-17ef-48e0-a46b-f7105518e701",
+      "transform": {
+        "translation": [0.7, 0, 0],
+        "rotation": [0, 0, 0, 1],
+        "scale": [0.75, 0.75, 0.75]
+      },
+      "mesh": {
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd1f7b",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd1f7c",
+        "debugName": "Right triangle",
+        "sortKey": "1"
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e704",
+      "transform": {
+        "translation": [0, 0, 3],
+        "rotation": [0, 0, 0, 1],
+        "scale": [1, 1, 1]
+      },
+      "camera": {
+        "debugName": "Primary camera",
+        "verticalFieldOfViewRadians": 1.04719755,
+        "nearPlane": 0.1,
+        "farPlane": 100,
+        "priority": 100,
+        "active": true
+      }
+    }
+  ]
+}

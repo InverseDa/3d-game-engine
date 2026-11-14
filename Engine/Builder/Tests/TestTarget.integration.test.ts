@@ -22,6 +22,7 @@ function RunBuild(
     ], {
         cwd: Root,
         encoding: "utf-8",
+        maxBuffer: 32 * 1024 * 1024,
         shell: true,
         env: { ...process.env, LIMITLESS_BUILDER_NODE: process.execPath },
     });

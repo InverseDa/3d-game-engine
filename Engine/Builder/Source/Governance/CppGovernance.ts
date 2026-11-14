@@ -270,6 +270,8 @@ function isPublicHeader(file: string): boolean {
 
 function isAllowedGlobal(file: string, symbol: string): boolean {
     return (file === "Engine/Source/Runtime/Launch/Private/Launch.cpp" && ["main", "WinMain"].includes(symbol))
+        || (file === "Engine/Source/Programs/AssetImport/Private/AssetImportMain.cpp" && ["main", "wmain"].includes(symbol))
+        || (file === "Engine/Source/Programs/SceneTool/Private/SceneToolMain.cpp" && ["main", "wmain"].includes(symbol))
         || (file === "Engine/Source/Tests/BuilderTests/Private/BuilderTests.cpp" && symbol === "main")
         || (file === "Engine/Source/Runtime/Platform/Private/Mac/MacPlatformWindow.mm"
             && symbol === "FMacPlatformWindowDelegate");

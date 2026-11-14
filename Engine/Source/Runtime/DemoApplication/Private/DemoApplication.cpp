@@ -1,33 +1,32 @@
 #include "DemoApplication/DemoApplication.h"
 
 #include "Application/RuntimeModule.h"
-#include "Asset/AssetMinimal.h"
+#include "AssetLoading/AssetLoading.h"
 #include "CoreMinimal.h"
 #include "DemoSettings.h"
 
 #include "Platform/Platform.h"
 #include "RHIMinimal.h"
 #include "RFGMinimal.h"
+#include "Renderer/RenderAssetProvider.h"
 #include "Renderer/RendererMinimal.h"
 #include "ShaderRuntimeCompiler.h"
+#include "Scene/Scene.h"
 #include "World/WorldMinimal.h"
 #include "WorldRenderer/WorldRendererMinimal.h"
 
 #include <cmath>
-#include <cstdint>
+#include <cstdlib>
+#include <locale.h>
+#if PLATFORM_MAC
+#include <xlocale.h>
+#endif
 
 namespace LE
 {
 
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogXBD);
 LE_DECLARE_LOG_CATEGORY(LogXBD);
-
-// 顶点结构：位置 + 颜色
-struct FSimpleVertex
-{
-    LE::Math::Vector3f Position;
-    LE::Math::Vector3f Color;
-};
 
 struct FDemoRenderResources
 {
@@ -38,14 +37,12 @@ struct FDemoRenderResources
     LE::FRHISampler* Sampler = nullptr;
     LE::FRHIBindGroupLayout* BindGroupLayout = nullptr;
     LE::FRHIBindGroup* BindGroup = nullptr;
-    LE::FRHIPipeline_Graphics* BasePassPipeline = nullptr;
     LE::FRHIPipeline_Graphics* CompositePipeline = nullptr;
 };
 
 static void DestroyDemoRenderResources(FDemoRenderResources& Resources)
 {
     RHI::DestroyResource(Resources.CompositePipeline);
-    RHI::DestroyResource(Resources.BasePassPipeline);
     RHI::DestroyResource(Resources.BindGroup);
     RHI::DestroyResource(Resources.BindGroupLayout);
     RHI::DestroyResource(Resources.Sampler);
@@ -55,7 +52,6 @@ static void DestroyDemoRenderResources(FDemoRenderResources& Resources)
     RHI::DestroyResource(Resources.SceneColorTexture);
 
     Resources.CompositePipeline = nullptr;
-    Resources.BasePassPipeline = nullptr;
     Resources.BindGroup = nullptr;
     Resources.BindGroupLayout = nullptr;
     Resources.Sampler = nullptr;
@@ -77,7 +73,7 @@ static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(
 
     LE::FRHIVertexInputBinding Binding;
     Binding.Binding = 0;
-    Binding.Stride = sizeof(FSimpleVertex);
+    Binding.Stride = sizeof(FBasePassVertex);
     Binding.bPerInstance = false;
     PipelineDesc.VertexBindings.PushBack(Binding);
 
@@ -85,14 +81,14 @@ static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(
     PosAttr.Location = 0;
     PosAttr.Binding = 0;
     PosAttr.Format = LE::EPixelFormat::R32G32B32_FLOAT;
-    PosAttr.Offset = offsetof(FSimpleVertex, Position);
+    PosAttr.Offset = offsetof(FBasePassVertex, Position);
     PipelineDesc.VertexAttributes.PushBack(PosAttr);
 
     LE::FRHIVertexInputAttribute ColorAttr;
     ColorAttr.Location = 1;
     ColorAttr.Binding = 0;
     ColorAttr.Format = LE::EPixelFormat::R32G32B32_FLOAT;
-    ColorAttr.Offset = offsetof(FSimpleVertex, Color);
+    ColorAttr.Offset = offsetof(FBasePassVertex, Color);
     PipelineDesc.VertexAttributes.PushBack(ColorAttr);
 
     PipelineDesc.RenderTargetCount = 1;
@@ -136,8 +132,6 @@ static LE::FRHIPipeline_Graphics* CreateCompositePipeline(
 
 static bool TryCreateDemoRenderResources(
     LE::FRHIDevice* Device,
-    LE::FRHIShader* BasePassVertexShader,
-    LE::FRHIShader* BasePassPixelShader,
     LE::FRHIShader* CompositeVertexShader,
     LE::FRHIShader* CompositePixelShader,
     uint32 Width,
@@ -147,7 +141,6 @@ static bool TryCreateDemoRenderResources(
     if (Device == nullptr || Width == 0 || Height == 0 ||
         OutResources.SceneColorTexture != nullptr ||
         OutResources.SceneDepthTexture != nullptr ||
-        OutResources.BasePassPipeline != nullptr ||
         OutResources.CompositePipeline != nullptr)
     {
         return false;
@@ -271,83 +264,20 @@ static bool TryCreateDemoRenderResources(
         return false;
     }
 
-    OutResources.BasePassPipeline = CreateBasePassPipeline(
-        Device, BasePassVertexShader, BasePassPixelShader);
     OutResources.CompositePipeline = CreateCompositePipeline(
         Device,
         CompositeVertexShader,
         CompositePixelShader,
         OutResources.BindGroupLayout,
         LE::EPixelFormat::B8G8R8A8_SRGB);
-    if (OutResources.BasePassPipeline == nullptr ||
-        OutResources.CompositePipeline == nullptr)
+    if (OutResources.CompositePipeline == nullptr)
     {
-        LE_LOG(LogXBD, Error, "Failed to create BasePass/Composite pipelines.");
+        LE_LOG(LogXBD, Error, "Failed to create Composite pipeline.");
         DestroyDemoRenderResources(OutResources);
         return false;
     }
 
     return true;
-}
-
-// Create triangle vertex buffer
-LE::FRHIBuffer* CreateTriangleVertexBuffer(LE::FRHIDevice* Device)
-{
-    FSimpleVertex Vertices[3] = {
-        { LE::Math::Vector3f( 0.0f,  0.5f, 0.0f), LE::Math::Vector3f(1.0f, 0.0f, 0.0f) }, // Top - Red
-        { LE::Math::Vector3f( 0.5f, -0.5f, 0.0f), LE::Math::Vector3f(0.0f, 1.0f, 0.0f) }, // Right - Green
-        { LE::Math::Vector3f(-0.5f, -0.5f, 0.0f), LE::Math::Vector3f(0.0f, 0.0f, 1.0f) }, // Left - Blue
-    };
-
-    const uint64 BufferSize = sizeof(Vertices);
-
-    LE::FRHIBufferDesc BufferDesc;
-    BufferDesc.Name = "TriangleVertexBuffer";
-    BufferDesc.Size = BufferSize;
-    BufferDesc.Usage = static_cast<uint32>(LE::EResourceUsage::Upload);
-    BufferDesc.UsageFlag = static_cast<uint32>(LE::EBufferUsageFlags::VertexBuffer);
-
-    LE::FRHIBuffer* Buffer = Device == nullptr ? nullptr : Device->CreateBuffer(BufferDesc);
-    if (Buffer == nullptr)
-    {
-        return nullptr;
-    }
-    void* MappedData = Buffer->Map(0, BufferSize);
-    if (MappedData == nullptr)
-    {
-        RHI::DestroyResource(Buffer);
-        return nullptr;
-    }
-    memcpy(MappedData, Vertices, BufferSize);
-    Buffer->Unmap();
-
-    LE_LOG(LogXBD, Info, "Created triangle vertex buffer");
-    return Buffer;
-}
-
-LE::FRHIBuffer* CreateTriangleIndexBuffer(LE::FRHIDevice* Device)
-{
-    const std::uint16_t Indices[3] = {0, 1, 2};
-    LE::FRHIBufferDesc BufferDesc;
-    BufferDesc.Name = "TriangleIndexBuffer";
-    BufferDesc.Size = sizeof(Indices);
-    BufferDesc.Usage = static_cast<uint32>(LE::EResourceUsage::Upload);
-    BufferDesc.UsageFlag = static_cast<uint32>(LE::EBufferUsageFlags::IndexBuffer);
-    LE::FRHIBuffer* Buffer = Device == nullptr ? nullptr : Device->CreateBuffer(BufferDesc);
-    if (Buffer == nullptr)
-    {
-        return nullptr;
-    }
-    void* const MappedData = Buffer->Map(0, sizeof(Indices));
-    if (MappedData == nullptr)
-    {
-        RHI::DestroyResource(Buffer);
-        return nullptr;
-    }
-    memcpy(MappedData, Indices, sizeof(Indices));
-    Buffer->Unmap();
-    LE_LOG(LogXBD, Info, "Created triangle index buffer");
-    return Buffer;
 }
 
 static void GetBackBufferExtent(
@@ -539,29 +469,6 @@ public:
             return false;
         }
 
-        FNativeGameplaySystemDescriptor RotateSystem;
-        RotateSystem.Name = "Demo.RotateTriangle";
-        RotateSystem.ProviderContext = this;
-        RotateSystem.Update = &RotateTriangleSystem;
-        RotateSystem.Phase = ENativeGameplaySystemPhase::Variable;
-        const ENativeGameplaySystemRegisterResult RegisterResult =
-            World.RegisterNativeGameplaySystem(RotateSystem);
-        if (RegisterResult != ENativeGameplaySystemRegisterResult::Success)
-        {
-            LE_LOG(LogXBD, Error, "Failed to register demo native gameplay system: {}.",
-                static_cast<uint32>(RegisterResult));
-            return false;
-        }
-        bGameplaySystemRegistered = true;
-        const ENativeGameplayScheduleResult ScheduleResult =
-            World.CompileNativeGameplaySystemSchedule();
-        if (ScheduleResult != ENativeGameplayScheduleResult::Success)
-        {
-            LE_LOG(LogXBD, Error, "Failed to compile demo native gameplay schedule: {}.",
-                static_cast<uint32>(ScheduleResult));
-            return false;
-        }
-
         Device = LE::RHI::CreateDevice();
         if (Device == nullptr)
         {
@@ -609,13 +516,18 @@ public:
             return false;
         }
 
+        BasePassPipeline = CreateBasePassPipeline(Device, BasePassVertexShader, BasePassPixelShader);
+        if (BasePassPipeline == nullptr)
+        {
+            LE_LOG(LogXBD, Error, "Failed to create BasePass pipeline.");
+            return false;
+        }
+
         uint32 InitialRenderWidth = DefaultWindowWidth;
         uint32 InitialRenderHeight = DefaultWindowHeight;
         GetBackBufferExtent(Swapchain, DefaultWindowWidth, DefaultWindowHeight, InitialRenderWidth, InitialRenderHeight);
         if (!TryCreateDemoRenderResources(
                 Device,
-                BasePassVertexShader,
-                BasePassPixelShader,
                 CompositeVertexShader,
                 CompositePixelShader,
                 InitialRenderWidth,
@@ -625,56 +537,16 @@ public:
             return false;
         }
 
-        VertexBuffer = CreateTriangleVertexBuffer(Device);
-        IndexBuffer = CreateTriangleIndexBuffer(Device);
-        if (VertexBuffer == nullptr || IndexBuffer == nullptr ||
-            !FrameScheduler.Initialize(Device))
+        if (!FrameScheduler.Initialize(Device))
         {
-            LE_LOG(LogXBD, Error, "Failed to create demo frame scheduler resources.");
+            LE_LOG(LogXBD, Error, "Failed to initialize demo frame scheduler.");
             return false;
         }
-
-        if (!RegisterRenderAssets())
+        RenderAssetProvider = {Device, BasePassPipeline};
+        if (!InitializeContent())
         {
-            LE_LOG(LogXBD, Error, "Failed to register demo render assets.");
-            Shutdown();
             return false;
         }
-
-        FWorldCommandBuffer* const Commands = World.GetCommandBuffer();
-        TComponentStorage<FWorldMeshComponent>* const MeshComponents =
-            World.GetMeshComponents();
-        TComponentStorage<FWorldCameraComponent>* const CameraComponents =
-            World.GetCameraComponents();
-        FWorldMeshComponent MeshComponent;
-        MeshComponent.DebugName = "TriangleMesh";
-        MeshComponent.Mesh = MeshAssetHandle;
-        MeshComponent.Material = MaterialAssetHandle;
-        MeshComponent.SortKey = 0;
-        FWorldCameraComponent CameraComponent;
-        CameraComponent.DebugName = "PrimaryCamera";
-        CameraComponent.Priority = 100;
-        CameraComponent.bActive = true;
-        FTransform CameraTransform;
-        CameraTransform.Translation = Math::Vector3f(0.0f, 0.0f, 2.0f);
-        if (!World.IsValid() || Commands == nullptr || MeshComponents == nullptr ||
-            CameraComponents == nullptr ||
-            Commands->TryCreateEntity(BootstrapMeshToken) != EWorldCommandRecordResult::Recorded ||
-            Commands->TryAddComponent(*MeshComponents, BootstrapMeshToken, std::move(MeshComponent)) !=
-                EWorldCommandRecordResult::Recorded ||
-            Commands->TryAddTransform(BootstrapMeshToken) != EWorldCommandRecordResult::Recorded ||
-            Commands->TryCreateEntity(BootstrapCameraToken) != EWorldCommandRecordResult::Recorded ||
-            Commands->TryAddComponent(
-                *CameraComponents, BootstrapCameraToken, std::move(CameraComponent)) !=
-                EWorldCommandRecordResult::Recorded ||
-            Commands->TryAddTransform(BootstrapCameraToken, CameraTransform) !=
-                EWorldCommandRecordResult::Recorded)
-        {
-            LE_LOG(LogXBD, Error, "Failed to record the demo World bootstrap commands.");
-            Shutdown();
-            return false;
-        }
-        bWorldBootstrapPending = true;
 
         Renderer.Initialize();
         bRendererInitialized = true;
@@ -693,50 +565,18 @@ public:
         bShutdown = true;
 
         LE_LOG(LogXBD, Info, "Shutting down demo render runtime...");
-        bool bWorldIdle = World.GetTickState() == EWorldTickState::Idle;
-        if (!bWorldIdle && World.GetTickState() == EWorldTickState::Updating)
-        {
-            static_cast<void>(World.EndTick());
-            bWorldIdle = World.GetTickState() == EWorldTickState::Idle;
-        }
-        if (bGameplaySystemRegistered && bWorldIdle)
-        {
-            if (World.UnregisterNativeGameplaySystem("Demo.RotateTriangle") !=
-                ENativeGameplaySystemUnregisterResult::Success)
-            {
-                LE_LOG(LogXBD, Error, "Failed to unregister demo native gameplay system.");
-            }
-            bGameplaySystemRegistered = false;
-        }
-        const bool bWorldReset = bWorldIdle && World.Reset();
-        if (!bWorldReset)
-        {
-            LE_LOG(LogXBD, Error, "Demo World was not idle during render runtime shutdown.");
-        }
-        else
-        {
-            bWorldBootstrapPending = false;
-            BootstrapMeshToken.Reset();
-            BootstrapCameraToken.Reset();
-            MeshEntity.Reset();
-            CameraEntity.Reset();
-            if (!UnregisterRenderAssets())
-            {
-                LE_LOG(LogXBD, Error, "Failed to unregister demo render assets.");
-            }
-        }
         FrameScheduler.Shutdown();
+        Scene.Reset();
+        Assets.Reset();
         if (bRendererInitialized)
         {
             Renderer.Shutdown();
             bRendererInitialized = false;
         }
 
-        RHI::DestroyResource(VertexBuffer);
-        VertexBuffer = nullptr;
-        RHI::DestroyResource(IndexBuffer);
-        IndexBuffer = nullptr;
         DestroyDemoRenderResources(RenderResources);
+        RHI::DestroyResource(BasePassPipeline);
+        BasePassPipeline = nullptr;
         RHI::DestroyResource(CompositePixelShader);
         CompositePixelShader = nullptr;
         RHI::DestroyResource(CompositeVertexShader);
@@ -757,9 +597,19 @@ public:
         const FPlatformWindowSize WindowSize = Window->GetSize();
         if (Window->IsMinimized() || WindowSize.Width == 0 || WindowSize.Height == 0)
         {
+            if (!bRenderingSuspended)
+            {
+                LE_LOG(LogXBD, Info, "Window minimized; rendering suspended.");
+                bRenderingSuspended = true;
+            }
             bCanRender = false;
             FPlatformTime::SleepForMilliseconds(16);
             return EApplicationTickResult::Continue;
+        }
+        if (bRenderingSuspended)
+        {
+            LE_LOG(LogXBD, Info, "Window restored; resuming rendering.");
+            bRenderingSuspended = false;
         }
 
         const bool bResizeSwapchain = bSwapchainRecreateRequested ||
@@ -798,8 +648,6 @@ public:
         FDemoRenderResources Candidate;
         if (!TryCreateDemoRenderResources(
             Device,
-            BasePassVertexShader,
-            BasePassPixelShader,
             CompositeVertexShader,
             CompositePixelShader,
             TargetRenderWidth,
@@ -811,19 +659,8 @@ public:
             bCanRender = true;
             return EApplicationTickResult::Continue;
         }
-        if (!ReplaceBasePassMaterial(Candidate.BasePassPipeline))
-        {
-            DestroyDemoRenderResources(Candidate);
-            LE_LOG(LogXBD, Error,
-                "Resize candidate publication failed; preserving the previous render resources.");
-            bCanRender = true;
-            return EApplicationTickResult::Continue;
-        }
-
         FDemoRenderResources Previous = RenderResources;
         RenderResources = Candidate;
-        Candidate = {};
-        MaterialAssets[ActiveMaterialSlot == 0 ? 1 : 0] = {};
         DestroyDemoRenderResources(Previous);
         bCanRender = true;
         return EApplicationTickResult::Continue;
@@ -831,55 +668,21 @@ public:
 
     EApplicationTickResult Update(const FApplicationTickContext& Context)
     {
-        FWorldTickContext WorldContext;
-        WorldContext.FrameIndex = Context.FrameIndex;
-        WorldContext.DeltaSeconds = Context.DeltaSeconds;
-        WorldContext.ElapsedSeconds = Context.ElapsedSeconds;
-        FWorldCommandFlushResult BeginFlush;
-        const EWorldTickResult BeginResult = World.BeginTick(WorldContext, &BeginFlush);
-        if (BeginResult != EWorldTickResult::Success &&
-            BeginResult != EWorldTickResult::CompletedWithCommandFailures)
+        FWorld& World = Scene->GetWorld();
+        const FWorldTickContext WorldContext{Context.FrameIndex, Context.DeltaSeconds, Context.ElapsedSeconds};
+        const EWorldTickResult Begin = World.BeginTick(WorldContext);
+        if (Begin != EWorldTickResult::Success && Begin != EWorldTickResult::CompletedWithCommandFailures)
         {
-            LE_LOG(LogXBD, Error, "Demo World BeginTick failed: {}.",
-                static_cast<uint32>(BeginResult));
+            LE_LOG(LogXBD, Error, "Demo World could not begin tick: {}.", static_cast<uint32>(Begin));
             return EApplicationTickResult::Exit;
         }
-
-        bool bBootstrapFailed = false;
-        if (bWorldBootstrapPending)
+        const auto UpdateResult = Begin == EWorldTickResult::Success
+            ? World.UpdateNativeGameplaySystems() : ENativeGameplayUpdateResult::InvalidState;
+        const auto End = World.EndTick();
+        if (UpdateResult != ENativeGameplayUpdateResult::Success || End != EWorldTickResult::Success)
         {
-            FWorldCommandBuffer* const Commands = World.GetCommandBuffer();
-            const EDeferredEntityResolveResult MeshResolveResult = Commands == nullptr
-                ? EDeferredEntityResolveResult::InvalidState
-                : Commands->TryResolveDeferredEntity(BootstrapMeshToken, MeshEntity);
-            const EDeferredEntityResolveResult CameraResolveResult = Commands == nullptr
-                ? EDeferredEntityResolveResult::InvalidState
-                : Commands->TryResolveDeferredEntity(BootstrapCameraToken, CameraEntity);
-            BootstrapMeshToken.Reset();
-            BootstrapCameraToken.Reset();
-            bWorldBootstrapPending = false;
-            bBootstrapFailed = MeshResolveResult != EDeferredEntityResolveResult::Resolved ||
-                CameraResolveResult != EDeferredEntityResolveResult::Resolved;
-        }
-        const bool bBeginCommandsFailed =
-            BeginResult == EWorldTickResult::CompletedWithCommandFailures;
-        const ENativeGameplayUpdateResult GameplayResult =
-            bBeginCommandsFailed || bBootstrapFailed
-            ? ENativeGameplayUpdateResult::InvalidState
-            : World.UpdateNativeGameplaySystems();
-        FWorldCommandFlushResult EndFlush;
-        const EWorldTickResult EndResult = World.EndTick(&EndFlush);
-        if (bBeginCommandsFailed || bBootstrapFailed ||
-            GameplayResult != ENativeGameplayUpdateResult::Success ||
-            EndResult != EWorldTickResult::Success)
-        {
-            LE_LOG(LogXBD, Error,
-                "Demo World update failed: Gameplay={} BeginFirst={} BeginReason={} EndFirst={} EndReason={}.",
-                static_cast<uint32>(GameplayResult),
-                BeginFlush.FirstFailureIndex,
-                static_cast<uint32>(BeginFlush.FirstFailureReason),
-                EndFlush.FirstFailureIndex,
-                static_cast<uint32>(EndFlush.FirstFailureReason));
+            LE_LOG(LogXBD, Error, "Demo World update failed: {} / {}.",
+                static_cast<uint32>(UpdateResult), static_cast<uint32>(End));
             return EApplicationTickResult::Exit;
         }
         return UpdateRenderResources();
@@ -903,8 +706,8 @@ public:
             SnapshotContext.ViewportHeight =
                 RenderResources.SceneColorTexture->GetDesc().Height;
             if (WorldRenderer.BuildSnapshot(
-                    World,
-                    AssetRegistry,
+                    Scene->GetWorld(),
+                    Assets->GetRegistry(),
                     SnapshotContext,
                     RenderSnapshot,
                     &SnapshotReport) !=
@@ -972,206 +775,217 @@ public:
     }
 
 private:
-    bool RegisterRenderAssets() noexcept
+    static bool ResolveMesh(void* Context, FAssetId Id, FMeshAssetHandle& Out) noexcept
     {
-        if (!FAssetId::TryParse(
-                "a2100000-0000-4000-8000-000000000001", MeshAssetId) ||
-            !FAssetId::TryParse(
-                "a2100000-0000-4000-8000-000000000002", MaterialAssetId))
+        FAssetLoadDiagnostic Diagnostic;
+        const auto Result = static_cast<FAssetLoadSession*>(Context)->Load(Id, Out, &Diagnostic);
+        if (Result != EAssetLoadResult::Success)
         {
+            LogAssetFailure(Diagnostic);
+        }
+        return Result == EAssetLoadResult::Success;
+    }
+
+    static bool ResolveMaterial(void* Context, FAssetId Id, FMaterialAssetHandle& Out) noexcept
+    {
+        FAssetLoadDiagnostic Diagnostic;
+        const auto Result = static_cast<FAssetLoadSession*>(Context)->Load(Id, Out, &Diagnostic);
+        if (Result != EAssetLoadResult::Success)
+        {
+            LogAssetFailure(Diagnostic);
+        }
+        return Result == EAssetLoadResult::Success;
+    }
+
+    static void LogAssetFailure(const FAssetLoadDiagnostic& Diagnostic) noexcept
+    {
+        LE_LOG(LogXBD, Error, "Content asset '{}' ({}): load={}, file={}, format={}.",
+            Diagnostic.Path.Data(), Diagnostic.Id.ToString().Data(),
+            static_cast<uint32>(Diagnostic.Result), DescribeContentIOResult(Diagnostic.FileResult),
+            static_cast<uint32>(Diagnostic.FormatResult));
+    }
+
+    bool InitializeContent() noexcept
+    {
+        const String ExecutableDirectory = Demo::ShaderRuntimeCompiler::GetExecutableDirectory();
+        if (ExecutableDirectory.IsEmpty())
+        {
+            LE_LOG(LogXBD, Error, "Could not locate the executable's content directory.");
             return false;
+        }
+        const char* RootOverride = std::getenv("LIMITLESS_DEMO_CONTENT");
+        const String ContentRoot = RootOverride != nullptr
+            ? String(RootOverride) : Demo::ShaderRuntimeCompiler::JoinPath(ExecutableDirectory.View(), "DemoContent");
+        const String AssetRoot = Demo::ShaderRuntimeCompiler::JoinPath(ContentRoot.View(), "Assets");
+        const FAssetMount Mount{"Game", AssetRoot.View()};
+        FAssetLoadDiagnostic Diagnostic;
+        if (Catalog.Rebuild({&Mount, 1}, &Diagnostic) != EAssetLoadResult::Success)
+        {
+            LogAssetFailure(Diagnostic);
+            return false;
+        }
+        const char* InputOverride = std::getenv("LIMITLESS_DEMO_SCENE");
+        const String ScenePath = InputOverride != nullptr
+            ? String(InputOverride) : Demo::ShaderRuntimeCompiler::JoinPath(ContentRoot.View(), "Scene.json");
+        return PublishScene(ScenePath.View()) && ApplyRequestedSceneEdit();
+    }
+
+    bool ApplyRequestedSceneEdit() noexcept
+    {
+        const char* EditId = std::getenv("LIMITLESS_DEMO_EDIT_ENTITY");
+        const char* Translation = std::getenv("LIMITLESS_DEMO_EDIT_X");
+        const char* SavePath = std::getenv("LIMITLESS_DEMO_SAVE_SCENE");
+        if (EditId == nullptr && Translation == nullptr && SavePath == nullptr)
+        {
+            return true;
         }
 
-        MeshAsset.VertexBuffer = VertexBuffer;
-        MeshAsset.VertexCount = 3;
-        MeshAsset.IndexBuffer = IndexBuffer;
-        MeshAsset.IndexCount = 3;
-        MeshAsset.IndexFormat = EPixelFormat::R16_UINT;
-        MeshAsset.LocalBounds = FRenderBounds(
-            Math::Vector3f(-0.5f, -0.5f, 0.0f),
-            Math::Vector3f(0.5f, 0.5f, 0.0f));
-        TAssetRegistration<FMeshAsset> MeshRegistration;
-        MeshRegistration.Id = MeshAssetId;
-        MeshRegistration.SoftPath = "Engine/Demo/Triangle.mesh";
-        MeshRegistration.DisplayName = "TriangleMesh";
-        MeshRegistration.ProviderName = "Demo.Render";
-        MeshRegistration.Object = &MeshAsset;
-        if (AssetRegistry.Register(MeshRegistration, MeshAssetHandle) !=
-            EAssetRegisterResult::Success)
+        FWorld& World = Scene->GetWorld();
+        if (EditId != nullptr || Translation != nullptr)
         {
-            return false;
+            FSceneEntityId Id;
+            FEntity Entity;
+            FTransform Transform;
+            float X = 0.0f;
+            const StringView Text(Translation);
+            if (EditId == nullptr || Text.IsEmpty() || !FSceneEntityId::TryParse(EditId, Id) ||
+                !Scene->TryFindEntity(Id, Entity) || !World.TryGetLocalTransform(Entity, Transform))
+            {
+                LE_LOG(LogXBD, Error, "Scene edit requires a known entity UUID and local X translation.");
+                return false;
+            }
+            char* End = nullptr;
+#if PLATFORM_WINDOWS
+            const auto Locale = _create_locale(LC_NUMERIC, "C");
+            if (Locale != nullptr)
+            {
+                X = _strtof_l(Translation, &End, Locale);
+                _free_locale(Locale);
+            }
+#else
+            const auto Locale = newlocale(LC_NUMERIC_MASK, "C", nullptr);
+            if (Locale != nullptr)
+            {
+                X = strtof_l(Translation, &End, Locale);
+                freelocale(Locale);
+            }
+#endif
+            if (End != Text.Data() + Text.Size() || !std::isfinite(X))
+            {
+                LE_LOG(LogXBD, Error, "Scene edit X translation must be a finite decimal number.");
+                return false;
+            }
+            Transform.Translation[0] = X;
+            const auto Result = World.SetLocalTransform(Entity, Transform);
+            if (Result != ETransformUpdateResult::Updated && Result != ETransformUpdateResult::Unchanged)
+            {
+                LE_LOG(LogXBD, Error, "Could not edit scene entity '{}': {}.", EditId, static_cast<uint32>(Result));
+                return false;
+            }
+            LE_LOG(LogXBD, Info, "Edited scene entity '{}' local X to {}.", EditId, X);
         }
-        bMeshAssetRegistered = true;
-
-        ActiveMaterialSlot = 0;
-        MaterialAssets[ActiveMaterialSlot].GraphicsPipeline =
-            RenderResources.BasePassPipeline;
-        MaterialAssets[ActiveMaterialSlot].PassMask = ERenderMeshPassMask::SceneColor;
-        MaterialAssets[ActiveMaterialSlot].BaseColor =
-            Math::Vector4f(1.0f, 0.9f, 0.8f, 1.0f);
-        TAssetRegistration<FMaterialAsset> MaterialRegistration;
-        MaterialRegistration.Id = MaterialAssetId;
-        MaterialRegistration.SoftPath = "Engine/Demo/Triangle.material";
-        MaterialRegistration.DisplayName = "TriangleMaterial";
-        MaterialRegistration.ProviderName = "Demo.Render";
-        MaterialRegistration.Object = &MaterialAssets[ActiveMaterialSlot];
-        if (AssetRegistry.Register(MaterialRegistration, MaterialAssetHandle) !=
-            EAssetRegisterResult::Success)
+        if (SavePath != nullptr)
         {
-            static_cast<void>(UnregisterRenderAssets());
-            return false;
+            FSceneOperationDiagnostic Diagnostic;
+            const auto Result = SaveScene(SavePath, *Scene, Assets->GetRegistry(), &Diagnostic);
+            if (Result != ESceneOperationResult::Success)
+            {
+                LE_LOG(LogXBD, Error, "Scene save '{}': {} ({}).", SavePath,
+                    DescribeSceneOperationResult(Result), DescribeContentIOResult(Diagnostic.FileResult));
+                return false;
+            }
+            LE_LOG(LogXBD, Info, "Saved scene '{}'.", SavePath);
         }
-        bMaterialAssetRegistered = true;
         return true;
     }
 
-    bool ReplaceBasePassMaterial(FRHIPipeline_Graphics* const NewPipeline) noexcept
+    bool PublishScene(StringView Path) noexcept
     {
-        if (NewPipeline == nullptr || !bMaterialAssetRegistered ||
-            World.GetTickState() != EWorldTickState::Idle)
+        FAssetLoadProviders Providers;
+        Providers.Mesh = {&RenderAssetProvider, &FRenderAssetProvider::CreateMesh, &FRenderAssetProvider::DestroyMesh};
+        Providers.Material = {&RenderAssetProvider,
+            &FRenderAssetProvider::CreateMaterial, &FRenderAssetProvider::DestroyMaterial};
+        auto CandidateAssets = TryMakeUnique<FAssetLoadSession>(Catalog, Providers, GetDefaultAllocator());
+        UniquePtr<FScene> Candidate;
+        FSceneOperationDiagnostic Diagnostic;
+        const String PrintablePath(Path);
+        if (!CandidateAssets)
         {
+            LE_LOG(LogXBD, Error, "Could not allocate a scene asset session for '{}'.", PrintablePath.Data());
             return false;
         }
-        TComponentStorage<FWorldMeshComponent>* const MeshComponents =
-            World.GetMeshComponents();
-        FWorldMeshComponent* const MeshComponent = MeshComponents == nullptr
-            ? nullptr
-            : World.GetComponent(*MeshComponents, MeshEntity);
-        if (MeshComponent == nullptr || MeshComponent->Material != MaterialAssetHandle)
+        const FSceneAssetResolver Resolver{CandidateAssets.Get(), &CandidateAssets->GetRegistry(),
+            &ResolveMesh, &ResolveMaterial};
+        const auto Result = LoadScene(Path, Resolver, Candidate, &Diagnostic);
+        if (Result != ESceneOperationResult::Success)
         {
+            LE_LOG(LogXBD, Error, "Scene '{}': {} ({}:{} {}, entity {}, asset {}, file {}).",
+                PrintablePath.Data(), DescribeSceneOperationResult(Result), Diagnostic.Document.Line,
+                Diagnostic.Document.Column, DescribeSceneDocumentResult(Diagnostic.Document.Result),
+                Diagnostic.Entity.ToString().Data(), Diagnostic.Asset.ToString().Data(),
+                DescribeContentIOResult(Diagnostic.FileResult));
+            return false;
+        }
+        FWorld& CandidateWorld = Candidate->GetWorld();
+        if (CandidateWorld.CompileNativeGameplaySystemSchedule() != ENativeGameplayScheduleResult::Success)
+        {
+            LE_LOG(LogXBD, Error, "Could not compile gameplay schedule for '{}'.", PrintablePath.Data());
             return false;
         }
 
-        const uint32 NewSlot = ActiveMaterialSlot == 0 ? 1 : 0;
-        MaterialAssets[NewSlot].GraphicsPipeline = NewPipeline;
-        MaterialAssets[NewSlot].PassMask = ERenderMeshPassMask::SceneColor;
-        MaterialAssets[NewSlot].BaseColor = MaterialAssets[ActiveMaterialSlot].BaseColor;
-        TAssetRegistration<FMaterialAsset> Registration;
-        Registration.Id = MaterialAssetId;
-        Registration.SoftPath = "Engine/Demo/Triangle.material";
-        Registration.DisplayName = "TriangleMaterial";
-        Registration.ProviderName = "Demo.Render";
-        Registration.Object = &MaterialAssets[NewSlot];
-
-        FMaterialAssetHandle NewHandle;
-        if (AssetRegistry.Replace(MaterialAssetHandle, Registration, NewHandle) !=
-            EAssetReplaceResult::Success)
+        FWorldRenderSnapshot Preview;
+        FWorldRenderSnapshotBuildReport PreviewReport;
+        FWorldRenderSnapshotBuildContext PreviewContext;
+        PreviewContext.ViewportWidth = RenderResources.SceneColorTexture->GetDesc().Width;
+        PreviewContext.ViewportHeight = RenderResources.SceneColorTexture->GetDesc().Height;
+        if (WorldRenderer.BuildSnapshot(CandidateWorld, CandidateAssets->GetRegistry(),
+                PreviewContext, Preview, &PreviewReport) != EWorldRenderSnapshotBuildResult::Success)
         {
-            MaterialAssets[NewSlot] = {};
+            LE_LOG(LogXBD, Error, "Scene '{}' is not renderable: {}.",
+                PrintablePath.Data(), static_cast<uint32>(PreviewReport.Result));
             return false;
         }
 
-        MeshComponent->Material = NewHandle;
-        MaterialAssetHandle = NewHandle;
-        ActiveMaterialSlot = NewSlot;
+        if (Scene)
+        {
+            if (Scene->GetWorld().GetTickState() != EWorldTickState::Idle)
+            {
+                return false;
+            }
+            FrameScheduler.WaitForAllFrames();
+        }
+        Scene = std::move(Candidate);
+        Assets = std::move(CandidateAssets);
+        LE_LOG(LogXBD, Info, "Loaded scene '{}' with {} entities and {} visible meshes.",
+            PrintablePath.Data(), Scene->GetWorld().GetEntityCount(), Preview.GetRenderScene().Meshes.Size());
         return true;
-    }
-
-    bool UnregisterRenderAssets() noexcept
-    {
-        bool bSuccess = true;
-        if (bMaterialAssetRegistered)
-        {
-            if (AssetRegistry.Unregister(MaterialAssetHandle) ==
-                EAssetUnregisterResult::Success)
-            {
-                MaterialAssetHandle.Reset();
-                bMaterialAssetRegistered = false;
-            }
-            else
-            {
-                bSuccess = false;
-            }
-        }
-        if (bMeshAssetRegistered)
-        {
-            if (AssetRegistry.Unregister(MeshAssetHandle) ==
-                EAssetUnregisterResult::Success)
-            {
-                MeshAssetHandle.Reset();
-                bMeshAssetRegistered = false;
-            }
-            else
-            {
-                bSuccess = false;
-            }
-        }
-        if (bSuccess)
-        {
-            MeshAsset = {};
-            MaterialAssets[0] = {};
-            MaterialAssets[1] = {};
-        }
-        return bSuccess;
-    }
-
-    static ENativeGameplaySystemResult RotateTriangleSystem(
-        void* const ProviderContext,
-        const FNativeGameplaySystemUpdateContext& Context) noexcept
-    {
-        FDemoRenderRuntimeModule& Module =
-            *static_cast<FDemoRenderRuntimeModule*>(ProviderContext);
-        if (Context.World == nullptr || Context.Commands == nullptr ||
-            !Context.World->IsAlive(Module.MeshEntity))
-        {
-            return ENativeGameplaySystemResult::Failure;
-        }
-        FTransform LocalTransform;
-        if (!Context.World->TryGetLocalTransform(Module.MeshEntity, LocalTransform))
-        {
-            return ENativeGameplaySystemResult::Failure;
-        }
-        constexpr double TwoPi = 6.28318530717958647692;
-        const float Angle = static_cast<float>(
-            std::fmod(Context.FrameElapsedSeconds * 0.75, TwoPi));
-        LocalTransform.Rotation = Math::Quaternionf(
-            Math::Vector3f(0.0f, 0.0f, 1.0f), Angle);
-        return Context.Commands->TrySetLocalTransform(Module.MeshEntity, LocalTransform) ==
-            EWorldCommandRecordResult::Recorded
-            ? ENativeGameplaySystemResult::Success
-            : ENativeGameplaySystemResult::Failure;
     }
 
     static constexpr uint32 DefaultWindowWidth = 1280;
     static constexpr uint32 DefaultWindowHeight = 720;
 
     FDemoWindowRuntimeModule& WindowModule;
-    // Declaration order is a fallback lifetime guarantee: reverse destruction
-    // releases World before Registry, and Registry before its borrowed payloads.
-    FMeshAsset MeshAsset;
-    FMaterialAsset MaterialAssets[2];
-    FAssetRegistry AssetRegistry;
-    FWorld World;
+    FRenderAssetProvider RenderAssetProvider;
+    FAssetCatalog Catalog;
+    UniquePtr<FAssetLoadSession> Assets;
+    UniquePtr<FScene> Scene;
     FWorldRenderer WorldRenderer;
-    FAssetId MeshAssetId;
-    FAssetId MaterialAssetId;
-    FMeshAssetHandle MeshAssetHandle;
-    FMaterialAssetHandle MaterialAssetHandle;
-    FDeferredEntityToken BootstrapMeshToken;
-    FDeferredEntityToken BootstrapCameraToken;
-    FEntity MeshEntity;
-    FEntity CameraEntity;
     FRHIDevice* Device = nullptr;
     FRHISwapchain* Swapchain = nullptr;
     FRHIShader* BasePassVertexShader = nullptr;
     FRHIShader* BasePassPixelShader = nullptr;
     FRHIShader* CompositeVertexShader = nullptr;
     FRHIShader* CompositePixelShader = nullptr;
-    FRHIBuffer* VertexBuffer = nullptr;
-    FRHIBuffer* IndexBuffer = nullptr;
+    FRHIPipeline_Graphics* BasePassPipeline = nullptr;
     FRenderFrameScheduler FrameScheduler;
     FDemoRenderResources RenderResources;
     FRenderer Renderer;
     uint32 CachedWindowWidth = DefaultWindowWidth;
     uint32 CachedWindowHeight = DefaultWindowHeight;
     bool bCanRender = false;
+    bool bRenderingSuspended = false;
     bool bSwapchainRecreateRequested = false;
     bool bRendererInitialized = false;
-    bool bWorldBootstrapPending = false;
-    bool bGameplaySystemRegistered = false;
-    bool bMeshAssetRegistered = false;
-    bool bMaterialAssetRegistered = false;
-    uint32 ActiveMaterialSlot = 0;
     bool bShutdown = false;
 };
 

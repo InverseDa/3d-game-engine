@@ -49,10 +49,14 @@ E:\Projects\3d-game-engine
 | **Reflection** | Reflection | 稳定 type/property IDs、owned runtime metadata registry、property bag、结构化二进制序列化与显式 provider 生命周期 | 14 | Core |
 | **RHI** | Render Hardware Interface | 渲染硬件接口，封装 Vulkan 底层对象 (Buffer、Texture、Pipeline、Swapchain、CommandList 等) | 27 | Core, Platform, Spdlog, Vulkan |
 | **RFG** | Render Frame Graph | 渲染帧图系统，负责 Pass 编排、资源屏障规划、依赖分析与执行调度 | 42 | Core, RHI |
-| **Renderer** | Renderer | 高层渲染器，定义 RenderPass / RenderPipeline / RenderView、Mesh/Material GPU payload 与正式 BasePass→Composite 管线，对接 Asset、Frame Graph 与 RHI | 22 | Core, Asset, RHI, RFG |
+| **Renderer** | Renderer | 高层渲染器，定义 RenderPass / RenderPipeline / RenderView、Mesh/Material GPU payload 与正式 BasePass→Composite 管线，提供 CPU 资产到 GPU payload 的构造 | 24 | Core, Asset, RHI, RFG；私有 AssetFormat |
 | **World** | World | Entity 生命周期、typed contiguous component storage、Transform hierarchy/dirty world-matrix cache、确定性 tick/deferred command boundary、单线程 native fixed/variable system schedule、Mesh/Material typed handles、primary camera 逻辑组件，以及显式 `FWorld` Reflection P0 provider | 10 | Core, Asset, Reflection |
 | **WorldRenderer** | World Renderer | 从 committed World 与同步 Asset registry 构建 frame-owned immutable render snapshot，选择相机、剔除并确定性排序 indexed mesh proxies | 4 | Core, Asset, Renderer, World |
-| **DemoApplication** | Demo Application | Phase 6 BasePass vertical slice；持有同步 asset registry 和 borrowed Renderer payload，通过 WorldRenderer 构建帧快照并事务化处理 SceneColor/depth resize Replace | 4 | Application, Asset, Core, Platform, Spdlog, RHI, RFG, Reflection, Renderer, World, WorldRenderer |
+| **ContentIO** | Content I/O | 有界读文件、受限挂载目录访问、同目录原子写入 | 2 | Core |
+| **AssetFormat** | Asset Format | 版本化 Mesh、Material、CPU Texture 的数据和编解码 | 2 | Core, Asset |
+| **AssetLoading** | Asset Loading | 挂载索引、同步加载、会话内 registry 缓存和 provider 生命周期 | 2 | Core, Asset, AssetFormat, ContentIO |
+| **Scene** | Scene Persistence | JSON 场景、持久实体 ID、候选 World 构造与保存恢复 | 4 | Core, Asset, World, ContentIO |
+| **DemoApplication** | Demo Application | 从磁盘加载场景与资产，组装共享 BasePass pipeline，提取场景快照并呈现 | 4 | Application, Asset, AssetLoading, Core, Platform, Spdlog, RHI, RFG, Reflection, Renderer, Scene, World, WorldRenderer |
 | **Launch** | Launch | `WinMain` / `main` 与通用 lifecycle bootstrap | 2 | Core, DemoApplication |
 
 > **注**：文件数统计包含 `.cpp` / `.h` / `.hpp` / `.mm` 等源码文件。
@@ -147,7 +151,7 @@ Application / Platform / Asset / RHI / RFG / Reflection / Renderer / World / Wor
 | Asset | Core |
 | RHI | Core, Platform, Spdlog, Vulkan |
 | RFG | Core, RHI |
-| Renderer | Core, Asset, RHI, RFG |
+| Renderer | Core, Asset, RHI, RFG；私有 AssetFormat |
 | Reflection | Core |
 | World | Core, Asset, Reflection |
 | WorldRenderer | Core, Asset, Renderer, World |

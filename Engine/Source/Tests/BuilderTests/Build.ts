@@ -16,11 +16,15 @@ export default class BuilderTestsBuild extends ModuleBuild {
         Configuration.PublicDependencies.push(
             "Application",
             "Asset",
+            "AssetFormat",
+            "AssetLoading",
+            "ContentIO",
             "Core",
             "Platform",
             "RHI",
             "Reflection",
             "Renderer",
+            "Scene",
             "World",
             "WorldRenderer",
         );

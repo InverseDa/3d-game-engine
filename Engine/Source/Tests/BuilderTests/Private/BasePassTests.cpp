@@ -657,6 +657,10 @@ int RunBasePassGraphContractTests()
 {
     int Failures = 0;
     FBasePassFixture Fixture;
+    Fixture.Scene.Meshes[1].VertexBuffer = Fixture.Scene.Meshes[0].VertexBuffer;
+    Fixture.Scene.Meshes[1].IndexBuffer = Fixture.Scene.Meshes[0].IndexBuffer;
+    Fixture.Scene.Meshes[1].IndexFormat = Fixture.Scene.Meshes[0].IndexFormat;
+    Fixture.Scene.Meshes[1].IndexCount = Fixture.Scene.Meshes[0].IndexCount;
     FBasePass Pass(Fixture.Resources);
     FRFGBuilder Builder;
     FRenderGraphBuilderBridge Bridge(Builder);
@@ -709,8 +713,8 @@ int RunBasePassGraphContractTests()
         HasAccess(BaseNode, SceneDepth, ERFGAccessType::Write, ERHIResourceState::DepthStencilWrite) &&
         HasAccess(BaseNode, Vertex0, ERFGAccessType::Read, ERHIResourceState::VertexBuffer) &&
         HasAccess(BaseNode, Index0, ERFGAccessType::Read, ERHIResourceState::IndexBuffer) &&
-        Graph.IsOutputResource(SceneDepth),
-        "BasePass RFG setup imports exact attachment, vertex, and index states");
+        Graph.IsOutputResource(SceneDepth) && BaseNode.ResourceAccesses.Size() == 4,
+        "BasePass declares each shared mesh buffer once alongside color and depth");
 
     FRFGCompiler Compiler;
     const FRFGCompileResult Compiled = Compiler.Compile(Graph, Builder.BuildSignature());

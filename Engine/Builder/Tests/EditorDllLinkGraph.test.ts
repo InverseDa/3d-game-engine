@@ -261,7 +261,7 @@ Test("World render assets preserve one-way module dependencies", () => {
     new RendererBuild().Configure(Target, RendererConfiguration);
     Assert.deepEqual(RendererConfiguration.PublicDependencies,
         ["Core", "Asset", "RHI", "RFG"]);
-    Assert.deepEqual(RendererConfiguration.PrivateDependencies, []);
+    Assert.deepEqual(RendererConfiguration.PrivateDependencies, ["AssetFormat"]);
 
     const WorldRendererConfiguration = CreateModuleConfiguration();
     const WorldRendererModule = new WorldRendererBuild();
@@ -332,33 +332,33 @@ Test("Demo WorldRenderer bridge preserves frame and asset lifetime order", async
     const Resize = Source.slice(ResizeBegin, ResizeEnd);
     const DrainFrames = Resize.indexOf("FrameScheduler.WaitForAllFrames()");
     const CreateCandidate = Resize.indexOf("TryCreateDemoRenderResources(");
-    const Replace = Resize.indexOf("ReplaceBasePassMaterial(Candidate.BasePassPipeline)");
     const SwapCandidate = Resize.indexOf("RenderResources = Candidate");
     const DestroyPrevious = Resize.indexOf("DestroyDemoRenderResources(Previous)");
     Assert.ok(ResizeBegin >= 0 && ResizeEnd > ResizeBegin && DrainFrames >= 0 &&
-        CreateCandidate > DrainFrames && Replace > CreateCandidate &&
-        SwapCandidate > Replace && DestroyPrevious > SwapCandidate,
+        CreateCandidate > DrainFrames && SwapCandidate > CreateCandidate &&
+        DestroyPrevious > SwapCandidate,
     "resize must drain frames, complete a candidate, publish, swap, then destroy old resources");
+    Assert.doesNotMatch(Resize, /(?:CreateBasePassPipeline|AssetRegistry\.Replace|MaterialAssetHandle)/,
+        "changing extent must preserve the shared BasePass pipeline and asset handles");
     Assert.doesNotMatch(Render, /WaitForAllFrames\s*\(/,
         "normal frame rendering must not globally drain frames");
 
     const ShutdownBegin = Source.indexOf("void Shutdown() noexcept");
     const ShutdownEnd = Source.indexOf("EApplicationTickResult UpdateRenderResources()", ShutdownBegin);
     const Shutdown = Source.slice(ShutdownBegin, ShutdownEnd);
-    const ResetWorld = Shutdown.indexOf("World.Reset()");
-    const UnregisterAssets = Shutdown.indexOf("UnregisterRenderAssets()");
+    const ResetWorld = Shutdown.indexOf("Scene.Reset()");
+    const ReleaseAssets = Shutdown.indexOf("Assets.Reset()");
     const StopFrames = Shutdown.indexOf("FrameScheduler.Shutdown()");
-    const DestroyMesh = Shutdown.indexOf("DestroyResource(VertexBuffer)");
-    const DestroyIndices = Shutdown.indexOf("DestroyResource(IndexBuffer)");
+    const DestroyPipeline = Shutdown.indexOf("DestroyResource(BasePassPipeline)");
     Assert.ok(ShutdownBegin >= 0 && ShutdownEnd > ShutdownBegin &&
-        ResetWorld >= 0 && UnregisterAssets > ResetWorld &&
-        StopFrames > UnregisterAssets && DestroyMesh > StopFrames &&
-        DestroyIndices > DestroyMesh,
-    "shutdown must clear World, unregister borrowed assets, stop frames, then destroy GPU resources");
+        StopFrames >= 0 && ResetWorld > StopFrames && ReleaseAssets > ResetWorld &&
+        DestroyPipeline > ReleaseAssets,
+    "shutdown must drain frames, clear the scene and its assets, then destroy the shared pipeline");
 
-    Assert.match(Source, /MeshAsset\.IndexBuffer\s*=\s*IndexBuffer/);
-    Assert.match(Source, /MeshAsset\.IndexFormat\s*=\s*EPixelFormat::R16_UINT/);
-    Assert.match(Source, /BootstrapCameraToken/);
+    const Publish = Source.slice(Source.indexOf("bool PublishScene("), Source.indexOf("static constexpr uint32 DefaultWindowWidth"));
+    Assert.ok(Publish.indexOf("LoadScene(") < Publish.indexOf("BuildSnapshot("));
+    Assert.ok(Publish.indexOf("BuildSnapshot(") < Publish.indexOf("Scene = std::move(Candidate)"));
+    Assert.ok(Publish.indexOf("FrameScheduler.WaitForAllFrames()") < Publish.indexOf("Assets = std::move(CandidateAssets)"));
     Assert.match(Source, /RenderResources\.SceneColorTexture->GetDesc\(\)\.Width/);
 });
 

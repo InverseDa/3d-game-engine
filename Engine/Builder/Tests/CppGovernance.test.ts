@@ -94,4 +94,6 @@ test("allowlist is exact to file and symbol", () => {
 test("the only approved global entry points remain exact", () => {
     assert.deepEqual(scan("Engine/Source/Runtime/Launch/Private/Launch.cpp", "int main() { return 0; }"), []);
     assert.equal(scan("Engine/Source/Runtime/Launch/Private/Launch.cpp", "int AnotherMain() { return 0; }").some((value) => value.rule === "global-engine-declaration"), true);
+    assert.deepEqual(scan("Engine/Source/Programs/AssetImport/Private/AssetImportMain.cpp", "int wmain(int argc, wchar_t** argv) { return 0; }"), []);
+    assert.equal(scan("Engine/Source/Programs/AssetImport/Private/Other.cpp", "int wmain() { return 0; }").some((value) => value.rule === "global-engine-declaration"), true);
 });

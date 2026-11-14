@@ -4,9 +4,11 @@ import type { ResolvedTarget } from "../Configuration/Types.ts";
 
 export class EnginePaths {
     private readonly RootDirectory: string;
+    private readonly ProgramOutputRoot?: string;
 
-    public constructor(RootDirectory: string) {
+    public constructor(RootDirectory: string, ProgramOutputRoot?: string) {
         this.RootDirectory = RootDirectory;
+        this.ProgramOutputRoot = ProgramOutputRoot;
     }
 
     public get Root(): string { return this.RootDirectory; }
@@ -23,11 +25,15 @@ export class EnginePaths {
     public get ProjectFilesDirectory(): string { return Path.join(this.IntermediateDirectory, "ProjectFiles"); }
 
     public BinaryOutputDirectory(BuildTarget: ResolvedTarget): string {
-        return Path.join(this.BinariesDirectory, ...this.TargetVariantSegments(BuildTarget));
+        return Path.join(this.ProgramOutputRoot === undefined
+            ? this.BinariesDirectory : Path.join(this.ProgramOutputRoot, "Binaries"),
+            ...this.TargetVariantSegments(BuildTarget));
     }
 
     public TemporaryOutputDirectory(BuildTarget: ResolvedTarget): string {
-        return Path.join(this.TemporaryDirectory, ...this.TargetVariantSegments(BuildTarget));
+        return Path.join(this.ProgramOutputRoot === undefined
+            ? this.TemporaryDirectory : Path.join(this.ProgramOutputRoot, "Build"),
+            ...this.TargetVariantSegments(BuildTarget));
     }
 
     public GeneratedOutputDirectory(BuildTarget: ResolvedTarget): string {

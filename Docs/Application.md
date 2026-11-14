@@ -94,7 +94,7 @@ Elapsed。
   render-finished semaphore、initially-signaled fence 和 deferred releases。Update 负责 minimize
   与显式 resize/retry；Render 驱动两槽 Acquire/record/Submit/Present 并处理
   Suboptimal/OutOfDate/Error。
-- Demo World 持有一个 +Z 朝向 -Z 的 primary camera 与一个 indexed mesh；WorldRenderer 用
+- Demo 从磁盘加载场景。样例含一个主相机和两个共享网格及材质的实体。WorldRenderer 用
   实际 SceneColor extent 构建 immutable snapshot，执行 frustum culling 与 deterministic sort，
   Renderer 录制 `BasePass -> CompositeToBackBufferPass`。BasePass 清除并写入 B8G8R8A8
   SceneColor 和 D32 depth；即使可见 mesh 为零，Composite 仍输出 SceneColor clear 值。
@@ -102,9 +102,11 @@ Elapsed。
   terminal shutdown 仍允许 exceptional idle。Renderer 将 RFG-owned texture/buffer transient
   的 ownership 转交给当前 frame slot；它们只在该槽 fence 完成后、allocator reset 前回收。
   imported resources 始终保持外部所有权。
-- Resize 先构造完整的候选 SceneColor/depth/views/sampler/bind group/pipelines，再 Replace
-  inactive Material payload、切换 Idle World handle、交换资源并销毁旧资源。vertex/index buffer
-  不随 resize 重建；候选失败不会破坏旧可用状态。
+- Resize 等待已提交帧，构造候选 SceneColor、depth、views、sampler、bind group 和 Composite
+  pipeline。候选完整后交换并销毁旧资源。BasePass 的附件格式固定，pipeline 由应用单独持有，
+  材质句柄可在多个实体间共享并跨 resize 使用。候选失败时保留之前的渲染资源。
+- 关闭时先停止帧调度，再销毁 Scene、资源会话及共享 BasePass pipeline，
+  最后销毁设备。
 - 所有 RHI 对象通过 `RHI::DestroyResource` 回到 RHI 模块走 virtual destructor；上层 DLL
   不直接 delete backend 分配的对象。
 

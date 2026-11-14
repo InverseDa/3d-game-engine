@@ -1,0 +1,23 @@
+{
+  "mount": "Game",
+  "assets": [
+    {
+      "kind": "mesh",
+      "source": "Triangle.obj",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd1f7b",
+      "path": "Game/Meshes/Triangle"
+    },
+    {
+      "kind": "material",
+      "source": "WarmOrange.material",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd1f7c",
+      "path": "Game/Materials/WarmOrange"
+    },
+    {
+      "kind": "texture",
+      "source": "Palette.ppm",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd1f7d",
+      "path": "Game/Textures/Palette"
+    }
+  ]
+}

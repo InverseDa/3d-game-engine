@@ -325,19 +325,11 @@ Its failed-system name and the compile diagnostic name views borrow
 registry-owned bytes; callers must not retain them across successful
 register/unregister or World destruction.
 
-The demo registers private `Demo.RotateTriangle` in Variable phase. After the
-bootstrap token resolves, the system reads the mesh Entity's local Transform,
-computes an absolute rotation from frame elapsed time, and records a Transform
-update. The old value remains visible until `EndTick`; Render then consumes the
-existing committed World snapshot. The callback has no renderer, RHI, asset, or
-script dependency.
-
-The demo is the first real consumer: its render runtime owns one persistent
-World and `FAssetRegistry`, registers borrowed Renderer-owned Mesh/Material
-payloads, records their handles with the Entity/Transform bootstrap commands,
-and Render reads only the committed World. Tick, command, or asset-resolution
-failure closes the accepted work and exits instead of dereferencing invalid GPU
-state.
+The Demo loads a candidate Scene and asset session from disk, compiles the
+World's schedule and publishes the pair after render snapshot validation.
+Its current sample uses an empty schedule. Each frame still advances World
+through `BeginTick`, `UpdateNativeGameplaySystems` and `EndTick` before
+rendering reads the committed state. See [Scene.md](Scene.md) for persistence.
 
 ## Rendering bridge
 
@@ -362,9 +354,7 @@ OOM input leaves the output snapshot empty and unpublished. No registry object
 pointer or borrowed metadata view survives the call.
 
 The snapshot is a stack value in the frame callback and remains const while
-Renderer synchronously records commands. GPU resources remain provider-owned;
-on resize the Demo waits all actual frame fences, builds a replacement pipeline
-in the inactive borrowed Material slot, calls `FAssetRegistry::Replace`, switches
-the idle World component to the new handle, and only then destroys the old
-pipeline. Task 22 now consumes this snapshot through the actual BasePass,
-indexed draw, depth, camera, culling, and deterministic sorting contract.
+Renderer synchronously records commands. GPU resources remain provider-owned.
+During resize, the Demo waits for submitted frames and publishes new render
+targets and Composite resources. Mesh and Material handles continue to resolve
+through the same registry and the shared BasePass pipeline stays alive.
