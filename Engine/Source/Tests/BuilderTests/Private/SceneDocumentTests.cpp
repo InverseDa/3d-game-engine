@@ -79,6 +79,68 @@ public:
 
     bool bFail = false;
 };
+
+int TestDirectionalLightDocument()
+{
+    constexpr char LightScene[] = R"json({
+  "entities": [
+    {
+      "directionalLight": { "active": true, "intensity": 0, "color": [1, 0.5, 0], "direction": [0, 0, -4] },
+      "id": "20000000-0000-4000-8000-000000000001"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000002",
+      "directionalLight": { "direction": [0, 2, 0], "color": [0, 1, 1], "intensity": 16, "active": false }
+    }
+  ],
+  "version": 2
+})json";
+    FSceneDocument Document;
+    FSceneDocumentDiagnostic Diagnostic;
+    if (DecodeSceneDocument(LightScene, Document, &Diagnostic) != EResult::Success ||
+        Document.Entities.Size() != 2)
+    {
+        return Check(false, "decode v2 with version last and unordered light fields");
+    }
+
+    const auto& Active = Document.Entities[0];
+    const auto& Inactive = Document.Entities[1];
+    int Failures = Check(Active.bHasDirectionalLight && Active.DirectionalLight.bActive &&
+        Active.DirectionalLight.Direction == Math::Vector3f(0, 0, -4) && Active.DirectionalLight.Intensity == 0 &&
+        Inactive.bHasDirectionalLight && !Inactive.DirectionalLight.bActive &&
+        Inactive.DirectionalLight.Color == Math::Vector3f(0, 1, 1) && Inactive.DirectionalLight.Intensity == 16,
+        "parse both light states and preserve authored magnitude and range boundaries");
+    const FInvalidEdit InvalidCases[] = {
+        {R"("version": 2)", R"("version": 1)", EResult::UnknownField, "directionalLight"},
+        {R"("active": false)", R"("active": true)", EResult::MultipleActiveDirectionalLights, "active"},
+        {R"("direction": [0, 0, -4])", R"("direction": [0, 0, 0])", EResult::InvalidValue, "direction"},
+        {R"("color": [0, 1, 1])", R"("color": [0, 2, 1])", EResult::InvalidValue, "color"},
+        {R"("intensity": 0)", R"("intensity": -1)", EResult::InvalidValue, "intensity"},
+        {R"("intensity": 0, )", "", EResult::MissingField, "intensity"},
+    };
+    for (const FInvalidEdit& Edit : InvalidCases)
+    {
+        const FSceneEntityId Expected = Edit.Old == StringView(R"("active": false)") ||
+            Edit.Field == StringView("color") ? Inactive.Id : Active.Id;
+        String Edited;
+        Failures += Check(ReplaceOnce(LightScene, Edit.Old, Edit.Replacement, Edited) &&
+            DecodeSceneDocument(Edited.View(), Document, &Diagnostic) == Edit.Result &&
+            Diagnostic.Field == Edit.Field && Diagnostic.Entity == Expected && Diagnostic.Line != 0 &&
+            Diagnostic.Column != 0, "locate invalid light at its authoring field and entity");
+    }
+    return Failures;
+}
+
+int TestLegacyCanonicalDocument()
+{
+    constexpr char Legacy[] = "{\n  \"version\": 1,\n  \"entities\": [\n"
+        "    {\n      \"id\": \"20000000-0000-4000-8000-000000000001\"\n    }\n  ]\n}\n";
+    FSceneDocument Document;
+    String Encoded;
+    return Check(DecodeSceneDocument(Legacy, Document) == EResult::Success &&
+        EncodeSceneDocument(Document, Encoded) == EResult::Success && Encoded.View() == StringView(Legacy),
+        "write a legacy scene with exactly the canonical v1 bytes");
+}
 } // namespace
 
 int RunSceneDocumentTests()
@@ -117,7 +179,7 @@ int RunSceneDocumentTests()
     std::swap(Document.Entities[0], Document.Entities[2]);
 
     const FInvalidEdit Cases[] = {
-        {R"("version": 1)", R"("version": 2)", EResult::UnsupportedVersion, "version"},
+        {R"("version": 1)", R"("version": 3)", EResult::UnsupportedVersion, "version"},
         {R"("version": 1)", R"("version": 1, "vers\u0069on": 1)", EResult::DuplicateField, "version"},
         {R"(, "scale": [1,1,1])", "", EResult::MissingField, "scale"},
         {R"("scale": [1,1,1])", R"("scale": [1,1,1], "unknown": false)", EResult::UnknownField, {}},
@@ -193,6 +255,6 @@ int RunSceneDocumentTests()
         AllocationOutput.Entities.Size() == 3 &&
         EncodeSceneDocument(Document, AllocationEncoded) == EResult::AllocationFailed &&
         AllocationEncoded.View() == StringView("previous output"), "allocator failure preserves both outputs");
-    return Failures;
+    return Failures + TestDirectionalLightDocument() + TestLegacyCanonicalDocument();
 }
 } // namespace LE

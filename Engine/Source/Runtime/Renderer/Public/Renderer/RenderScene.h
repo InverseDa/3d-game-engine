@@ -144,11 +144,16 @@ struct FRenderMeshProxy : public FRenderPrimitive
     Math::Vector4f BaseColor{1.0f};
     FRHITexture* BaseColorTexture = nullptr;
     FRHIBindGroup* MaterialBindGroup = nullptr;
+    Math::Matrix3f NormalToWorld = Math::Matrix3f::Identity();
+    bool bHasNormals = false;
 };
 
 struct FRenderLightProxy : public FRenderPrimitive
 {
     using FRenderPrimitive::FRenderPrimitive;
+
+    Math::Vector3f DirectionToLight;
+    Math::Vector3f Radiance;
 };
 
 struct FRenderCameraProxy : public FRenderPrimitive

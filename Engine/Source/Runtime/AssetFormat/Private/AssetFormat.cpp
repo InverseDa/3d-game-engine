@@ -21,6 +21,8 @@ constexpr std::size_t PayloadLengthOffset = PathLengthOffset + sizeof(uint32);
 constexpr std::size_t PathOffset = PayloadLengthOffset + sizeof(uint32);
 constexpr std::size_t PairSize = 2 * sizeof(uint32);
 constexpr std::size_t VectorSize = 3 * sizeof(uint32);
+constexpr std::size_t MeshNormalsHeaderSize = PairSize + sizeof(uint32);
+constexpr uint32 MeshUVFlag = 1;
 
 static_assert(PathOffset + MaxAssetPathBytes == MaxAssetFileHeaderBytes);
 static_assert(sizeof(float) == sizeof(uint32) && std::numeric_limits<float>::is_iec559);
@@ -229,7 +231,7 @@ bool IsValidColor(const Math::Vector3f& Color) noexcept
 
 EAssetFormatResult GetMeshPayloadSize(
     const std::size_t VertexCount, const std::size_t IndexCount,
-    const bool bHasUVs, std::size_t& PayloadSize) noexcept
+    const bool bHasUVs, const bool bHasNormals, std::size_t& PayloadSize) noexcept
 {
     if (VertexCount > MaxAssetMeshVertices || IndexCount > MaxAssetMeshIndices)
     {
@@ -239,9 +241,11 @@ EAssetFormatResult GetMeshPayloadSize(
     {
         return EAssetFormatResult::InvalidPayload;
     }
-    // With the checked caps this fits in 32 bits, including the count pair.
-    const std::size_t VertexSize = VectorSize + (bHasUVs ? PairSize : 0);
-    PayloadSize = PairSize + VertexCount * VertexSize + IndexCount * sizeof(uint32);
+    // The checked caps keep the payload size below 2^32.
+    const std::size_t VertexSize = VectorSize + (bHasUVs ? PairSize : 0)
+        + (bHasNormals ? VectorSize : 0);
+    const std::size_t HeaderSize = bHasNormals ? MeshNormalsHeaderSize : PairSize;
+    PayloadSize = HeaderSize + VertexCount * VertexSize + IndexCount * sizeof(uint32);
     return EAssetFormatResult::Success;
 }
 
@@ -278,7 +282,8 @@ EAssetFormatResult ReadAssetFileHeader(
     }
     const uint8* const Bytes = Prefix.Data();
     const uint32 Version = ReadUInt32(Bytes + VersionOffset);
-    if (Version != AssetFileVersion && Version != TexturedAssetFileVersion)
+    if (Version != AssetFileVersion && Version != TexturedAssetFileVersion
+        && Version != MeshNormalsAssetFileVersion)
     {
         return EAssetFormatResult::UnsupportedVersion;
     }
@@ -300,8 +305,9 @@ EAssetFormatResult ReadAssetFileHeader(
     {
         return EAssetFormatResult::InvalidIdentity;
     }
-    if (Version == TexturedAssetFileVersion
-        && Candidate.TypeId != GetMeshAssetTypeId() && Candidate.TypeId != GetMaterialAssetTypeId())
+    if ((Version == TexturedAssetFileVersion
+            && Candidate.TypeId != GetMeshAssetTypeId() && Candidate.TypeId != GetMaterialAssetTypeId())
+        || (Version == MeshNormalsAssetFileVersion && Candidate.TypeId != GetMeshAssetTypeId()))
     {
         return EAssetFormatResult::UnsupportedVersion;
     }
@@ -319,13 +325,15 @@ EAssetFormatResult EncodeAssetFile(
     Array<uint8>& Out) noexcept
 {
     const bool bHasUVs = !Mesh.UVs.IsEmpty();
-    if (bHasUVs && Mesh.UVs.Size() != Mesh.Positions.Size())
+    const bool bHasNormals = !Mesh.Normals.IsEmpty();
+    if ((bHasUVs && Mesh.UVs.Size() != Mesh.Positions.Size())
+        || (bHasNormals && Mesh.Normals.Size() != Mesh.Positions.Size()))
     {
         return EAssetFormatResult::InvalidPayload;
     }
     std::size_t PayloadSize = 0;
     const EAssetFormatResult ShapeResult = GetMeshPayloadSize(
-        Mesh.Positions.Size(), Mesh.Indices.Size(), bHasUVs, PayloadSize);
+        Mesh.Positions.Size(), Mesh.Indices.Size(), bHasUVs, bHasNormals, PayloadSize);
     if (ShapeResult != EAssetFormatResult::Success)
     {
         return ShapeResult;
@@ -351,9 +359,18 @@ EAssetFormatResult EncodeAssetFile(
             return EAssetFormatResult::InvalidPayload;
         }
     }
+    for (const Math::Vector3f& Normal : Mesh.Normals)
+    {
+        if (!IsValidAssetMeshNormal(Normal))
+        {
+            return EAssetFormatResult::InvalidPayload;
+        }
+    }
     Array<uint8> Candidate(Out.GetAllocator());
-    const EAssetFormatResult Result = BeginEncoding(Id, GetMeshAssetTypeId(), Path,
-        bHasUVs ? TexturedAssetFileVersion : AssetFileVersion, PayloadSize, Candidate);
+    const uint32 Version = bHasNormals ? MeshNormalsAssetFileVersion
+        : (bHasUVs ? TexturedAssetFileVersion : AssetFileVersion);
+    const EAssetFormatResult Result = BeginEncoding(
+        Id, GetMeshAssetTypeId(), Path, Version, PayloadSize, Candidate);
     if (Result != EAssetFormatResult::Success)
     {
         return Result;
@@ -362,6 +379,11 @@ EAssetFormatResult EncodeAssetFile(
     WriteUInt32(Payload, static_cast<uint32>(Mesh.Positions.Size()));
     WriteUInt32(Payload + sizeof(uint32), static_cast<uint32>(Mesh.Indices.Size()));
     uint8* PositionBytes = Payload + PairSize;
+    if (bHasNormals)
+    {
+        WriteUInt32(PositionBytes, bHasUVs ? MeshUVFlag : 0);
+        PositionBytes += sizeof(uint32);
+    }
     for (const Math::Vector3f& Position : Mesh.Positions)
     {
         WriteVector(PositionBytes, Position);
@@ -373,7 +395,13 @@ EAssetFormatResult EncodeAssetFile(
         WriteVector(UVBytes, UV);
         UVBytes += PairSize;
     }
-    uint8* IndexBytes = UVBytes;
+    uint8* NormalBytes = UVBytes;
+    for (const Math::Vector3f& Normal : Mesh.Normals)
+    {
+        WriteVector(NormalBytes, Normal);
+        NormalBytes += VectorSize;
+    }
+    uint8* IndexBytes = NormalBytes;
     for (const uint32 Index : Mesh.Indices)
     {
         WriteUInt32(IndexBytes, Index);
@@ -449,15 +477,23 @@ EAssetFormatResult DecodeAssetFile(const Span<const uint8> Bytes, FMeshAssetData
     {
         return Result;
     }
-    if (Payload.Size() < PairSize)
+    const bool bHasNormals = Version == MeshNormalsAssetFileVersion;
+    const std::size_t HeaderSize = bHasNormals ? MeshNormalsHeaderSize : PairSize;
+    if (Payload.Size() < HeaderSize)
     {
         return EAssetFormatResult::InvalidPayload;
     }
     const uint32 VertexCount = ReadUInt32(Payload.Data());
     const uint32 IndexCount = ReadUInt32(Payload.Data() + sizeof(uint32));
-    const bool bHasUVs = Version == TexturedAssetFileVersion;
+    const uint32 Flags = bHasNormals ? ReadUInt32(Payload.Data() + PairSize) : 0;
+    if ((Flags & ~MeshUVFlag) != 0)
+    {
+        return EAssetFormatResult::InvalidPayload;
+    }
+    const bool bHasUVs = Version == TexturedAssetFileVersion || (Flags & MeshUVFlag) != 0;
     std::size_t PayloadSize = 0;
-    const EAssetFormatResult ShapeResult = GetMeshPayloadSize(VertexCount, IndexCount, bHasUVs, PayloadSize);
+    const EAssetFormatResult ShapeResult = GetMeshPayloadSize(
+        VertexCount, IndexCount, bHasUVs, bHasNormals, PayloadSize);
     if (ShapeResult != EAssetFormatResult::Success)
     {
         return ShapeResult;
@@ -467,9 +503,10 @@ EAssetFormatResult DecodeAssetFile(const Span<const uint8> Bytes, FMeshAssetData
         return EAssetFormatResult::InvalidPayload;
     }
 
-    const uint8* const PositionBytes = Payload.Data() + PairSize;
+    const uint8* const PositionBytes = Payload.Data() + HeaderSize;
     const uint8* const UVBytes = PositionBytes + VertexCount * VectorSize;
-    const uint8* const IndexBytes = UVBytes + (bHasUVs ? VertexCount * PairSize : 0);
+    const uint8* const NormalBytes = UVBytes + (bHasUVs ? VertexCount * PairSize : 0);
+    const uint8* const IndexBytes = NormalBytes + (bHasNormals ? VertexCount * VectorSize : 0);
     for (uint32 Index = 0; Index < IndexCount; ++Index)
     {
         if (ReadUInt32(IndexBytes + Index * sizeof(uint32)) >= VertexCount)
@@ -482,7 +519,9 @@ EAssetFormatResult DecodeAssetFile(const Span<const uint8> Bytes, FMeshAssetData
     for (uint32 Vertex = 0; Vertex < VertexCount; ++Vertex)
     {
         const Math::Vector3f Position = ReadVector<Math::Vector3f>(PositionBytes + Vertex * VectorSize);
-        if (!IsFinite(Position) || (bHasUVs && !IsFinite(ReadVector<Math::Vector2f>(UVBytes + Vertex * PairSize))))
+        if (!IsFinite(Position)
+            || (bHasUVs && !IsFinite(ReadVector<Math::Vector2f>(UVBytes + Vertex * PairSize)))
+            || (bHasNormals && !IsValidAssetMeshNormal(ReadVector<Math::Vector3f>(NormalBytes + Vertex * VectorSize))))
         {
             return EAssetFormatResult::InvalidPayload;
         }
@@ -503,9 +542,11 @@ EAssetFormatResult DecodeAssetFile(const Span<const uint8> Bytes, FMeshAssetData
     FMeshAssetData Candidate(Out.Positions.GetAllocator());
     Candidate.Indices = Array<uint32>(Out.Indices.GetAllocator());
     Candidate.UVs = Array<Math::Vector2f>(Out.UVs.GetAllocator());
+    Candidate.Normals = Array<Math::Vector3f>(Out.Normals.GetAllocator());
     if (!Candidate.Positions.TryReserve(VertexCount) || !Candidate.Indices.TryReserve(IndexCount)
         || !Candidate.Positions.TryResize(VertexCount) || !Candidate.Indices.TryResize(IndexCount)
-        || (bHasUVs && (!Candidate.UVs.TryReserve(VertexCount) || !Candidate.UVs.TryResize(VertexCount))))
+        || (bHasUVs && (!Candidate.UVs.TryReserve(VertexCount) || !Candidate.UVs.TryResize(VertexCount)))
+        || (bHasNormals && (!Candidate.Normals.TryReserve(VertexCount) || !Candidate.Normals.TryResize(VertexCount))))
     {
         return EAssetFormatResult::AllocationFailed;
     }
@@ -517,6 +558,10 @@ EAssetFormatResult DecodeAssetFile(const Span<const uint8> Bytes, FMeshAssetData
         if (bHasUVs)
         {
             Candidate.UVs[Vertex] = ReadVector<Math::Vector2f>(UVBytes + Vertex * PairSize);
+        }
+        if (bHasNormals)
+        {
+            Candidate.Normals[Vertex] = ReadVector<Math::Vector3f>(NormalBytes + Vertex * VectorSize);
         }
     }
     for (uint32 Index = 0; Index < IndexCount; ++Index)

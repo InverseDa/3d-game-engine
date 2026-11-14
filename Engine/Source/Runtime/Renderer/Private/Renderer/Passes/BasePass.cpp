@@ -8,6 +8,7 @@
 #include "RHI/RHIPipeline.h"
 #include "RHI/RHITexture.h"
 #include "Renderer/RenderGraphBuilderBridge.h"
+#include "Renderer/RenderAssetProvider.h"
 
 #include <cmath>
 
@@ -23,7 +24,8 @@ constexpr EShaderStage BasePassPushStages = static_cast<EShaderStage>(
     static_cast<uint8>(EShaderStage::Vertex) |
     static_cast<uint8>(EShaderStage::Pixel));
 
-bool IsFiniteMatrix(const Math::Matrix4f& Matrix) noexcept
+template <std::size_t Size>
+bool IsFiniteMatrix(const Math::Matrix<float, Size, Size>& Matrix) noexcept
 {
     for (const float Value : Matrix.Values)
     {
@@ -59,14 +61,39 @@ bool IsPipelineValid(const FRHIPipeline_Graphics& Pipeline) noexcept
         Desc.DepthStencilState.DepthFunc == ECompareFunction::Less &&
         Desc.VertexBindings.Size() == 1 &&
         Desc.VertexBindings[0].Binding == 0 &&
-        Desc.VertexBindings[0].Stride > 0 &&
+        Desc.VertexBindings[0].Stride == sizeof(FBasePassVertex) &&
         !Desc.VertexBindings[0].bPerInstance &&
         Desc.PushConstants.StageFlags == BasePassPushStages &&
         Desc.PushConstants.Size == sizeof(FBasePassObjectConstants) &&
         Desc.PushConstants.IsValid();
 }
 
-bool IsMaterialBindingValid(const FRenderMeshProxy& Mesh) noexcept
+bool IsLightBindingValid(const FBasePassLightBinding& Light) noexcept
+{
+    if (Light.Buffer == nullptr || Light.BindGroup == nullptr ||
+        Light.Buffer->GetDesc().Size != sizeof(FBasePassLightConstants) ||
+        (Light.Buffer->GetDesc().UsageFlag & static_cast<uint32>(EBufferUsageFlags::UniformBuffer)) == 0)
+    {
+        return false;
+    }
+    const auto& Group = Light.BindGroup->GetDesc();
+    if (Group.Layout == nullptr || Group.Items.Size() != 1)
+    {
+        return false;
+    }
+    const auto& Layout = Group.Layout->GetDesc();
+    const auto& Item = Group.Items[0];
+    return Layout.SetIndex == FBasePassFrameLighting::SetIndex &&
+        Layout.Bindings.Size() == 1 &&
+        Layout.Bindings[0].Binding == FBasePassFrameLighting::BindingIndex &&
+        Layout.Bindings[0].Count == 1 &&
+        Layout.Bindings[0].Type == ERHIBindGroupItemType::UniformBuffer &&
+        Layout.Bindings[0].StageFlags == EShaderStage::Pixel &&
+        Item.Binding == FBasePassFrameLighting::BindingIndex && Item.Buffer == Light.Buffer &&
+        Item.Offset == 0 && Item.Range == sizeof(FBasePassLightConstants);
+}
+
+bool IsMaterialBindingValid(const FRenderMeshProxy& Mesh, const FBasePassLightBinding& Light) noexcept
 {
     if (Mesh.MaterialBindGroup == nullptr || Mesh.BaseColorTexture == nullptr)
     {
@@ -81,7 +108,8 @@ bool IsMaterialBindingValid(const FRenderMeshProxy& Mesh) noexcept
     }
     const auto& Layouts = Mesh.GraphicsPipeline->GetDesc().BindGroupLayouts;
     const auto& BindGroup = Mesh.MaterialBindGroup->GetDesc();
-    if (Layouts.Size() != 1 || BindGroup.Layout == nullptr || BindGroup.Layout != Layouts[MaterialSet] ||
+    if (Layouts.Size() != 2 || Layouts[FBasePassFrameLighting::SetIndex] != Light.BindGroup->GetDesc().Layout ||
+        BindGroup.Layout == nullptr || BindGroup.Layout != Layouts[MaterialSet] ||
         BindGroup.Layout->GetDesc().SetIndex != MaterialSet || BindGroup.Items.Size() != 2)
     {
         return false;
@@ -152,7 +180,8 @@ bool FBasePass::IsConfigurationValid(
     uint32 Width = 0;
     uint32 Height = 0;
     if (!IsTextureContractValid(InResources, Width, Height) ||
-        RenderScene.Cameras.Size() != 1)
+        RenderScene.Cameras.Size() != 1 || RenderScene.Lights.Size() > 1 ||
+        !IsLightBindingValid(InResources.Light))
     {
         return false;
     }
@@ -174,7 +203,8 @@ bool FBasePass::IsConfigurationValid(
             Mesh.VertexCount == 0 || Mesh.IndexBuffer == nullptr ||
             Mesh.IndexCount == 0 || !IsValidIndexFormat(Mesh.IndexFormat) ||
             !IsFiniteMatrix(Mesh.LocalToWorld) || !IsFiniteNonNegativeRgb(Mesh.BaseColor) ||
-            !IsPipelineValid(*Mesh.GraphicsPipeline) || !IsMaterialBindingValid(Mesh) ||
+            (Mesh.bHasNormals && !IsFiniteMatrix(Mesh.NormalToWorld)) ||
+            !IsPipelineValid(*Mesh.GraphicsPipeline) || !IsMaterialBindingValid(Mesh, InResources.Light) ||
             Mesh.BaseColorTexture == InResources.SceneColorTexture ||
             Mesh.BaseColorTexture == InResources.SceneDepthTexture)
         {
@@ -243,6 +273,11 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
     FRFGAccessDesc TextureRead = VertexRead;
     TextureRead.State = ERHIResourceState::ShaderResource;
     TextureRead.ShaderStage = EShaderStage::Pixel;
+    FRFGAccessDesc LightRead = TextureRead;
+    LightRead.State = ERHIResourceState::ConstantBuffer;
+    const FRFGResourceHandle Light = Context.GraphBridge->ImportBuffer(
+        "BasePassFrameLight", Resources.Light.Buffer, ERHIResourceState::ConstantBuffer);
+    Context.GraphBridge->Read(Context.PassHandle, Light, LightRead);
     HashSet<FRHIBuffer*> VertexBuffers;
     HashSet<FRHIBuffer*> IndexBuffers;
     HashSet<FRHITexture*> SampledTextures;
@@ -327,9 +362,18 @@ void FBasePass::Record(FRenderPassRecordContext& Context)
         Constants.LocalToClip = Camera.ViewProjection * Mesh.LocalToWorld;
         Constants.BaseColor = Math::Vector4f(
             Mesh.BaseColor.Values[0], Mesh.BaseColor.Values[1],
-            Mesh.BaseColor.Values[2], 1.0f);
+            Mesh.BaseColor.Values[2], Mesh.bHasNormals ? 1.0f : 0.0f);
+        if (Mesh.bHasNormals)
+        {
+            for (std::size_t Row = 0; Row < 3; ++Row)
+            {
+                Constants.NormalToWorldRows[Row] = Math::Vector4f(
+                    Mesh.NormalToWorld(Row, 0), Mesh.NormalToWorld(Row, 1), Mesh.NormalToWorld(Row, 2), 0.0f);
+            }
+        }
         CommandList->SetGraphicsPipeline(Mesh.GraphicsPipeline);
         CommandList->SetBindGroup(MaterialSet, Mesh.MaterialBindGroup);
+        CommandList->SetBindGroup(FBasePassFrameLighting::SetIndex, Resources.Light.BindGroup);
         CommandList->SetVertexBuffer(0, Mesh.VertexBuffer, 0);
         CommandList->SetIndexBuffer(Mesh.IndexBuffer, 0, Mesh.IndexFormat);
         CommandList->SetPushConstants(

@@ -66,7 +66,8 @@ static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(
     LE::FRHIDevice* Device,
     LE::FRHIShader* VertexShader,
     LE::FRHIShader* PixelShader,
-    LE::FRHIBindGroupLayout* MaterialLayout)
+    LE::FRHIBindGroupLayout* MaterialLayout,
+    LE::FRHIBindGroupLayout* LightLayout)
 {
     LE::FRHIPipelineDesc_Graphics PipelineDesc;
     PipelineDesc.Name = "BasePassPipeline";
@@ -99,7 +100,14 @@ static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(
     UVAttr.Format = LE::EPixelFormat::R32G32_FLOAT;
     UVAttr.Offset = offsetof(FBasePassVertex, UV);
     PipelineDesc.VertexAttributes.PushBack(UVAttr);
+    LE::FRHIVertexInputAttribute NormalAttr;
+    NormalAttr.Location = 3;
+    NormalAttr.Binding = 0;
+    NormalAttr.Format = LE::EPixelFormat::R32G32B32_FLOAT;
+    NormalAttr.Offset = offsetof(FBasePassVertex, Normal);
+    PipelineDesc.VertexAttributes.PushBack(NormalAttr);
     PipelineDesc.BindGroupLayouts.PushBack(MaterialLayout);
+    PipelineDesc.BindGroupLayouts.PushBack(LightLayout);
 
     PipelineDesc.RenderTargetCount = 1;
     PipelineDesc.RenderTargetFormats[0] = LE::EPixelFormat::B8G8R8A8_SRGB;
@@ -550,7 +558,13 @@ public:
         {
             return false;
         }
-        BasePassPipeline = CreateBasePassPipeline(Device, BasePassVertexShader, BasePassPixelShader, MaterialLayout);
+        if (!FrameLighting.Initialize(*Device))
+        {
+            LE_LOG(LogXBD, Error, "Failed to initialize BasePass frame lighting.");
+            return false;
+        }
+        BasePassPipeline = CreateBasePassPipeline(Device, BasePassVertexShader, BasePassPixelShader,
+            MaterialLayout, FrameLighting.GetLayout());
         if (BasePassPipeline == nullptr)
         {
             LE_LOG(LogXBD, Error, "Failed to create BasePass pipeline.");
@@ -610,6 +624,7 @@ public:
         DestroyDemoRenderResources(RenderResources);
         RHI::DestroyResource(BasePassPipeline);
         BasePassPipeline = nullptr;
+        FrameLighting.Shutdown();
         RHI::DestroyResource(MaterialLayout);
         MaterialLayout = nullptr;
         RHI::DestroyResource(CompositePixelShader);
@@ -771,6 +786,14 @@ public:
             FrameContext.FrameScope = &ScheduledFrame;
             FrameContext.ViewFamily.PrimarySwapchain = Swapchain;
             LE::FBasePassCompositePipelineDesc RenderPipelineDesc;
+            const FRenderScene& RenderScene = RenderSnapshot.GetRenderScene();
+            if (!FrameLighting.WriteSlot(ScheduledFrame.GetSlotIndex(),
+                    {RenderScene.Lights.Data(), RenderScene.Lights.Size()}, RenderPipelineDesc.BasePassResources.Light))
+            {
+                LE_LOG(LogXBD, Error, "Failed to write BasePass frame lighting for slot {}.",
+                    ScheduledFrame.GetSlotIndex());
+                return LE::ERenderFrameRecordResult::Error;
+            }
             RenderPipelineDesc.BasePassResources.SceneColorTexture =
                 RenderResources.SceneColorTexture;
             RenderPipelineDesc.BasePassResources.SceneColorView =
@@ -784,8 +807,7 @@ public:
             RenderPipelineDesc.CompositeBindGroup = RenderResources.BindGroup;
             LE::FBasePassCompositePipeline RenderPipeline(RenderPipelineDesc);
             FrameContext.Pipeline = &RenderPipeline;
-            return Renderer.RenderFrame(
-                FrameContext, &RenderSnapshot.GetRenderScene());
+            return Renderer.RenderFrame(FrameContext, &RenderSnapshot.GetRenderScene());
         };
 
         const FRenderFrameResult FrameResult = FrameScheduler.ExecuteFrame(Swapchain, RecordFrame);
@@ -1000,10 +1022,11 @@ private:
         const auto Result = LoadScene(Path, Resolver, Candidate, &Diagnostic);
         if (Result != ESceneOperationResult::Success)
         {
-            LE_LOG(LogXBD, Error, "Scene '{}': {} ({}:{} {}, entity {}, asset {}, file {}).",
+            LE_LOG(LogXBD, Error, "Scene '{}': {} ({}:{} {}, entity {}, field {}, asset {}, file {}).",
                 PrintablePath.Data(), DescribeSceneOperationResult(Result), Diagnostic.Document.Line,
                 Diagnostic.Document.Column, DescribeSceneDocumentResult(Diagnostic.Document.Result),
-                Diagnostic.Entity.ToString().Data(), Diagnostic.Asset.ToString().Data(),
+                Diagnostic.Entity.ToString().Data(), String(Diagnostic.Document.Field).Data(),
+                Diagnostic.Asset.ToString().Data(),
                 DescribeContentIOResult(Diagnostic.FileResult));
             return false;
         }
@@ -1026,7 +1049,8 @@ private:
         if (WorldRenderer.BuildSnapshot(CandidateWorld, CandidateAssets->GetRegistry(),
                 PreviewContext, Preview, &PreviewReport) != EWorldRenderSnapshotBuildResult::Success)
         {
-            if (PreviewReport.Result == EWorldRenderSnapshotBuildResult::MissingMeshUV)
+            const bool bMissingUV = PreviewReport.Result == EWorldRenderSnapshotBuildResult::MissingMeshUV;
+            if (bMissingUV || PreviewReport.Result == EWorldRenderSnapshotBuildResult::InvalidNormalTransform)
             {
                 const auto* Meshes = CandidateWorld.GetMeshComponents();
                 if (Meshes != nullptr && PreviewReport.MeshIndex < Meshes->GetEntities().Size())
@@ -1038,9 +1062,17 @@ private:
                     Candidate->TryGetEntityId(Meshes->GetEntities()[PreviewReport.MeshIndex], EntityId);
                     CandidateAssets->GetRegistry().TryGetAssetId(Mesh.Mesh, MeshId);
                     CandidateAssets->GetRegistry().TryGetAssetId(Mesh.Material, MaterialId);
-                    LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has no UVs for material {}.",
-                        PrintablePath.Data(), EntityId.ToString().Data(), MeshId.ToString().Data(),
-                        MaterialId.ToString().Data());
+                    if (bMissingUV)
+                    {
+                        LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has no UVs for material {}.",
+                            PrintablePath.Data(), EntityId.ToString().Data(), MeshId.ToString().Data(),
+                            MaterialId.ToString().Data());
+                    }
+                    else
+                    {
+                        LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has an invalid normal transform.",
+                            PrintablePath.Data(), EntityId.ToString().Data(), MeshId.ToString().Data());
+                    }
                     return false;
                 }
             }
@@ -1093,6 +1125,7 @@ private:
     FRHIPipeline_Graphics* BasePassPipeline = nullptr;
     FRHIBindGroupLayout* MaterialLayout = nullptr;
     FRenderFrameScheduler FrameScheduler;
+    FBasePassFrameLighting FrameLighting;
     FDemoRenderResources RenderResources;
     FRenderer Renderer;
     uint32 CachedWindowWidth = DefaultWindowWidth;

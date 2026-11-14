@@ -9,10 +9,9 @@ World, and Asset remains Core-only.
 
 `FWorldRenderer::BuildSnapshot` accepts an Idle `FWorld`, the synchronous
 `FAssetRegistry`, an explicit frame/viewport build context, and an output
-`FWorldRenderSnapshot`. It updates
-the World's private Transform cache, validates the paired dense Entity/Mesh
-component spans, resolves typed Mesh/Material handles, and builds a complete
-candidate before publication.
+`FWorldRenderSnapshot`. It updates the World's private Transform cache,
+validates the paired dense entity and component spans, resolves typed Mesh and
+Material handles, and builds a complete candidate before publication.
 
 ## Snapshot contract
 
@@ -28,6 +27,7 @@ Each mesh proxy copies:
   generation/index;
 - its owned debug name and sort key;
 - `LocalToWorld` and a validated world-space AABB;
+- whether the mesh has authored normals, plus `NormalToWorld` when lit;
 - the persistent Material asset ID used by deterministic ordering;
 - resolved vertex/index buffers, vertex/index counts, R16/R32 index format,
   graphics pipeline, opaque base color, sampled image, material binding, and pass mask.
@@ -61,6 +61,26 @@ authored pose. The session pose supplies View, the camera component supplies
 Projection, and the resulting ViewProjection drives both rendering and culling.
 WorldRenderer publishes the authored seed independently of the effective View
 and leaves the authored transform and hierarchy intact.
+
+The snapshot includes at most one directional light. WorldRenderer validates
+the authored fields of all directional lights and publishes only an enabled
+light. Its proxy stores the primitive ID, unit direction toward the light
+(opposite the authored ray direction), and linear RGB radiance (color times
+intensity). It derives the proxy from world-space authored values, independent
+of both the light entity's hierarchy and the selected camera pose. On failure,
+`InvalidDirectionalLight` and `MultipleDirectionalLights` report the primitive
+ID of the offending light.
+
+When a light is enabled, a mesh with authored normals uses the inverse
+transpose of the linear part of its world transform. WorldRenderer computes
+the cofactors in double precision and preserves the determinant sign for
+mirrored transforms. It scales all coefficients by a common positive factor
+for float storage. BasePass normalizes the transformed interpolated normal.
+A non-finite transform or a determinant with magnitude at or below `1e-8`
+times the product of the linear column lengths fails before frustum culling.
+`InvalidNormalTransform` reports the failing mesh component index and primitive
+ID. Meshes without authored normals and frames without an enabled light keep
+the existing transform checks and use the unlit material formula.
 
 Meshes are sorted by `(SortKey, MaterialAssetId, PrimitiveId.Scope,
 PrimitiveId.Value)`, independent of dense storage order.

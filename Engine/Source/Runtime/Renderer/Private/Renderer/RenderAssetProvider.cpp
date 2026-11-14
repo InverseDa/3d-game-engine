@@ -51,13 +51,21 @@ bool ValidateMesh(const FMeshAssetData& Data, const FRenderBounds& Bounds) noexc
     if (Data.Positions.IsEmpty() || Data.Positions.Size() > MaxAssetMeshVertices ||
         Data.Indices.IsEmpty() || Data.Indices.Size() > MaxAssetMeshIndices ||
         Data.Indices.Size() % 3 != 0 || !Bounds.IsValid() ||
-        (!Data.UVs.IsEmpty() && Data.UVs.Size() != Data.Positions.Size()))
+        (!Data.UVs.IsEmpty() && Data.UVs.Size() != Data.Positions.Size()) ||
+        (!Data.Normals.IsEmpty() && Data.Normals.Size() != Data.Positions.Size()))
     {
         return false;
     }
     for (const Math::Vector2f& UV : Data.UVs)
     {
         if (!std::isfinite(UV.Values[0]) || !std::isfinite(UV.Values[1]))
+        {
+            return false;
+        }
+    }
+    for (const Math::Vector3f& Normal : Data.Normals)
+    {
+        if (!IsValidAssetMeshNormal(Normal))
         {
             return false;
         }
@@ -357,7 +365,7 @@ bool FRenderAssetProvider::Initialize(FRHIDevice* Device, FRHIPipeline_Graphics*
     FRHIBindGroupLayout* Layout) noexcept
 {
     if (Session != nullptr || Device == nullptr || Pipeline == nullptr || Layout == nullptr ||
-        !HasMaterialLayout(*Layout) || Pipeline->GetDesc().BindGroupLayouts.Size() != 1 ||
+        !HasMaterialLayout(*Layout) || Pipeline->GetDesc().BindGroupLayouts.IsEmpty() ||
         Pipeline->GetDesc().BindGroupLayouts[0] != Layout)
     {
         LastResult = ETextureUploadResult::InvalidInput;
@@ -432,10 +440,12 @@ FMeshAsset* FRenderAssetProvider::CreateMesh(void* Context, const FMeshAssetData
     }
     auto* VertexDestination = static_cast<uint8*>(VertexMapping);
     const bool bHasUV = !Data.UVs.IsEmpty();
+    const bool bHasNormals = !Data.Normals.IsEmpty();
     for (std::size_t Index = 0; Index < Data.Positions.Size(); ++Index)
     {
         const FBasePassVertex Vertex{Data.Positions[Index], Math::Vector3f(1.0f),
-            bHasUV ? Data.UVs[Index] : Math::Vector2f{}};
+            bHasUV ? Data.UVs[Index] : Math::Vector2f{},
+            bHasNormals ? Data.Normals[Index] : Math::Vector3f{}};
         std::memcpy(VertexDestination, &Vertex, sizeof(Vertex));
         VertexDestination += sizeof(Vertex);
     }
@@ -468,6 +478,7 @@ FMeshAsset* FRenderAssetProvider::CreateMesh(void* Context, const FMeshAssetData
     Mesh->IndexFormat = EPixelFormat::R32_UINT;
     Mesh->LocalBounds = Bounds;
     Mesh->bHasUV = bHasUV;
+    Mesh->bHasNormals = bHasNormals;
     Mesh->OwnedVertices = std::move(Vertices);
     Mesh->OwnedIndices = std::move(Indices);
     return Mesh;

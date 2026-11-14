@@ -1,20 +1,11 @@
-struct FBasePassConstants
-{
-    float4 LocalToClipRow0;
-    float4 LocalToClipRow1;
-    float4 LocalToClipRow2;
-    float4 LocalToClipRow3;
-    float4 BaseColor;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<FBasePassConstants> ObjectConstants;
+#include "BasePassConstants.lsi"
 
 struct VSInput
 {
     [[vk::location(0)]] float3 Position : POSITION;
     [[vk::location(1)]] float3 Color : COLOR0;
     [[vk::location(2)]] float2 UV : TEXCOORD0;
+    [[vk::location(3)]] float3 Normal : NORMAL0;
 };
 
 struct VSOutput
@@ -22,6 +13,7 @@ struct VSOutput
     float4 Position : SV_Position;
     [[vk::location(0)]] float3 Color : COLOR0;
     [[vk::location(1)]] float2 UV : TEXCOORD0;
+    [[vk::location(2)]] float3 WorldNormal : NORMAL0;
 };
 
 VSOutput MainVS(VSInput input)
@@ -35,5 +27,9 @@ VSOutput MainVS(VSInput input)
         dot(ObjectConstants.LocalToClipRow3, local));
     output.Color = input.Color;
     output.UV = input.UV;
+    output.WorldNormal = float3(
+        dot(ObjectConstants.NormalToWorldRow0.xyz, input.Normal),
+        dot(ObjectConstants.NormalToWorldRow1.xyz, input.Normal),
+        dot(ObjectConstants.NormalToWorldRow2.xyz, input.Normal));
     return output;
 }

@@ -268,6 +268,16 @@ ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneA
                 return Result;
             }
         }
+        if (Record.bHasDirectionalLight)
+        {
+            const FSceneDirectionalLightRecord& Light = Record.DirectionalLight;
+            const auto Mutation = World.TryAddComponent(*World.GetDirectionalLightComponents(), Item.Entity,
+                FWorldDirectionalLightComponent{Light.Direction, Light.Color, Light.Intensity, Light.bActive});
+            if (Mutation != EComponentMutationResult::Added)
+            {
+                return ReportComponent(Diagnostic, Mutation, Record.Id);
+            }
+        }
     }
     for (const FRestoreEntity& Item : Entities)
     {
@@ -390,6 +400,12 @@ ESceneOperationResult CaptureScene(const FScene& Scene, const FAssetRegistry& Re
             Record.Camera.FarPlane = Camera->FarPlane;
             Record.Camera.Priority = Camera->Priority;
             Record.Camera.bActive = Camera->bActive;
+        }
+        const auto* const Light = World.GetComponent(*World.GetDirectionalLightComponents(), Entity);
+        if (Light != nullptr)
+        {
+            Record.bHasDirectionalLight = true;
+            Record.DirectionalLight = {Light->Direction, Light->Color, Light->Intensity, Light->bActive};
         }
         if (!Candidate.Entities.TryPushBack(std::move(Record)))
         {

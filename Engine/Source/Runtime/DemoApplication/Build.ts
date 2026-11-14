@@ -32,8 +32,31 @@ export default class DemoApplicationBuild extends ModuleBuild {
         );
         if (Target.Platform === Platform.Win64 &&
             (Target.TargetType === TargetType.Game || Target.TargetType === TargetType.Editor)) {
-            const Source = "[engine.Root]/Engine/Content/Examples/AssetImport";
-            const Destination = "[engine.Binaries]/DemoContent";
+            const Samples = [
+                { Name: "AssetImport", Destination: "[engine.Binaries]/DemoContent" },
+                { Name: "DirectionalLight", Destination: "[engine.Binaries]/DirectionalLightContent" },
+            ].map(({ Name, Destination }) => {
+                const Source = `[engine.Root]/Engine/Content/Examples/${Name}`;
+                const Manifest = JSON.parse(readFileSync(new URL(
+                    `../../../Content/Examples/${Name}/Imports.json`, import.meta.url), "utf-8"));
+                const Assets = Manifest.assets as { source: string; path: string }[];
+                const Cooked = Assets.map((Asset) => {
+                    const Prefix = `${Manifest.mount}/`;
+                    if (!Asset.path.startsWith(Prefix) || Path.basename(Asset.source) !== Asset.source) {
+                        throw new Error("Invalid Demo import manifest entry");
+                    }
+                    const Relative = Asset.path.slice(Prefix.length);
+                    if (!Relative.split("/").every((Segment) => /^[A-Za-z0-9_-]+$/.test(Segment))) {
+                        throw new Error(`Invalid Demo asset path ${Asset.path}`);
+                    }
+                    return `${Destination}/Assets/${Relative}.leasset`;
+                });
+                return {
+                    Source, Destination,
+                    Inputs: [`${Source}/Imports.json`, `${Source}/Scene.json`, ...Assets.map((Asset) => `${Source}/${Asset.source}`)],
+                    Outputs: [`${Destination}/Scene.json`, ...Cooked],
+                };
+            });
             const ToolSources = [
                 "Runtime/Core", "Runtime/Asset", "Runtime/AssetFormat", "Runtime/AssetLoading",
                 "Runtime/ContentIO", "Runtime/Reflection", "Runtime/World", "Runtime/Scene",
@@ -44,25 +67,9 @@ export default class DemoApplicationBuild extends ModuleBuild {
                     .filter((Entry) => Entry.isFile())
                     .map((Entry) => Path.join(Entry.parentPath, Entry.name));
             }).sort();
-            const Manifest = JSON.parse(readFileSync(new URL(
-                "../../../Content/Examples/AssetImport/Imports.json", import.meta.url), "utf-8"));
-            const CookedOutputs = Manifest.assets.map((Asset: { source: string; path: string }) => {
-                const Prefix = `${Manifest.mount}/`;
-                if (!Asset.path.startsWith(Prefix) || Path.basename(Asset.source) !== Asset.source) {
-                    throw new Error("Invalid Demo import manifest entry");
-                }
-                const Relative = Asset.path.slice(Prefix.length);
-                if (!Relative.split("/").every((Segment) => /^[A-Za-z0-9_-]+$/.test(Segment))) {
-                    throw new Error(`Invalid Demo asset path ${Asset.path}`);
-                }
-                return `${Destination}/Assets/${Relative}.leasset`;
-            });
             Configuration.CustomActions.push({
                 Id: "StageDemoContent",
-                Inputs: [
-                    `${Source}/Imports.json`, `${Source}/Scene.json`,
-                    ...Manifest.assets.map((Asset: { source: string }) => `${Source}/${Asset.source}`),
-                ],
+                Inputs: Samples.flatMap((Sample) => Sample.Inputs),
                 ImplicitInputs: [
                     "[engine.Root]/Engine/Builder/Source/Content/StageDemoContent.ts",
                     "[engine.Root]/Engine/Builder/Targets/AssetImport.target.ts",
@@ -71,11 +78,12 @@ export default class DemoApplicationBuild extends ModuleBuild {
                     "[engine.Root]/Engine/Builder/Source/Project/EnginePaths.ts",
                     ...ToolSources,
                 ],
-                Outputs: [`${Destination}/Scene.json`, ...CookedOutputs],
+                Outputs: Samples.flatMap((Sample) => Sample.Outputs),
                 Command: [
                     process.execPath, "--no-warnings", "--experimental-strip-types",
                     "[engine.Root]/Engine/Builder/Source/Content/StageDemoContent.ts",
-                    "[engine.Root]", Destination, Target.Optimization, "[module.Generated]/ContentTools",
+                    "[engine.Root]", Target.Optimization, "[module.Generated]/ContentTools",
+                    ...Samples.flatMap(({ Source, Destination }) => [Source, Destination]),
                 ],
                 Description: "CONTENT DemoApplication",
                 RunBeforeCompile: true,

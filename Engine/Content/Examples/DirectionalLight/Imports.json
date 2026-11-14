@@ -1,0 +1,59 @@
+{
+  "mount": "Game",
+  "assets": [
+    {
+      "kind": "mesh",
+      "source": "Facing.obj",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd2001",
+      "path": "Game/Meshes/Facing"
+    },
+    {
+      "kind": "mesh",
+      "source": "Side.obj",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd2002",
+      "path": "Game/Meshes/Side"
+    },
+    {
+      "kind": "mesh",
+      "source": "Back.obj",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd2003",
+      "path": "Game/Meshes/Back"
+    },
+    {
+      "kind": "mesh",
+      "source": "Tilted.obj",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd2004",
+      "path": "Game/Meshes/Tilted"
+    },
+    {
+      "kind": "mesh",
+      "source": "TexturedFacing.obj",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd2005",
+      "path": "Game/Meshes/TexturedFacing"
+    },
+    {
+      "kind": "mesh",
+      "source": "Legacy.obj",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd2006",
+      "path": "Game/Meshes/Legacy"
+    },
+    {
+      "kind": "material",
+      "source": "White.material",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd2007",
+      "path": "Game/Materials/White"
+    },
+    {
+      "kind": "texture",
+      "source": "Midgray.ppm",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd2008",
+      "path": "Game/Textures/Midgray"
+    },
+    {
+      "kind": "material",
+      "source": "Midgray.material",
+      "id": "62fdc991-27a8-4a81-a077-647b47fd2009",
+      "path": "Game/Materials/Midgray"
+    }
+  ]
+}

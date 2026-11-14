@@ -14,6 +14,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <utility>
 
 namespace LE
@@ -330,18 +331,24 @@ struct FProviderFixture
     {
         Layout = CreateBasePassMaterialLayout(Device);
         Pipeline.Desc.BindGroupLayouts.PushBack(Layout);
+        FRHIBindGroupLayoutDesc LightingLayoutDesc;
+        LightingLayoutDesc.SetIndex = 1;
+        LightingLayout = Device.CreateBindGroupLayout(LightingLayoutDesc);
+        Pipeline.Desc.BindGroupLayouts.PushBack(LightingLayout);
         bInitialized = Provider.Initialize(&Device, &Pipeline, Layout);
     }
 
     ~FProviderFixture()
     {
         Provider.Shutdown();
+        RHI::DestroyResource(LightingLayout);
         RHI::DestroyResource(Layout);
     }
 
     FUploadTestDevice Device;
     FProviderTestPipeline Pipeline;
     FRHIBindGroupLayout* Layout = nullptr;
+    FRHIBindGroupLayout* LightingLayout = nullptr;
     FRenderAssetProvider Provider;
     bool bInitialized = false;
 };
@@ -360,9 +367,87 @@ FMeshAssetData MakeMesh()
     return Data;
 }
 
+bool TestNormalVertexUploads()
+{
+    FProviderFixture Fixture;
+    if (!ExpectProvider(Fixture.bInitialized, "material provider accepts set 0 with a separate lighting set"))
+    {
+        return false;
+    }
+    FMeshAssetData Data = MakeMesh();
+    const Math::Vector3f ExpectedNormals[] = {
+        Math::Vector3f(0.0f, 0.0f, 1.0f),
+        Math::Vector3f(0.0f, 0.6f, -0.8f),
+        Math::Vector3f(-1.0f, 0.0f, 0.0f),
+    };
+    Data.UVs = {Math::Vector2f(0.0f, 1.0f), Math::Vector2f(1.0f, 1.0f), Math::Vector2f(0.5f, 0.0f)};
+    FAssetId Id;
+    if (!FAssetId::TryParse("aef10000-0000-4000-8000-000000000001", Id))
+    {
+        return false;
+    }
+
+    bool Passed = true;
+    for (const bool bAuthoredNormals : {false, true})
+    {
+        if (bAuthoredNormals)
+        {
+            Data.Normals = {ExpectedNormals[0], ExpectedNormals[1], ExpectedNormals[2]};
+        }
+        Array<uint8> Cooked;
+        FAssetFileHeaderView Header;
+        FMeshAssetData Decoded;
+        const bool bDecoded = EncodeAssetFile(Id, "Tests/Provider.mesh", Data, Cooked) ==
+                EAssetFormatResult::Success &&
+            ReadAssetFileHeader(Cooked.AsSpan(), Header) == EAssetFormatResult::Success &&
+            Header.Version == (bAuthoredNormals ? MeshNormalsAssetFileVersion : TexturedAssetFileVersion) &&
+            DecodeAssetFile(Cooked.AsSpan(), Decoded) == EAssetFormatResult::Success;
+        FMeshAsset* Mesh = bDecoded ? FRenderAssetProvider::CreateMesh(&Fixture.Provider, Decoded) : nullptr;
+        if (!ExpectProvider(Mesh != nullptr, "provider constructs baked mesh with and without authored normals"))
+        {
+            return false;
+        }
+        const auto* const Vertices = static_cast<const FUploadTestBuffer*>(Mesh->VertexBuffer);
+        FBasePassVertex Uploaded[3];
+        std::memcpy(Uploaded, Vertices->Bytes, sizeof(Uploaded));
+        bool bMatched = Mesh->bHasUV && Mesh->bHasNormals == bAuthoredNormals &&
+            Vertices->GetDesc().Size == sizeof(Uploaded);
+        for (std::size_t Index = 0; Index < 3; ++Index)
+        {
+            bMatched = bMatched && Uploaded[Index].Position == Data.Positions[Index] &&
+                Uploaded[Index].UV == Data.UVs[Index] &&
+                Uploaded[Index].Normal == (bAuthoredNormals ? ExpectedNormals[Index] : Math::Vector3f{});
+        }
+        Passed &= ExpectProvider(bMatched, "GPU vertex bytes carry authored v3 normals or zero legacy normals");
+        FRenderAssetProvider::DestroyMesh(&Fixture.Provider, Mesh);
+    }
+
+    const unsigned AttemptsBeforeInvalidData = Fixture.Device.Attempts;
+    Data.Normals = {ExpectedNormals[0], ExpectedNormals[1]};
+    FMeshAsset* Mesh = FRenderAssetProvider::CreateMesh(&Fixture.Provider, Data);
+    Passed &= ExpectProvider(Mesh == nullptr && Fixture.Device.Attempts == AttemptsBeforeInvalidData,
+        "malformed vertex normal count never allocates GPU buffers");
+    FRenderAssetProvider::DestroyMesh(&Fixture.Provider, Mesh);
+
+    Data.Normals = {ExpectedNormals[0], Math::Vector3f{}, ExpectedNormals[2]};
+    Mesh = FRenderAssetProvider::CreateMesh(&Fixture.Provider, Data);
+    Passed &= ExpectProvider(Mesh == nullptr && Fixture.Device.Attempts == AttemptsBeforeInvalidData,
+        "zero normal never allocates GPU buffers");
+    FRenderAssetProvider::DestroyMesh(&Fixture.Provider, Mesh);
+
+    Data.Normals[1] = Math::Vector3f(0.0f, std::numeric_limits<float>::infinity(), 0.0f);
+    Mesh = FRenderAssetProvider::CreateMesh(&Fixture.Provider, Data);
+    Passed &= ExpectProvider(Mesh == nullptr && Fixture.Device.Attempts == AttemptsBeforeInvalidData,
+        "non-finite normal never allocates GPU buffers");
+    FRenderAssetProvider::DestroyMesh(&Fixture.Provider, Mesh);
+    return Passed;
+}
+
 bool TestFailedUploads()
 {
     FMeshAssetData Data = MakeMesh();
+    Data.Normals = {Math::Vector3f(0.0f, 0.0f, 1.0f),
+        Math::Vector3f(0.0f, 0.0f, 1.0f), Math::Vector3f(0.0f, 0.0f, 1.0f)};
     FProviderFixture Fixture;
     if (!Fixture.bInitialized) { return false; }
     auto& Device = Fixture.Device;
@@ -670,6 +755,7 @@ bool TestSharedAuthoredTexture()
 bool RunRenderAssetProviderTests()
 {
     bool Passed = TestFailedUploads();
+    Passed &= TestNormalVertexUploads();
     Passed &= TestSharedMaterialAcrossExtents();
     Passed &= TestFailedTextureUpload();
     Passed &= TestSharedAuthoredTexture();

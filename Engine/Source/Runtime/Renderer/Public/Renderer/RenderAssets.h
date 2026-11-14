@@ -24,6 +24,7 @@ struct FMeshAsset
     EPixelFormat IndexFormat = EPixelFormat::Unknown;
     FRenderBounds LocalBounds;
     bool bHasUV = false;
+    bool bHasNormals = false;
 };
 
 struct FMaterialAsset

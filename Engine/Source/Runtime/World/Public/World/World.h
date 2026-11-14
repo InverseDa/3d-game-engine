@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Reflection/ReflectionMacros.h"
 #include "World/ComponentStorage.h"
+#include "World/DirectionalLight.h"
 #include "World/NativeGameplaySystem.h"
 #include "World/Transform.h"
 
@@ -34,6 +35,15 @@ struct FWorldCameraComponent : public FWorldPrimitive
     float NearPlane = 0.1f;
     float FarPlane = 1000.0f;
     int32 Priority = 0;
+    bool bActive = true;
+};
+
+struct FWorldDirectionalLightComponent
+{
+    // World-space direction in which the rays travel. Its authored magnitude is preserved.
+    Math::Vector3f Direction{0.0f, 0.0f, -1.0f};
+    Math::Vector3f Color{1.0f, 1.0f, 1.0f};
+    float Intensity = 1.0f;
     bool bActive = true;
 };
 
@@ -132,6 +142,8 @@ public:
     const TComponentStorage<FWorldMeshComponent>* GetMeshComponents() const noexcept;
     TComponentStorage<FWorldCameraComponent>* GetCameraComponents() noexcept;
     const TComponentStorage<FWorldCameraComponent>* GetCameraComponents() const noexcept;
+    TComponentStorage<FWorldDirectionalLightComponent>* GetDirectionalLightComponents() noexcept;
+    const TComponentStorage<FWorldDirectionalLightComponent>* GetDirectionalLightComponents() const noexcept;
 
     template <typename T>
     bool AttachComponentStorage(TComponentStorage<T>& Storage) noexcept

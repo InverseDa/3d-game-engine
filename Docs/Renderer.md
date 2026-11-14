@@ -30,7 +30,7 @@ frame-owned `FRenderScene` snapshot for synchronous command recording.
 | 成员 | 类型 | 说明 |
 |------|------|------|
 | `Meshes` | `LE::Array<FRenderMeshProxy>` | 已剔除并确定性排序的 indexed mesh proxies，复制 transform/bounds、persistent material ID、VB/IB、pipeline 与最小 opaque base color |
-| `Lights` | `LE::Array<FRenderLightProxy>` | 光源代理（当前为空壳） |
+| `Lights` | `LE::Array<FRenderLightProxy>` | 零或一个方向光，携带世界空间朝光方向与线性 RGB 强度 |
 | `Cameras` | `LE::Array<FRenderCameraProxy>` | 恰好一个 primary camera，复制 View/Projection/ViewProjection、primitive ID 与 viewport |
 
 `ERenderMeshPassMask` 定义了网格可参与的目标通道：`BackBuffer`、`SceneColor`。
@@ -203,7 +203,11 @@ pipeline、layout 和设备。固定附件格式支持在 resize 时复用材质
 - Setup 导入 SceneColor/depth、VB/IB 和采样纹理。对共享纹理声明一次 Pixel ShaderResource 读取，
   导入初始状态也是 ShaderResource。附件和 VB/IB 保持各自的状态。
 - Record 不再分配或排序；严格按 immutable snapshot 顺序清除 color/depth、设置 viewport/scissor，
-  每次绘制绑定 pipeline、材质、VB/IB，上传 80 字节的 LocalToClip 四行和 BaseColor。
+  每次绘制绑定 pipeline、材质、帧级灯光、VB/IB，上传 128 字节的 LocalToClip、BaseColor 和逆转置法线行。
+- 光照使用 mesh v3 的显式顶点法线。Base Color 在 sRGB 纹理解码后进入线性 Lambert 漫反射，
+  无启用光源或无作者法线的 draw 沿用原颜色公式。场景灯光和像素基准见 [DirectionalLight.md](DirectionalLight.md)。
+- frame slot 各自持有一个 32 字节 UniformBuffer 和绑定组。槽 fence 完成后写入该帧灯光或停用值，
+  BasePass 声明读取 set 1 binding 0，材质继续用 set 0。调整窗口尺寸不重建灯光缓冲。
   顶点着色器逐行点乘计算 clip position。像素着色器线性乘以顶点色、材质色和 sRGB 解码
   后的采样颜色，输出 alpha 为 1。
 - 零可见 mesh 仍是有效计划，BasePass 仍清除 SceneColor/depth。
@@ -273,7 +277,7 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 
 1. **BasePass 仍是最小 vertical slice**：生产级 `Forward+`、`Deferred`、透明与多 Pass 材质尚未实现；`EShadingPath` 枚举存在但未驱动选择。
 2. **无通用材质系统**：`FRenderMeshProxy` 直接复制 resolved pipeline、buffers 与最小 RGB base color，没有纹理参数表、材质实例或 shader variant 抽象。
-3. **场景数据仍精简**：已有 primary camera 与 CPU frustum culling，但 `FRenderLightProxy` 仍为空壳，且无 LOD、occlusion culling 或 shadows。
+3. **场景数据仍精简**：已有 primary camera、CPU frustum culling 和单方向光。LOD、occlusion culling 与 shadows 留给后续阶段。
 4. **单视图限制**：`FRenderer::RenderFrame` 仅取 `ViewFamily.Views.front()`，多视口/分屏/Shadow Cascade 不支持。
 5. **同步资产路径**：Asset registry 和 WorldRenderer snapshot build 仍同步执行，没有异步加载或 render thread。
 6. **无后处理框架**：无 Bloom、Tone Mapping、AA 等后处理 Pass 的标准注册与组合机制。
@@ -298,7 +302,7 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 - 定义后处理体积（Post Process Volume）与混合权重。
 
 ### 9.4 场景与剔除
-- 填充 `FRenderLightProxy`（类型、位置、方向、颜色、强度、阴影参数）。
+- 扩展 `FRenderLightProxy`，支持其他光源类型、位置和阴影参数。
 - 在现有 CPU frustum culling 之后增加 LOD、occlusion culling 与批处理。
 
 ### 9.5 多视图与并行
@@ -323,7 +327,7 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 | `Public/Renderer/ShadingPath.h` | `EShadingPath` |
 | `Public/Renderer/SimpleRenderPass.h` | `FSimpleRenderPass` |
 | `Public/Renderer/SimpleRenderPipeline.h` | `FSimpleRenderPipeline` |
-| `Public/Renderer/BasePass.h` | 正式 BasePass attachment、indexed draw 与 80-byte object constants 契约 |
+| `Public/Renderer/BasePass.h` | BasePass attachment、indexed draw、128 字节对象常量和 32 字节帧灯光常量 |
 | `Public/Renderer/RenderAssetProvider.h` | BasePass 网格、材质、同步纹理上传及会话缓存 |
 | `Public/Renderer/BasePassCompositePipeline.h` | 正式 BasePass→Composite 双 Pass pipeline |
 | `Public/Renderer/RendererMinimal.h` | 模块统一头文件（聚合包含） |

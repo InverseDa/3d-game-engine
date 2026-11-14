@@ -16,6 +16,7 @@ struct FBasePassVertex
     Math::Vector3f Position;
     Math::Vector3f Color;
     Math::Vector2f UV;
+    Math::Vector3f Normal;
 };
 
 static_assert(std::is_standard_layout<FBasePassVertex>::value

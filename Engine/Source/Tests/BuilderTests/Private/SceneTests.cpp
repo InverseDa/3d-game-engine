@@ -1,5 +1,6 @@
 #include "Renderer/RenderAssets.h"
 #include "Scene/Scene.h"
+#include "World/WorldCommandBuffer.h"
 
 #include <cstdio>
 #include <limits>
@@ -342,6 +343,102 @@ bool TestSaveAndLoad(const FSceneTestIds& Ids, const FSceneFakeAssets& Published
     return bPassed;
 }
 
+bool TestDirectionalLightSaveAndLoad(const FSceneTestIds& Ids)
+{
+    FSceneDocument Document;
+    auto& AuthoredActive = Document.Entities.EmplaceBack();
+    AuthoredActive.Id = Ids.Left;
+    AuthoredActive.bHasDirectionalLight = true;
+    AuthoredActive.DirectionalLight = {
+        Math::Vector3f(1.0f, 0.0f, -4.0f), Math::Vector3f(1.0f, 0.5f, 0.25f), 8.0f, true};
+    auto& AuthoredDisabled = Document.Entities.EmplaceBack();
+    AuthoredDisabled.Id = Ids.Right;
+    AuthoredDisabled.bHasDirectionalLight = true;
+    AuthoredDisabled.DirectionalLight = {
+        Math::Vector3f(0.0f, -2.0f, 0.0f), Math::Vector3f(0.0f, 1.0f, 0.5f), 16.0f, false};
+
+    FAssetRegistry Registry;
+    const FSceneAssetResolver Resolver{nullptr, &Registry};
+    UniquePtr<FScene> Published;
+    FUuid TemporaryId;
+    if (!ExpectScene(FUuid::TryGenerate(TemporaryId) &&
+            RestoreScene(Document, Resolver, Published) == EResult::Success, "restore two light entities"))
+    {
+        return false;
+    }
+    FTemporarySceneFile Temporary;
+    Temporary.Path = TemporaryId.ToString();
+    Temporary.Path.Append(".scene.json");
+    const StringView Path = Temporary.Path.View();
+    Array<uint8> WithLights;
+    UniquePtr<FScene> Reloaded;
+    if (!ExpectScene(SaveScene(Path, *Published, Registry) == EResult::Success &&
+            ReadContentFile(Path, MaxSceneDocumentBytes, WithLights) == EContentIOResult::Success &&
+            LoadScene(Path, Resolver, Reloaded) == EResult::Success, "save and reload v2 light scene"))
+    {
+        return false;
+    }
+    FWorld& World = Reloaded->GetWorld();
+    auto* const Storage = World.GetDirectionalLightComponents();
+    FEntity ActiveEntity;
+    FEntity DisabledEntity;
+    if (!ExpectScene(Storage != nullptr && Storage->GetEntities().Size() == 2 &&
+            Reloaded->TryFindEntity(Ids.Left, ActiveEntity) && Reloaded->TryFindEntity(Ids.Right, DisabledEntity),
+            "restore light storage and persistent IDs"))
+    {
+        return false;
+    }
+    const auto* const ActiveLight = World.GetComponent(*Storage, ActiveEntity);
+    const auto* const DisabledLight = World.GetComponent(*Storage, DisabledEntity);
+    bool bPassed = ExpectScene(ActiveLight != nullptr && ActiveLight->bActive &&
+        ActiveLight->Direction == Math::Vector3f(1, 0, -4) &&
+        ActiveLight->Color == Math::Vector3f(1, 0.5f, 0.25f) && ActiveLight->Intensity == 8.0f &&
+        DisabledLight != nullptr && !DisabledLight->bActive && DisabledLight->Direction == Math::Vector3f(0, -2, 0) &&
+        DisabledLight->Color == Math::Vector3f(0, 1, 0.5f) && DisabledLight->Intensity == 16.0f &&
+        !World.HasTransform(ActiveEntity) && !World.HasTransform(DisabledEntity),
+        "preserve authored values and require no transform for lights");
+    Array<uint8> SavedAgain;
+    const StringView FirstSave{reinterpret_cast<const char*>(WithLights.Data()), WithLights.Size()};
+    const StringView Version2Prefix("{\n  \"version\": 2,\n");
+    bPassed &= ExpectScene(FirstSave.Substr(0, Version2Prefix.Size()) == Version2Prefix &&
+        SaveScene(Path, *Reloaded, Registry) == EResult::Success &&
+        ReadContentFile(Path, MaxSceneDocumentBytes, SavedAgain) == EContentIOResult::Success &&
+        FirstSave == StringView(reinterpret_cast<const char*>(SavedAgain.Data()), SavedAgain.Size()),
+        "save preserves deterministic v2 bytes");
+
+    FSceneOperationDiagnostic Diagnostic;
+    const auto* const PublishedScene = Reloaded.Get();
+    Document.Entities[1].DirectionalLight.bActive = true;
+    bPassed &= ExpectScene(RestoreScene(Document, Resolver, Reloaded, &Diagnostic) == EResult::InvalidDocument &&
+        Diagnostic.Document.Result == ESceneDocumentResult::MultipleActiveDirectionalLights &&
+        Diagnostic.Entity == Ids.Right && Reloaded.Get() == PublishedScene,
+        "reject a second active light before replacing the scene");
+    bPassed &= ExpectScene(World.DestroyEntity(ActiveEntity) && Storage->GetEntities().Size() == 1 &&
+        World.GetComponent(*Storage, ActiveEntity) == nullptr,
+        "light storage follows entity destruction");
+    FSceneDocument Captured;
+    String Encoded;
+    bPassed &= ExpectScene(CaptureScene(*Reloaded, Registry, Captured) == EResult::Success &&
+        EncodeSceneDocument(Captured, Encoded) == ESceneDocumentResult::Success &&
+        Encoded.View().Substr(0, Version2Prefix.Size()) == Version2Prefix,
+        "a disabled light on its own still requires Scene v2");
+    FWorldDirectionalLightComponent Edited;
+    Edited.Direction = Math::Vector3f(0, 3, 0);
+    bPassed &= ExpectScene(World.BeginTick(FWorldTickContext{}) == EWorldTickResult::Success &&
+        World.GetCommandBuffer()->TrySetComponent(*Storage, DisabledEntity, std::move(Edited)) ==
+            EWorldCommandRecordResult::Recorded && World.EndTick() == EWorldTickResult::Success &&
+        CaptureScene(*Reloaded, Registry, Captured) == EResult::Success && Captured.Entities.Size() == 1 &&
+        Captured.Entities[0].DirectionalLight.bActive &&
+        Captured.Entities[0].DirectionalLight.Direction == Math::Vector3f(0, 3, 0),
+        "deferred light edits reach the committed scene");
+    bPassed &= ExpectScene(World.Reset() && Storage->GetEntities().IsEmpty() &&
+        CaptureScene(*Reloaded, Registry, Captured) == EResult::Success &&
+        EncodeSceneDocument(Captured, Encoded) == ESceneDocumentResult::Success &&
+        Encoded.View() == StringView("{\n  \"version\": 1,\n  \"entities\": []\n}\n"),
+        "World reset removes light storage values and saves the original v1 form");
+    return bPassed;
+}
+
 } // namespace
 
 bool RunSceneTests()
@@ -361,6 +458,7 @@ bool RunSceneTests()
     bPassed &= TestRestoredScene(*Published, Ids);
     bPassed &= TestFailedRestore(Document, Ids, Assets, Published);
     bPassed &= TestSaveAndLoad(Ids, Assets, *Published);
+    bPassed &= TestDirectionalLightSaveAndLoad(Ids);
     FEntity Removed;
     if (ExpectScene(Published->TryFindEntity(Ids.Empty, Removed) && Published->GetWorld().DestroyEntity(Removed),
             "destroy a scene entity via World"))

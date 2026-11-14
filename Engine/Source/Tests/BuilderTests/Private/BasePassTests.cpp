@@ -7,11 +7,13 @@
 #include "RHI/RHIBindGroup.h"
 #include "RHI/RHIBuffer.h"
 #include "RHI/RHICommandList.h"
+#include "RHI/RHIDevice.h"
 #include "RHI/RHIPipeline.h"
 #include "RHI/RHISampler.h"
 #include "RHI/RHITexture.h"
 #include "Record/RFGBuilder.h"
 #include "Record/RFGRecordedGraph.h"
+#include "Renderer/RenderAssetProvider.h"
 #include "Renderer/RenderGraphBuilderBridge.h"
 #include "Renderer/RendererFrameContext.h"
 #include "Renderer/RenderView.h"
@@ -42,11 +44,16 @@ constexpr EShaderStage BasePassStages = static_cast<EShaderStage>(
 class FBasePassTestBuffer final : public FRHIBuffer
 {
 public:
-    void* Map(uint64, uint64) override { return nullptr; }
+    void* Map(const uint64 Offset, const uint64 Size) override
+    {
+        return bMapFails || Offset != 0 || Size != sizeof(Bytes) ? nullptr : Bytes;
+    }
     void Unmap() override {}
     const FRHIBufferDesc& GetDesc() const override { return Desc; }
 
     FRHIBufferDesc Desc;
+    uint8 Bytes[sizeof(FBasePassLightConstants)]{};
+    bool bMapFails = false;
 };
 
 class FBasePassTestTexture final : public FRHITexture
@@ -99,6 +106,98 @@ private:
     FRHISamplerDesc Desc;
 };
 
+class FBasePassTestDevice final : public FRHIDevice
+{
+public:
+    FRHIQueue* GetGraphicsQueue() const override { return nullptr; }
+    FRHIBuffer* CreateBuffer(const FRHIBufferDesc& Desc) override
+    {
+        auto* Buffer = new FBasePassTestBuffer;
+        Buffer->Desc = Desc;
+        return Buffer;
+    }
+    FRHIBindGroup* CreateBindGroup(const FRHIBindGroupDesc& Desc) override
+    {
+        if (++GroupAttempts == FailGroupAttempt)
+        {
+            return nullptr;
+        }
+        auto* Group = new FBasePassTestBindGroup;
+        Group->Desc = Desc;
+        return Group;
+    }
+    FRHIBindGroupLayout* CreateBindGroupLayout(const FRHIBindGroupLayoutDesc& Desc) override
+    {
+        auto* Layout = new FBasePassTestBindGroupLayout;
+        Layout->Desc = Desc;
+        return Layout;
+    }
+    FRHITexture* CreateTexture(const FRHITextureDesc&) override { return nullptr; }
+    FRHITextureView* CreateTextureView(const FRHITextureViewDesc&) override { return nullptr; }
+    FRHIShader* CreateShaderFromFile(EShaderStage, const void*, uint64, const String&) override { return nullptr; }
+    FRHIPipeline_Graphics* CreateGraphicsPipeline(const FRHIPipelineDesc_Graphics&) override { return nullptr; }
+    FRHICommandAllocator* CreateCommandAllocator(EQueueType) override { return nullptr; }
+    FRHICommandList* CreateCommandList(FRHICommandAllocator*) override { return nullptr; }
+    FRHISemaphore* CreateBinarySemaphore() override { return nullptr; }
+    FRHIFence* CreateFence(bool) override { return nullptr; }
+    FRHISwapchain* CreateSwapchain(const FRHISwapchainDesc&) override { return nullptr; }
+    FRHISampler* CreateSampler(const FRHISamplerDesc&) override { return nullptr; }
+    void* GetBindlessHeapGPUDescriptor() const override { return nullptr; }
+    uint32 AllocateBindlessIndex(FRHIResource*) override { return 0; }
+
+    uint32 GroupAttempts = 0;
+    uint32 FailGroupAttempt = 2;
+};
+
+int RunFrameLightingTests()
+{
+    FBasePassTestDevice Device;
+    FBasePassFrameLighting Lighting;
+    FBasePassLightBinding Slot0;
+    FBasePassLightBinding Slot1;
+    int Failures = Expect(!Lighting.Initialize(Device) && Lighting.GetLayout() == nullptr &&
+        !Lighting.WriteSlot(0, {}, Slot0), "failed frame lighting initialization can be retried");
+    if (!Lighting.Initialize(Device))
+    {
+        return Failures + Expect(false, "initialize light buffers for every slot");
+    }
+
+    FRenderLightProxy Light;
+    Light.PrimitiveId = {1, 1};
+    Light.DirectionToLight = Math::Vector3f(0.0f, 0.0f, 1.0f);
+    Light.Radiance = Math::Vector3f(0.5f, 0.25f, 0.125f);
+    if (!Lighting.WriteSlot(0, {&Light, 1}, Slot0))
+    {
+        return Failures + Expect(false, "write the first slot");
+    }
+    Light.DirectionToLight[2] = -1.0f;
+    if (!Lighting.WriteSlot(1, {&Light, 1}, Slot1))
+    {
+        return Failures + Expect(false, "write the second slot");
+    }
+    const auto ReadSlot = [](FRHIBuffer* Buffer)
+    {
+        FBasePassLightConstants Constants;
+        std::memcpy(&Constants, static_cast<FBasePassTestBuffer*>(Buffer)->Bytes, sizeof(Constants));
+        return Constants;
+    };
+    Failures += Expect(Slot0.Buffer != Slot1.Buffer && Slot0.BindGroup != Slot1.BindGroup &&
+        ReadSlot(Slot0.Buffer).DirectionAndEnabled == Math::Vector4f(0.0f, 0.0f, 1.0f, 1.0f) &&
+        ReadSlot(Slot1.Buffer).DirectionAndEnabled == Math::Vector4f(0.0f, 0.0f, -1.0f, 1.0f) &&
+        ReadSlot(Slot0.Buffer).Radiance == Math::Vector4f(0.5f, 0.25f, 0.125f, 0.0f),
+        "alternating directional lights reach distinct frame slots");
+    Failures += Expect(Lighting.WriteSlot(0, {}, Slot0) &&
+        ReadSlot(Slot0.Buffer).DirectionAndEnabled == Math::Vector4f() &&
+        ReadSlot(Slot0.Buffer).Radiance == Math::Vector4f() && ReadSlot(Slot1.Buffer).DirectionAndEnabled[3] == 1.0f,
+        "disabling one light clears all its slot bytes and preserves the other slot");
+    static_cast<FBasePassTestBuffer*>(Slot1.Buffer)->bMapFails = true;
+    FBasePassLightBinding Candidate = Slot0;
+    Failures += Expect(!Lighting.WriteSlot(1, {}, Candidate) && Candidate.Buffer == Slot0.Buffer &&
+        ReadSlot(Slot1.Buffer).DirectionAndEnabled[3] == 1.0f && !Lighting.WriteSlot(2, {}, Candidate),
+        "mapping or slot errors preserve the previous binding and light bytes");
+    return Failures;
+}
+
 enum class EBasePassCommandEvent : uint8
 {
     BindPipeline,
@@ -106,6 +205,7 @@ enum class EBasePassCommandEvent : uint8
     SetViewport,
     SetScissor,
     BindMaterial,
+    BindLight,
     SetVertex,
     SetIndex,
     PushConstants,
@@ -171,6 +271,12 @@ public:
     }
     void SetBindGroup(uint32 SetIndex, FRHIBindGroup* BindGroup) override
     {
+        if (SetIndex == FBasePassFrameLighting::SetIndex)
+        {
+            Events.PushBack(EBasePassCommandEvent::BindLight);
+            Lights.PushBack(BindGroup);
+            return;
+        }
         Events.PushBack(EBasePassCommandEvent::BindMaterial);
         MaterialSets.PushBack(SetIndex);
         Materials.PushBack(BindGroup);
@@ -198,6 +304,7 @@ public:
     Array<FRHIPipeline_Graphics*> Pipelines;
     Array<FRHIBindGroup*> Materials;
     Array<uint32> MaterialSets;
+    Array<FRHIBindGroup*> Lights;
     Array<FRHIBuffer*> VertexBuffers;
     Array<FRecordedIndexBinding> IndexBuffers;
     Array<FRecordedPushConstants> Pushes;
@@ -233,12 +340,24 @@ struct FBasePassFixture
         Resources.SceneDepthTexture = &Depth;
         Resources.SceneDepthView = &DepthView;
 
+        LightLayout.Desc.SetIndex = FBasePassFrameLighting::SetIndex;
+        LightLayout.Desc.Bindings.PushBack({FBasePassFrameLighting::BindingIndex, 1,
+            ERHIBindGroupItemType::UniformBuffer, EShaderStage::Pixel});
+        LightBuffer.Desc.Size = sizeof(FBasePassLightConstants);
+        LightBuffer.Desc.UsageFlag = static_cast<uint32>(EBufferUsageFlags::UniformBuffer);
+        LightGroup.Desc.Layout = &LightLayout;
+        auto& LightItem = LightGroup.Desc.Items.EmplaceBack();
+        LightItem.Buffer = &LightBuffer;
+        LightItem.Range = sizeof(FBasePassLightConstants);
+        Resources.Light = {&LightBuffer, &LightGroup};
+
         ConfigurePipeline(Pipelines[0]);
         ConfigurePipeline(Pipelines[1]);
         Layout.Desc.SetIndex = 0;
         for (std::size_t Index = 0; Index < 2; ++Index)
         {
             Pipelines[Index].Desc.BindGroupLayouts.PushBack(&Layout);
+            Pipelines[Index].Desc.BindGroupLayouts.PushBack(&LightLayout);
         }
         for (std::size_t Index = 0; Index < 3; ++Index)
         {
@@ -297,7 +416,7 @@ struct FBasePassFixture
         Pipeline.Desc.DepthStencilState.DepthFunc = ECompareFunction::Less;
         Pipeline.Desc.VertexBindings.TryEmplaceBack();
         Pipeline.Desc.VertexBindings.Back().Binding = 0;
-        Pipeline.Desc.VertexBindings.Back().Stride = 24;
+        Pipeline.Desc.VertexBindings.Back().Stride = sizeof(FBasePassVertex);
         Pipeline.Desc.VertexBindings.Back().bPerInstance = false;
         Pipeline.Desc.PushConstants.StageFlags = BasePassStages;
         Pipeline.Desc.PushConstants.Size = sizeof(FBasePassObjectConstants);
@@ -330,6 +449,9 @@ struct FBasePassFixture
     FBasePassTestTextureView DepthView;
     FBasePassResources Resources;
     FBasePassTestBindGroupLayout Layout;
+    FBasePassTestBindGroupLayout LightLayout;
+    FBasePassTestBuffer LightBuffer;
+    FBasePassTestBindGroup LightGroup;
     FBasePassTestSampler Sampler;
     FBasePassTestTexture Samples[3];
     FBasePassTestTextureView SampleViews[3];
@@ -387,6 +509,8 @@ int RunBasePassRecordTests()
 {
     int Failures = 0;
     FBasePassFixture Fixture;
+    Fixture.Scene.Meshes[1].bHasNormals = true;
+    Fixture.Scene.Meshes[1].NormalToWorld(0, 0) = 0.5f;
     FBasePass Pass(Fixture.Resources);
     FBasePassTestCommandList Commands;
     RecordBasePass(Pass, Fixture.Scene, Commands);
@@ -429,15 +553,17 @@ int RunBasePassRecordTests()
         std::memcpy(&First, Commands.Pushes[0].Bytes, sizeof(First));
         std::memcpy(&Second, Commands.Pushes[1].Bytes, sizeof(Second));
         bPushConstantsValid = Commands.Pushes[0].Stage == BasePassStages &&
-            Commands.Pushes[0].Size == 80 && Commands.Pushes[1].Stage == BasePassStages &&
-            Commands.Pushes[1].Size == 80 &&
+            Commands.Pushes[0].Size == sizeof(First) && Commands.Pushes[1].Stage == BasePassStages &&
+            Commands.Pushes[1].Size == sizeof(Second) &&
             MatrixEquals(First.LocalToClip, Fixture.Scene.Meshes[0].LocalToWorld) &&
             MatrixEquals(Second.LocalToClip, Fixture.Scene.Meshes[1].LocalToWorld) &&
-            First.BaseColor == Math::Vector4f(1.0f, 0.25f, 0.5f, 1.0f) &&
-            Second.BaseColor == Math::Vector4f(4.0f, 2.0f, 1.0f, 1.0f);
+            First.BaseColor == Math::Vector4f(1.0f, 0.25f, 0.5f, 0.0f) &&
+            Second.BaseColor == Math::Vector4f(4.0f, 2.0f, 1.0f, 1.0f) &&
+            First.NormalToWorldRows[0] == Math::Vector4f() &&
+            Second.NormalToWorldRows[0] == Math::Vector4f(0.5f, 0.0f, 0.0f, 0.0f);
     }
     Failures += Expect(bPushConstantsValid,
-        "BasePass uploads row-major LocalToClip and forces opaque alpha in exactly 80 bytes");
+        "BasePass records the 128-byte transform, material, and authored normal rows");
 
     const EBasePassCommandEvent ExpectedEvents[] = {
         EBasePassCommandEvent::BindPipeline,
@@ -446,12 +572,14 @@ int RunBasePassRecordTests()
         EBasePassCommandEvent::SetScissor,
         EBasePassCommandEvent::BindPipeline,
         EBasePassCommandEvent::BindMaterial,
+        EBasePassCommandEvent::BindLight,
         EBasePassCommandEvent::SetVertex,
         EBasePassCommandEvent::SetIndex,
         EBasePassCommandEvent::PushConstants,
         EBasePassCommandEvent::DrawIndexed,
         EBasePassCommandEvent::BindPipeline,
         EBasePassCommandEvent::BindMaterial,
+        EBasePassCommandEvent::BindLight,
         EBasePassCommandEvent::SetVertex,
         EBasePassCommandEvent::SetIndex,
         EBasePassCommandEvent::PushConstants,
@@ -475,12 +603,12 @@ int RunBasePassRecordTests()
     Fixture.Scene.Meshes.Back().MaterialBindGroup = &Fixture.Groups[3];
     FBasePassTestCommandList MixedMaterialCommands;
     RecordBasePass(Pass, Fixture.Scene, MixedMaterialCommands);
-    bool bMixBound = MixedMaterialCommands.Materials.Size() == 4 &&
+    bool bMixBound = MixedMaterialCommands.Materials.Size() == 4 && MixedMaterialCommands.Lights.Size() == 4 &&
         MixedMaterialCommands.DrawIndexCounts.Size() == 4;
     for (std::size_t Index = 0; bMixBound && Index < 4; ++Index)
     {
         bMixBound = MixedMaterialCommands.Materials[Index] == &Fixture.Groups[Index] &&
-            MixedMaterialCommands.MaterialSets[Index] == 0;
+            MixedMaterialCommands.MaterialSets[Index] == 0 && MixedMaterialCommands.Lights[Index] == &Fixture.LightGroup;
     }
     Failures += Expect(bMixBound,
         "BasePass rebinds each material across texture A, white, texture B and shared texture A");
@@ -753,6 +881,8 @@ int RunBasePassGraphContractTests()
         "BasePassIndexBuffer", &Fixture.IndexBuffers[0], ERHIResourceState::IndexBuffer);
     const FRFGResourceHandle Sample = Bridge.ImportTexture(
         "BasePassColorTexture", &Fixture.Samples[0], ERHIResourceState::ShaderResource);
+    const FRFGResourceHandle Light = Bridge.ImportBuffer(
+        "BasePassFrameLight", &Fixture.LightBuffer, ERHIResourceState::ConstantBuffer);
 
     const FRFGPassHandle CompositeHandle = Builder.AddPass(
         "Composite", "Composite", {}, ERFGPassFlags::None, ERFGQueueType::Graphics);
@@ -788,8 +918,9 @@ int RunBasePassGraphContractTests()
         HasAccess(BaseNode, Vertex0, ERFGAccessType::Read, ERHIResourceState::VertexBuffer) &&
         HasAccess(BaseNode, Index0, ERFGAccessType::Read, ERHIResourceState::IndexBuffer) &&
         HasAccess(BaseNode, Sample, ERFGAccessType::Read, ERHIResourceState::ShaderResource, EShaderStage::Pixel) &&
-        Graph.IsOutputResource(SceneDepth) && BaseNode.ResourceAccesses.Size() == 5,
-        "BasePass declares shared mesh buffers and sampled image once alongside color and depth");
+        HasAccess(BaseNode, Light, ERFGAccessType::Read, ERHIResourceState::ConstantBuffer, EShaderStage::Pixel) &&
+        Graph.IsOutputResource(SceneDepth) && BaseNode.ResourceAccesses.Size() == 6,
+        "BasePass declares shared mesh resources and the frame light once alongside color and depth");
 
     FRFGCompiler Compiler;
     const FRFGCompileResult Compiled = Compiler.Compile(Graph, Builder.BuildSignature());
@@ -888,13 +1019,14 @@ int RunRHIIndexedAndPushConstantContractTests()
 
 int RunBasePassTests()
 {
-    static_assert(sizeof(FBasePassObjectConstants) == 80);
+    static_assert(sizeof(FBasePassObjectConstants) == 128);
     int Failures = 0;
     Failures += RunRHIIndexedAndPushConstantContractTests();
     Failures += RunBasePassPlanValidationTests();
     Failures += RunBasePassCompositePipelineTests();
     Failures += RunBasePassRecordTests();
     Failures += RunBasePassGraphContractTests();
+    Failures += RunFrameLightingTests();
     return Failures;
 }
 

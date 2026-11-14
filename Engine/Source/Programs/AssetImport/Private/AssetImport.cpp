@@ -202,6 +202,20 @@ struct FMeshCorner
 {
     uint32 Position = 0;
     uint32 UV = 0;
+    uint32 Normal = 0;
+
+    bool HasSameAttributes(const FMeshCorner& Other) const noexcept
+    {
+        return (UV != 0) == (Other.UV != 0) && (Normal != 0) == (Other.Normal != 0);
+    }
+
+    uint64 VertexKey() const noexcept
+    {
+        constexpr uint32 IndexBits = 20;
+        static_assert(MaxAssetMeshVertices < (1u << IndexBits));
+        return (static_cast<uint64>(Position) << (2u * IndexBits))
+            | (static_cast<uint64>(UV) << IndexBits) | Normal;
+    }
 };
 
 struct FMeshTriangle
@@ -210,18 +224,53 @@ struct FMeshTriangle
     std::size_t Line = 0;
 };
 
+bool ParseMeshIndex(const StringView Token, uint32& Index) noexcept
+{
+    return ParseUnsigned(Token, Index) && Index != 0 && Index <= MaxAssetMeshVertices;
+}
+
+std::size_t MeshIndexSeparator(const StringView Token, std::size_t Offset) noexcept
+{
+    while (Offset < Token.Size() && Token[Offset] != '/') { ++Offset; }
+    return Offset;
+}
+
 bool ParseCorner(const StringView Token, FMeshCorner& Corner) noexcept
 {
-    std::size_t Separator = 0;
-    while (Separator < Token.Size() && Token[Separator] != '/') { ++Separator; }
-    if (!ParseUnsigned(Token.Substr(0, Separator), Corner.Position)
-        || Corner.Position == 0 || Corner.Position > MaxAssetMeshVertices)
+    const std::size_t First = MeshIndexSeparator(Token, 0);
+    if (!ParseMeshIndex(Token.Substr(0, First), Corner.Position))
     {
         return false;
     }
-    return Separator == Token.Size()
-        || (ParseUnsigned(Token.Substr(Separator + 1, Token.Size()), Corner.UV)
-            && Corner.UV != 0 && Corner.UV <= MaxAssetMeshVertices);
+    if (First == Token.Size())
+    {
+        return true;
+    }
+    const std::size_t Second = MeshIndexSeparator(Token, First + 1);
+    const StringView UV = Token.Substr(First + 1, Second - First - 1);
+    if (Second == Token.Size())
+    {
+        return ParseMeshIndex(UV, Corner.UV);
+    }
+    return (UV.IsEmpty() || ParseMeshIndex(UV, Corner.UV))
+        && ParseMeshIndex(Token.Substr(Second + 1, Token.Size()), Corner.Normal);
+}
+
+bool NormalizeMeshNormal(Math::Vector3f& Normal) noexcept
+{
+    const double X = Normal.Values[0];
+    const double Y = Normal.Values[1];
+    const double Z = Normal.Values[2];
+    const double Length = std::sqrt(X * X + Y * Y + Z * Z);
+    if (Length == 0.0)
+    {
+        return false;
+    }
+    for (float& Component : Normal.Values)
+    {
+        Component = static_cast<float>(static_cast<double>(Component) / Length);
+    }
+    return true;
 }
 
 FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
@@ -235,8 +284,8 @@ FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
     const StringView Text = TextWithoutBom(Source);
     Array<Math::Vector3f> SourcePositions;
     Array<Math::Vector2f> SourceUVs;
+    Array<Math::Vector3f> SourceNormals;
     Array<FMeshTriangle> Triangles;
-    bool bTextured = false;
     for (std::size_t Offset = 0, Line = 1; Offset < Text.Size(); ++Line)
     {
         FTokenCursor Tokens(TakeLine(Text, Offset));
@@ -274,6 +323,23 @@ FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
                 return {"could not allocate a UV coordinate", Line};
             }
         }
+        else if (Kind == StringView("vn"))
+        {
+            Math::Vector3f Normal;
+            if (!ParseVector(Tokens, Decimal, Normal) || !Tokens.Next().IsEmpty()
+                || !NormalizeMeshNormal(Normal))
+            {
+                return {"expected three finite decimal normal coordinates with nonzero length", Line};
+            }
+            if (SourceNormals.Size() >= MaxAssetMeshVertices)
+            {
+                return {"normal coordinate limit exceeded", Line};
+            }
+            if (!SourceNormals.TryPushBack(Normal))
+            {
+                return {"could not allocate a normal coordinate", Line};
+            }
+        }
         else if (Kind == StringView("f"))
         {
             if (Triangles.Size() >= MaxAssetMeshIndices / 3)
@@ -286,22 +352,19 @@ FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
             {
                 if (!ParseCorner(Tokens.Next(), Corner))
                 {
-                    return {"expected three positive position or position/UV indices", Line};
+                    return {"expected three positive OBJ corners using v, v/vt, v//vn or v/vt/vn", Line};
                 }
             }
             if (!Tokens.Next().IsEmpty())
             {
                 return {"only triangular faces are supported", Line};
             }
-            if (Triangles.IsEmpty())
-            {
-                bTextured = Triangle.Corners[0].UV != 0;
-            }
+            const FMeshCorner& FirstCorner = Triangles.IsEmpty() ? Triangle.Corners[0] : Triangles[0].Corners[0];
             for (const FMeshCorner& Corner : Triangle.Corners)
             {
-                if ((Corner.UV != 0) != bTextured)
+                if (!Corner.HasSameAttributes(FirstCorner))
                 {
-                    return {"cannot mix position-only and position/UV face indices", Line};
+                    return {"cannot mix OBJ face formats", Line};
                 }
             }
             if (!Triangles.TryPushBack(Triangle))
@@ -311,12 +374,18 @@ FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
         }
         else if (!Kind.IsEmpty())
         {
-            return {"unsupported OBJ record; expected v, vt or f", Line};
+            return {"unsupported OBJ record; expected v, vt, vn or f", Line};
         }
     }
     if (Triangles.IsEmpty())
     {
         return {"expected at least one triangle"};
+    }
+    const bool bHasUVs = Triangles[0].Corners[0].UV != 0;
+    const bool bHasNormals = Triangles[0].Corners[0].Normal != 0;
+    if (!SourceNormals.IsEmpty() && !bHasNormals)
+    {
+        return {"every face corner must reference a normal when vn records are present", Triangles[0].Line};
     }
     if (!Mesh.Indices.TryReserve(Triangles.Size() * 3))
     {
@@ -332,13 +401,17 @@ FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
                 return {"face index exceeds vertex count", Triangle.Line};
             }
             uint32 Index = Corner.Position - 1;
-            if (bTextured)
+            if (bHasUVs || bHasNormals)
             {
                 if (Corner.UV > SourceUVs.Size())
                 {
                     return {"face UV index exceeds UV coordinate count", Triangle.Line};
                 }
-                const uint64 Key = (static_cast<uint64>(Corner.Position) << 32) | Corner.UV;
+                if (Corner.Normal > SourceNormals.Size())
+                {
+                    return {"face normal index exceeds normal coordinate count", Triangle.Line};
+                }
+                const uint64 Key = Corner.VertexKey();
                 const uint32* const Existing = ExpandedVertices.Find(Key);
                 if (Existing != nullptr)
                 {
@@ -352,7 +425,8 @@ FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
                     }
                     Index = static_cast<uint32>(Mesh.Positions.Size());
                     if (!Mesh.Positions.TryPushBack(SourcePositions[Corner.Position - 1])
-                        || !Mesh.UVs.TryPushBack(SourceUVs[Corner.UV - 1]))
+                        || (bHasUVs && !Mesh.UVs.TryPushBack(SourceUVs[Corner.UV - 1]))
+                        || (bHasNormals && !Mesh.Normals.TryPushBack(SourceNormals[Corner.Normal - 1])))
                     {
                         return {"could not allocate an expanded mesh vertex", Triangle.Line};
                     }
@@ -368,7 +442,7 @@ FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
             }
         }
     }
-    if (!bTextured)
+    if (!bHasUVs && !bHasNormals)
     {
         Mesh.Positions = std::move(SourcePositions);
     }

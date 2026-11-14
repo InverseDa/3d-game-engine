@@ -1,26 +1,44 @@
-struct FBasePassConstants
-{
-    float4 LocalToClipRow0;
-    float4 LocalToClipRow1;
-    float4 LocalToClipRow2;
-    float4 LocalToClipRow3;
-    float4 BaseColor;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<FBasePassConstants> ObjectConstants;
+#include "BasePassConstants.lsi"
 
 Texture2D BaseColorTexture : register(t0, space0);
 SamplerState BaseColorSampler : register(s1, space0);
+
+struct FBasePassLightConstants
+{
+    float4 DirectionAndEnabled;
+    float4 Radiance;
+};
+
+ConstantBuffer<FBasePassLightConstants> FrameLight : register(b0, space1);
 
 struct PSInput
 {
     [[vk::location(0)]] float3 Color : COLOR0;
     [[vk::location(1)]] float2 UV : TEXCOORD0;
+    [[vk::location(2)]] float3 WorldNormal : NORMAL0;
 };
 
 float4 MainPS(PSInput input) : SV_Target0
 {
     const float3 sampled = BaseColorTexture.SampleLevel(BaseColorSampler, input.UV, 0.0).rgb;
-    return float4(input.Color * ObjectConstants.BaseColor.rgb * sampled, 1.0);
+    if (FrameLight.DirectionAndEnabled.w == 0.0 || ObjectConstants.BaseColor.w == 0.0)
+    {
+        return float4(input.Color * ObjectConstants.BaseColor.rgb * sampled, 1.0);
+    }
+
+    const float maxComponent = max(max(abs(input.WorldNormal.x), abs(input.WorldNormal.y)),
+        abs(input.WorldNormal.z));
+    if (maxComponent == 0.0)
+    {
+        return float4(0.0, 0.0, 0.0, 1.0);
+    }
+    const float3 normal = normalize(input.WorldNormal / maxComponent);
+    const float facing = saturate(dot(normal, FrameLight.DirectionAndEnabled.xyz));
+    const float3 factor = input.Color * sampled * FrameLight.Radiance.rgb * facing;
+    const float3 bounded = min(ObjectConstants.BaseColor.rgb, 1.0 / max(factor, 1.0));
+    const float3 material = float3(
+        factor.x > 1.0 ? bounded.x : ObjectConstants.BaseColor.x,
+        factor.y > 1.0 ? bounded.y : ObjectConstants.BaseColor.y,
+        factor.z > 1.0 ? bounded.z : ObjectConstants.BaseColor.z);
+    return float4(saturate(material * factor), 1.0);
 }

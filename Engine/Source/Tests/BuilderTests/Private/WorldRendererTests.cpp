@@ -267,7 +267,7 @@ int RunSnapshotSuccessAndIdentityTests()
         Result == EWorldRenderSnapshotBuildResult::Success &&
         Report.Result == EWorldRenderSnapshotBuildResult::Success &&
         Snapshot.IsPublished() && Snapshot.GetFrameIndex() == 17 &&
-        Scene.Meshes.Size() == 1 && Scene.Cameras.Size() == 1 &&
+        Scene.Meshes.Size() == 1 && Scene.Cameras.Size() == 1 && Scene.Lights.IsEmpty() &&
         Report.SourceMeshCount == 1 && Report.VisibleMeshCount == 1 &&
         Report.CulledMeshCount == 0,
         "WorldRenderer publishes one complete frame-owned snapshot");
@@ -285,6 +285,7 @@ int RunSnapshotSuccessAndIdentityTests()
             Proxy.GraphicsPipeline == Fixture.MaterialAssets[0].GraphicsPipeline &&
             Proxy.VertexCount == 3 && Proxy.IndexCount == 3 &&
             Proxy.IndexFormat == EPixelFormat::R32_UINT &&
+            !Proxy.bHasNormals && Proxy.NormalToWorld == Math::Matrix3f::Identity() &&
             Proxy.PassMask == ERenderMeshPassMask::SceneColor && Proxy.SortKey == 41 &&
             Proxy.MaterialAssetId == Fixture.MaterialId &&
             Proxy.BaseColor == Fixture.MaterialAssets[0].BaseColor,
@@ -1140,6 +1141,173 @@ int RunCameraOverrideTests()
     return Failures;
 }
 
+int RunDirectionalLightExtractionTests()
+{
+    int Failures = 0;
+    FWorldRendererFixture Fixture;
+    FEntity LightEntity;
+    FEntity InactiveEntity;
+    FEntity LightParent;
+    FWorldDirectionalLightComponent Light;
+    Light.Direction = Math::Vector3f(0.0f, 3.0f, -4.0f);
+    Light.Color = Math::Vector3f(1.0f, 0.5f, 0.25f);
+    Light.Intensity = 0.5f;
+    FWorldDirectionalLightComponent Inactive;
+    Inactive.bActive = false;
+    auto* const Lights = Fixture.World.GetDirectionalLightComponents();
+    if (Expect(Fixture.Initialize() && Lights != nullptr && Fixture.World.TryCreateEntity(LightEntity) &&
+        Fixture.World.TryCreateEntity(InactiveEntity) && Fixture.World.TryCreateEntity(LightParent) &&
+        Fixture.World.TryAddComponent(*Lights, LightEntity, Light) == EComponentMutationResult::Added &&
+        Fixture.World.TryAddComponent(*Lights, InactiveEntity, Inactive) == EComponentMutationResult::Added,
+        "fixture has one active and one inactive directional light"))
+    {
+        return 1;
+    }
+
+    FWorldRenderer Renderer;
+    FWorldRenderSnapshot Snapshot;
+    FWorldRenderSnapshotBuildReport Report;
+    FWorldRenderSnapshotBuildContext Context = MakeBuildContext(77);
+    const FRenderPrimitiveId LightId{LightEntity.WorldDomain,
+        (static_cast<uint64>(LightEntity.GetGeneration()) << 32) | LightEntity.GetIndex()};
+    if (Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::Success && Snapshot.GetRenderScene().Lights.Size() == 1,
+        "snapshot publishes only the active directional light"))
+    {
+        return 1;
+    }
+    const FRenderLightProxy& Proxy = Snapshot.GetRenderScene().Lights[0];
+    const Math::Vector3f DirectionToLight(0.0f, -0.6f, 0.8f);
+    const Math::Vector3f Radiance(0.5f, 0.25f, 0.125f);
+    Failures += Expect(Proxy.PrimitiveId == LightId && Proxy.DirectionToLight == DirectionToLight &&
+        Proxy.Radiance == Radiance, "proxy negates and normalizes authored direction and multiplies linear radiance");
+
+    FTransform LightTransform;
+    LightTransform.Translation = Math::Vector3f(10.0f, 20.0f, 30.0f);
+    FTransform LightParentTransform;
+    LightParentTransform.Rotation = Math::Quaternionf(Math::Vector3f(0.0f, 1.0f, 0.0f), 1.0f);
+    LightParentTransform.Scale = Math::Vector3f(2.0f, 0.0f, 3.0f);
+    const bool bParented = Fixture.World.TryAddTransform(LightEntity, LightTransform) ==
+            EComponentMutationResult::Added &&
+        Fixture.World.TryAddTransform(LightParent, LightParentTransform) == EComponentMutationResult::Added &&
+        Fixture.World.SetTransformParent(LightEntity, LightParent) == ETransformParentResult::Reparented;
+    Context.CameraOverride = Snapshot.GetAuthoredPrimaryCameraPose();
+    Context.CameraOverride.CameraToWorld(0, 3) += 2.0f;
+    Failures += Expect(bParented && Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::Success && Snapshot.GetRenderScene().Lights.Size() == 1 &&
+        Snapshot.GetRenderScene().Lights[0].DirectionToLight == DirectionToLight &&
+        Snapshot.GetRenderScene().Lights[0].Radiance == Radiance &&
+        NearlyEqual(Snapshot.GetRenderScene().Cameras[0].View(0, 3), -6.0f),
+        "camera roaming and a transformed light hierarchy do not change world-space lighting");
+
+    auto* const Second = Fixture.World.GetComponent(*Lights, InactiveEntity);
+    if (Expect(Second != nullptr, "inactive directional light remains in the authored World"))
+    {
+        return Failures + 1;
+    }
+    Second->Direction = Math::Vector3f{};
+    const FRenderPrimitiveId SecondId{InactiveEntity.WorldDomain,
+        (static_cast<uint64>(InactiveEntity.GetGeneration()) << 32) | InactiveEntity.GetIndex()};
+    Failures += Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::InvalidDirectionalLight && Report.PrimitiveId == SecondId &&
+        !Snapshot.IsPublished() && Snapshot.GetRenderScene().Lights.IsEmpty(),
+        "invalid inactive light is diagnosed and no partially built light escapes");
+
+    Second->Direction = Inactive.Direction;
+    Second->bActive = true;
+    Failures += Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::MultipleDirectionalLights && Report.PrimitiveId == SecondId &&
+        !Snapshot.IsPublished(), "duplicate active light reports the conflicting primitive");
+    return Failures;
+}
+
+int RunNormalTransformTests()
+{
+    int Failures = 0;
+    FWorldRendererFixture Fixture;
+    FEntity LightEntity;
+    FWorldDirectionalLightComponent Light;
+    // Black radiance still uses the lighting path and needs a valid normal matrix.
+    Light.Intensity = 0.0f;
+    auto* const Lights = Fixture.World.GetDirectionalLightComponents();
+    if (Expect(Fixture.Initialize() && Lights != nullptr && Fixture.World.TryCreateEntity(LightEntity) &&
+        Fixture.World.TryAddComponent(*Lights, LightEntity, Light) == EComponentMutationResult::Added,
+        "normal matrix fixture has an enabled zero-intensity light"))
+    {
+        return 1;
+    }
+    Fixture.MeshAsset.bHasNormals = true;
+    FWorldRenderer Renderer;
+    FWorldRenderSnapshot Snapshot;
+    FWorldRenderSnapshotBuildReport Report;
+    const FWorldRenderSnapshotBuildContext Context = MakeBuildContext(78);
+    FTransform Transform;
+    Transform.Translation = Math::Vector3f(4.0f, 5.0f, 6.0f);
+    Transform.Rotation = Math::Quaternionf(Math::Vector3f(0.0f, 0.0f, 1.0f), 0.6f);
+    const Math::Vector3f LocalNormal = Math::Vector3f(1.0f, 0.0f, 1.0f).Normalized();
+    for (const float ScaleX : {2.0f, -2.0f})
+    {
+        Transform.Scale = Math::Vector3f(ScaleX, 1.0f, 4.0f);
+        const bool bApplied = Fixture.World.SetLocalTransform(Fixture.Entity, Transform) ==
+            ETransformUpdateResult::Updated;
+        if (Expect(bApplied && Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+                EWorldRenderSnapshotBuildResult::Success && Snapshot.GetRenderScene().Meshes.Size() == 1 &&
+            Snapshot.GetRenderScene().Lights.Size() == 1 && Snapshot.GetRenderScene().Lights[0].Radiance == Math::Vector3f{},
+            "active zero-intensity light and nonuniform or mirrored draw publish"))
+        {
+            return Failures + 1;
+        }
+        const FRenderMeshProxy& Proxy = Snapshot.GetRenderScene().Meshes[0];
+        const Math::Vector3f Actual = (Proxy.NormalToWorld * LocalNormal).Normalized();
+        const Math::Vector3f Expected = Transform.Rotation.RotateVector(Math::Vector3f(
+            LocalNormal[0] / ScaleX, LocalNormal[1], LocalNormal[2] / 4.0f)).Normalized();
+        Failures += Expect(Proxy.bHasNormals && NearlyEqual(Actual[0], Expected[0]) &&
+            NearlyEqual(Actual[1], Expected[1]) && NearlyEqual(Actual[2], Expected[2]),
+            "normal transform matches normalized inverse-transpose including reflection sign");
+    }
+
+    Transform.Scale = Math::Vector3f(0.0f, 1.0f, 1.0f);
+    Transform.Translation[0] = 1000.0f;
+    const FRenderPrimitiveId MeshId{Fixture.Entity.WorldDomain,
+        (static_cast<uint64>(Fixture.Entity.GetGeneration()) << 32) | Fixture.Entity.GetIndex()};
+    const bool bCulledSingular = Fixture.World.SetLocalTransform(Fixture.Entity, Transform) ==
+        ETransformUpdateResult::Updated;
+    Failures += Expect(bCulledSingular && Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::InvalidNormalTransform && Report.MeshIndex == 0 &&
+        Report.PrimitiveId == MeshId && !Snapshot.IsPublished(),
+        "singular lit mesh is diagnosed by entity and mesh index before it can be culled");
+
+    Fixture.MeshAsset.bHasNormals = false;
+    Failures += Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::Success && Report.CulledMeshCount == 1,
+        "legacy mesh with the same singular transform retains old culling behavior in a lit scene");
+
+    Fixture.MeshAsset.bHasNormals = true;
+    FEntity MeshParent;
+    FTransform NearlyCollapsing;
+    NearlyCollapsing.Scale = Math::Vector3f(1.0e-12f, 1.0f, 1.0f);
+    Transform.Scale = Math::Vector3f(1.0f);
+    Transform.Translation[0] = 4.0f;
+    const bool bNearlySingular = Fixture.World.TryCreateEntity(MeshParent) &&
+        Fixture.World.TryAddTransform(MeshParent, NearlyCollapsing) == EComponentMutationResult::Added &&
+        Fixture.World.SetLocalTransform(Fixture.Entity, Transform) == ETransformUpdateResult::Updated &&
+        Fixture.World.SetTransformParent(Fixture.Entity, MeshParent) == ETransformParentResult::Reparented;
+    Failures += Expect(bNearlySingular && Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::InvalidNormalTransform && Report.PrimitiveId == MeshId,
+        "almost-collinear world basis with nonzero determinant fails the relative degeneracy threshold");
+
+    auto* const AuthoredLight = Fixture.World.GetComponent(*Lights, LightEntity);
+    if (Expect(AuthoredLight != nullptr, "active directional light remains in the authored World"))
+    {
+        return Failures + 1;
+    }
+    AuthoredLight->bActive = false;
+    Failures += Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::Success && Snapshot.GetRenderScene().Lights.IsEmpty(),
+        "disabled light retains old transform validation for the same authored normal mesh");
+    return Failures;
+}
+
 int RunFrustumCullingAndSortTests()
 {
     int Failures = 0;
@@ -1369,6 +1537,8 @@ int RunWorldRendererTests()
     Failures += RunSnapshotMoveTests();
     Failures += RunCameraContractTests();
     Failures += RunCameraOverrideTests();
+    Failures += RunDirectionalLightExtractionTests();
+    Failures += RunNormalTransformTests();
     Failures += RunFrustumCullingAndSortTests();
     Failures += RunInvalidClipCoordinateTests();
     return Failures;

@@ -1,6 +1,7 @@
 #include "WorldRenderer/WorldRenderer.h"
 
 #include "Renderer/RenderAssets.h"
+#include "World/DirectionalLight.h"
 #include "World/World.h"
 
 #include <algorithm>
@@ -49,6 +50,54 @@ bool IsFiniteNonNegativeRgb(const Math::Vector4f& Color) noexcept
         if (!std::isfinite(Color.Values[Component]) || Color.Values[Component] < 0.0f)
         {
             return false;
+        }
+    }
+    return true;
+}
+
+bool TryBuildNormalToWorld(
+    const Math::Matrix4f& LocalToWorld, Math::Matrix3f& OutNormalToWorld) noexcept
+{
+    Math::Vector3d Columns[3];
+    for (std::size_t Column = 0; Column < 3; ++Column)
+    {
+        Columns[Column] = Math::Vector3d(
+            LocalToWorld(0, Column), LocalToWorld(1, Column), LocalToWorld(2, Column));
+    }
+    const Math::Vector3d Cofactors[] = {
+        Math::Vector3d::Cross(Columns[1], Columns[2]),
+        Math::Vector3d::Cross(Columns[2], Columns[0]),
+        Math::Vector3d::Cross(Columns[0], Columns[1]),
+    };
+    const double Determinant = Math::Vector3d::Dot(Columns[0], Cofactors[0]);
+    const double ColumnScale = Columns[0].Length() * Columns[1].Length() * Columns[2].Length();
+    if (!std::isfinite(Determinant) || std::fabs(Determinant) <= 1.0e-8 * ColumnScale)
+    {
+        return false;
+    }
+
+    double MaxCofactor = 0.0;
+    for (const Math::Vector3d& Cofactor : Cofactors)
+    {
+        for (const double Value : Cofactor.Values)
+        {
+            MaxCofactor = (std::max)(MaxCofactor, std::fabs(Value));
+        }
+    }
+    // Cofactors / determinant gives inverse-transpose. The shader normalizes
+    // the transformed vector, so a common positive scale can bound the float
+    // coefficients. Keep the determinant sign to preserve mirrored normals.
+    const double Divisor = std::copysign(MaxCofactor, Determinant);
+    for (std::size_t Column = 0; Column < 3; ++Column)
+    {
+        for (std::size_t Row = 0; Row < 3; ++Row)
+        {
+            const double Coefficient = Cofactors[Column][Row] / Divisor;
+            if (!std::isfinite(Coefficient))
+            {
+                return false;
+            }
+            OutNormalToWorld(Row, Column) = static_cast<float>(Coefficient);
         }
     }
     return true;
@@ -362,7 +411,9 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         World.GetCameraComponents();
     const TComponentStorage<FWorldMeshComponent>* const MeshStorage =
         World.GetMeshComponents();
-    if (CameraStorage == nullptr || MeshStorage == nullptr)
+    const TComponentStorage<FWorldDirectionalLightComponent>* const LightStorage =
+        World.GetDirectionalLightComponents();
+    if (CameraStorage == nullptr || MeshStorage == nullptr || LightStorage == nullptr)
     {
         return Fail(EWorldRenderSnapshotBuildResult::InvalidWorld, 0);
     }
@@ -372,8 +423,11 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
     const Span<const FWorldMeshComponent> MeshComponents =
         MeshStorage->GetComponents();
     const Span<const FEntity> MeshEntities = MeshStorage->GetEntities();
+    const Span<const FWorldDirectionalLightComponent> LightComponents = LightStorage->GetComponents();
+    const Span<const FEntity> LightEntities = LightStorage->GetEntities();
     if (CameraComponents.Size() != CameraEntities.Size() ||
-        MeshComponents.Size() != MeshEntities.Size())
+        MeshComponents.Size() != MeshEntities.Size() ||
+        LightComponents.Size() != LightEntities.Size())
     {
         return Fail(EWorldRenderSnapshotBuildResult::StorageMismatch, 0);
     }
@@ -464,6 +518,40 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
     CameraProxy.ViewportWidth = Context.ViewportWidth;
     CameraProxy.ViewportHeight = Context.ViewportHeight;
 
+    for (std::size_t Index = 0; Index < LightComponents.Size(); ++Index)
+    {
+        const FEntity Entity = LightEntities[Index];
+        const FRenderPrimitiveId PrimitiveId = MakePrimitiveId(Entity);
+        if (!World.IsAlive(Entity) || !PrimitiveId.IsValid())
+        {
+            return Fail(EWorldRenderSnapshotBuildResult::StorageMismatch, 0, PrimitiveId);
+        }
+        const FWorldDirectionalLightComponent& Light = LightComponents[Index];
+        if (ValidateDirectionalLightParameters(Light.Direction, Light.Color, Light.Intensity) !=
+            EDirectionalLightParameterError::None)
+        {
+            return Fail(EWorldRenderSnapshotBuildResult::InvalidDirectionalLight, 0, PrimitiveId);
+        }
+        if (!Light.bActive)
+        {
+            continue;
+        }
+        if (!Candidate.Lights.IsEmpty())
+        {
+            return Fail(EWorldRenderSnapshotBuildResult::MultipleDirectionalLights, 0, PrimitiveId);
+        }
+        if (!Candidate.Lights.TryEmplaceBack(*OutSnapshot.Allocator))
+        {
+            return Fail(EWorldRenderSnapshotBuildResult::AllocationFailed, 0, PrimitiveId);
+        }
+        const Math::Vector3d Direction(Light.Direction[0], Light.Direction[1], Light.Direction[2]);
+        const Math::Vector3d ToLight = Direction * (-1.0 / Direction.Length());
+        FRenderLightProxy& Proxy = Candidate.Lights.Back();
+        Proxy.PrimitiveId = PrimitiveId;
+        Proxy.DirectionToLight = Math::Vector3f(ToLight[0], ToLight[1], ToLight[2]);
+        Proxy.Radiance = Light.Color * Light.Intensity;
+    }
+
     if (!Candidate.Meshes.TryReserve(MeshComponents.Size()))
     {
         return Fail(EWorldRenderSnapshotBuildResult::AllocationFailed, 0);
@@ -540,9 +628,18 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         {
             return Fail(EWorldRenderSnapshotBuildResult::TransformUpdateFailed, Index, PrimitiveId);
         }
+        const bool bHasNormals = ResolvedMesh->bHasNormals;
+        const bool bNeedsNormalTransform = bHasNormals && !Candidate.Lights.IsEmpty();
         if (!IsFiniteMatrix(LocalToWorld))
         {
-            return Fail(EWorldRenderSnapshotBuildResult::InvalidTransform, Index, PrimitiveId);
+            return Fail(bNeedsNormalTransform ? EWorldRenderSnapshotBuildResult::InvalidNormalTransform
+                                             : EWorldRenderSnapshotBuildResult::InvalidTransform,
+                Index, PrimitiveId);
+        }
+        Math::Matrix3f NormalToWorld = Math::Matrix3f::Identity();
+        if (bNeedsNormalTransform && !TryBuildNormalToWorld(LocalToWorld, NormalToWorld))
+        {
+            return Fail(EWorldRenderSnapshotBuildResult::InvalidNormalTransform, Index, PrimitiveId);
         }
         FRenderBounds WorldBounds;
         if (!TryTransformBounds(LocalBounds, LocalToWorld, WorldBounds))
@@ -572,6 +669,8 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         Proxy.PrimitiveId = PrimitiveId;
         Proxy.WorldBounds = WorldBounds;
         Proxy.LocalToWorld = LocalToWorld;
+        Proxy.NormalToWorld = NormalToWorld;
+        Proxy.bHasNormals = bHasNormals;
         Proxy.GraphicsPipeline = GraphicsPipeline;
         Proxy.VertexBuffer = VertexBuffer;
         Proxy.VertexCount = VertexCount;

@@ -68,6 +68,8 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
     const Demo = Path.join(GameRoot, "DemoContent");
     const SceneTool = Path.join(GameIntermediate,
         "Generated/DemoApplication/ContentTools/Binaries/Win64/Debug/SceneTool/Program/SceneTool.exe");
+    const AssetImport = Path.join(GameIntermediate,
+        "Generated/DemoApplication/ContentTools/Binaries/Win64/Debug/AssetImport/Program/AssetImport.exe");
     const Scratch = await Fs.mkdtemp(Path.join(Os.tmpdir(), "limitless-textured-scene-"));
     try {
         await Fs.cp(Demo, Scratch, { recursive: true });
@@ -107,6 +109,75 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         CameraEntity.camera.verticalFieldOfViewRadians = 0.9;
         CameraEntity.transform.rotation = [0, 0, 0, 0];
         await CheckCameraFixture("CameraInvalidRotation.json", "rotation");
+
+        const LightId = "8a0a5d74-17ef-48e0-a46b-f7105518e707";
+        const SecondLightId = "8a0a5d74-17ef-48e0-a46b-f7105518e708";
+        type Light = { direction: number[]; color: number[]; intensity?: number; active: boolean };
+        type LightEntity = { id: string; directionalLight: Light };
+        const LightScene = JSON.parse(SceneText);
+        LightScene.version = 2;
+        LightScene.entities.push({
+            id: LightId,
+            directionalLight: { direction: [0, 0, -1], color: [1, 0.5, 0.25], intensity: 0.5, active: true },
+        });
+        const LightEntity: LightEntity = LightScene.entities.find((Entity: LightEntity) => Entity.id === LightId);
+        const EditedLight = { direction: [0, 0, -4], color: [0.25, 0.5, 1], intensity: 2, active: true };
+        Object.assign(LightEntity.directionalLight, EditedLight);
+
+        async function CheckLightFixture(FileName: string, InvalidField?: string, EntityId = LightId): Promise<void> {
+            const File = Path.join(Scratch, FileName);
+            await Fs.writeFile(File, JSON.stringify(LightScene, null, 2) + "\n");
+            const Before = await HashFiles([File]);
+            const Result = Check(File);
+            Assert.equal(Result.status, InvalidField === undefined ? 0 : 1, Result.stderr);
+            if (InvalidField !== undefined) {
+                Assert.ok(Result.stderr.startsWith(`${File}:`), Result.stderr);
+                Assert.ok(Result.stderr.includes(`entity ${EntityId}, field ${InvalidField})`), Result.stderr);
+            }
+            Assert.deepEqual(await HashFiles([File]), Before);
+        }
+
+        await CheckLightFixture("LightEdited.json");
+        for (const [Field, Invalid] of [
+            ["direction", [0, 0, 0]], ["color", [1, 1.25, 0]], ["intensity", 17],
+        ] as const) {
+            Object.assign(LightEntity.directionalLight, { [Field]: Invalid });
+            await CheckLightFixture(`LightInvalid-${Field}.json`, Field);
+            Object.assign(LightEntity.directionalLight, EditedLight);
+        }
+        delete LightEntity.directionalLight.intensity;
+        await CheckLightFixture("LightMissingIntensity.json", "intensity");
+        Object.assign(LightEntity.directionalLight, EditedLight);
+        LightScene.entities.push({ id: SecondLightId, directionalLight: { ...EditedLight } });
+        await CheckLightFixture("LightDuplicateActive.json", "active", SecondLightId);
+        LightScene.entities.pop();
+
+        const NormalSource = Path.join(Scratch, "WithNormals.obj");
+        const NormalAsset = Path.join(AssetRoot, "Meshes/TextureQuad.leasset");
+        const NormalAssetId = "62fdc991-27a8-4a81-a077-647b47fd1f7e";
+        const OriginalMeshBytes = await Fs.readFile(NormalAsset);
+        await Fs.writeFile(NormalSource, "v -1 -1 0\nv 1 -1 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0.5 1\n"
+            + "vn 0 0 1\nf 1/1/1 2/2/1 3/3/1\n");
+        const ImportNormalMesh = spawnSync(AssetImport, [
+            "mesh", "--source", NormalSource, "--id", NormalAssetId, "--path", "Game/Meshes/TextureQuad",
+            "--output", NormalAsset,
+        ], { cwd: Scratch, encoding: "utf-8" });
+        Assert.equal(ImportNormalMesh.status, 0, ImportNormalMesh.error?.message ?? ImportNormalMesh.stderr);
+        const NormalMeshOk = Check();
+        Assert.equal(NormalMeshOk.status, 0, NormalMeshOk.stderr);
+        const BadNormalMesh = await Fs.readFile(NormalAsset);
+        Assert.equal(BadNormalMesh.readUInt32LE(4), 3);
+        const MeshPayload = 48 + BadNormalMesh.readUInt32LE(40);
+        const VertexCount = BadNormalMesh.readUInt32LE(MeshPayload);
+        const FirstNormal = MeshPayload + 12 + VertexCount * (3 + 2) * 4;
+        BadNormalMesh.fill(0, FirstNormal, FirstNormal + 3 * 4);
+        await Fs.writeFile(NormalAsset, BadNormalMesh);
+        const BadNormal = Check();
+        Assert.equal(BadNormal.status, 1, BadNormal.stderr);
+        Assert.ok(BadNormal.stderr.includes(
+            `entity 8a0a5d74-17ef-48e0-a46b-f7105518e702 field mesh.mesh: asset ${NormalAssetId}`,
+        ), BadNormal.stderr);
+        await Fs.writeFile(NormalAsset, OriginalMeshBytes);
 
         const TexturedEntity = Scene.entities.find((Entity: { mesh?: { sortKey: string } }) =>
             Entity.mesh?.sortKey === "0");

@@ -145,6 +145,7 @@ struct FWorld::FImpl
         , TransformComponents(InAllocator)
         , MeshComponents(InAllocator)
         , CameraComponents(InAllocator)
+        , DirectionalLightComponents(InAllocator)
         , NativeGameplaySystems(InAllocator)
         , FixedSystemOrder(InAllocator)
         , VariableSystemOrder(InAllocator)
@@ -159,6 +160,7 @@ struct FWorld::FImpl
     TComponentStorage<FTransformComponent> TransformComponents;
     TComponentStorage<FWorldMeshComponent> MeshComponents;
     TComponentStorage<FWorldCameraComponent> CameraComponents;
+    TComponentStorage<FWorldDirectionalLightComponent> DirectionalLightComponents;
     FWorldCommandBuffer* CommandBuffer = nullptr;
     Array<FRegisteredNativeGameplaySystem> NativeGameplaySystems;
     Array<std::size_t> FixedSystemOrder;
@@ -227,7 +229,7 @@ FWorld::FWorld(IAllocator& Allocator) noexcept
         Impl = nullptr;
         return;
     }
-    if (!AttachStorage(Impl->CameraComponents))
+    if (!AttachStorage(Impl->CameraComponents) || !AttachStorage(Impl->DirectionalLightComponents))
     {
         Impl->~FImpl();
         DeallocateArray(Allocator, Impl, 1);
@@ -1446,6 +1448,16 @@ TComponentStorage<FWorldCameraComponent>* FWorld::GetCameraComponents() noexcept
 const TComponentStorage<FWorldCameraComponent>* FWorld::GetCameraComponents() const noexcept
 {
     return Impl == nullptr ? nullptr : &Impl->CameraComponents;
+}
+
+TComponentStorage<FWorldDirectionalLightComponent>* FWorld::GetDirectionalLightComponents() noexcept
+{
+    return Impl == nullptr ? nullptr : &Impl->DirectionalLightComponents;
+}
+
+const TComponentStorage<FWorldDirectionalLightComponent>* FWorld::GetDirectionalLightComponents() const noexcept
+{
+    return Impl == nullptr ? nullptr : &Impl->DirectionalLightComponents;
 }
 
 bool FWorld::AttachStorage(FComponentStorageNode& Storage) noexcept

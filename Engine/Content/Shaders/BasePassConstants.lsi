@@ -1,0 +1,14 @@
+struct FBasePassConstants
+{
+    float4 LocalToClipRow0;
+    float4 LocalToClipRow1;
+    float4 LocalToClipRow2;
+    float4 LocalToClipRow3;
+    float4 BaseColor;
+    float4 NormalToWorldRow0;
+    float4 NormalToWorldRow1;
+    float4 NormalToWorldRow2;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<FBasePassConstants> ObjectConstants;

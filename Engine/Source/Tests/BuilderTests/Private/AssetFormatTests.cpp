@@ -112,9 +112,12 @@ bool TestMaterial(const FAssetId Id)
     Result &= ExpectFormat(EncodeAssetFile(Id, Path, Material, Repeat) == EAssetFormatResult::InvalidPayload,
         "negative colors are rejected");
 
-    Bytes[4] = 3;
+    Bytes[4] = 4;
     Result &= ExpectFormat(ReadAssetFileHeader(Bytes.AsSpan(), Header) == EAssetFormatResult::UnsupportedVersion
         && Header.Path.Size() == MaxAssetPathBytes, "unknown version preserves header output");
+    Bytes[4] = MeshNormalsAssetFileVersion;
+    Result &= ExpectFormat(ReadAssetFileHeader(Bytes.AsSpan(), Header) == EAssetFormatResult::UnsupportedVersion
+        && Header.Path.Size() == MaxAssetPathBytes, "mesh v3 rejects material type");
     Bytes[4] = 1;
     Result &= ExpectFormat(ReadAssetFileHeader(Bytes.AsSpan().First(HeaderSize - 1), Bytes.Size(), Header)
         == EAssetFormatResult::InvalidHeader, "truncated path is rejected");
@@ -292,6 +295,80 @@ bool TestTexture(const FAssetId Id)
     return Result;
 }
 
+bool TestMeshNormals(const FAssetId Id)
+{
+    const StringView Path = "Game/Meshes/Normals";
+    FMeshAssetData Mesh;
+    Mesh.Positions = {Math::Vector3f{0, 0, 0}, Math::Vector3f{1, 0, 0}, Math::Vector3f{0, 1, 0}};
+    Mesh.Indices = {2, 1, 0};
+    const Array<Math::Vector3f> Normals{
+        Math::Vector3f{0, 0, 1}, Math::Vector3f{0, 1, 0}, Math::Vector3f{1, 0, 0}};
+    const Array<Math::Vector2f> UVs{Math::Vector2f{0, 0}, Math::Vector2f{1, 0}, Math::Vector2f{0, 1}};
+    FMeshAssetData Decoded;
+    Array<uint8> Bytes;
+    FAssetFileHeaderView Header;
+    bool Result = true;
+    for (const bool bHasUVs : {false, true})
+    {
+        Mesh.Normals = Normals;
+        if (bHasUVs) { Mesh.UVs = UVs; }
+        if (!ExpectFormat(EncodeAssetFile(Id, Path, Mesh, Bytes) == EAssetFormatResult::Success
+            && ReadAssetFileHeader(Bytes.AsSpan(), Header) == EAssetFormatResult::Success
+            && Header.Version == MeshNormalsAssetFileVersion
+            && Header.PayloadSize == (bHasUVs ? 120 : 96)
+            && DecodeAssetFile(Bytes.AsSpan(), Decoded) == EAssetFormatResult::Success
+            && Decoded.UVs.Size() == Mesh.UVs.Size() && Decoded.Normals.Size() == 3
+            && Decoded.Normals[2] == Normals[2] && Decoded.Indices[0] == 2
+            && Decoded.BoundsMax == Math::Vector3f{1, 1, 0}, "v3 round trip with optional UVs"))
+        {
+            return false;
+        }
+        uint8* const Payload = Bytes.Data() + Header.PayloadOffset;
+        Result &= ExpectFormat(Payload[8] == (bHasUVs ? 1 : 0), "v3 mesh emits the UV presence flag");
+        Payload[8] |= 0x80;
+        Result &= ExpectFormat(DecodeAssetFile(Bytes.AsSpan(), Decoded) == EAssetFormatResult::InvalidPayload
+            && Decoded.Normals[2] == Normals[2], "reserved flags preserve prior output");
+        Payload[8] = bHasUVs ? 0 : 1;
+        Result &= ExpectFormat(DecodeAssetFile(Bytes.AsSpan(), Decoded) == EAssetFormatResult::InvalidPayload,
+            "payload length must agree with the UV flag");
+        Payload[8] = bHasUVs ? 1 : 0;
+        Result &= ExpectFormat(DecodeAssetFile(Bytes.AsSpan().First(Bytes.Size() - 1), Decoded)
+            == EAssetFormatResult::InvalidHeader && Decoded.Normals.Size() == 3,
+            "truncated v3 mesh preserves output");
+        uint8* const FirstIndex = Payload + Header.PayloadSize - 3 * sizeof(uint32);
+        FirstIndex[0] = 3;
+        Result &= ExpectFormat(DecodeAssetFile(Bytes.AsSpan(), Decoded) == EAssetFormatResult::InvalidPayload
+            && Decoded.Indices[0] == 2, "v3 checks index bounds and preserves output");
+        FirstIndex[0] = 2;
+        uint8* const FirstNormal = FirstIndex - 3 * 12;
+        std::memset(FirstNormal, 0, 12);
+        Result &= ExpectFormat(DecodeAssetFile(Bytes.AsSpan(), Decoded) == EAssetFormatResult::InvalidPayload
+            && Decoded.Normals[0] == Normals[0], "zero normal preserves decoded output");
+        constexpr uint8 Infinity[] = {0, 0, 0x80, 0x7f};
+        std::memcpy(FirstNormal, Infinity, sizeof(Infinity));
+        Result &= ExpectFormat(DecodeAssetFile(Bytes.AsSpan(), Decoded) == EAssetFormatResult::InvalidPayload
+            && Decoded.Normals[0] == Normals[0], "nonfinite normal preserves decoded output");
+
+        const Array<uint8> PriorBytes = Bytes;
+        Mesh.Normals[0] = Math::Vector3f{0, 0, 2};
+        Result &= ExpectFormat(EncodeAssetFile(Id, Path, Mesh, Bytes) == EAssetFormatResult::InvalidPayload
+            && Bytes.Size() == PriorBytes.Size()
+            && std::memcmp(Bytes.Data(), PriorBytes.Data(), Bytes.Size()) == 0,
+            "nonunit normal preserves encoded output");
+        Mesh.Normals = {Math::Vector3f{0, 0, 1}};
+        Result &= ExpectFormat(EncodeAssetFile(Id, Path, Mesh, Bytes) == EAssetFormatResult::InvalidPayload,
+            "mesh requires an entire normal channel");
+        Mesh.Normals.Clear();
+        Result &= ExpectFormat(EncodeAssetFile(Id, Path, Mesh, Bytes) == EAssetFormatResult::Success
+            && ReadAssetFileHeader(Bytes.AsSpan(), Header) == EAssetFormatResult::Success
+            && Header.Version == (bHasUVs ? TexturedAssetFileVersion : AssetFileVersion)
+            && DecodeAssetFile(Bytes.AsSpan(), Decoded) == EAssetFormatResult::Success
+            && Decoded.Normals.IsEmpty() && Decoded.UVs.Size() == Mesh.UVs.Size(),
+            "v1/v2 decode clears prior normals");
+    }
+    return Result;
+}
+
 bool TestAllocationFailure(const FAssetId Id)
 {
     FMeshAssetData Mesh;
@@ -303,6 +380,7 @@ bool TestAllocationFailure(const FAssetId Id)
     Mesh.Indices = {0, 1, 2};
     Mesh.UVs = {Math::Vector2f{0, 0}, Math::Vector2f{1, 0}, Math::Vector2f{0, 1}};
     const StringView Path = "Game/LongerThanSmallStringAssetPath/Oom.leasset";
+    Mesh.Normals = {Math::Vector3f{0, 0, 1}, Math::Vector3f{0, 0, 1}, Math::Vector3f{0, 0, 1}};
     Array<uint8> Bytes;
     if (!ExpectFormat(EncodeAssetFile(Id, Path, Mesh, Bytes) == EAssetFormatResult::Success,
         "valid input for allocator probes"))
@@ -350,6 +428,7 @@ bool TestAllocationFailure(const FAssetId Id)
             }
             Result &= ExpectFormat(Status == EAssetFormatResult::AllocationFailed
                 && Decoded.Positions.IsEmpty() && Decoded.Indices.IsEmpty() && Decoded.UVs.IsEmpty()
+                && Decoded.Normals.IsEmpty()
                 && Decoded.BoundsMin == Math::Vector3f{19.0f} && Allocator.Live == 0,
                 "decode allocation failure preserves payload and releases candidate");
         }
@@ -371,6 +450,7 @@ bool RunAssetFormatTests()
     bool Result = TestMaterial(Id);
     Result &= TestMesh(Id);
     Result &= TestTexturedPayloads(Id);
+    Result &= TestMeshNormals(Id);
     Result &= TestTexture(Id);
     Result &= TestAllocationFailure(Id);
     return Result;

@@ -1,5 +1,6 @@
 import * as Assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import * as Fs from "node:fs/promises";
 import * as Os from "node:os";
 import * as Path from "node:path";
@@ -55,6 +56,8 @@ Test("AssetImport validates, converts and safely publishes editable sources", {
     const First = Import("mesh", Source);
     Assert.equal(First.status, 0, First.stderr);
     const Bytes = await Fs.readFile(Output);
+    Assert.equal(createHash("sha256").update(Bytes).digest("hex"),
+        "4538257c001b2216989143bf760b4cf8d329e77adf42e3aef344d923de1fde8b");
     Assert.equal(Bytes.toString("ascii", 48, 48 + Buffer.byteLength(Virtual)), Virtual);
     const Mesh = Payload(Bytes);
     Assert.deepEqual([Mesh.readUInt32LE(0), Mesh.readUInt32LE(4)], [3, 3]);
@@ -83,7 +86,7 @@ Test("AssetImport validates, converts and safely publishes editable sources", {
         ["f 1 2 4\n", /face index exceeds vertex count/],
         ["f 1 2 3 1\n", /only triangular faces/],
         ["v nan 0 0\n", /finite decimal/],
-        ["vn 0 0 1\n", /unsupported OBJ record/],
+        ["s 1\n", /unsupported OBJ record/],
     ] as const) {
         await Fs.writeFile(Source, OriginalSource + Record);
         const Invalid = Import("mesh", Source);
@@ -115,6 +118,8 @@ Test("AssetImport validates, converts and safely publishes editable sources", {
     const Textured = Import("mesh", Source);
     Assert.equal(Textured.status, 0, Textured.stderr);
     const MeshV2Bytes = await Fs.readFile(Output);
+    Assert.equal(createHash("sha256").update(MeshV2Bytes).digest("hex"),
+        "bf295c16fda94d91d8f22ad5a6a0e92fb675365fc33680570244ee57ea01ef39");
     const MeshV2 = Payload(MeshV2Bytes, 2);
     Assert.deepEqual([MeshV2.readUInt32LE(0), MeshV2.readUInt32LE(4)], [5, 6]);
     Assert.deepEqual(
@@ -133,7 +138,7 @@ Test("AssetImport validates, converts and safely publishes editable sources", {
     Assert.deepEqual(await Fs.readFile(Output), MeshV2Bytes);
     for (const [Face, Error] of [
         ["f 1/6 2/2 3/3", /UV index exceeds UV coordinate count/],
-        ["f 1//1 2/2 3/3", /positive position or position\/UV/],
+        ["f 1///1 2/2 3/3", /positive OBJ corners/],
         ["f 1/1 2 3/3", /cannot mix/],
         ["f 1 2 3", /cannot mix/],
     ] as const) {
@@ -143,6 +148,64 @@ Test("AssetImport validates, converts and safely publishes editable sources", {
         Assert.match(Rejected.stderr, Error);
         Assert.match(Rejected.stderr, /source\.obj:12:/);
         Assert.deepEqual(await Fs.readFile(Output), MeshV2Bytes);
+    }
+
+    const PositionLines = ["v 0 0 0", "v 1 0 0", "v 1 1 0", "v 0 1 0"];
+    const NormalLines = ["vn 0 0 25", "vn 1e30 0 0", "vn 0 0 -1e-30"];
+    const UntexturedNormals = [
+        ...PositionLines, ...NormalLines, "f 3//3 2//3 1//3", "",
+    ].join("\n");
+    await Fs.writeFile(Source, UntexturedNormals);
+    const NormalOnlyCheck = Import("mesh", Source, "");
+    Assert.equal(NormalOnlyCheck.status, 0, NormalOnlyCheck.stderr);
+    Assert.deepEqual(await Fs.readFile(Output), MeshV2Bytes);
+    const NormalOnlyImport = Import("mesh", Source);
+    Assert.equal(NormalOnlyImport.status, 0, NormalOnlyImport.stderr);
+    const NormalOnly = Payload(await Fs.readFile(Output), 3);
+    Assert.deepEqual([NormalOnly.readUInt32LE(0), NormalOnly.readUInt32LE(4), NormalOnly.readUInt32LE(8)],
+        [3, 3, 0]);
+    Assert.deepEqual(Array.from({ length: 18 }, (_, Index) => NormalOnly.readFloatLE(12 + 4 * Index)),
+        [1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1]);
+    Assert.deepEqual(Array.from({ length: 3 }, (_, Index) => NormalOnly.readUInt32LE(84 + 4 * Index)), [0, 1, 2]);
+
+    const NormalSeams = [
+        ...PositionLines, "vt 0 0", "vt 1 0", "vt 1 1", "vt 0 1", "vt 0.25 0.75",
+        ...NormalLines, "f 1/1/1 2/2/1 3/3/1", "f 1/1/2 3/5/1 4/4/1", "",
+    ].join("\n");
+    await Fs.writeFile(Source, NormalSeams);
+    const NormalSeamImport = Import("mesh", Source);
+    Assert.equal(NormalSeamImport.status, 0, NormalSeamImport.stderr);
+    const MeshV3Bytes = await Fs.readFile(Output);
+    const MeshV3 = Payload(MeshV3Bytes, 3);
+    Assert.deepEqual([MeshV3.readUInt32LE(0), MeshV3.readUInt32LE(4), MeshV3.readUInt32LE(8)], [6, 6, 1]);
+    Assert.deepEqual(Array.from({ length: 18 }, (_, Index) => MeshV3.readFloatLE(12 + 4 * Index)),
+        [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0]);
+    Assert.deepEqual(Array.from({ length: 12 }, (_, Index) => MeshV3.readFloatLE(84 + 4 * Index)),
+        [0, 1, 1, 1, 1, 0, 0, 1, 0.25, 0.25, 0, 0]);
+    Assert.deepEqual(Array.from({ length: 18 }, (_, Index) => MeshV3.readFloatLE(132 + 4 * Index)),
+        [0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1]);
+    Assert.deepEqual(Array.from({ length: 6 }, (_, Index) => MeshV3.readUInt32LE(204 + 4 * Index)),
+        [0, 1, 2, 3, 4, 5]);
+    const RepeatNormals = Import("mesh", Source);
+    Assert.equal(RepeatNormals.status, 0, RepeatNormals.stderr);
+    Assert.deepEqual(await Fs.readFile(Output), MeshV3Bytes);
+
+    for (const [InvalidSource, Line, Error] of [
+        [NormalSeams.replace("vn 0 0 25", "vn 0 0 0"), 10, /normal coordinates with nonzero length/],
+        [NormalSeams.replace("vn 0 0 25", "vn nan 0 0"), 10, /finite decimal normal/],
+        [NormalSeams.replace("f 1/1/1", "f 1/1/"), 13, /positive OBJ corners/],
+        [NormalSeams.replace("f 1/1/1", "f 1/1/4"), 13, /normal index exceeds normal coordinate count/],
+        [NormalSeams.replace("f 1/1/1", "f 1/1"), 13, /cannot mix OBJ face formats/],
+        [OriginalSource + "vn 0 0 1\n", 4, /every face corner must reference a normal/],
+    ] as const) {
+        await Fs.writeFile(Source, InvalidSource);
+        for (const Destination of ["", Output]) {
+            const Rejected = Import("mesh", Source, Destination);
+            Assert.equal(Rejected.status, 1, Rejected.stderr);
+            Assert.match(Rejected.stderr, Error);
+            Assert.ok(Rejected.stderr.includes(`source.obj:${Line}:`), Rejected.stderr);
+            Assert.deepEqual(await Fs.readFile(Output), MeshV3Bytes);
+        }
     }
 
     const P3 = Path.join(Temp, "ascii.ppm");

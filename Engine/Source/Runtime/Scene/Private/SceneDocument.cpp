@@ -1,6 +1,7 @@
 #include "Scene/SceneDocument.h"
 
 #include "Containers/HashMap.h"
+#include "World/DirectionalLight.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -23,7 +24,7 @@ namespace
 {
 
 constexpr StringView EntityKeys[] = {
-    {"id", 2}, {"parent", 6}, {"transform", 9}, {"mesh", 4}, {"camera", 6},
+    {"id", 2}, {"parent", 6}, {"transform", 9}, {"mesh", 4}, {"camera", 6}, {"directionalLight", 16},
 };
 constexpr StringView TransformKeys[] = {
     {"translation", 11}, {"rotation", 8}, {"scale", 5},
@@ -35,9 +36,13 @@ constexpr StringView CameraKeys[] = {
     {"debugName", 9}, {"verticalFieldOfViewRadians", 26},
     {"nearPlane", 9}, {"farPlane", 8}, {"priority", 8}, {"active", 6},
 };
+constexpr StringView DirectionalLightKeys[] = {
+    {"direction", 9}, {"color", 5}, {"intensity", 9}, {"active", 6},
+};
 constexpr StringView DocumentKeys[] = {
     {"version", 7}, {"entities", 8},
 };
+constexpr uint32 LegacySceneDocumentVersion = 1;
 constexpr std::size_t MaxNumberBytes = 128;
 
 bool IsDigit(const char Byte) noexcept { return Byte >= '0' && Byte <= '9'; }
@@ -204,6 +209,7 @@ struct FEntitySourceLocation
     std::size_t Transform[sizeof(TransformKeys) / sizeof(TransformKeys[0])]{};
     std::size_t Mesh[sizeof(MeshKeys) / sizeof(MeshKeys[0])]{};
     std::size_t Camera[sizeof(CameraKeys) / sizeof(CameraKeys[0])]{};
+    std::size_t DirectionalLight[sizeof(DirectionalLightKeys) / sizeof(DirectionalLightKeys[0])]{};
 
     Span<std::size_t> ForObject(const StringView* Keys) noexcept
     {
@@ -211,6 +217,7 @@ struct FEntitySourceLocation
         if (Keys == TransformKeys) { return Transform; }
         if (Keys == MeshKeys) { return Mesh; }
         if (Keys == CameraKeys) { return Camera; }
+        if (Keys == DirectionalLightKeys) { return DirectionalLight; }
         return {};
     }
 
@@ -232,6 +239,13 @@ struct FEntitySourceLocation
         {
             if (Field == &CameraKeys[Index] && Camera[Index] != 0) { return Camera[Index]; }
         }
+        for (std::size_t Index = 0; Index < sizeof(DirectionalLight) / sizeof(DirectionalLight[0]); ++Index)
+        {
+            if (Field == &DirectionalLightKeys[Index] && DirectionalLight[Index] != 0)
+            {
+                return DirectionalLight[Index];
+            }
+        }
         return Record;
     }
 };
@@ -242,7 +256,7 @@ public:
     FSceneReader(const StringView InSource, IAllocator& InAllocator, FSceneDocumentDiagnostic* InDiagnostic) noexcept
         : Source(InSource), Allocator(InAllocator), Diagnostic(InDiagnostic), Key(InAllocator) {}
 
-    EResult Read(FSceneDocument& Candidate, Array<FEntitySourceLocation>& Locations) noexcept;
+    EResult Read(FSceneDocument& Candidate, Array<FEntitySourceLocation>& Locations, uint32& Version) noexcept;
 
 private:
     bool Fail(EResult Result, std::size_t At) noexcept;
@@ -267,6 +281,7 @@ private:
     bool ReadTransform(FTransform& Out) noexcept;
     bool ReadMesh(FSceneMeshRecord& Out) noexcept;
     bool ReadCamera(FSceneCameraRecord& Out) noexcept;
+    bool ReadDirectionalLight(FSceneDirectionalLightRecord& Out, uint32& Seen) noexcept;
     bool ReadVector(Span<float> Values) noexcept;
     bool ReadEntities(FSceneDocument& Candidate, Array<FEntitySourceLocation>& Locations) noexcept;
 
@@ -329,7 +344,11 @@ bool FSceneReader::ReadObjectField(const Span<const StringView> Keys,
     if (!ReadString(Key, MaxSceneNameBytes)) { return false; }
     Slot = 0;
     while (Slot < Keys.Size() && Key.View() != Keys[Slot]) { ++Slot; }
-    if (Slot == Keys.Size()) { return Fail(EResult::UnknownField, KeyOffset); }
+    if (Slot == Keys.Size())
+    {
+        if (Keys.Data() == DirectionalLightKeys) { Field = EntityKeys[5]; }
+        return Fail(EResult::UnknownField, KeyOffset);
+    }
     Field = Keys[Slot];
     const uint32 Bit = 1u << Slot;
     if ((Seen & Bit) != 0) { return Fail(EResult::DuplicateField, KeyOffset); }
@@ -623,10 +642,27 @@ bool FSceneReader::ReadCamera(FSceneCameraRecord& Out) noexcept
     return Error == EResult::Success && RequireFields(CameraKeys, Seen, 0b111111);
 }
 
+bool FSceneReader::ReadDirectionalLight(FSceneDirectionalLightRecord& Out, uint32& Seen) noexcept
+{
+    if (!Require('{')) { return false; }
+    bool HasField = true;
+    std::size_t Slot = 0;
+    while (ReadObjectField(DirectionalLightKeys, Seen, HasField, Slot) && HasField)
+    {
+        if (Slot == 0 && !ReadVector(Out.Direction.Values)) { return false; }
+        if (Slot == 1 && !ReadVector(Out.Color.Values)) { return false; }
+        if (Slot == 2 && !ReadFloat(Out.Intensity)) { return false; }
+        if (Slot == 3 && !ReadBoolean(Out.bActive)) { return false; }
+    }
+    return Error == EResult::Success;
+}
+
 bool FSceneReader::ReadEntity(FSceneEntityRecord& Entity) noexcept
 {
     if (!Require('{')) { return false; }
     uint32 Seen = 0;
+    uint32 SeenLightFields = 0;
+    std::size_t LightEnd = 0;
     bool HasField = true;
     std::size_t Slot = 0;
     CurrentEntity = {};
@@ -653,9 +689,20 @@ bool FSceneReader::ReadEntity(FSceneEntityRecord& Entity) noexcept
             if (!ReadCamera(Entity.Camera)) { return false; }
             Entity.bHasCamera = true;
             break;
+        case 5:
+            if (!ReadDirectionalLight(Entity.DirectionalLight, SeenLightFields)) { return false; }
+            LightEnd = Offset;
+            Entity.bHasDirectionalLight = true;
+            break;
         }
     }
-    return Error == EResult::Success && RequireFields(EntityKeys, Seen, 1);
+    if (Error != EResult::Success || !RequireFields(EntityKeys, Seen, 1)) { return false; }
+    if (Entity.bHasDirectionalLight && SeenLightFields != 0b1111)
+    {
+        Offset = LightEnd;
+        return RequireFields(DirectionalLightKeys, SeenLightFields, 0b1111);
+    }
+    return true;
 }
 
 bool FSceneReader::ReadEntities(FSceneDocument& Candidate, Array<FEntitySourceLocation>& Locations) noexcept
@@ -690,7 +737,8 @@ bool FSceneReader::ReadEntities(FSceneDocument& Candidate, Array<FEntitySourceLo
     return false;
 }
 
-EResult FSceneReader::Read(FSceneDocument& Candidate, Array<FEntitySourceLocation>& Locations) noexcept
+EResult FSceneReader::Read(FSceneDocument& Candidate, Array<FEntitySourceLocation>& Locations,
+    uint32& Version) noexcept
 {
     if (!Locale.IsValid()) { return Report(Diagnostic, EResult::AllocationFailed); }
     if (Source.Substr(0, 3) == StringView("\xef\xbb\xbf", 3)) { Offset = 3; }
@@ -704,9 +752,8 @@ EResult FSceneReader::Read(FSceneDocument& Candidate, Array<FEntitySourceLocatio
         {
             SkipWhitespace();
             const std::size_t At = Offset;
-            uint32 Version = 0;
             if (!ReadInteger(Version)) { return Error; }
-            if (Version != SceneDocumentVersion)
+            if (Version != LegacySceneDocumentVersion && Version != SceneDocumentVersion)
             {
                 Fail(EResult::UnsupportedVersion, At);
                 return Error;
@@ -743,7 +790,8 @@ bool IsValidRotation(const Math::Quaternionf& Value) noexcept
         std::isfinite(Value.w) && (Value.x != 0.0f || Value.y != 0.0f || Value.z != 0.0f || Value.w != 0.0f);
 }
 
-FValidationResult Validate(const FSceneDocument& Document, IAllocator& Allocator) noexcept
+FValidationResult Validate(const FSceneDocument& Document, IAllocator& Allocator,
+    const uint32 Version = SceneDocumentVersion) noexcept
 {
     const auto& Entities = Document.Entities;
     if (Entities.Size() > MaxSceneEntities) { return {EResult::LimitExceeded, &DocumentKeys[1]}; }
@@ -756,6 +804,7 @@ FValidationResult Validate(const FSceneDocument& Document, IAllocator& Allocator
     {
         return {EResult::AllocationFailed, &DocumentKeys[1]};
     }
+    bool bFoundActiveDirectionalLight = false;
     for (std::size_t Index = 0; Index < Entities.Size(); ++Index)
     {
         const FSceneEntityRecord& Entity = Entities[Index];
@@ -806,6 +855,30 @@ FValidationResult Validate(const FSceneDocument& Document, IAllocator& Allocator
             if (!std::isfinite(Camera.FarPlane) || Camera.FarPlane <= Camera.NearPlane)
             {
                 return {EResult::InvalidValue, &CameraKeys[3], Index};
+            }
+        }
+        if (Entity.bHasDirectionalLight)
+        {
+            if (Version == LegacySceneDocumentVersion) { return {EResult::UnknownField, &EntityKeys[5], Index}; }
+            const FSceneDirectionalLightRecord& Light = Entity.DirectionalLight;
+            switch (ValidateDirectionalLightParameters(Light.Direction, Light.Color, Light.Intensity))
+            {
+            case EDirectionalLightParameterError::Direction:
+                return {EResult::InvalidValue, &DirectionalLightKeys[0], Index};
+            case EDirectionalLightParameterError::Color:
+                return {EResult::InvalidValue, &DirectionalLightKeys[1], Index};
+            case EDirectionalLightParameterError::Intensity:
+                return {EResult::InvalidValue, &DirectionalLightKeys[2], Index};
+            case EDirectionalLightParameterError::None:
+                break;
+            }
+            if (Light.bActive)
+            {
+                if (bFoundActiveDirectionalLight)
+                {
+                    return {EResult::MultipleActiveDirectionalLights, &DirectionalLightKeys[3], Index};
+                }
+                bFoundActiveDirectionalLight = true;
             }
         }
     }
@@ -862,7 +935,7 @@ class FSceneWriter
 {
 public:
     explicit FSceneWriter(String& InOutput) noexcept : Output(InOutput) {}
-    EResult Write(Span<const FSceneEntityRecord* const> Entities) noexcept;
+    EResult Write(Span<const FSceneEntityRecord* const> Entities, uint32 Version) noexcept;
 
 private:
     bool Append(StringView Text) noexcept;
@@ -874,6 +947,7 @@ private:
     bool WriteTransform(const FTransform& Value) noexcept;
     bool WriteMesh(const FSceneMeshRecord& Value) noexcept;
     bool WriteCamera(const FSceneCameraRecord& Value) noexcept;
+    bool WriteDirectionalLight(const FSceneDirectionalLightRecord& Value) noexcept;
     bool WriteEntity(const FSceneEntityRecord& Entity) noexcept;
 
     String& Output;
@@ -999,19 +1073,28 @@ bool FSceneWriter::WriteCamera(const FSceneCameraRecord& Value) noexcept
         Append(",\n        \"active\": ") && Append(Value.bActive ? "true" : "false") && Append("\n      }");
 }
 
+bool FSceneWriter::WriteDirectionalLight(const FSceneDirectionalLightRecord& Value) noexcept
+{
+    return Append(",\n      \"directionalLight\": {\n        \"direction\": ") && WriteVector(Value.Direction.Values) &&
+        Append(",\n        \"color\": ") && WriteVector(Value.Color.Values) &&
+        Append(",\n        \"intensity\": ") && WriteFloat(Value.Intensity) &&
+        Append(",\n        \"active\": ") && Append(Value.bActive ? "true" : "false") && Append("\n      }");
+}
+
 bool FSceneWriter::WriteEntity(const FSceneEntityRecord& Entity) noexcept
 {
     return Append("    {\n      \"id\": ") && WriteId(Entity.Id.GetUuid()) &&
         (!Entity.Parent.IsValid() || (Append(",\n      \"parent\": ") && WriteId(Entity.Parent.GetUuid()))) &&
         (!Entity.bHasTransform || WriteTransform(Entity.Transform)) &&
         (!Entity.bHasMesh || WriteMesh(Entity.Mesh)) &&
-        (!Entity.bHasCamera || WriteCamera(Entity.Camera)) && Append("\n    }");
+        (!Entity.bHasCamera || WriteCamera(Entity.Camera)) &&
+        (!Entity.bHasDirectionalLight || WriteDirectionalLight(Entity.DirectionalLight)) && Append("\n    }");
 }
 
-EResult FSceneWriter::Write(const Span<const FSceneEntityRecord* const> Entities) noexcept
+EResult FSceneWriter::Write(const Span<const FSceneEntityRecord* const> Entities, const uint32 Version) noexcept
 {
     if (!Locale.IsValid()) { return EResult::AllocationFailed; }
-    if (!Append("{\n  \"version\": ") || !WriteInteger(SceneDocumentVersion) || !Append(",\n  \"entities\": ["))
+    if (!Append("{\n  \"version\": ") || !WriteInteger(Version) || !Append(",\n  \"entities\": ["))
     {
         return Error;
     }
@@ -1033,10 +1116,11 @@ ESceneDocumentResult DecodeSceneDocument(const StringView Source, FSceneDocument
     FSceneDocument Candidate(Allocator);
     Array<FEntitySourceLocation> Locations(Allocator);
     FSceneReader Reader(Source, Allocator, Diagnostic);
-    const EResult ParseResult = Reader.Read(Candidate, Locations);
+    uint32 Version = 0;
+    const EResult ParseResult = Reader.Read(Candidate, Locations, Version);
     if (ParseResult != EResult::Success) { return ParseResult; }
 
-    const FValidationResult Validation = Validate(Candidate, Allocator);
+    const FValidationResult Validation = Validate(Candidate, Allocator, Version);
     if (Validation.Result != EResult::Success)
     {
         ReportValidation(Diagnostic, Candidate, Validation);
@@ -1067,9 +1151,11 @@ ESceneDocumentResult EncodeSceneDocument(const FSceneDocument& Document, String&
     }
     Array<const FSceneEntityRecord*> Ordered(Allocator);
     if (!Ordered.TryReserve(Document.Entities.Size())) { return Report(Diagnostic, EResult::AllocationFailed); }
+    uint32 Version = LegacySceneDocumentVersion;
     for (const FSceneEntityRecord& Entity : Document.Entities)
     {
         if (!Ordered.TryPushBack(&Entity)) { return Report(Diagnostic, EResult::AllocationFailed); }
+        if (Entity.bHasDirectionalLight) { Version = SceneDocumentVersion; }
     }
     if (Ordered.Size() > 1)
     {
@@ -1078,7 +1164,7 @@ ESceneDocumentResult EncodeSceneDocument(const FSceneDocument& Document, String&
     }
     String Candidate(Allocator);
     FSceneWriter Writer(Candidate);
-    const EResult Result = Writer.Write(Ordered.AsSpan());
+    const EResult Result = Writer.Write(Ordered.AsSpan(), Version);
     if (Result == EResult::Success) { Out = std::move(Candidate); }
     return Report(Diagnostic, Result);
 }
@@ -1100,11 +1186,12 @@ const char* DescribeSceneDocumentResult(const ESceneDocumentResult Result) noexc
     case EResult::UnknownField: return "unknown field";
     case EResult::MissingField: return "missing required field";
     case EResult::InvalidValue: return "invalid field value";
-    case EResult::LimitExceeded: return "scene v1 limit exceeded";
+    case EResult::LimitExceeded: return "scene limit exceeded";
     case EResult::AllocationFailed: return "out of memory";
     case EResult::DuplicateEntityId: return "duplicate entity ID";
     case EResult::InvalidParent: return "parent is missing or parent and child require transforms";
     case EResult::ParentCycle: return "parent cycle";
+    case EResult::MultipleActiveDirectionalLights: return "scene has more than one active directional light";
     }
     return "unexpected scene error";
 }

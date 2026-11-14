@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "RHI/RHIDescription.h"
 #include "Renderer/RenderPass.h"
+#include "Renderer/RenderFrameScheduler.h"
 #include "Renderer/RenderPipeline.h"
 #include "Renderer/RenderScene.h"
 
@@ -14,6 +15,16 @@ namespace LE
 
 class FRHITexture;
 class FRHITextureView;
+class FRHIBuffer;
+class FRHIBindGroup;
+class FRHIBindGroupLayout;
+class FRHIDevice;
+
+struct FBasePassLightBinding
+{
+    FRHIBuffer* Buffer = nullptr;
+    FRHIBindGroup* BindGroup = nullptr;
+};
 
 struct FBasePassResources
 {
@@ -21,6 +32,7 @@ struct FBasePassResources
     FRHITextureView* SceneColorView = nullptr;
     FRHITexture* SceneDepthTexture = nullptr;
     FRHITextureView* SceneDepthView = nullptr;
+    FBasePassLightBinding Light;
 };
 
 // Shader-visible bytes. The vertex shader reads the four row-major vectors
@@ -29,14 +41,47 @@ struct alignas(16) FBasePassObjectConstants
 {
     Math::Matrix4f LocalToClip = Math::Matrix4f::Identity();
     Math::Vector4f BaseColor{1.0f};
+    Math::Vector4f NormalToWorldRows[3]{};
 };
 
-static_assert(sizeof(FBasePassObjectConstants) == 80,
-    "BasePass push constants must remain exactly 80 bytes");
+static_assert(sizeof(FBasePassObjectConstants) == 128,
+    "BasePass push constants must remain exactly 128 bytes");
 static_assert(offsetof(FBasePassObjectConstants, BaseColor) == 64,
     "BasePass color must follow the 64-byte matrix without padding");
+static_assert(offsetof(FBasePassObjectConstants, NormalToWorldRows) == 80);
 static_assert(std::is_trivially_copyable<FBasePassObjectConstants>::value,
     "BasePass push constants must be copied directly into command recording");
+
+struct alignas(16) FBasePassLightConstants
+{
+    Math::Vector4f DirectionAndEnabled;
+    Math::Vector4f Radiance;
+};
+
+static_assert(sizeof(FBasePassLightConstants) == 32);
+static_assert(offsetof(FBasePassLightConstants, Radiance) == 16);
+static_assert(std::is_trivially_copyable<FBasePassLightConstants>::value);
+
+// Release these resources after the scheduler has drained all submitted slots.
+class RENDERER_API FBasePassFrameLighting final : public FNonCopyable
+{
+public:
+    static constexpr uint32 SetIndex = 1;
+    static constexpr uint32 BindingIndex = 0;
+
+    ~FBasePassFrameLighting() noexcept;
+    bool Initialize(FRHIDevice& Device) noexcept;
+    void Shutdown() noexcept;
+    FRHIBindGroupLayout* GetLayout() const noexcept { return Layout; }
+
+    // The scheduler must have waited for this slot before it is written.
+    bool WriteSlot(uint32 SlotIndex, Span<const FRenderLightProxy> Lights,
+        FBasePassLightBinding& OutBinding) noexcept;
+
+private:
+    FRHIBindGroupLayout* Layout = nullptr;
+    FBasePassLightBinding Slots[FRenderFrameScheduler::FrameSlotCount];
+};
 
 class RENDERER_API FBasePass final : public IRenderPass
 {

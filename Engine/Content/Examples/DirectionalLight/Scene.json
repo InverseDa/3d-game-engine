@@ -1,0 +1,213 @@
+{
+  "version": 2,
+  "entities": [
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e710",
+      "transform": {
+        "translation": [
+          -1.4,
+          0.7,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "mesh": {
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd2001",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd2007",
+        "debugName": "Facing",
+        "sortKey": "0"
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e711",
+      "transform": {
+        "translation": [
+          0,
+          0.7,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "mesh": {
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd2002",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd2007",
+        "debugName": "Side",
+        "sortKey": "1"
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e712",
+      "transform": {
+        "translation": [
+          1.4,
+          0.7,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "mesh": {
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd2003",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd2007",
+        "debugName": "Back",
+        "sortKey": "2"
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e713",
+      "transform": {
+        "translation": [
+          0,
+          -0.7,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          2,
+          1,
+          1
+        ]
+      },
+      "mesh": {
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd2004",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd2007",
+        "debugName": "Tilted",
+        "sortKey": "3"
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e714",
+      "transform": {
+        "translation": [
+          -1.4,
+          -0.7,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "mesh": {
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd2005",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd2009",
+        "debugName": "TexturedFacing",
+        "sortKey": "4"
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e715",
+      "transform": {
+        "translation": [
+          1.4,
+          -0.7,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "mesh": {
+        "mesh": "62fdc991-27a8-4a81-a077-647b47fd2006",
+        "material": "62fdc991-27a8-4a81-a077-647b47fd2007",
+        "debugName": "Legacy",
+        "sortKey": "5"
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e716",
+      "transform": {
+        "translation": [
+          0,
+          0,
+          4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "camera": {
+        "debugName": "Lighting reference",
+        "verticalFieldOfViewRadians": 1.04719755,
+        "nearPlane": 0.1,
+        "farPlane": 100,
+        "priority": 100,
+        "active": true
+      }
+    },
+    {
+      "id": "8a0a5d74-17ef-48e0-a46b-f7105518e707",
+      "directionalLight": {
+        "direction": [
+          0,
+          0,
+          -1
+        ],
+        "color": [
+          1,
+          0.5,
+          0.25
+        ],
+        "intensity": 0.5,
+        "active": true
+      }
+    }
+  ]
+}

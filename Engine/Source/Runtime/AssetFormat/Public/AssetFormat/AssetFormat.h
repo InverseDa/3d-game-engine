@@ -6,11 +6,14 @@
 #include "Containers/Span.h"
 #include "Math/Vector.h"
 
+#include <cmath>
+
 namespace LE
 {
 
 inline constexpr uint32 AssetFileVersion = 1;
 inline constexpr uint32 TexturedAssetFileVersion = 2;
+inline constexpr uint32 MeshNormalsAssetFileVersion = 3;
 inline constexpr std::size_t MaxAssetFileBytes = 128 * 1024 * 1024;
 inline constexpr std::size_t MaxAssetPathBytes = 1024;
 inline constexpr std::size_t MaxAssetFileHeaderBytes = 48 + MaxAssetPathBytes;
@@ -31,15 +34,25 @@ struct FAssetFileHeaderView
 struct FMeshAssetData
 {
     explicit FMeshAssetData(IAllocator& Allocator = GetDefaultAllocator()) noexcept
-        : Positions(Allocator), Indices(Allocator), UVs(Allocator) {}
+        : Positions(Allocator), Indices(Allocator), UVs(Allocator), Normals(Allocator) {}
 
     Array<Math::Vector3f> Positions;
     Array<uint32> Indices;
-    // Empty for v1, or one top-left-origin coordinate per vertex.
+    // Empty or one top-left-origin coordinate per vertex.
     Array<Math::Vector2f> UVs;
+    // Empty for v1/v2, or one unit-length authored normal per vertex.
+    Array<Math::Vector3f> Normals;
     Math::Vector3f BoundsMin;
     Math::Vector3f BoundsMax;
 };
+
+inline bool IsValidAssetMeshNormal(const Math::Vector3f& Normal) noexcept
+{
+    const double X = Normal.Values[0];
+    const double Y = Normal.Values[1];
+    const double Z = Normal.Values[2];
+    return std::abs(X * X + Y * Y + Z * Z - 1.0) <= 1e-4;
+}
 
 struct FMaterialAssetData
 {

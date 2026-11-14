@@ -8,7 +8,7 @@
 namespace LE
 {
 
-inline constexpr uint32 SceneDocumentVersion = 1;
+inline constexpr uint32 SceneDocumentVersion = 2;
 inline constexpr std::size_t MaxSceneDocumentBytes = 64 * 1024 * 1024;
 inline constexpr std::size_t MaxSceneEntities = 65536;
 inline constexpr std::size_t MaxSceneNameBytes = 1024;
@@ -40,6 +40,14 @@ struct FSceneCameraRecord
     bool bActive = true;
 };
 
+struct FSceneDirectionalLightRecord
+{
+    Math::Vector3f Direction{0.0f, 0.0f, -1.0f};
+    Math::Vector3f Color{1.0f, 1.0f, 1.0f};
+    float Intensity = 1.0f;
+    bool bActive = true;
+};
+
 struct FSceneEntityRecord
 {
     explicit FSceneEntityRecord(IAllocator& Allocator = GetDefaultAllocator()) noexcept
@@ -50,9 +58,11 @@ struct FSceneEntityRecord
     FTransform Transform;
     FSceneMeshRecord Mesh;
     FSceneCameraRecord Camera;
+    FSceneDirectionalLightRecord DirectionalLight;
     bool bHasTransform = false;
     bool bHasMesh = false;
     bool bHasCamera = false;
+    bool bHasDirectionalLight = false;
 };
 
 struct FSceneDocument
@@ -77,6 +87,7 @@ enum class ESceneDocumentResult : uint8
     DuplicateEntityId,
     InvalidParent,
     ParentCycle,
+    MultipleActiveDirectionalLights,
 };
 
 struct FSceneDocumentDiagnostic
