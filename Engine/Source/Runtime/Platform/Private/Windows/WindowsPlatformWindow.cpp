@@ -1,7 +1,11 @@
 #include "Windows/WindowsPlatformWindow.h"
 
 #include "Containers/String.h"
+#include "Logger/Log.h"
 
+#include <hidusage.h>
+
+#include <cstddef>
 #include <new>
 
 namespace LE
@@ -9,6 +13,18 @@ namespace LE
 
 namespace
 {
+EPlatformKey GetPlatformKey(const WPARAM VirtualKey) noexcept
+{
+    switch (VirtualKey)
+    {
+    case 'W': return EPlatformKey::W;
+    case 'A': return EPlatformKey::A;
+    case 'S': return EPlatformKey::S;
+    case 'D': return EPlatformKey::D;
+    default: return EPlatformKey::Unknown;
+    }
+}
+
 void DestroyPlatformWindow(void*, FPlatformWindow* const Window) noexcept
 {
     delete Window;
@@ -18,6 +34,7 @@ void DestroyPlatformWindow(void*, FPlatformWindow* const Window) noexcept
 FWindowsPlatformWindow::FWindowsPlatformWindow(const FPlatformWindowDesc& Description)
     : Width(Description.Width)
     , Height(Description.Height)
+    , bInputEnabled(Description.bEnableInput)
 {
     WNDCLASSEXA WindowClass = {};
     WindowClass.cbSize = sizeof(WNDCLASSEXA);
@@ -55,16 +72,22 @@ FWindowsPlatformWindow::FWindowsPlatformWindow(const FPlatformWindowDesc& Descri
     {
         return;
     }
+    bHasFocus = GetFocus() == Hwnd;
+    if (bInputEnabled)
+    {
+        RegisterRawMouse();
+    }
 }
 
 FWindowsPlatformWindow::~FWindowsPlatformWindow()
 {
-    PendingEvents.Clear();
     if (Hwnd != nullptr)
     {
+        RequestClose();
         DestroyWindow(Hwnd);
         Hwnd = nullptr;
     }
+    PendingEvents.Clear();
 }
 
 FPlatformSurface FWindowsPlatformWindow::GetSurface() const noexcept
@@ -82,11 +105,7 @@ void FWindowsPlatformWindow::PumpEvents(FPlatformEventQueue& OutEvents)
     {
         if (Message.message == WM_QUIT)
         {
-            if (!bCloseRequested)
-            {
-                bCloseRequested = true;
-                PushEvent(EPlatformEventType::CloseRequested);
-            }
+            RequestClose();
             continue;
         }
         TranslateMessage(&Message);
@@ -96,10 +115,8 @@ void FWindowsPlatformWindow::PumpEvents(FPlatformEventQueue& OutEvents)
     DrainPendingEvents(OutEvents);
 }
 
-void FWindowsPlatformWindow::PushEvent(const EPlatformEventType Type)
+void FWindowsPlatformWindow::PushEvent(FPlatformEvent Event)
 {
-    FPlatformEvent Event;
-    Event.Type = Type;
     Event.WindowId = GetId();
     Event.Width = Width;
     Event.Height = Height;
@@ -112,6 +129,137 @@ void FWindowsPlatformWindow::DrainPendingEvents(FPlatformEventQueue& OutEvents)
     while (PendingEvents.Poll(Event))
     {
         OutEvents.Push(Event);
+    }
+}
+
+bool FWindowsPlatformWindow::CanReceiveInput() const noexcept
+{
+    return bInputEnabled && bHasFocus && !bCloseRequested && !bMinimized && Width != 0 && Height != 0;
+}
+
+void FWindowsPlatformWindow::HandleKey(const EPlatformEventType Type, const WPARAM VirtualKey,
+    const LPARAM KeyFlags)
+{
+    const EPlatformKey Key = GetPlatformKey(VirtualKey);
+    if (CanReceiveInput() && Key != EPlatformKey::Unknown)
+    {
+        FPlatformEvent Event{Type};
+        Event.Key = Key;
+        constexpr LPARAM PreviousKeyStateBit = LPARAM{1} << 30;
+        Event.bRepeat = Type == EPlatformEventType::KeyPressed && (KeyFlags & PreviousKeyStateBit) != 0;
+        PushEvent(Event);
+    }
+}
+
+void FWindowsPlatformWindow::RegisterRawMouse()
+{
+    const RAWINPUTDEVICE Device{HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, 0, Hwnd};
+    bRawMouseRegistered = RegisterRawInputDevices(&Device, 1, sizeof(Device)) != FALSE;
+    if (!bRawMouseRegistered)
+    {
+        const DWORD Error = GetLastError();
+        auto* const Logger = Log::GetLoggerOrCreate("Platform");
+        LE_LOG(Logger, Warn,
+            "Could not register raw mouse input for window {} (Win32 error {}).", GetId(), Error);
+    }
+}
+
+void FWindowsPlatformWindow::UnregisterRawMouse()
+{
+    if (!bRawMouseRegistered)
+    {
+        return;
+    }
+    bRawMouseRegistered = false;
+    const RAWINPUTDEVICE Device{HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE, RIDEV_REMOVE, nullptr};
+    if (!RegisterRawInputDevices(&Device, 1, sizeof(Device)))
+    {
+        const DWORD Error = GetLastError();
+        auto* const Logger = Log::GetLoggerOrCreate("Platform");
+        LE_LOG(Logger, Warn,
+            "Could not unregister raw mouse input for window {} (Win32 error {}).", GetId(), Error);
+    }
+}
+
+void FWindowsPlatformWindow::HandleRawMouse(const HRAWINPUT Input)
+{
+    if (!bMouseCaptured || !CanReceiveInput())
+    {
+        return;
+    }
+
+    RAWINPUT Raw{};
+    UINT Size = sizeof(Raw);
+    const UINT Bytes = GetRawInputData(Input, RID_INPUT, &Raw, &Size, sizeof(RAWINPUTHEADER));
+    if (Bytes == static_cast<UINT>(-1) || Bytes < offsetof(RAWINPUT, data) + sizeof(RAWMOUSE) ||
+        Raw.header.dwType != RIM_TYPEMOUSE || (Raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) != 0 ||
+        (Raw.data.mouse.lLastX == 0 && Raw.data.mouse.lLastY == 0))
+    {
+        return;
+    }
+
+    FPlatformEvent Event{EPlatformEventType::MouseMoved};
+    Event.MouseDeltaX = Raw.data.mouse.lLastX;
+    Event.MouseDeltaY = Raw.data.mouse.lLastY;
+    PushEvent(Event);
+}
+
+void FWindowsPlatformWindow::BeginMouseCapture()
+{
+    if (!CanReceiveInput() || !bRawMouseRegistered || bMouseCaptured)
+    {
+        return;
+    }
+
+    SetCapture(Hwnd);
+    if (GetCapture() != Hwnd)
+    {
+        auto* const Logger = Log::GetLoggerOrCreate("Platform");
+        LE_LOG(Logger, Warn,
+            "Window {} could not acquire right-button mouse capture.", GetId());
+        return;
+    }
+    bMouseCaptured = true;
+    PushEvent(EPlatformEventType::MouseCaptureStarted);
+}
+
+void FWindowsPlatformWindow::EndMouseCapture()
+{
+    if (!bMouseCaptured)
+    {
+        return;
+    }
+    bMouseCaptured = false;
+    PushEvent(EPlatformEventType::MouseCaptureEnded);
+    if (GetCapture() == Hwnd)
+    {
+        ReleaseCapture();
+    }
+}
+
+void FWindowsPlatformWindow::CancelInput()
+{
+    if (!bInputEnabled)
+    {
+        return;
+    }
+    const bool bReleaseCapture = bMouseCaptured && GetCapture() == Hwnd;
+    // The synchronous WM_CAPTURECHANGED from our own release is not a cancellation.
+    bMouseCaptured = false;
+    PushEvent(EPlatformEventType::InputCanceled);
+    if (bReleaseCapture)
+    {
+        ReleaseCapture();
+    }
+}
+
+void FWindowsPlatformWindow::RequestClose()
+{
+    if (!bCloseRequested)
+    {
+        bCloseRequested = true;
+        CancelInput();
+        PushEvent(EPlatformEventType::CloseRequested);
     }
 }
 
@@ -137,14 +285,18 @@ LRESULT CALLBACK FWindowsPlatformWindow::WndProc(
     switch (Message)
     {
         case WM_CLOSE:
-            if (Window != nullptr && !Window->bCloseRequested)
+            if (Window != nullptr)
             {
-                Window->bCloseRequested = true;
-                Window->PushEvent(EPlatformEventType::CloseRequested);
+                Window->RequestClose();
             }
             return 0;
 
         case WM_DESTROY:
+            if (Window != nullptr)
+            {
+                Window->RequestClose();
+                Window->UnregisterRawMouse();
+            }
             return 0;
 
         case WM_NCDESTROY:
@@ -163,6 +315,10 @@ LRESULT CALLBACK FWindowsPlatformWindow::WndProc(
                 Window->Height = static_cast<uint32>(HIWORD(LParam));
                 Window->bMinimized = WParam == SIZE_MINIMIZED;
 
+                if (Window->bMinimized || Window->Width == 0 || Window->Height == 0)
+                {
+                    Window->CancelInput();
+                }
                 if (Window->bMinimized && !bWasMinimized)
                 {
                     Window->PushEvent(EPlatformEventType::Minimized);
@@ -178,9 +334,80 @@ LRESULT CALLBACK FWindowsPlatformWindow::WndProc(
             }
             return 0;
 
+        case WM_SETFOCUS:
+            if (Window != nullptr)
+            {
+                Window->bHasFocus = true;
+            }
+            break;
+
+        case WM_KILLFOCUS:
+            if (Window != nullptr)
+            {
+                Window->bHasFocus = false;
+                Window->CancelInput();
+            }
+            break;
+
+        case WM_CANCELMODE:
+            if (Window != nullptr)
+            {
+                Window->CancelInput();
+            }
+            break;
+
+        case WM_KEYDOWN:
+            if (Window != nullptr)
+            {
+                Window->HandleKey(EPlatformEventType::KeyPressed, WParam, LParam);
+            }
+            break;
+
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            if (Window != nullptr)
+            {
+                Window->HandleKey(EPlatformEventType::KeyReleased, WParam, LParam);
+            }
+            break;
+
+        case WM_RBUTTONDOWN:
+            if (Window != nullptr)
+            {
+                Window->BeginMouseCapture();
+            }
+            break;
+
+        case WM_RBUTTONUP:
+            if (Window != nullptr)
+            {
+                Window->EndMouseCapture();
+            }
+            break;
+
+        case WM_CAPTURECHANGED:
+            if (Window != nullptr && Window->bMouseCaptured)
+            {
+                Window->CancelInput();
+            }
+            break;
+
+        case WM_INPUT:
+            if (GET_RAWINPUT_CODE_WPARAM(WParam) == RIM_INPUT)
+            {
+                if (Window != nullptr)
+                {
+                    Window->HandleRawMouse(reinterpret_cast<HRAWINPUT>(LParam));
+                }
+                // DefWindowProc performs foreground raw-input cleanup.
+                break;
+            }
+            return 0;
+
         default:
-            return DefWindowProcA(WindowHandle, Message, WParam, LParam);
+            break;
     }
+    return DefWindowProcA(WindowHandle, Message, WParam, LParam);
 }
 
 FPlatformWindowPtr CreatePlatformWindow(const FPlatformWindowDesc& Description)

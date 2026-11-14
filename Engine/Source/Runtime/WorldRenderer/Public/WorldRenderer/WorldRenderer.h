@@ -38,6 +38,8 @@ struct FWorldRenderSnapshotBuildContext
     uint64 FrameIndex = 0;
     uint32 ViewportWidth = 0;
     uint32 ViewportHeight = 0;
+    // Invalid or stale identity leaves camera selection and pose authored.
+    FWorldRenderCameraPose CameraOverride;
 };
 
 struct FWorldRenderSnapshotBuildReport

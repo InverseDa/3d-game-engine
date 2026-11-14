@@ -48,6 +48,8 @@ bool RunSceneTests();
 int RunSceneDocumentTests();
 int RunWorldRendererTests();
 int RunBasePassTests();
+bool RunPlatformInputTests();
+bool RunDemoCameraNavigationTests();
 }
 
 namespace
@@ -3441,6 +3443,8 @@ int main(const int ArgCount, char** Arguments)
     FailureCount += LE::RunSceneDocumentTests();
     FailureCount += LE::RunWorldRendererTests();
     FailureCount += LE::RunBasePassTests();
+    FailureCount += LE::RunPlatformInputTests() ? 0 : 1;
+    FailureCount += LE::RunDemoCameraNavigationTests() ? 0 : 1;
     FailureCount += RunOwnershipTests();
     FailureCount += RunFunctionTests();
     FailureCount += RunMathVectorTests();

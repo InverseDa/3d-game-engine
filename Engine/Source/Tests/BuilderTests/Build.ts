@@ -29,6 +29,7 @@ export default class BuilderTestsBuild extends ModuleBuild {
             "WorldRenderer",
         );
         if (Target.TargetType === TargetType.Test) {
+            Configuration.IncludePaths.push("[engine.Root]/Engine/Source/Runtime/DemoApplication/Private/Camera");
             Configuration.CustomActions.push({
                 Id: "GenerateReflection",
                 Inputs: ["[module.SourceRoot]/Private/ReflectionGeneratedFixture.h"],

@@ -44,7 +44,11 @@ Objective-C++ 实现中。
 因此窗口销毁后读取已经转移到调用方队列的事件不会造成悬空引用。窗口析构会清空
 仍留在实现内部的 pending queue。
 
-输入设备事件尚不属于 Task 4，将在后续 Input/UI 阶段加入独立契约。
+调用方通过 `FPlatformWindowDesc::bEnableInput` 为 Win64 Demo 窗口启用输入。同一个事件队列还会报告 `KeyPressed`、`KeyReleased`、`MouseCaptureStarted`、`MouseCaptureEnded`、`MouseMoved` 和 `InputCanceled`。键盘值为引擎的 W/A/S/D，重复按下消息携带 `bRepeat`，鼠标移动携带有符号的相对位移。队列按消息顺序读取，批量移动与键盘、捕获及取消事件保持原有顺序。
+
+每次消息泵开始前调用 `FPlatformWindowInput::BeginFrame()`，再按顺序用 `Apply()` 处理本窗口的事件。`GetFrame()` 提供当帧值。按住与捕获状态跨帧保留，按下及松开边沿与鼠标累计位移在新帧归零。同帧按下再松开会报告两个边沿，最终按住状态为松开。重复按下不会增加边沿，也不会在取消后重新开始移动。
+
+Win64 后端在窗口有焦点、客户区有效时用右键申请鼠标捕获。前台 Raw Input 提供相对移动，光标到达屏幕边缘后仍可转向。常规右键松开结束捕获，保留本帧已接收的相对位移与键盘状态。失焦、最小化、零尺寸、系统取消、意外丢失捕获和关闭会清除按住状态及未消费位移，恢复后等待新的按下。相对输入注册或捕获失败时记录 Platform 日志，键盘仍可使用。macOS 继续发出窗口生命周期事件。
 
 ## 时间契约
 

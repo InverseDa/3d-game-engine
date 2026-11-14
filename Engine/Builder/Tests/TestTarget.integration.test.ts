@@ -73,13 +73,41 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         await Fs.cp(Demo, Scratch, { recursive: true });
         const SceneFile = Path.join(Scratch, "Scene.json");
         const AssetRoot = Path.join(Scratch, "Assets");
-        const Check = () => spawnSync(SceneTool, ["check", SceneFile, "Game", AssetRoot], {
+        const Check = (File = SceneFile) => spawnSync(SceneTool, ["check", File, "Game", AssetRoot], {
             cwd: Scratch, encoding: "utf-8",
         });
         const Valid = Check();
         Assert.equal(Valid.status, 0, Valid.stderr);
         const SceneText = await Fs.readFile(SceneFile, "utf-8");
         const Scene = JSON.parse(SceneText);
+        const CameraScene = JSON.parse(SceneText);
+        const CameraId = "8a0a5d74-17ef-48e0-a46b-f7105518e704";
+        const CameraEntity = CameraScene.entities.find((Entity: { id: string }) => Entity.id === CameraId);
+        Assert.ok(CameraEntity?.transform && CameraEntity?.camera);
+        CameraEntity.transform.translation = [0, 0, 4];
+        CameraEntity.transform.rotation = [0, 0, 0.13052619, 0.99144486];
+        CameraEntity.camera.verticalFieldOfViewRadians = 0.9;
+
+        async function CheckCameraFixture(FileName: string, InvalidField?: string): Promise<void> {
+            const File = Path.join(Scratch, FileName);
+            const Before = Buffer.from(`${JSON.stringify(CameraScene, null, 2)}\n`);
+            await Fs.writeFile(File, Before);
+            const Result = Check(File);
+            Assert.equal(Result.status, InvalidField === undefined ? 0 : 1, Result.stderr);
+            if (InvalidField !== undefined) {
+                Assert.ok(Result.stderr.startsWith(`${File}:`), Result.stderr);
+                Assert.ok(Result.stderr.includes(`entity ${CameraId}, field ${InvalidField})`), Result.stderr);
+            }
+            Assert.deepEqual(await Fs.readFile(File), Before);
+        }
+
+        await CheckCameraFixture("CameraEdited.json");
+        CameraEntity.camera.verticalFieldOfViewRadians = 0;
+        await CheckCameraFixture("CameraInvalidFov.json", "verticalFieldOfViewRadians");
+        CameraEntity.camera.verticalFieldOfViewRadians = 0.9;
+        CameraEntity.transform.rotation = [0, 0, 0, 0];
+        await CheckCameraFixture("CameraInvalidRotation.json", "rotation");
+
         const TexturedEntity = Scene.entities.find((Entity: { mesh?: { sortKey: string } }) =>
             Entity.mesh?.sortKey === "0");
         TexturedEntity.mesh.mesh = "62fdc991-27a8-4a81-a077-647b47fd1f7b";

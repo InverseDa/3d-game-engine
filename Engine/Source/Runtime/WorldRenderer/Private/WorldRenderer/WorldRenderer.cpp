@@ -277,10 +277,12 @@ FWorldRenderSnapshot::FWorldRenderSnapshot(IAllocator& InAllocator) noexcept
 FWorldRenderSnapshot::FWorldRenderSnapshot(FWorldRenderSnapshot&& Other) noexcept
     : Allocator(Other.Allocator)
     , RenderScene(std::move(Other.RenderScene))
+    , AuthoredPrimaryCameraPose(Other.AuthoredPrimaryCameraPose)
     , FrameIndex(Other.FrameIndex)
     , bPublished(Other.bPublished)
 {
     Other.Allocator = &Other.RenderScene.GetAllocator();
+    Other.AuthoredPrimaryCameraPose = {};
     Other.FrameIndex = 0;
     Other.bPublished = false;
 }
@@ -292,9 +294,11 @@ FWorldRenderSnapshot& FWorldRenderSnapshot::operator=(
     {
         RenderScene = std::move(Other.RenderScene);
         Allocator = Other.Allocator;
+        AuthoredPrimaryCameraPose = Other.AuthoredPrimaryCameraPose;
         FrameIndex = Other.FrameIndex;
         bPublished = Other.bPublished;
         Other.Allocator = &Other.RenderScene.GetAllocator();
+        Other.AuthoredPrimaryCameraPose = {};
         Other.FrameIndex = 0;
         Other.bPublished = false;
     }
@@ -304,6 +308,7 @@ FWorldRenderSnapshot& FWorldRenderSnapshot::operator=(
 void FWorldRenderSnapshot::Reset() noexcept
 {
     RenderScene.Reset();
+    AuthoredPrimaryCameraPose = {};
     FrameIndex = 0;
     bPublished = false;
 }
@@ -419,6 +424,11 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
     Math::Matrix4f Projection;
     Math::Matrix4f ViewProjection;
     if (!TryBuildViewMatrix(CameraToWorld, View))
+    {
+        return Fail(EWorldRenderSnapshotBuildResult::InvalidCameraTransform, 0, PrimaryCameraId);
+    }
+    if (Context.CameraOverride.PrimitiveId == PrimaryCameraId &&
+        !TryBuildViewMatrix(Context.CameraOverride.CameraToWorld, View))
     {
         return Fail(EWorldRenderSnapshotBuildResult::InvalidCameraTransform, 0, PrimaryCameraId);
     }
@@ -582,6 +592,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         std::sort(Candidate.Meshes.Data(), Candidate.Meshes.Data() + Candidate.Meshes.Size(), &MeshProxyLess);
     }
     OutSnapshot.RenderScene = std::move(Candidate);
+    OutSnapshot.AuthoredPrimaryCameraPose = {PrimaryCameraId, CameraToWorld};
     OutSnapshot.FrameIndex = Context.FrameIndex;
     OutSnapshot.bPublished = true;
     if (OutReport != nullptr)

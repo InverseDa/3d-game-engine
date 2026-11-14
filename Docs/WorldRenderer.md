@@ -16,10 +16,10 @@ candidate before publication.
 
 ## Snapshot contract
 
-`FWorldRenderSnapshot` is non-copyable and noexcept movable. Consumers can only
-read its frame index, publication state, and const `FRenderScene`. Its arrays
-and owned debug strings use the allocator supplied when the snapshot is
-constructed. A failed build always leaves it empty and unpublished, including
+`FWorldRenderSnapshot` is non-copyable and noexcept movable. Consumers can read
+its frame index, publication state, const `FRenderScene`, and authored primary
+camera pose. Its arrays and owned debug strings use the allocator supplied when
+the snapshot is constructed. A failed build leaves it empty and unpublished, including
 when replacing a previously successful result.
 
 Each mesh proxy copies:
@@ -49,8 +49,21 @@ Exactly one primary camera is published. Active candidates are ordered by
 descending priority and then ascending persistent primitive ID. The winner must
 have a valid Transform and a finite rigid camera basis. The convention is
 right-handed, -Z forward, +Y up, column vectors, Vulkan depth [0,1], and an
-explicit projection Y flip. Meshes are sorted by `(SortKey, MaterialAssetId,
-PrimitiveId.Scope, PrimitiveId.Value)`, independent of dense storage order.
+explicit projection Y flip.
+
+On a published snapshot, `GetAuthoredPrimaryCameraPose()` supplies the selected
+camera's primitive ID and validated camera-to-world matrix for initializing a
+session pose. This matrix includes its authored parent transforms. A
+`CameraOverride` in the build context applies only when its primitive ID matches
+the selected camera. An absent or stale identity uses the authored pose. A
+matching override must pass the same finite rigid-transform checks as the
+authored pose. The session pose supplies View, the camera component supplies
+Projection, and the resulting ViewProjection drives both rendering and culling.
+WorldRenderer publishes the authored seed independently of the effective View
+and leaves the authored transform and hierarchy intact.
+
+Meshes are sorted by `(SortKey, MaterialAssetId, PrimitiveId.Scope,
+PrimitiveId.Value)`, independent of dense storage order.
 
 ## Lifetime
 

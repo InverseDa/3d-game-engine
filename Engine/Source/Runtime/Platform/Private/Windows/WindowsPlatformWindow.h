@@ -27,13 +27,27 @@ public:
     bool IsCloseRequested() const noexcept override { return bCloseRequested; }
 
 private:
-    void PushEvent(EPlatformEventType Type);
+    void PushEvent(FPlatformEvent Event);
+    void PushEvent(EPlatformEventType Type) { PushEvent(FPlatformEvent{Type}); }
     void DrainPendingEvents(FPlatformEventQueue& OutEvents);
+    bool CanReceiveInput() const noexcept;
+    void HandleKey(EPlatformEventType Type, WPARAM VirtualKey, LPARAM KeyFlags);
+    void RegisterRawMouse();
+    void UnregisterRawMouse();
+    void HandleRawMouse(HRAWINPUT Input);
+    void BeginMouseCapture();
+    void EndMouseCapture();
+    void CancelInput();
+    void RequestClose();
     static LRESULT CALLBACK WndProc(HWND WindowHandle, UINT Message, WPARAM WParam, LPARAM LParam);
 
     HWND Hwnd = nullptr;
     uint32 Width = 0;
     uint32 Height = 0;
+    bool bInputEnabled = false;
+    bool bHasFocus = false;
+    bool bRawMouseRegistered = false;
+    bool bMouseCaptured = false;
     bool bMinimized = false;
     bool bCloseRequested = false;
     FPlatformEventQueue PendingEvents;

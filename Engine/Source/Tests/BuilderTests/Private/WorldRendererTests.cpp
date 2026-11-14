@@ -32,6 +32,18 @@ bool NearlyEqual(const float Left, const float Right) noexcept
     return std::fabs(Left - Right) <= 1.0e-4f;
 }
 
+bool MatrixNearlyEqual(const Math::Matrix4f& Left, const Math::Matrix4f& Right) noexcept
+{
+    for (std::size_t Index = 0; Index < 16; ++Index)
+    {
+        if (!NearlyEqual(Left.Values[Index], Right.Values[Index]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 FWorldRenderSnapshotBuildContext MakeBuildContext(
     const uint64 FrameIndex,
     const uint32 Width = 1280,
@@ -286,8 +298,13 @@ int RunSnapshotSuccessAndIdentityTests()
     if (!Scene.Cameras.IsEmpty())
     {
         const FRenderCameraProxy& Camera = Scene.Cameras[0];
+        const FWorldRenderCameraPose& AuthoredPose = Snapshot.GetAuthoredPrimaryCameraPose();
         Failures += Expect(Camera.DebugName == StringView("TestCamera") &&
             Camera.PrimitiveId.Scope == Fixture.CameraEntity.WorldDomain &&
+            AuthoredPose.PrimitiveId == Camera.PrimitiveId &&
+            NearlyEqual(AuthoredPose.CameraToWorld(0, 3), 4.0f) &&
+            NearlyEqual(AuthoredPose.CameraToWorld(1, 3), 5.0f) &&
+            NearlyEqual(AuthoredPose.CameraToWorld(2, 3), 20.0f) &&
             Camera.ViewportWidth == 1280 && Camera.ViewportHeight == 720 &&
             NearlyEqual(Camera.View(0, 3), -4.0f) &&
             NearlyEqual(Camera.View(1, 3), -5.0f) &&
@@ -639,12 +656,16 @@ int RunSnapshotMoveTests()
         const bool bSourceBuilt = Renderer.BuildSnapshot(
             Fixture.World, Fixture.Assets, MakeBuildContext(60), Source) ==
             EWorldRenderSnapshotBuildResult::Success;
+        const FWorldRenderCameraPose OriginalPose = Source.GetAuthoredPrimaryCameraPose();
         FWorldRenderSnapshot Constructed(std::move(Source));
         const bool bConstructedTransferred = bSourceBuilt && Constructed.IsPublished() &&
             Constructed.GetFrameIndex() == 60 &&
+            Constructed.GetAuthoredPrimaryCameraPose().PrimitiveId == OriginalPose.PrimitiveId &&
+            Constructed.GetAuthoredPrimaryCameraPose().CameraToWorld == OriginalPose.CameraToWorld &&
             Constructed.GetRenderScene().Meshes.Size() == 1 &&
             &Constructed.GetRenderScene().GetAllocator() == &SourceAllocator &&
             !Source.IsPublished() && Source.GetFrameIndex() == 0 &&
+            !Source.GetAuthoredPrimaryCameraPose().PrimitiveId.IsValid() &&
             Source.GetRenderScene().Meshes.IsEmpty() &&
             &Source.GetRenderScene().GetAllocator() == &SourceAllocator;
         const bool bSourceRebuilt = Renderer.BuildSnapshot(
@@ -658,10 +679,13 @@ int RunSnapshotMoveTests()
         Destination = std::move(Constructed);
         const bool bAssignedTransferred = bDestinationBuilt &&
             Destination.IsPublished() && Destination.GetFrameIndex() == 60 &&
+            Destination.GetAuthoredPrimaryCameraPose().PrimitiveId == OriginalPose.PrimitiveId &&
+            Destination.GetAuthoredPrimaryCameraPose().CameraToWorld == OriginalPose.CameraToWorld &&
             Destination.GetRenderScene().Meshes.Size() == 1 &&
             &Destination.GetRenderScene().GetAllocator() == &SourceAllocator &&
             DestinationAllocator.LiveAllocations == 0 &&
             !Constructed.IsPublished() && Constructed.GetFrameIndex() == 0 &&
+            !Constructed.GetAuthoredPrimaryCameraPose().PrimitiveId.IsValid() &&
             Constructed.GetRenderScene().Meshes.IsEmpty() &&
             &Constructed.GetRenderScene().GetAllocator() == &SourceAllocator;
         const bool bConstructedRebuilt = Renderer.BuildSnapshot(
@@ -957,15 +981,27 @@ int RunCameraContractTests()
     const uint64 ExpectedCameraValue =
         (static_cast<uint64>(HigherPriorityCamera.GetGeneration()) << 32) |
         static_cast<uint64>(HigherPriorityCamera.GetIndex());
-    Failures += Expect(bSelectionReady && Renderer.BuildSnapshot(
-            Fixture.World, Fixture.Assets, MakeBuildContext(73), Snapshot, &Report) ==
+    FWorldRenderSnapshotBuildContext SelectionContext = MakeBuildContext(73);
+    SelectionContext.CameraOverride.PrimitiveId = {
+        EqualPriorityLaterCamera.WorldDomain,
+        (static_cast<uint64>(EqualPriorityLaterCamera.GetGeneration()) << 32) |
+            static_cast<uint64>(EqualPriorityLaterCamera.GetIndex())};
+    const bool bSelectionBuilt = bSelectionReady && Renderer.BuildSnapshot(
+            Fixture.World, Fixture.Assets, SelectionContext, Snapshot, &Report) ==
             EWorldRenderSnapshotBuildResult::Success &&
-        Snapshot.GetRenderScene().Cameras.Size() == 1 &&
-        Snapshot.GetRenderScene().Cameras[0].PrimitiveId.Value == ExpectedCameraValue &&
-        Snapshot.GetRenderScene().Cameras[0].DebugName == StringView("HigherPriority"),
-        "active camera selection is priority-descending then primitive-ID ascending");
+        Snapshot.GetRenderScene().Cameras.Size() == 1;
+    if (!bSelectionBuilt)
+    {
+        return Failures + Expect(false, "multi-camera snapshot publishes exactly one primary camera");
+    }
 
     const FRenderCameraProxy& SelectedCamera = Snapshot.GetRenderScene().Cameras[0];
+    const FWorldRenderCameraPose SelectedPose = Snapshot.GetAuthoredPrimaryCameraPose();
+    Failures += Expect(SelectedCamera.PrimitiveId.Value == ExpectedCameraValue &&
+        SelectedPose.PrimitiveId == SelectedCamera.PrimitiveId &&
+        NearlyEqual(SelectedCamera.View(2, 3), -15.0f) &&
+        SelectedCamera.DebugName == StringView("HigherPriority"),
+        "active camera selection preserves priority and ID order with a non-primary override");
     const FWorldCameraComponent* const SelectedWorldCamera =
         Fixture.World.GetComponent(*Cameras, HigherPriorityCamera);
     const float NearPlane = SelectedWorldCamera == nullptr ? 0.1f : SelectedWorldCamera->NearPlane;
@@ -1016,11 +1052,91 @@ int RunCameraContractTests()
     ScaledCamera.Scale = Math::Vector3f(2.0f, 1.0f, 1.0f);
     const bool bScaled = Fixture.World.SetLocalTransform(
         HigherPriorityCamera, ScaledCamera) == ETransformUpdateResult::Updated;
+    FWorldRenderSnapshotBuildContext ScaledContext = MakeBuildContext(75);
+    ScaledContext.CameraOverride = SelectedPose;
     Failures += Expect(bScaled && Renderer.BuildSnapshot(
-            Fixture.World, Fixture.Assets, MakeBuildContext(75), Snapshot, &Report) ==
+            Fixture.World, Fixture.Assets, ScaledContext, Snapshot, &Report) ==
             EWorldRenderSnapshotBuildResult::InvalidCameraTransform &&
         !Snapshot.IsPublished(),
-        "non-rigid or non-unit camera bases are rejected");
+        "a valid matching override cannot bypass validation of a non-rigid authored camera basis");
+    return Failures;
+}
+
+int RunCameraOverrideTests()
+{
+    int Failures = 0;
+    FWorldRendererFixture Fixture;
+    FEntity ParentEntity;
+    FTransform ParentTransform;
+    ParentTransform.Translation = Math::Vector3f(1.0f, 2.0f, 1.0f);
+    ParentTransform.Rotation = Math::Quaternionf(Math::Vector3f(0.0f, 0.0f, 1.0f), 0.3f);
+    FTransform CameraLocalTransform;
+    const bool bReady = Fixture.Initialize() && Fixture.World.TryCreateEntity(ParentEntity) &&
+        Fixture.World.TryAddTransform(ParentEntity, ParentTransform) == EComponentMutationResult::Added &&
+        Fixture.World.SetTransformParent(Fixture.CameraEntity, ParentEntity) ==
+            ETransformParentResult::Reparented &&
+        Fixture.World.TryGetLocalTransform(Fixture.CameraEntity, CameraLocalTransform);
+    const uint64 AuthoredTransformVersion = Fixture.World.GetTransformMutationVersion();
+    FWorldRenderer Renderer;
+    FWorldRenderSnapshot AuthoredSnapshot;
+    const bool bAuthored = bReady && Renderer.BuildSnapshot(
+            Fixture.World, Fixture.Assets, MakeBuildContext(76), AuthoredSnapshot) ==
+            EWorldRenderSnapshotBuildResult::Success &&
+        AuthoredSnapshot.GetRenderScene().Cameras.Size() == 1 &&
+        AuthoredSnapshot.GetRenderScene().Meshes.Size() == 1;
+    if (!bAuthored)
+    {
+        return Expect(false, "authored parented camera renders the original visible mesh");
+    }
+
+    const FRenderCameraProxy& AuthoredCamera = AuthoredSnapshot.GetRenderScene().Cameras[0];
+    const FWorldRenderCameraPose& AuthoredPose = AuthoredSnapshot.GetAuthoredPrimaryCameraPose();
+    const Math::Matrix4f AuthoredCameraToWorld = ParentTransform.ToMatrix() * CameraLocalTransform.ToMatrix();
+    Failures += Expect(AuthoredPose.PrimitiveId == AuthoredCamera.PrimitiveId &&
+        MatrixNearlyEqual(AuthoredPose.CameraToWorld, AuthoredCameraToWorld),
+        "authored camera seed composes the local transform with its rigid parent");
+
+    FWorldRenderSnapshotBuildContext Context = MakeBuildContext(76);
+    Context.CameraOverride = AuthoredPose;
+    Context.CameraOverride.CameraToWorld(0, 3) = 1000.0f;
+    FWorldRenderSnapshot Snapshot;
+    FWorldRenderSnapshotBuildReport Report;
+    const bool bOverridden = Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::Success && Snapshot.GetRenderScene().Cameras.Size() == 1;
+    Failures += Expect(bOverridden &&
+        Snapshot.GetFrameIndex() == AuthoredSnapshot.GetFrameIndex() &&
+        Snapshot.GetRenderScene().Cameras[0].PrimitiveId == AuthoredCamera.PrimitiveId &&
+        Snapshot.GetRenderScene().Cameras[0].View != AuthoredCamera.View &&
+        Snapshot.GetRenderScene().Cameras[0].Projection == AuthoredCamera.Projection &&
+        MatrixNearlyEqual(Snapshot.GetRenderScene().Cameras[0].ViewProjection,
+            AuthoredCamera.Projection * Snapshot.GetRenderScene().Cameras[0].View) &&
+        Snapshot.GetRenderScene().Meshes.IsEmpty() && Report.CulledMeshCount == 1 &&
+        Snapshot.GetAuthoredPrimaryCameraPose().PrimitiveId == AuthoredPose.PrimitiveId &&
+        Snapshot.GetAuthoredPrimaryCameraPose().CameraToWorld == AuthoredPose.CameraToWorld,
+        "matching session pose changes rendered View and same-frame frustum while retaining the authored seed");
+
+    ++Context.CameraOverride.PrimitiveId.Scope;
+    Context.CameraOverride.CameraToWorld(0, 0) = std::numeric_limits<float>::quiet_NaN();
+    Failures += Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::Success && Snapshot.GetRenderScene().Cameras.Size() == 1 &&
+        Snapshot.GetRenderScene().Cameras[0].View == AuthoredCamera.View &&
+        Snapshot.GetRenderScene().Cameras[0].ViewProjection == AuthoredCamera.ViewProjection &&
+        Snapshot.GetRenderScene().Meshes.Size() == 1 &&
+        Snapshot.GetRenderScene().Meshes[0].PrimitiveId == AuthoredSnapshot.GetRenderScene().Meshes[0].PrimitiveId &&
+        Report.CulledMeshCount == 0,
+        "stale session identity ignores its pose and restores the authored view and mesh set");
+
+    Context.CameraOverride.PrimitiveId = AuthoredPose.PrimitiveId;
+    Failures += Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) ==
+            EWorldRenderSnapshotBuildResult::InvalidCameraTransform && Report.PrimitiveId == AuthoredPose.PrimitiveId &&
+        !Snapshot.IsPublished() && !Snapshot.GetAuthoredPrimaryCameraPose().PrimitiveId.IsValid(),
+        "invalid matching session pose fails publication and clears the previous snapshot seed");
+
+    Math::Matrix4f WorldMatrix;
+    Failures += Expect(Fixture.World.GetTransformMutationVersion() == AuthoredTransformVersion &&
+        Fixture.World.TryGetWorldMatrix(Fixture.CameraEntity, WorldMatrix) &&
+        WorldMatrix == AuthoredPose.CameraToWorld,
+        "session pose extraction leaves authored camera hierarchy untouched");
     return Failures;
 }
 
@@ -1252,6 +1368,7 @@ int RunWorldRendererTests()
     Failures += RunSnapshotPayloadAndStaleTests();
     Failures += RunSnapshotMoveTests();
     Failures += RunCameraContractTests();
+    Failures += RunCameraOverrideTests();
     Failures += RunFrustumCullingAndSortTests();
     Failures += RunInvalidClipCoordinateTests();
     return Failures;

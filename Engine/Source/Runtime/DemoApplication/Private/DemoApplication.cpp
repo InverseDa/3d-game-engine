@@ -2,6 +2,7 @@
 
 #include "Application/RuntimeModule.h"
 #include "AssetLoading/AssetLoading.h"
+#include "Camera/DemoCameraNavigation.h"
 #include "CoreMinimal.h"
 #include "DemoSettings.h"
 
@@ -394,6 +395,7 @@ public:
         WindowDesc.Width = Width;
         WindowDesc.Height = Height;
         WindowDesc.Title = Title;
+        WindowDesc.bEnableInput = true;
         Window = CreatePlatformWindow(WindowDesc);
         if (!Window)
         {
@@ -414,14 +416,17 @@ public:
         CleanupReflection();
         Window.Reset();
         PlatformEvents.Clear();
+        Input.Reset();
     }
 
     EApplicationTickResult ProcessPlatformEvents()
     {
+        Input.BeginFrame();
         Window->PumpEvents(PlatformEvents);
         FPlatformEvent PlatformEvent;
         while (PlatformEvents.Poll(PlatformEvent))
         {
+            Input.Apply(Window->GetId(), PlatformEvent);
             if (PlatformEvent.WindowId == Window->GetId() &&
                 PlatformEvent.Type == EPlatformEventType::CloseRequested)
             {
@@ -434,6 +439,8 @@ public:
     }
 
     FPlatformWindow* GetWindow() const noexcept { return Window.Get(); }
+    const FPlatformInputFrame& GetInputFrame() const noexcept { return Input.GetFrame(); }
+    void ResetInputForScene() noexcept { Input.ResetKeysAndMotion(); }
 
     static bool StartupThunk(void* Context) noexcept
     {
@@ -464,6 +471,7 @@ private:
     FPropertyBag DecodedSettings;
     FPlatformWindowPtr Window;
     FPlatformEventQueue PlatformEvents;
+    FPlatformWindowInput Input;
     bool bReflectionRegistered = false;
     bool bShutdown = false;
 };
@@ -714,6 +722,10 @@ public:
                 static_cast<uint32>(UpdateResult), static_cast<uint32>(End));
             return EApplicationTickResult::Exit;
         }
+        if (CameraNavigation.Update(WindowModule.GetInputFrame(), Context.DeltaSeconds))
+        {
+            bNavigationUpdated = true;
+        }
         return UpdateRenderResources();
     }
 
@@ -734,6 +746,7 @@ public:
                 RenderResources.SceneColorTexture->GetDesc().Width;
             SnapshotContext.ViewportHeight =
                 RenderResources.SceneColorTexture->GetDesc().Height;
+            SnapshotContext.CameraOverride = {NavigationCameraId, CameraNavigation.GetCameraToWorld()};
             if (WorldRenderer.BuildSnapshot(
                     Scene->GetWorld(),
                     Assets->GetRegistry(),
@@ -790,9 +803,20 @@ public:
                 static_cast<uint32>(FrameResult.PresentStatus));
             return EApplicationTickResult::Exit;
         }
-        if (!bSceneSwitchAttempted && FrameResult.PresentStatus == ERHISwapchainStatus::Success)
+        if (!bSceneSwitchAttempted && (!bTestAfterNavigation || bNavigationUpdated) &&
+            FrameResult.PresentStatus == ERHISwapchainStatus::Success)
         {
             bSceneSwitchAttempted = true;
+            if (bTestAfterNavigation)
+            {
+                const auto& Pose = CameraNavigation.GetCameraToWorld();
+                LE_LOG(LogXBD, Info, "Presented navigated camera at ({}, {}, {}), forward ({}, {}, {}).",
+                    Pose(0, 3), Pose(1, 3), Pose(2, 3), -Pose(0, 2), -Pose(1, 2), -Pose(2, 2));
+                if (!SaveRequestedScene())
+                {
+                    return EApplicationTickResult::Exit;
+                }
+            }
             const char* const NextScene = std::getenv("LIMITLESS_DEMO_NEXT_SCENE");
             if (NextScene != nullptr && !PublishScene(NextScene))
             {
@@ -879,79 +903,83 @@ private:
         const char* InputOverride = std::getenv("LIMITLESS_DEMO_SCENE");
         const String ScenePath = InputOverride != nullptr
             ? String(InputOverride) : Demo::ShaderRuntimeCompiler::JoinPath(ContentRoot.View(), "Scene.json");
-        return PublishScene(ScenePath.View()) && ApplyRequestedSceneEdit();
+        bTestAfterNavigation = StringView(std::getenv("LIMITLESS_DEMO_TEST_AFTER_NAVIGATION")) == StringView("1");
+        return PublishScene(ScenePath.View(), true) && (bTestAfterNavigation || SaveRequestedScene());
     }
 
-    bool ApplyRequestedSceneEdit() noexcept
+    bool SaveRequestedScene() noexcept
+    {
+        const char* const SavePath = std::getenv("LIMITLESS_DEMO_SAVE_SCENE");
+        if (SavePath == nullptr)
+        {
+            return true;
+        }
+        FSceneOperationDiagnostic SaveDiagnostic;
+        const auto SaveResult = SaveScene(SavePath, *Scene, Assets->GetRegistry(), &SaveDiagnostic);
+        if (SaveResult != ESceneOperationResult::Success)
+        {
+            LE_LOG(LogXBD, Error, "Scene save '{}': {} ({}).", SavePath,
+                DescribeSceneOperationResult(SaveResult), DescribeContentIOResult(SaveDiagnostic.FileResult));
+            return false;
+        }
+        LE_LOG(LogXBD, Info, "Saved scene '{}'.", SavePath);
+        return true;
+    }
+
+    static bool ApplyRequestedSceneEdit(FScene& Candidate) noexcept
     {
         const char* EditId = std::getenv("LIMITLESS_DEMO_EDIT_ENTITY");
         const char* Translation = std::getenv("LIMITLESS_DEMO_EDIT_X");
-        const char* SavePath = std::getenv("LIMITLESS_DEMO_SAVE_SCENE");
-        if (EditId == nullptr && Translation == nullptr && SavePath == nullptr)
+        if (EditId == nullptr && Translation == nullptr)
         {
             return true;
         }
 
-        FWorld& World = Scene->GetWorld();
-        if (EditId != nullptr || Translation != nullptr)
+        FWorld& World = Candidate.GetWorld();
+        FSceneEntityId Id;
+        FEntity Entity;
+        FTransform Transform;
+        float X = 0.0f;
+        const StringView Text(Translation);
+        if (EditId == nullptr || Text.IsEmpty() || !FSceneEntityId::TryParse(EditId, Id) ||
+            !Candidate.TryFindEntity(Id, Entity) || !World.TryGetLocalTransform(Entity, Transform))
         {
-            FSceneEntityId Id;
-            FEntity Entity;
-            FTransform Transform;
-            float X = 0.0f;
-            const StringView Text(Translation);
-            if (EditId == nullptr || Text.IsEmpty() || !FSceneEntityId::TryParse(EditId, Id) ||
-                !Scene->TryFindEntity(Id, Entity) || !World.TryGetLocalTransform(Entity, Transform))
-            {
-                LE_LOG(LogXBD, Error, "Scene edit requires a known entity UUID and local X translation.");
-                return false;
-            }
-            char* End = nullptr;
+            LE_LOG(LogXBD, Error, "Scene edit requires a known entity UUID and local X translation.");
+            return false;
+        }
+        char* End = nullptr;
 #if PLATFORM_WINDOWS
-            const auto Locale = _create_locale(LC_NUMERIC, "C");
-            if (Locale != nullptr)
-            {
-                X = _strtof_l(Translation, &End, Locale);
-                _free_locale(Locale);
-            }
-#else
-            const auto Locale = newlocale(LC_NUMERIC_MASK, "C", nullptr);
-            if (Locale != nullptr)
-            {
-                X = strtof_l(Translation, &End, Locale);
-                freelocale(Locale);
-            }
-#endif
-            if (End != Text.Data() + Text.Size() || !std::isfinite(X))
-            {
-                LE_LOG(LogXBD, Error, "Scene edit X translation must be a finite decimal number.");
-                return false;
-            }
-            Transform.Translation[0] = X;
-            const auto Result = World.SetLocalTransform(Entity, Transform);
-            if (Result != ETransformUpdateResult::Updated && Result != ETransformUpdateResult::Unchanged)
-            {
-                LE_LOG(LogXBD, Error, "Could not edit scene entity '{}': {}.", EditId, static_cast<uint32>(Result));
-                return false;
-            }
-            LE_LOG(LogXBD, Info, "Edited scene entity '{}' local X to {}.", EditId, X);
-        }
-        if (SavePath != nullptr)
+        const auto Locale = _create_locale(LC_NUMERIC, "C");
+        if (Locale != nullptr)
         {
-            FSceneOperationDiagnostic Diagnostic;
-            const auto Result = SaveScene(SavePath, *Scene, Assets->GetRegistry(), &Diagnostic);
-            if (Result != ESceneOperationResult::Success)
-            {
-                LE_LOG(LogXBD, Error, "Scene save '{}': {} ({}).", SavePath,
-                    DescribeSceneOperationResult(Result), DescribeContentIOResult(Diagnostic.FileResult));
-                return false;
-            }
-            LE_LOG(LogXBD, Info, "Saved scene '{}'.", SavePath);
+            X = _strtof_l(Translation, &End, Locale);
+            _free_locale(Locale);
         }
+#else
+        const auto Locale = newlocale(LC_NUMERIC_MASK, "C", nullptr);
+        if (Locale != nullptr)
+        {
+            X = strtof_l(Translation, &End, Locale);
+            freelocale(Locale);
+        }
+#endif
+        if (End != Text.Data() + Text.Size() || !std::isfinite(X))
+        {
+            LE_LOG(LogXBD, Error, "Scene edit X translation must be a finite decimal number.");
+            return false;
+        }
+        Transform.Translation[0] = X;
+        const auto Result = World.SetLocalTransform(Entity, Transform);
+        if (Result != ETransformUpdateResult::Updated && Result != ETransformUpdateResult::Unchanged)
+        {
+            LE_LOG(LogXBD, Error, "Could not edit scene entity '{}': {}.", EditId, static_cast<uint32>(Result));
+            return false;
+        }
+        LE_LOG(LogXBD, Info, "Edited scene entity '{}' local X to {}.", EditId, X);
         return true;
     }
 
-    bool PublishScene(StringView Path) noexcept
+    bool PublishScene(StringView Path, const bool bApplyStartupEdit = false) noexcept
     {
         auto CandidateAssets = TryMakeUnique<FDemoSceneAssets>(Catalog);
         UniquePtr<FScene> Candidate;
@@ -977,6 +1005,10 @@ private:
                 Diagnostic.Document.Column, DescribeSceneDocumentResult(Diagnostic.Document.Result),
                 Diagnostic.Entity.ToString().Data(), Diagnostic.Asset.ToString().Data(),
                 DescribeContentIOResult(Diagnostic.FileResult));
+            return false;
+        }
+        if (bApplyStartupEdit && !ApplyRequestedSceneEdit(*Candidate))
+        {
             return false;
         }
         FWorld& CandidateWorld = Candidate->GetWorld();
@@ -1027,8 +1059,17 @@ private:
         }
         Scene = std::move(Candidate);
         Assets = std::move(CandidateAssets);
+        const FWorldRenderCameraPose& CameraPose = Preview.GetAuthoredPrimaryCameraPose();
+        NavigationCameraId = CameraPose.PrimitiveId;
+        CameraNavigation.Start(CameraPose.CameraToWorld);
+        WindowModule.ResetInputForScene();
         LE_LOG(LogXBD, Info, "Loaded scene '{}' with {} entities and {} visible meshes.",
             PrintablePath.Data(), Scene->GetWorld().GetEntityCount(), Preview.GetRenderScene().Meshes.Size());
+        const auto& Pose = CameraPose.CameraToWorld;
+        const auto& Projection = Preview.GetRenderScene().Cameras[0].Projection;
+        LE_LOG(LogXBD, Info, "Authored camera position ({}, {}, {}), forward ({}, {}, {}), vertical FOV {} rad.",
+            Pose(0, 3), Pose(1, 3), Pose(2, 3), -Pose(0, 2), -Pose(1, 2), -Pose(2, 2),
+            2.0f * std::atan(1.0f / std::abs(Projection(1, 1))));
         LE_LOG(LogXBD, Info, "Scene texture uploads at publication: {}.", Assets->Provider.GetTextureUploadCount());
         return true;
     }
@@ -1041,6 +1082,8 @@ private:
     UniquePtr<FDemoSceneAssets> Assets;
     UniquePtr<FScene> Scene;
     FWorldRenderer WorldRenderer;
+    FDemoCameraNavigation CameraNavigation;
+    FRenderPrimitiveId NavigationCameraId;
     FRHIDevice* Device = nullptr;
     FRHISwapchain* Swapchain = nullptr;
     FRHIShader* BasePassVertexShader = nullptr;
@@ -1055,6 +1098,8 @@ private:
     uint32 CachedWindowWidth = DefaultWindowWidth;
     uint32 CachedWindowHeight = DefaultWindowHeight;
     bool bCanRender = false;
+    bool bNavigationUpdated = false;
+    bool bTestAfterNavigation = false;
     bool bSceneSwitchAttempted = false;
     bool bReportPreservedScene = false;
     bool bRenderingSuspended = false;

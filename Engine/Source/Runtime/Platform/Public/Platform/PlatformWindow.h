@@ -14,6 +14,7 @@ struct FPlatformWindowDesc
     uint32 Width = 1280;
     uint32 Height = 720;
     LE::StringView Title = "Limitless Engine";
+    bool bEnableInput = false;
 };
 
 struct FPlatformWindowSize
