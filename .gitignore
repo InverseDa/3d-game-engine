@@ -89,6 +89,10 @@ mono_crash.*
 
 # Build results
 [Dd]ebug/
+# RFG's public Debug directory contains tracked source headers.
+!/Engine/Source/Runtime/RFG/Public/Debug/
+/Engine/Source/Runtime/RFG/Public/Debug/*
+!/Engine/Source/Runtime/RFG/Public/Debug/RFGGraphExporter.h
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
