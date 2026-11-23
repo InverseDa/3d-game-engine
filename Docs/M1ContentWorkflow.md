@@ -54,6 +54,32 @@ Remove-Item Env:LIMITLESS_DEMO_SCENE
 
 验收漫游与保存时，先设 `LIMITLESS_DEMO_SAVE_SCENE` 保存作者状态。第二次用同一个源场景启动，换一个存档路径并设置 `LIMITLESS_DEMO_TEST_AFTER_NAVIGATION=1`，移动相机后等待日志出现 `Presented navigated camera` 和 `Saved scene`。该测试入口在第一个呈现成功的漫游帧后执行指定的保存，也可配合 `LIMITLESS_DEMO_NEXT_SCENE` 验证替换场景。用 `Get-FileHash` 比较两份存档与前后源文件。两份存档应一致，源文件哈希应保持原值。
 
+## 预检并重载正在运行的场景
+
+在 Win64 Debug Game 打开一个可编辑的场景副本。以下命令使用方向光样例，可在仓库根目录运行。
+
+```powershell
+$gameRoot = (Resolve-Path 'Engine/Binaries/Win64/Debug/Limitless/Game').Path
+$content = Join-Path $gameRoot 'DirectionalLightContent'
+$assetRoot = Join-Path $content 'Assets'
+$tool = (Resolve-Path 'Engine/Binaries/Win64/Debug/SceneTool/Program/SceneTool.exe').Path
+$scene = Join-Path (Resolve-Path 'Engine/Intermediate').Path ('ScenePreview-' + [guid]::NewGuid() + '.json')
+Copy-Item -LiteralPath (Join-Path $content 'Scene.json') -Destination $scene
+& $tool check --json $scene Game $assetRoot
+$previousContent = $env:LIMITLESS_DEMO_CONTENT
+$previousScene = $env:LIMITLESS_DEMO_SCENE
+try {
+    $env:LIMITLESS_DEMO_CONTENT = $content
+    $env:LIMITLESS_DEMO_SCENE = $scene
+    Start-Process -FilePath (Join-Path $gameRoot 'LimitlessGame.exe') -WorkingDirectory (Get-Location).Path
+} finally {
+    $env:LIMITLESS_DEMO_CONTENT = $previousContent
+    $env:LIMITLESS_DEMO_SCENE = $previousScene
+}
+```
+
+编辑 `$scene` 并再次运行 `SceneTool check --json`。例如，把方向光的 `direction` 从 `[0,0,-1]` 改为 `[0,0,1]`。工具输出一条 JSON，包含 `ok`、`code` 和可用的文件、实体、资产、字段或行列信息。校验通过后，在 Game 窗口有焦点时按 **F5**。每次重载成功从文件的作者机位开始，日志分别记录接受和实际呈现。拒绝候选时保留当前画面和漫游机位，修正文件后可再次按 F5。重载使用启动时挂载的 cooked 资产目录。
+
 ## Win64 Debug 验收记录
 
 Win64 Debug 的 AssetImport、SceneTool、Game、Editor 和 Test 已构建。Builder 单元与集成测试 44 项通过，C++ Test target 和规范扫描通过。在 GeForce RTX 4070 Ti（Vulkan 1.4.341）上，Game 加载五实体场景，两个网格进入 BasePass。将左侧子实体局部 X 改为 `-0.8` 后保存，新进程从保存文件恢复实体、层级和资源引用。验证了 resize、最小化恢复和正常退出。两次运行均安装 Khronos 验证回调，错误为零。该次验收用进程环境变量禁用了本机的 Overwolf 捕获层。macOS 尚无自动样例 staging 和运行验收，可通过绝对内容根路径提供同样的已生成内容。

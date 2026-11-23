@@ -31,6 +31,7 @@ enum class EPlatformKey : uint8
     A,
     S,
     D,
+    F5,
 };
 
 struct FPlatformEvent
@@ -123,6 +124,8 @@ private:
             return 1 << 2;
         case EPlatformKey::D:
             return 1 << 3;
+        case EPlatformKey::F5:
+            return 1 << 4;
         default:
             return 0;
         }

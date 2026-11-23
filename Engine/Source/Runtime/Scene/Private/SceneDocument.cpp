@@ -340,6 +340,8 @@ private:
     template <typename Id> bool ReadId(Id& Out) noexcept;
 
     bool ReadEntity(FSceneEntityRecord& Entity) noexcept;
+    FSceneEntityId RecoverEntityId(std::size_t EntityOffset) noexcept;
+    bool SkipEntityFieldValue() noexcept;
     bool ReadTransform(FTransform& Out) noexcept;
     bool ReadMesh(FSceneMeshRecord& Out) noexcept;
     bool ReadCamera(FSceneCameraRecord& Out) noexcept;
@@ -973,6 +975,83 @@ bool FSceneReader::ReadEntity(FSceneEntityRecord& Entity) noexcept
     return true;
 }
 
+bool FSceneReader::SkipEntityFieldValue() noexcept
+{
+    std::size_t Depth = 0;
+    bool bQuoted = false;
+    for (; Offset < Source.Size(); ++Offset)
+    {
+        const char Byte = Source[Offset];
+        if (bQuoted)
+        {
+            if (Byte == '\\' && Offset + 1 < Source.Size())
+            {
+                ++Offset;
+            }
+            else if (Byte == '"')
+            {
+                bQuoted = false;
+            }
+        }
+        else if (Byte == '"')
+        {
+            bQuoted = true;
+        }
+        else if (Byte == '{' || Byte == '[')
+        {
+            ++Depth;
+        }
+        else if (Depth == 0 && (Byte == ',' || Byte == '}'))
+        {
+            return true;
+        }
+        else if (Byte == '}' || Byte == ']')
+        {
+            if (Depth == 0)
+            {
+                return false;
+            }
+            --Depth;
+        }
+    }
+    return false;
+}
+
+FSceneEntityId FSceneReader::RecoverEntityId(const std::size_t EntityOffset) noexcept
+{
+    // The parse error is already recorded. Only scan this object's keys so
+    // nested or subsequent entities cannot supply the failed entity's ID.
+    Offset = EntityOffset;
+    FSceneEntityId Id;
+    if (!Require('{'))
+    {
+        return {};
+    }
+    do
+    {
+        if (!ReadString(Key, MaxSceneNameBytes) || !Require(':'))
+        {
+            return {};
+        }
+        if (Key.View() == EntityKeys[0])
+        {
+            if (Id.IsValid() || !ReadId(Id))
+            {
+                return {};
+            }
+        }
+        else if (!SkipEntityFieldValue())
+        {
+            return {};
+        }
+        if (Consume('}'))
+        {
+            return Id;
+        }
+    } while (Require(','));
+    return {};
+}
+
 bool FSceneReader::ReadEntities(FSceneDocument& Candidate, Array<FEntitySourceLocation>& Locations) noexcept
 {
     if (!Require('['))
@@ -999,6 +1078,10 @@ bool FSceneReader::ReadEntities(FSceneDocument& Candidate, Array<FEntitySourceLo
         EntityLocation = nullptr;
         if (!bParsed)
         {
+            if (Diagnostic != nullptr && !Diagnostic->Entity.IsValid() && Error != EResult::AllocationFailed)
+            {
+                Diagnostic->Entity = RecoverEntityId(At);
+            }
             return false;
         }
         if (!Candidate.Entities.TryPushBack(std::move(Entity)) || (Diagnostic != nullptr && !Locations.TryPushBack(Location)))

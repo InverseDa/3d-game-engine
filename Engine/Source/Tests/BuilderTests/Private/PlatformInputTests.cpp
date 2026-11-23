@@ -109,13 +109,35 @@ bool TestInputQueue()
     return bSuccess;
 }
 
+bool TestReloadInput()
+{
+    constexpr FPlatformWindowId WindowId = 1;
+    FPlatformWindowInput Input;
+    const FPlatformInputFrame& Frame = Input.GetFrame();
+    const FPlatformEvent Press{EPlatformEventType::KeyPressed, WindowId, 0, 0, EPlatformKey::F5};
+    FPlatformEvent Repeat = Press;
+    Repeat.bRepeat = true;
+
+    Input.Apply(WindowId, Press);
+    bool bSuccess = ExpectInput(Frame.WasKeyPressed(EPlatformKey::F5) && !Frame.WasKeyPressed(EPlatformKey::W), "F5 records a dedicated reload edge");
+    Input.ResetKeysAndMotion();
+    Input.BeginFrame();
+    Input.Apply(WindowId, Repeat);
+    bSuccess &= ExpectInput(!Frame.WasKeyPressed(EPlatformKey::F5), "holding F5 after scene publication does not request a second reload");
+    Input.Apply(WindowId, {EPlatformEventType::KeyReleased, WindowId, 0, 0, EPlatformKey::F5});
+    Input.Apply(WindowId, Press);
+    bSuccess &= ExpectInput(Frame.WasKeyPressed(EPlatformKey::F5), "releasing and pressing F5 requests another reload");
+    return bSuccess;
+}
+
 } // namespace
 
 bool RunPlatformInputTests()
 {
     const bool bWindowInput = TestWindowInput();
     const bool bEventQueue = TestInputQueue();
-    return bWindowInput && bEventQueue;
+    const bool bReloadInput = TestReloadInput();
+    return bWindowInput && bEventQueue && bReloadInput;
 }
 
 } // namespace LE

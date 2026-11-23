@@ -107,6 +107,8 @@ int TestDirectionalLightDocument()
         {R"("direction": [0, 0, -4])", R"("direction": [0, 0, 0])", EResult::InvalidValue, "direction"},
         {R"("color": [0, 1, 1])", R"("color": [0, 2, 1])", EResult::InvalidValue, "color"},
         {R"("intensity": 0)", R"("intensity": -1)", EResult::InvalidValue, "intensity"},
+        {R"("intensity": 0)", R"("intensity": "wrong type")", EResult::InvalidJson, "intensity"},
+        {R"("intensity": 0)", R"("intensity": {"id": "30000000-0000-4000-8000-000000000003", "quoted": "}],\""})", EResult::InvalidJson, "intensity"},
         {R"("intensity": 0, )", "", EResult::MissingField, "intensity"},
     };
     for (const FInvalidEdit& Edit : InvalidCases)

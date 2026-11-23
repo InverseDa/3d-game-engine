@@ -318,6 +318,11 @@ public:
 
     EApplicationTickResult Update(const FApplicationTickContext& Context)
     {
+        if (!ProcessSceneRequests())
+        {
+            return EApplicationTickResult::Exit;
+        }
+
         FWorld& World = Scene->GetWorld();
         const FWorldTickContext WorldContext{Context.FrameIndex, Context.DeltaSeconds, Context.ElapsedSeconds};
         const EWorldTickResult Begin = World.BeginTick(WorldContext);
@@ -376,30 +381,7 @@ public:
             LE_LOG(LogXBD, Error, "Explicit frame failed. Acquire={}, Submit={}, Present={}.", static_cast<uint32>(FrameResult.AcquireStatus), static_cast<uint32>(FrameResult.SubmitResult), static_cast<uint32>(FrameResult.PresentStatus));
             return EApplicationTickResult::Exit;
         }
-        if (!bSceneSwitchAttempted && (!bTestAfterNavigation || bNavigationUpdated) && FrameResult.PresentStatus == ERHISwapchainStatus::Success)
-        {
-            bSceneSwitchAttempted = true;
-            if (bTestAfterNavigation)
-            {
-                const auto& Pose = CameraNavigation.GetCameraToWorld();
-                LE_LOG(LogXBD, Info, "Presented navigated camera at ({}, {}, {}), forward ({}, {}, {}).", Pose(0, 3), Pose(1, 3), Pose(2, 3), -Pose(0, 2), -Pose(1, 2), -Pose(2, 2));
-                if (!SaveRequestedScene())
-                {
-                    return EApplicationTickResult::Exit;
-                }
-            }
-            const char* const NextScene = std::getenv("LIMITLESS_DEMO_NEXT_SCENE");
-            if (NextScene != nullptr && !PublishScene(NextScene))
-            {
-                LE_LOG(LogXBD, Info, "Keeping the active scene after replacement failed.");
-                bReportPreservedScene = true;
-            }
-        }
-        else if (bReportPreservedScene && FrameResult.PresentStatus == ERHISwapchainStatus::Success)
-        {
-            bReportPreservedScene = false;
-            LE_LOG(LogXBD, Info, "Presented the preserved scene with {} texture uploads.", Assets->Provider.GetTextureUploadCount());
-        }
+        bPreviousFramePresented = FrameResult.PresentStatus == ERHISwapchainStatus::Success;
         return EApplicationTickResult::Continue;
     }
 
@@ -408,6 +390,75 @@ public:
     static void ShutdownThunk(void* Context) noexcept { static_cast<FDemoRenderRuntimeModule*>(Context)->Shutdown(); }
 
 private:
+    enum class EScenePresentationReport : uint8
+    {
+        None,
+        Reloaded,
+        Preserved,
+    };
+
+    bool ProcessSceneRequests() noexcept
+    {
+        const bool bReloadRequested = WindowModule.GetInputFrame().WasKeyPressed(EPlatformKey::F5);
+        if (bPreviousFramePresented)
+        {
+            bPreviousFramePresented = false;
+            if (PendingPresentationReport == EScenePresentationReport::Reloaded)
+            {
+                LE_LOG(LogXBD, Info, "Presented reloaded scene '{}'.", ActiveScenePath.Data());
+            }
+            else if (PendingPresentationReport == EScenePresentationReport::Preserved)
+            {
+                LE_LOG(LogXBD, Info, "Presented the preserved scene with {} texture uploads.", Assets->Provider.GetTextureUploadCount());
+            }
+            PendingPresentationReport = EScenePresentationReport::None;
+            if (!RunRequestedSceneTest())
+            {
+                return false;
+            }
+        }
+
+        if (bReloadRequested)
+        {
+            if (PublishScene(ActiveScenePath.View()))
+            {
+                LE_LOG(LogXBD, Info, "Scene reload accepted '{}'.", ActiveScenePath.Data());
+                PendingPresentationReport = EScenePresentationReport::Reloaded;
+            }
+            else
+            {
+                LE_LOG(LogXBD, Info, "Scene reload rejected '{}'; keeping the active scene.", ActiveScenePath.Data());
+                PendingPresentationReport = EScenePresentationReport::Preserved;
+            }
+        }
+        return true;
+    }
+
+    bool RunRequestedSceneTest() noexcept
+    {
+        if (bSceneSwitchAttempted || (bTestAfterNavigation && !bNavigationUpdated))
+        {
+            return true;
+        }
+        bSceneSwitchAttempted = true;
+        if (bTestAfterNavigation)
+        {
+            const auto& Pose = CameraNavigation.GetCameraToWorld();
+            LE_LOG(LogXBD, Info, "Presented navigated camera at ({}, {}, {}), forward ({}, {}, {}).", Pose(0, 3), Pose(1, 3), Pose(2, 3), -Pose(0, 2), -Pose(1, 2), -Pose(2, 2));
+            if (!SaveRequestedScene())
+            {
+                return false;
+            }
+        }
+        const char* const NextScene = std::getenv("LIMITLESS_DEMO_NEXT_SCENE");
+        if (NextScene != nullptr && !PublishScene(NextScene))
+        {
+            LE_LOG(LogXBD, Info, "Keeping the active scene after replacement failed.");
+            PendingPresentationReport = EScenePresentationReport::Preserved;
+        }
+        return true;
+    }
+
     static bool ResolveMesh(void* Context, FAssetId Id, FMeshAssetHandle& Out) noexcept
     {
         FAssetLoadDiagnostic Diagnostic;
@@ -533,25 +584,31 @@ private:
 
     bool PublishScene(StringView Path, const bool bApplyStartupEdit = false) noexcept
     {
+        String CandidatePath;
+        if (!CandidatePath.TryAssign(Path))
+        {
+            LE_LOG(LogXBD, Error, "Could not store the candidate scene path.");
+            return false;
+        }
         auto CandidateAssets = TryMakeUnique<FDemoSceneAssets>(Catalog);
         UniquePtr<FScene> Candidate;
         FSceneOperationDiagnostic Diagnostic;
-        const String PrintablePath(Path);
+        const char* const PrintablePath = CandidatePath.Data();
         if (!CandidateAssets)
         {
-            LE_LOG(LogXBD, Error, "Could not allocate a scene asset session for '{}'.", PrintablePath.Data());
+            LE_LOG(LogXBD, Error, "Could not allocate a scene asset session for '{}'.", PrintablePath);
             return false;
         }
         if (!Renderer.InitializeAssetProvider(CandidateAssets->Provider))
         {
-            LE_LOG(LogXBD, Error, "Could not initialize material GPU resources for '{}'.", PrintablePath.Data());
+            LE_LOG(LogXBD, Error, "Could not initialize material GPU resources for '{}'.", PrintablePath);
             return false;
         }
         const FSceneAssetResolver Resolver{CandidateAssets.Get(), &CandidateAssets->GetRegistry(), &ResolveMesh, &ResolveMaterial};
-        const auto Result = LoadScene(Path, Resolver, Candidate, &Diagnostic);
+        const auto Result = LoadScene(CandidatePath.View(), Resolver, Candidate, &Diagnostic);
         if (Result != ESceneOperationResult::Success)
         {
-            LE_LOG(LogXBD, Error, "Scene '{}': {} ({}:{} {}, entity {}, field {}, asset {}, file {}).", PrintablePath.Data(), DescribeSceneOperationResult(Result), Diagnostic.Document.Line, Diagnostic.Document.Column, DescribeSceneDocumentResult(Diagnostic.Document.Result), Diagnostic.Entity.ToString().Data(), String(Diagnostic.Document.Field).Data(), Diagnostic.Asset.ToString().Data(), DescribeFileSystemResult(Diagnostic.FileResult));
+            LE_LOG(LogXBD, Error, "Scene '{}': {} ({}:{} {}, entity {}, field {}, asset {}, file {}).", PrintablePath, DescribeSceneOperationResult(Result), Diagnostic.Document.Line, Diagnostic.Document.Column, DescribeSceneDocumentResult(Diagnostic.Document.Result), Diagnostic.Entity.ToString().Data(), String(Diagnostic.Document.Field).Data(), Diagnostic.Asset.ToString().Data(), DescribeFileSystemResult(Diagnostic.FileResult));
             return false;
         }
         if (bApplyStartupEdit && !ApplyRequestedSceneEdit(*Candidate))
@@ -561,7 +618,7 @@ private:
         FWorld& CandidateWorld = Candidate->GetWorld();
         if (CandidateWorld.CompileNativeGameplaySystemSchedule() != ENativeGameplayScheduleResult::Success)
         {
-            LE_LOG(LogXBD, Error, "Could not compile gameplay schedule for '{}'.", PrintablePath.Data());
+            LE_LOG(LogXBD, Error, "Could not compile gameplay schedule for '{}'.", PrintablePath);
             return false;
         }
 
@@ -588,16 +645,16 @@ private:
                     CandidateAssets->GetRegistry().TryGetAssetId(Mesh.Material, MaterialId);
                     if (bMissingUV)
                     {
-                        LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has no UVs for material {}.", PrintablePath.Data(), EntityId.ToString().Data(), MeshId.ToString().Data(), MaterialId.ToString().Data());
+                        LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has no UVs for material {}.", PrintablePath, EntityId.ToString().Data(), MeshId.ToString().Data(), MaterialId.ToString().Data());
                     }
                     else
                     {
-                        LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has an invalid normal transform.", PrintablePath.Data(), EntityId.ToString().Data(), MeshId.ToString().Data());
+                        LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has an invalid normal transform.", PrintablePath, EntityId.ToString().Data(), MeshId.ToString().Data());
                     }
                     return false;
                 }
             }
-            LE_LOG(LogXBD, Error, "Scene '{}' is not renderable: {} (mesh {}).", PrintablePath.Data(), static_cast<uint32>(PreviewReport.Result), PreviewReport.MeshIndex);
+            LE_LOG(LogXBD, Error, "Scene '{}' is not renderable: {} (mesh {}).", PrintablePath, static_cast<uint32>(PreviewReport.Result), PreviewReport.MeshIndex);
             return false;
         }
 
@@ -611,11 +668,12 @@ private:
         }
         Scene = std::move(Candidate);
         Assets = std::move(CandidateAssets);
+        ActiveScenePath.Swap(CandidatePath);
         const FWorldRenderCameraPose& CameraPose = Preview.GetAuthoredPrimaryCameraPose();
         NavigationCameraId = CameraPose.PrimitiveId;
         CameraNavigation.Start(CameraPose.CameraToWorld);
         WindowModule.ResetInputForScene();
-        LE_LOG(LogXBD, Info, "Loaded scene '{}' with {} entities and {} visible meshes.", PrintablePath.Data(), Scene->GetWorld().GetEntityCount(), Preview.GetRenderScene().Meshes.Size());
+        LE_LOG(LogXBD, Info, "Loaded scene '{}' with {} entities and {} visible meshes.", ActiveScenePath.Data(), Scene->GetWorld().GetEntityCount(), Preview.GetRenderScene().Meshes.Size());
         const auto& Pose = CameraPose.CameraToWorld;
         const auto& Projection = Preview.GetRenderScene().Cameras[0].Projection;
         LE_LOG(LogXBD, Info, "Authored camera position ({}, {}, {}), forward ({}, {}, {}), vertical FOV {} rad.", Pose(0, 3), Pose(1, 3), Pose(2, 3), -Pose(0, 2), -Pose(1, 2), -Pose(2, 2), 2.0f * std::atan(1.0f / std::abs(Projection(1, 1))));
@@ -630,6 +688,7 @@ private:
     FAssetCatalog Catalog;
     UniquePtr<FDemoSceneAssets> Assets;
     UniquePtr<FScene> Scene;
+    String ActiveScenePath;
     FWorldRenderer WorldRenderer;
     FDemoCameraNavigation CameraNavigation;
     FRenderPrimitiveId NavigationCameraId;
@@ -638,11 +697,12 @@ private:
     FRenderFrameScheduler FrameScheduler;
     FSceneRenderer Renderer;
     FPlatformWindowSize CachedWindowSize{DefaultWindowWidth, DefaultWindowHeight};
+    EScenePresentationReport PendingPresentationReport = EScenePresentationReport::None;
     bool bCanRender = false;
     bool bNavigationUpdated = false;
     bool bTestAfterNavigation = false;
     bool bSceneSwitchAttempted = false;
-    bool bReportPreservedScene = false;
+    bool bPreviousFramePresented = false;
     bool bRenderingSuspended = false;
     bool bSwapchainRecreateRequested = false;
     bool bShutdown = false;

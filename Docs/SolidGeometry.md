@@ -9,22 +9,18 @@ Win64 Game 和 Editor 会把样例暂存到各自的 `SolidGeometryContent`。�
 ```powershell
 $gameRoot = (Resolve-Path 'Engine/Binaries/Win64/Debug/Limitless/Game').Path
 $solidContent = Join-Path $gameRoot 'SolidGeometryContent'
-$scene = Join-Path $solidContent 'Scene.json'
 $tool = (Resolve-Path 'Engine/Binaries/Win64/Debug/SceneTool/Program/SceneTool.exe').Path
-& $tool check $scene Game "$solidContent/Assets"
+& $tool check --json "$solidContent/Scene.json" Game "$solidContent/Assets"
 $previousContent = $env:LIMITLESS_DEMO_CONTENT
-$previousScene = $env:LIMITLESS_DEMO_SCENE
 try {
     $env:LIMITLESS_DEMO_CONTENT = $solidContent
-    $env:LIMITLESS_DEMO_SCENE = $scene
     Start-Process -FilePath "$gameRoot/LimitlessGame.exe" -WorkingDirectory (Get-Location).Path -Wait
 } finally {
     $env:LIMITLESS_DEMO_CONTENT = $previousContent
-    $env:LIMITLESS_DEMO_SCENE = $previousScene
 }
 ```
 
-用 WASD 和右键转向绕看箱体。初始相机同时看到箱体的顶部和侧面，移动后可检查箱体的轮廓、地面遮挡和各面的贴图。要预览编辑，把 `Scene.json` 复制到工作区的临时目录，改好后将 `$scene` 设为副本的绝对路径，校验后重新启动 Game。
+用 WASD 和右键转向绕看箱体。初始相机同时看到箱体的顶部和侧面，移动后可检查箱体的轮廓、地面遮挡和各面的贴图。要编辑并在运行中按 F5 重载，可用 `LIMITLESS_DEMO_SCENE` 指向场景副本，操作与 [场景预检及重载](M1ContentWorkflow.md#预检并重载正在运行的场景) 相同。
 
 ## 方向光阴影取样
 
@@ -35,7 +31,7 @@ try {
 | 立柱投影内部 | `(2.1, 0, -1.11)` | `(841, 365)` | 遮光 |
 | 同一材质的受光处 | `(2.1, 0, 0.10)` | `(873, 418)` | 受光 |
 
-立柱实体的 UUID 是 `96e540d4-209d-47be-8be0-08d14fb5ef02`。在场景副本中将它的平移 `z` 从 `0.2` 改为 `1.6`，然后从副本重新启动 Game。两个位置的预期亮暗会互换，立柱仍在视野外。
+立柱实体的 UUID 是 `96e540d4-209d-47be-8be0-08d14fb5ef02`。在场景副本中将它的平移 `z` 从 `0.2` 改为 `1.6` 并重载，两个位置的预期亮暗会互换，立柱仍在视野外。
 
 ## Win64 验收
 

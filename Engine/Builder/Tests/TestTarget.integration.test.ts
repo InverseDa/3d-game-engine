@@ -74,10 +74,10 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         "Generated/DemoApplication/ContentTools/Binaries/Win64/Debug/AssetImport/Program/AssetImport.exe");
     const SolidGeometry = Path.join(GameRoot, "SolidGeometryContent");
     const SolidCheck = spawnSync(SceneTool, [
-        "check", Path.join(SolidGeometry, "Scene.json"), "Game", Path.join(SolidGeometry, "Assets"),
+        "check", "--json", Path.join(SolidGeometry, "Scene.json"), "Game", Path.join(SolidGeometry, "Assets"),
     ], { cwd: Root, encoding: "utf-8" });
     Assert.equal(SolidCheck.status, 0, SolidCheck.error?.message ?? SolidCheck.stdout + SolidCheck.stderr);
-    Assert.match(SolidCheck.stdout, /\(5 entities\)/);
+    Assert.equal(JSON.parse(SolidCheck.stdout).entityCount, 5);
     const Scratch = await Fs.mkdtemp(Path.join(Os.tmpdir(), "limitless-textured-scene-"));
     try {
         await Fs.cp(Demo, Scratch, { recursive: true });
@@ -86,6 +86,19 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         const Check = (File = SceneFile) => spawnSync(SceneTool, ["check", File, "Game", AssetRoot], {
             cwd: Scratch, encoding: "utf-8",
         });
+        function CheckJson(File: string, ExpectedExit: number) {
+            const Run = spawnSync(SceneTool, ["check", "--json", File, "Game", AssetRoot], {
+                cwd: Scratch, encoding: "utf-8",
+            });
+            Assert.equal(Run.status, ExpectedExit, Run.error?.message ?? Run.stdout + Run.stderr);
+            Assert.equal(Run.stderr, "");
+            const Report = JSON.parse(Run.stdout);
+            Assert.equal(Report.ok, ExpectedExit === 0);
+            Assert.equal(Report.path, File);
+            Assert.equal(typeof Report.code, "string");
+            Assert.equal(typeof Report.message, "string");
+            return Report;
+        }
         const Valid = Check();
         Assert.equal(Valid.status, 0, Valid.stderr);
         const SceneText = await Fs.readFile(SceneFile, "utf-8");
@@ -97,6 +110,13 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         CameraEntity.transform.translation = [0, 0, 4];
         CameraEntity.transform.rotation = [0, 0, 0.13052619, 0.99144486];
         CameraEntity.camera.verticalFieldOfViewRadians = 0.9;
+        const UnicodeCameraFile = Path.join(Scratch, "场景 相机.json");
+        const EditedCameraBytes = Buffer.from(JSON.stringify(CameraScene, null, 2) + "\n");
+        await Fs.writeFile(UnicodeCameraFile, EditedCameraBytes);
+        const ValidJson = CheckJson(UnicodeCameraFile, 0);
+        Assert.equal(ValidJson.code, "ok");
+        Assert.equal(ValidJson.entityCount, CameraScene.entities.length);
+        Assert.deepEqual(await Fs.readFile(UnicodeCameraFile), EditedCameraBytes);
 
         async function CheckCameraFixture(FileName: string, InvalidField?: string): Promise<void> {
             const File = Path.join(Scratch, FileName);
@@ -114,6 +134,14 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         await CheckCameraFixture("CameraEdited.json");
         CameraEntity.camera.verticalFieldOfViewRadians = 0;
         await CheckCameraFixture("CameraInvalidFov.json", "verticalFieldOfViewRadians");
+        const InvalidCameraFile = Path.join(Scratch, "CameraInvalidFov.json");
+        const InvalidCameraBytes = await Fs.readFile(InvalidCameraFile);
+        const InvalidJson = CheckJson(InvalidCameraFile, 1);
+        Assert.equal(InvalidJson.code, "scene_document_error");
+        Assert.equal(InvalidJson.entity, CameraId);
+        Assert.equal(InvalidJson.field, "verticalFieldOfViewRadians");
+        Assert.ok(InvalidJson.line > 0 && InvalidJson.column > 0);
+        Assert.deepEqual(await Fs.readFile(InvalidCameraFile), InvalidCameraBytes);
         CameraEntity.camera.verticalFieldOfViewRadians = 0.9;
         CameraEntity.transform.rotation = [0, 0, 0, 0];
         await CheckCameraFixture("CameraInvalidRotation.json", "rotation");
@@ -146,6 +174,24 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         }
 
         await CheckLightFixture("LightEdited.json");
+        const WrongTypeLight = { ...EditedLight, intensity: "0.5" };
+        for (const [Name, Entity] of [
+            ["id-first", { id: LightId, directionalLight: WrongTypeLight }],
+            ["id-last", { directionalLight: WrongTypeLight, id: LightId }],
+        ] as const) {
+            const File = Path.join(Scratch, `LightTypedField-${Name}.json`);
+            const Bytes = Buffer.from(JSON.stringify({
+                ...LightScene, entities: LightScene.entities.map((Item: LightEntity) =>
+                    Item.id === LightId ? Entity : Item),
+            }, null, 2) + "\n");
+            await Fs.writeFile(File, Bytes);
+            const InvalidLight = CheckJson(File, 1);
+            Assert.equal(InvalidLight.code, "scene_document_error");
+            Assert.equal(InvalidLight.entity, LightId);
+            Assert.equal(InvalidLight.field, "intensity");
+            Assert.ok(InvalidLight.line > 0 && InvalidLight.column > 0);
+            Assert.deepEqual(await Fs.readFile(File), Bytes);
+        }
         for (const [Field, Invalid] of [
             ["direction", [0, 0, 0]], ["color", [1, 1.25, 0]], ["intensity", 17],
         ] as const) {
@@ -173,6 +219,32 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         Assert.equal(ImportNormalMesh.status, 0, ImportNormalMesh.error?.message ?? ImportNormalMesh.stderr);
         const NormalMeshOk = Check();
         Assert.equal(NormalMeshOk.status, 0, NormalMeshOk.stderr);
+
+        const LitMeshId = "8a0a5d74-17ef-48e0-a46b-f7105518e702";
+        const LitParentId = "8a0a5d74-17ef-48e0-a46b-f7105518e709";
+        LightScene.entities.find((Entity: { id: string }) => Entity.id === LitMeshId).parent = LitParentId;
+        const LitParent = {
+            id: LitParentId,
+            transform: { translation: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [0, 1, 1] },
+        };
+        LightScene.entities.push(LitParent);
+        const LitSceneFile = Path.join(Scratch, "LitMeshTransform.json");
+        const LitSceneBytes = Buffer.from(JSON.stringify(LightScene, null, 2) + "\n");
+        await Fs.writeFile(LitSceneFile, LitSceneBytes);
+        const InvalidLitMesh = CheckJson(LitSceneFile, 1);
+        Assert.equal(InvalidLitMesh.code, "invalid_normal_transform");
+        Assert.equal(InvalidLitMesh.entity, LitMeshId);
+        Assert.equal(InvalidLitMesh.asset, NormalAssetId);
+        Assert.equal(InvalidLitMesh.field, "transform");
+        Assert.deepEqual(await Fs.readFile(LitSceneFile), LitSceneBytes);
+        LightEntity.directionalLight.active = false;
+        await Fs.writeFile(LitSceneFile, JSON.stringify(LightScene, null, 2) + "\n");
+        Assert.equal(CheckJson(LitSceneFile, 0).code, "ok");
+        LightEntity.directionalLight.active = true;
+        LitParent.transform.scale[0] = 1;
+        await Fs.writeFile(LitSceneFile, JSON.stringify(LightScene, null, 2) + "\n");
+        Assert.equal(CheckJson(LitSceneFile, 0).code, "ok");
+
         const BadNormalMesh = await Fs.readFile(NormalAsset);
         Assert.equal(BadNormalMesh.readUInt32LE(4), 3);
         const MeshPayload = 48 + BadNormalMesh.readUInt32LE(40);
@@ -185,6 +257,11 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         Assert.ok(BadNormal.stderr.includes(
             `entity 8a0a5d74-17ef-48e0-a46b-f7105518e702 field mesh.mesh: asset ${NormalAssetId}`,
         ), BadNormal.stderr);
+        const BadMeshJson = CheckJson(SceneFile, 1);
+        Assert.equal(BadMeshJson.code, "asset_reference_error");
+        Assert.equal(BadMeshJson.entity, LitMeshId);
+        Assert.equal(BadMeshJson.asset, NormalAssetId);
+        Assert.equal(BadMeshJson.field, "mesh.mesh");
         await Fs.writeFile(NormalAsset, OriginalMeshBytes);
 
         const TexturedEntity = Scene.entities.find((Entity: { mesh?: { sortKey: string } }) =>

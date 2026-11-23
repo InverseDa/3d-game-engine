@@ -362,6 +362,29 @@ bool TestDirectionalLightSaveAndLoad(const FSceneTestIds& Ids)
     return bPassed;
 }
 
+bool TestMeshTransformPreflight(const FSceneTestIds& Ids)
+{
+    FSceneDocument Document = MakeSceneDocument(Ids);
+    auto& Light = Document.Entities.EmplaceBack();
+    Light.Id = ParseSceneTestId<FSceneEntityId>("10000000-0000-4000-8000-000000000006");
+    Light.bHasDirectionalLight = true;
+    auto& ParentScale = Document.Entities[0].Transform.Scale;
+    ParentScale = Math::Vector3f(-2.0f, 3.0f, 0.5f);
+
+    bool bMeshHasNormals = true;
+    const FSceneMeshNormalResolver MeshNormals{&bMeshHasNormals, [](const void* Context, FAssetId) noexcept { return *static_cast<const bool*>(Context); }};
+    FSceneOperationDiagnostic Diagnostic;
+    bool bPassed = ExpectScene(ValidateSceneMeshTransforms(Document, MeshNormals, &Diagnostic) == EResult::Success, "preflight accepts nonsingular mirrored world transforms");
+    ParentScale[0] = 0.0f;
+    bPassed &= ExpectScene(ValidateSceneMeshTransforms(Document, MeshNormals, &Diagnostic) == EResult::InvalidNormalTransform && Diagnostic.Entity == Ids.Left && Diagnostic.Asset == Ids.Mesh && Diagnostic.Document.Field == StringView("transform"), "preflight reports the lit mesh child and asset for a singular ancestor transform");
+    Light.DirectionalLight.bActive = false;
+    bPassed &= ExpectScene(ValidateSceneMeshTransforms(Document, MeshNormals, &Diagnostic) == EResult::Success && !Diagnostic.Entity.IsValid(), "preflight preserves the singular transform fallback without an active light");
+    Light.DirectionalLight.bActive = true;
+    bMeshHasNormals = false;
+    bPassed &= ExpectScene(ValidateSceneMeshTransforms(Document, MeshNormals, &Diagnostic) == EResult::Success, "preflight preserves the singular transform fallback without authored normals");
+    return bPassed;
+}
+
 } // namespace
 
 bool RunSceneTests()
@@ -380,6 +403,7 @@ bool RunSceneTests()
     bPassed &= TestFailedRestore(Document, Ids, Assets, Published);
     bPassed &= TestSaveAndLoad(Ids, Assets, *Published);
     bPassed &= TestDirectionalLightSaveAndLoad(Ids);
+    bPassed &= TestMeshTransformPreflight(Ids);
     FEntity Removed;
     if (ExpectScene(Published->TryFindEntity(Ids.Empty, Removed) && Published->GetWorld().DestroyEntity(Removed), "destroy a scene entity via World"))
     {

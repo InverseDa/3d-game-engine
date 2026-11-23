@@ -95,6 +95,56 @@ struct FRestoreEntity
     FEntity Entity;
 };
 
+template <typename CreateEntityType> EResult RestoreHierarchy(const FSceneDocument& Document, FWorld& World, Array<FRestoreEntity>& Entities, const CreateEntityType& CreateEntity, FSceneOperationDiagnostic* const Diagnostic) noexcept
+{
+    if (!Entities.TryReserve(Document.Entities.Size()))
+    {
+        return Report(Diagnostic, EResult::AllocationFailed);
+    }
+    for (const FSceneEntityRecord& Record : Document.Entities)
+    {
+        if (!Entities.TryPushBack(FRestoreEntity{&Record, {}}))
+        {
+            return Report(Diagnostic, EResult::AllocationFailed);
+        }
+    }
+    if (Entities.Size() > 1)
+    {
+        std::sort(Entities.Data(), Entities.Data() + Entities.Size(), [](const FRestoreEntity& Left, const FRestoreEntity& Right) { return Left.Record->Id < Right.Record->Id; });
+    }
+    for (FRestoreEntity& Item : Entities)
+    {
+        const FSceneEntityRecord& Record = *Item.Record;
+        if (!CreateEntity(Record.Id, Item.Entity))
+        {
+            return Report(Diagnostic, EResult::AllocationFailed, Record.Id);
+        }
+        if (Record.bHasTransform)
+        {
+            const auto Mutation = World.TryAddTransform(Item.Entity, Record.Transform);
+            if (Mutation != EComponentMutationResult::Added)
+            {
+                return ReportComponent(Diagnostic, Mutation, Record.Id);
+            }
+        }
+    }
+    for (const FRestoreEntity& Item : Entities)
+    {
+        const FSceneEntityRecord& Record = *Item.Record;
+        if (!Record.Parent.IsValid())
+        {
+            continue;
+        }
+        const auto* const End = Entities.Data() + Entities.Size();
+        const auto* const Parent = std::lower_bound(static_cast<const FRestoreEntity*>(Entities.Data()), End, Record.Parent, [](const FRestoreEntity& Entry, const FSceneEntityId Id) { return Entry.Record->Id < Id; });
+        if (Parent == End || Parent->Record->Id != Record.Parent || World.SetTransformParent(Item.Entity, Parent->Entity) != ETransformParentResult::Reparented)
+        {
+            return Report(Diagnostic, EResult::WorldMutationFailed, Record.Id);
+        }
+    }
+    return World.UpdateTransforms() ? EResult::Success : Report(Diagnostic, EResult::WorldMutationFailed);
+}
+
 } // namespace
 
 FScene::FScene(IAllocator& Allocator) noexcept : Identities(Allocator), World(Allocator)
@@ -190,37 +240,15 @@ ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneA
         return Report(Diagnostic, EResult::AllocationFailed);
     }
     Array<FRestoreEntity> Entities(Allocator);
-    if (!Entities.TryReserve(Document.Entities.Size()))
-    {
-        return Report(Diagnostic, EResult::AllocationFailed);
-    }
-    for (const FSceneEntityRecord& Record : Document.Entities)
-    {
-        if (!Entities.TryPushBack(FRestoreEntity{&Record, {}}))
-        {
-            return Report(Diagnostic, EResult::AllocationFailed);
-        }
-    }
-    if (Entities.Size() > 1)
-    {
-        std::sort(Entities.Data(), Entities.Data() + Entities.Size(), [](const FRestoreEntity& Left, const FRestoreEntity& Right) { return Left.Record->Id < Right.Record->Id; });
-    }
     FWorld& World = Candidate->GetWorld();
-    for (FRestoreEntity& Item : Entities)
+    const auto CreateEntity = [&Candidate](const FSceneEntityId Id, FEntity& Entity) noexcept { return Candidate->TryCreateEntityWithUniqueId(Id, Entity); };
+    if (const EResult Result = RestoreHierarchy(Document, World, Entities, CreateEntity, Diagnostic); Result != EResult::Success)
+    {
+        return Result;
+    }
+    for (const FRestoreEntity& Item : Entities)
     {
         const FSceneEntityRecord& Record = *Item.Record;
-        if (!Candidate->TryCreateEntityWithUniqueId(Record.Id, Item.Entity))
-        {
-            return Report(Diagnostic, EResult::AllocationFailed, Record.Id);
-        }
-        if (Record.bHasTransform)
-        {
-            const auto Mutation = World.TryAddTransform(Item.Entity, Record.Transform);
-            if (Mutation != EComponentMutationResult::Added)
-            {
-                return ReportComponent(Diagnostic, Mutation, Record.Id);
-            }
-        }
         if (Record.bHasMesh)
         {
             const EResult Result = AddMesh(World, Item.Entity, Record, Assets, Allocator, Diagnostic);
@@ -247,24 +275,6 @@ ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneA
             }
         }
     }
-    for (const FRestoreEntity& Item : Entities)
-    {
-        const FSceneEntityRecord& Record = *Item.Record;
-        if (!Record.Parent.IsValid())
-        {
-            continue;
-        }
-        const auto* const End = Entities.Data() + Entities.Size();
-        const auto* const Parent = std::lower_bound(static_cast<const FRestoreEntity*>(Entities.Data()), End, Record.Parent, [](const FRestoreEntity& Entry, const FSceneEntityId Id) { return Entry.Record->Id < Id; });
-        if (Parent == End || Parent->Record->Id != Record.Parent || World.SetTransformParent(Item.Entity, Parent->Entity) != ETransformParentResult::Reparented)
-        {
-            return Report(Diagnostic, EResult::WorldMutationFailed, Record.Id);
-        }
-    }
-    if (!World.UpdateTransforms())
-    {
-        return Report(Diagnostic, EResult::WorldMutationFailed);
-    }
     OutScene = std::move(Candidate);
     return Report(Diagnostic, EResult::Success);
 }
@@ -285,6 +295,64 @@ ESceneOperationResult LoadScene(const StringView Path, const FSceneAssetResolver
         return ReportDocument(Diagnostic, Format);
     }
     return RestoreScene(Document, Assets, OutScene, Diagnostic, Allocator);
+}
+
+ESceneOperationResult ValidateSceneMeshTransforms(const FSceneDocument& Document, const FSceneMeshNormalResolver& MeshNormals, FSceneOperationDiagnostic* const Diagnostic) noexcept
+{
+    if (MeshNormals.HasNormals == nullptr)
+    {
+        return Report(Diagnostic, EResult::InvalidState);
+    }
+    bool bHasActiveLight = false;
+    bool bHasMeshNormals = false;
+    for (const FSceneEntityRecord& Record : Document.Entities)
+    {
+        bHasActiveLight |= Record.bHasDirectionalLight && Record.DirectionalLight.bActive;
+        bHasMeshNormals |= Record.bHasMesh && MeshNormals.HasNormals(MeshNormals.Context, Record.Mesh.Mesh);
+        if (bHasActiveLight && bHasMeshNormals)
+        {
+            break;
+        }
+    }
+    if (!bHasActiveLight || !bHasMeshNormals)
+    {
+        return Report(Diagnostic, EResult::Success);
+    }
+
+    IAllocator& Allocator = Document.Entities.GetAllocator();
+    FWorld World(Allocator);
+    if (!World.IsValid())
+    {
+        return Report(Diagnostic, EResult::AllocationFailed);
+    }
+    Array<FRestoreEntity> Entities(Allocator);
+    const auto CreateEntity = [&World](FSceneEntityId, FEntity& Entity) noexcept { return World.TryCreateEntity(Entity); };
+    if (const EResult Result = RestoreHierarchy(Document, World, Entities, CreateEntity, Diagnostic); Result != EResult::Success)
+    {
+        return Result;
+    }
+    for (const FRestoreEntity& Item : Entities)
+    {
+        const FSceneEntityRecord& Record = *Item.Record;
+        if (!Record.bHasMesh || !MeshNormals.HasNormals(MeshNormals.Context, Record.Mesh.Mesh))
+        {
+            continue;
+        }
+        Math::Matrix4f LocalToWorld = Math::Matrix4f::Identity();
+        if (Record.bHasTransform && !World.TryGetWorldMatrix(Item.Entity, LocalToWorld))
+        {
+            return Report(Diagnostic, EResult::WorldMutationFailed, Record.Id, Record.Mesh.Mesh);
+        }
+        Math::Matrix3f NormalToWorld;
+        if (!Math::TryBuildNormalMatrix(LocalToWorld, NormalToWorld))
+        {
+            FSceneDocumentDiagnostic Format;
+            Format.Entity = Record.Id;
+            Format.Field = "transform";
+            return Report(Diagnostic, EResult::InvalidNormalTransform, Record.Id, Record.Mesh.Mesh, EFileSystemResult::Success, Format);
+        }
+    }
+    return Report(Diagnostic, EResult::Success);
 }
 
 ESceneOperationResult CaptureScene(const FScene& Scene, const FAssetRegistry& Registry, FSceneDocument& OutDocument, FSceneOperationDiagnostic* const Diagnostic) noexcept
@@ -425,6 +493,8 @@ const char* DescribeSceneOperationResult(const ESceneOperationResult Result) noe
         return "could not read the scene file";
     case ESceneOperationResult::FileWriteFailed:
         return "could not publish the scene file";
+    case ESceneOperationResult::InvalidNormalTransform:
+        return "lit mesh has an invalid normal transform";
     }
     return "unknown scene failure";
 }

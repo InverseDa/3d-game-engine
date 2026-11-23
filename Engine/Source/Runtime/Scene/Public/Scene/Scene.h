@@ -22,6 +22,7 @@ enum class ESceneOperationResult : uint8
     WorldMutationFailed,
     FileReadFailed,
     FileWriteFailed,
+    InvalidNormalTransform,
 };
 
 struct FSceneOperationDiagnostic
@@ -42,6 +43,12 @@ struct FSceneAssetResolver
     const FAssetRegistry* Registry = nullptr;
     bool (*ResolveMesh)(void*, FAssetId, FMeshAssetHandle&) noexcept = nullptr;
     bool (*ResolveMaterial)(void*, FAssetId, FMaterialAssetHandle&) noexcept = nullptr;
+};
+
+struct FSceneMeshNormalResolver
+{
+    const void* Context = nullptr;
+    bool (*HasNormals)(const void*, FAssetId) noexcept = nullptr;
 };
 
 class SCENE_API FScene final
@@ -76,6 +83,9 @@ private:
 // scene alive, pass an empty candidate owner and publish it at a frame boundary.
 SCENE_API ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneAssetResolver& Assets, UniquePtr<FScene>& OutScene, FSceneOperationDiagnostic* Diagnostic = nullptr, IAllocator& Allocator = GetDefaultAllocator()) noexcept;
 SCENE_API ESceneOperationResult LoadScene(StringView Path, const FSceneAssetResolver& Assets, UniquePtr<FScene>& OutScene, FSceneOperationDiagnostic* Diagnostic = nullptr, IAllocator& Allocator = GetDefaultAllocator()) noexcept;
+// Checks composed transforms for lit meshes after the document and all typed
+// mesh references have been validated. The resolver reads decoded metadata.
+SCENE_API ESceneOperationResult ValidateSceneMeshTransforms(const FSceneDocument& Document, const FSceneMeshNormalResolver& MeshNormals, FSceneOperationDiagnostic* Diagnostic = nullptr) noexcept;
 SCENE_API ESceneOperationResult CaptureScene(const FScene& Scene, const FAssetRegistry& Registry, FSceneDocument& OutDocument, FSceneOperationDiagnostic* Diagnostic = nullptr) noexcept;
 SCENE_API ESceneOperationResult SaveScene(StringView Path, const FScene& Scene, const FAssetRegistry& Registry, FSceneOperationDiagnostic* Diagnostic = nullptr) noexcept;
 SCENE_API const char* DescribeSceneOperationResult(ESceneOperationResult Result) noexcept;

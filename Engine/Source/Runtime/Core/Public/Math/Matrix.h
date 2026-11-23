@@ -195,6 +195,10 @@ using Matrix2d = Matrix<double, 2, 2>;
 using Matrix3d = Matrix<double, 3, 3>;
 using Matrix4d = Matrix<double, 4, 4>;
 
+// Builds the inverse transpose of the linear part up to a positive scale.
+// Returns false for nonfinite or degenerate transforms and preserves Out.
+CORE_API bool TryBuildNormalMatrix(const Matrix4f& LocalToWorld, Matrix3f& Out) noexcept;
+
 // Uses double precision for elimination and preserves Out on failure.
 CORE_API bool TryInvertMatrix(const Matrix4f& Matrix, Matrix4f& Out) noexcept;
 
