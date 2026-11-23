@@ -21,29 +21,25 @@ camera pose. Its arrays and owned debug strings use the allocator supplied when
 the snapshot is constructed. A failed build leaves it empty and unpublished, including
 when replacing a previously successful result.
 
-Each mesh proxy copies:
-
-- a `FRenderPrimitiveId` derived losslessly from World domain plus Entity
-  generation/index;
-- its owned debug name and sort key;
-- `LocalToWorld` and a validated world-space AABB;
-- whether the mesh has authored normals, plus `NormalToWorld` when lit;
-- the persistent Material asset ID used by deterministic ordering;
-- resolved vertex/index buffers, vertex/index counts, R16/R32 index format,
-  graphics pipeline, opaque base color, sampled image, material binding, and pass mask.
+Each visible mesh proxy owns its debug name, sort key, world transform,
+world-space AABB and `NormalToWorld` when lit. A `FRenderPrimitiveId` records
+the World domain and packed Entity generation/index. The proxy also carries the
+persistent material ID and borrows the resolved Mesh and Material payloads.
+Renderer passes select their own pipeline and access GPU resources through
+those payloads.
 
 A material with an authored color texture requires authored mesh UVs.
 Snapshot extraction rejects incompatible pairs before culling and reports
-the mesh index and primitive ID. GPU pointers remain borrowed through the
-scene's renderer provider.
+the mesh index and primitive ID.
 
 Mesh assets provide validated local-space AABBs. WorldRenderer transforms them
 with the absolute linear matrix, so rotation and non-uniform scale remain
 conservative. Default bounds are invalid sentinels; non-finite transforms or
 unordered/non-finite bounds fail publication. The selected camera supplies View,
 Projection, and ViewProjection matrices. WorldRenderer conservatively tests all
-eight AABB corners in homogeneous clip space; plane contact is retained, fully
-outside meshes are omitted, and non-finite clip coordinates fail publication.
+eight AABB corners in homogeneous clip space. It retains plane contact, omits
+fully outside meshes from the visible list and rejects non-finite clip
+coordinates.
 
 Exactly one primary camera is published. Active candidates are ordered by
 descending priority and then ascending persistent primitive ID. The winner must
@@ -71,9 +67,16 @@ of both the light entity's hierarchy and the selected camera pose. On failure,
 `InvalidDirectionalLight` and `MultipleDirectionalLights` report the primitive
 ID of the offending light.
 
+With an enabled light, `ShadowCasters` contains the mesh reference, world
+transform and validated bounds for each mesh before main-camera culling removes
+it from the visible list. This includes geometry without authored normals.
+Renderer uses the caster bounds to fit the directional shadow map. See the
+[solid geometry sample](SolidGeometry.md) for an off-camera caster with an
+on-screen shadow.
+
 When a light is enabled, a mesh with authored normals uses the inverse
-transpose of the linear part of its world transform. WorldRenderer computes
-the cofactors in double precision and preserves the determinant sign for
+transpose of the linear part of its world transform. The Core math helper
+computes the cofactors in double precision and preserves the determinant sign for
 mirrored transforms. It scales all coefficients by a common positive factor
 for float storage. BasePass normalizes the transformed interpolated normal.
 A non-finite transform or a determinant with magnitude at or below `1e-8`
@@ -88,19 +91,18 @@ PrimitiveId.Value)`, independent of dense storage order.
 ## Lifetime
 
 The Demo constructs one snapshot on the `FRenderFrameScheduler::ExecuteFrame`
-callback stack and Renderer reads it synchronously while recording. No World
-pointer, registry pointer, resolved asset-object pointer, or borrowed
-`StringView` is stored in the published snapshot. A later asset Replace is seen
-only by the next build; an already published CPU snapshot is not rewritten.
+callback stack and passes it to `FSceneRenderer::RecordFrame`. The published
+snapshot owns its scene data and debug strings and borrows the resolved asset
+payloads. Renderer reads it synchronously during recording. Each subsequent
+build resolves the currently registered assets.
 
-GPU resource pointers are provider-borrowed, not snapshot-owned. Providers must
-keep them alive until submitted frames finish. During resize, the Demo waits
-for submitted frames, builds replacement attachments and Composite resources,
-and publishes the complete replacement before destroying the old resources.
-The shared BasePass pipeline uses dynamic viewport and scissor, so the same
-material handle remains usable for every entity across viewport sizes.
-Shutdown stops frame slots, releases the active scene and asset session,
-then destroys the shared pipeline and device.
+Keep the provider and each referenced payload alive until its submitted frames
+finish. The Demo drains frames before resizing the swapchain. `FSceneRenderer`
+builds candidate attachments and Composite resources, then waits for submitted
+frames before publishing and retiring its old targets. The shared BasePass
+pipeline uses dynamic viewport and scissor, keeping material handles valid
+across viewport sizes. Shutdown drains frame slots, releases the scene and
+asset session, then destroys the renderer and device.
 
 ## Deliberate exclusions
 

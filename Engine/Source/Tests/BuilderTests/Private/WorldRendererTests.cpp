@@ -122,10 +122,8 @@ struct FWorldRendererFixture
         MeshAsset.IndexCount = 3;
         MeshAsset.IndexFormat = EPixelFormat::R32_UINT;
         MeshAsset.LocalBounds = FRenderBounds(Math::Vector3f(-1.0f, -2.0f, -0.5f), Math::Vector3f(1.0f, 2.0f, 0.5f));
-        MaterialAssets[0].GraphicsPipeline = reinterpret_cast<FRHIPipeline_Graphics*>(static_cast<std::uintptr_t>(0x2000));
         MaterialAssets[0].PassMask = ERenderMeshPassMask::SceneColor;
         MaterialAssets[0].BaseColor = Math::Vector4f(1.0f, 0.5f, 0.25f, 0.0f);
-        MaterialAssets[1].GraphicsPipeline = reinterpret_cast<FRHIPipeline_Graphics*>(static_cast<std::uintptr_t>(0x3000));
         MaterialAssets[1].PassMask = ERenderMeshPassMask::SceneColor;
         MaterialAssets[1].BaseColor = Math::Vector4f(2.0f, 1.0f, 0.5f, 7.0f);
 
@@ -197,7 +195,7 @@ int RunTexturedMeshContractTests()
     FTransform Visible;
     Visible.Translation = Math::Vector3f(4.0f, 5.0f, 6.0f);
     const bool bRestored = Fixture.World.SetLocalTransform(Fixture.Entity, Visible) == ETransformUpdateResult::Updated;
-    Failures += Expect(bRestored && Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, MakeBuildContext(2), Snapshot, &Report) == EWorldRenderSnapshotBuildResult::Success && Snapshot.GetRenderScene().Meshes.Size() == 1 && Snapshot.GetRenderScene().Meshes[0].BaseColorTexture == Material.BaseColorTexture && Snapshot.GetRenderScene().Meshes[0].MaterialBindGroup == Material.MaterialBindGroup, "valid visible UV mesh copies material sampling references into the snapshot");
+    Failures += Expect(bRestored && Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, MakeBuildContext(2), Snapshot, &Report) == EWorldRenderSnapshotBuildResult::Success && Snapshot.GetRenderScene().Meshes.Size() == 1 && Snapshot.GetRenderScene().Meshes[0].Material == &Material, "valid visible UV mesh references the resolved material");
     return Failures;
 }
 
@@ -211,12 +209,16 @@ int RunSnapshotSuccessAndIdentityTests()
     FWorldRenderSnapshotBuildReport Report;
     const EWorldRenderSnapshotBuildResult Result = Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, MakeBuildContext(17), Snapshot, &Report);
     const FRenderScene& Scene = Snapshot.GetRenderScene();
-    Failures += Expect(bInitialized && Result == EWorldRenderSnapshotBuildResult::Success && Report.Result == EWorldRenderSnapshotBuildResult::Success && Snapshot.IsPublished() && Snapshot.GetFrameIndex() == 17 && Scene.Meshes.Size() == 1 && Scene.Cameras.Size() == 1 && Scene.Lights.IsEmpty() && Report.SourceMeshCount == 1 && Report.VisibleMeshCount == 1 && Report.CulledMeshCount == 0, "WorldRenderer publishes one complete frame-owned snapshot");
+    Failures += Expect(bInitialized && Result == EWorldRenderSnapshotBuildResult::Success && Report.Result == EWorldRenderSnapshotBuildResult::Success && Snapshot.IsPublished() && Snapshot.GetFrameIndex() == 17 && Scene.Meshes.Size() == 1 && Scene.Cameras.Size() == 1 && Scene.Lights.IsEmpty() && Scene.ShadowCasters.IsEmpty() && Report.SourceMeshCount == 1 && Report.VisibleMeshCount == 1 && Report.CulledMeshCount == 0, "WorldRenderer publishes one complete frame-owned snapshot");
     if (!Scene.Meshes.IsEmpty())
     {
         const FRenderMeshProxy& Proxy = Scene.Meshes[0];
         const uint64 ExpectedValue = (static_cast<uint64>(Fixture.Entity.GetGeneration()) << 32) | static_cast<uint64>(Fixture.Entity.GetIndex());
-        Failures += Expect(Proxy.PrimitiveId.Scope == Fixture.Entity.WorldDomain && Proxy.PrimitiveId.Value == ExpectedValue && Proxy.DebugName == StringView("SnapshotTriangle") && Proxy.VertexBuffer == Fixture.MeshAsset.VertexBuffer && Proxy.IndexBuffer == Fixture.MeshAsset.IndexBuffer && Proxy.GraphicsPipeline == Fixture.MaterialAssets[0].GraphicsPipeline && Proxy.VertexCount == 3 && Proxy.IndexCount == 3 && Proxy.IndexFormat == EPixelFormat::R32_UINT && !Proxy.bHasNormals && Proxy.NormalToWorld == Math::Matrix3f::Identity() && Proxy.PassMask == ERenderMeshPassMask::SceneColor && Proxy.SortKey == 41 && Proxy.MaterialAssetId == Fixture.MaterialId && Proxy.BaseColor == Fixture.MaterialAssets[0].BaseColor, "snapshot owns metadata and copies resolved Renderer resources");
+        Failures += Expect(Proxy.PrimitiveId.Scope == Fixture.Entity.WorldDomain && Proxy.PrimitiveId.Value == ExpectedValue &&
+                           Proxy.DebugName == StringView("SnapshotTriangle") && Proxy.Mesh == &Fixture.MeshAsset &&
+                           Proxy.Material == &Fixture.MaterialAssets[0] && Proxy.NormalToWorld == Math::Matrix3f::Identity() &&
+                           Proxy.SortKey == 41 && Proxy.MaterialAssetId == Fixture.MaterialId,
+                           "snapshot owns metadata and borrows resolved mesh and material payloads");
         Failures += Expect(HasBounds(Proxy.WorldBounds, Math::Vector3f(-2.0f, 3.0f, 4.0f), Math::Vector3f(10.0f, 7.0f, 8.0f)), "world AABB handles rotation and non-uniform scale");
     }
     if (!Scene.Cameras.IsEmpty())
@@ -249,8 +251,6 @@ int RunSnapshotStabilityAndReplacementTests()
     FWorldRenderSnapshot BeforeReplace;
     const bool bFirstBuilt = Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, MakeBuildContext(20), BeforeReplace) == EWorldRenderSnapshotBuildResult::Success;
     const FRenderPrimitiveId StableId = bFirstBuilt ? BeforeReplace.GetRenderScene().Meshes[0].PrimitiveId : FRenderPrimitiveId{};
-    FRHIPipeline_Graphics* const OldPipeline = bFirstBuilt ? BeforeReplace.GetRenderScene().Meshes[0].GraphicsPipeline : nullptr;
-    FRHIBuffer* const OldIndexBuffer = bFirstBuilt ? BeforeReplace.GetRenderScene().Meshes[0].IndexBuffer : nullptr;
 
     TAssetRegistration<FMaterialAsset> Replacement;
     Replacement.Id = Fixture.MaterialId;
@@ -294,9 +294,16 @@ int RunSnapshotStabilityAndReplacementTests()
     const FRenderScene& NewScene = AfterReplace.GetRenderScene();
     const FMaterialAsset* Resolved = nullptr;
     const FMeshAsset* ResolvedMesh = nullptr;
-    Failures += Expect(bInitialized && bFirstBuilt && bReplaced && bMeshReplaced && Component != nullptr && bSecondBuilt && Fixture.Assets.Resolve(OldHandle, Resolved) == EAssetResolveResult::StaleHandle && Fixture.Assets.Resolve(OldMeshHandle, ResolvedMesh) == EAssetResolveResult::StaleHandle && OldScene.Meshes[0].GraphicsPipeline == OldPipeline && OldScene.Meshes[0].IndexBuffer == OldIndexBuffer && OldScene.Meshes[0].IndexCount == 3 && OldScene.Meshes[0].IndexFormat == EPixelFormat::R32_UINT && OldScene.Meshes[0].DebugName == StringView("SnapshotTriangle") && NewScene.Meshes[0].GraphicsPipeline == Fixture.MaterialAssets[1].GraphicsPipeline && NewScene.Meshes[0].IndexBuffer == ReplacementMesh.IndexBuffer && NewScene.Meshes[0].IndexCount == 6 && NewScene.Meshes[0].IndexFormat == EPixelFormat::R16_UINT && OldScene.Meshes[0].MaterialAssetId == Fixture.MaterialId && NewScene.Meshes[0].MaterialAssetId == Fixture.MaterialId &&
-                           NewScene.Meshes[0].DebugName == StringView("ChangedAfterSnapshot") && NewScene.Meshes[0].PrimitiveId == StableId,
-        "published snapshot owns CPU values and the next build re-resolves Replace");
+    Failures += Expect(bInitialized && bFirstBuilt && bReplaced && bMeshReplaced && Component != nullptr && bSecondBuilt &&
+                       Fixture.Assets.Resolve(OldHandle, Resolved) == EAssetResolveResult::StaleHandle &&
+                       Fixture.Assets.Resolve(OldMeshHandle, ResolvedMesh) == EAssetResolveResult::StaleHandle &&
+                       OldScene.Meshes[0].Mesh == &Fixture.MeshAsset && OldScene.Meshes[0].Material == &Fixture.MaterialAssets[0] &&
+                       NewScene.Meshes[0].Mesh == &ReplacementMesh && NewScene.Meshes[0].Material == &Fixture.MaterialAssets[1] &&
+                       OldScene.Meshes[0].DebugName == StringView("SnapshotTriangle") &&
+                       NewScene.Meshes[0].DebugName == StringView("ChangedAfterSnapshot") &&
+                       OldScene.Meshes[0].MaterialAssetId == Fixture.MaterialId && NewScene.Meshes[0].MaterialAssetId == Fixture.MaterialId &&
+                       NewScene.Meshes[0].PrimitiveId == StableId,
+                       "published snapshot owns CPU values and the next build re-resolves the borrowed payloads");
 
     FTransform Changed;
     Changed.Translation = Math::Vector3f(9.0f, 0.0f, 0.0f);
@@ -573,6 +580,7 @@ int RunSnapshotPayloadAndStaleTests()
     }
 
     FMaterialAsset InvalidMaterial;
+    InvalidMaterial.BaseColorTexture = reinterpret_cast<FRHITexture*>(static_cast<std::uintptr_t>(0x4200));
     TAssetRegistration<FMaterialAsset> MaterialReplacement;
     MaterialReplacement.Id = Fixture.MaterialId;
     MaterialReplacement.SoftPath = "Tests/WorldRenderer/Triangle.material";
@@ -586,10 +594,9 @@ int RunSnapshotPayloadAndStaleTests()
         Component->Material = InvalidMaterialHandle;
         Fixture.MaterialHandle = InvalidMaterialHandle;
     }
-    Failures += Expect(bMeshRestored && bInvalidMaterialReplaced && Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, MakeBuildContext(52), Snapshot) == EWorldRenderSnapshotBuildResult::InvalidMaterialPayload && !Snapshot.IsPublished(), "null material GPU payload is rejected before publication");
+    Failures += Expect(bMeshRestored && bInvalidMaterialReplaced && Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, MakeBuildContext(52), Snapshot) == EWorldRenderSnapshotBuildResult::InvalidMaterialPayload && !Snapshot.IsPublished(), "inconsistent material texture binding is rejected before publication");
 
     FMaterialAsset InvalidColorMaterial;
-    InvalidColorMaterial.GraphicsPipeline = Fixture.MaterialAssets[0].GraphicsPipeline;
     InvalidColorMaterial.PassMask = ERenderMeshPassMask::SceneColor;
     InvalidColorMaterial.BaseColor = Math::Vector4f(-1.0f, 1.0f, 1.0f, 1.0f);
     MaterialReplacement.Object = &InvalidColorMaterial;
@@ -828,7 +835,7 @@ int RunNormalTransformTests()
         const FRenderMeshProxy& Proxy = Snapshot.GetRenderScene().Meshes[0];
         const Math::Vector3f Actual = (Proxy.NormalToWorld * LocalNormal).Normalized();
         const Math::Vector3f Expected = Transform.Rotation.RotateVector(Math::Vector3f(LocalNormal[0] / ScaleX, LocalNormal[1], LocalNormal[2] / 4.0f)).Normalized();
-        Failures += Expect(Proxy.bHasNormals && NearlyEqual(Actual[0], Expected[0]) && NearlyEqual(Actual[1], Expected[1]) && NearlyEqual(Actual[2], Expected[2]), "normal transform matches normalized inverse-transpose including reflection sign");
+        Failures += Expect(Proxy.Mesh != nullptr && Proxy.Mesh->bHasNormals && NearlyEqual(Actual[0], Expected[0]) && NearlyEqual(Actual[1], Expected[1]) && NearlyEqual(Actual[2], Expected[2]), "normal transform matches normalized inverse-transpose including reflection sign");
     }
 
     Transform.Scale = Math::Vector3f(0.0f, 1.0f, 1.0f);
@@ -839,6 +846,14 @@ int RunNormalTransformTests()
 
     Fixture.MeshAsset.bHasNormals = false;
     Failures += Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) == EWorldRenderSnapshotBuildResult::Success && Report.CulledMeshCount == 1, "legacy mesh with the same singular transform retains old culling behavior in a lit scene");
+
+    Transform.Scale = Math::Vector3f(1.0f);
+    const bool bOutsideCamera = Fixture.World.SetLocalTransform(Fixture.Entity, Transform) == ETransformUpdateResult::Updated;
+    Failures += Expect(bOutsideCamera && Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) == EWorldRenderSnapshotBuildResult::Success &&
+                       Snapshot.GetRenderScene().Meshes.IsEmpty() && Snapshot.GetRenderScene().ShadowCasters.Size() == 1 &&
+                       Snapshot.GetRenderScene().ShadowCasters[0].Mesh == &Fixture.MeshAsset &&
+                       Snapshot.GetRenderScene().ShadowCasters[0].WorldBounds.IsValid(),
+                       "off-camera legacy geometry remains in the independent shadow caster list");
 
     Fixture.MeshAsset.bHasNormals = true;
     FEntity MeshParent;
@@ -855,7 +870,9 @@ int RunNormalTransformTests()
         return Failures + 1;
     }
     AuthoredLight->bActive = false;
-    Failures += Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) == EWorldRenderSnapshotBuildResult::Success && Snapshot.GetRenderScene().Lights.IsEmpty(), "disabled light retains old transform validation for the same authored normal mesh");
+    Failures += Expect(Renderer.BuildSnapshot(Fixture.World, Fixture.Assets, Context, Snapshot, &Report) == EWorldRenderSnapshotBuildResult::Success &&
+                       Snapshot.GetRenderScene().Lights.IsEmpty() && Snapshot.GetRenderScene().ShadowCasters.IsEmpty(),
+                       "disabled light retains old transform validation and publishes no shadow casters");
     return Failures;
 }
 

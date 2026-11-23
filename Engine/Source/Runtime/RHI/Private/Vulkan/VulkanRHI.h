@@ -147,8 +147,6 @@ public:
 
 public:
     FRHIQueue* GetGraphicsQueue() const override;
-    void* GetBindlessHeapGPUDescriptor() const override;
-    uint32 AllocateBindlessIndex(FRHIResource* Resource) override;
 
 public:
     FRHIBuffer* CreateBuffer(const FRHIBufferDesc& Desc) override;

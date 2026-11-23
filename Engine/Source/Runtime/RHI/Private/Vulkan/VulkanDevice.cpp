@@ -943,24 +943,6 @@ FRHIQueue* FVulkanRHIDevice::GetGraphicsQueue() const
     return this->GraphicsQueue;
 }
 
-void* FVulkanRHIDevice::GetBindlessHeapGPUDescriptor() const
-{
-    return reinterpret_cast<void*>(this->VkContext.BindlessDescriptorSet);
-}
-
-uint32 FVulkanRHIDevice::AllocateBindlessIndex(FRHIResource* Resource)
-{
-    // TODO: kodak - Implement proper bindless index allocation
-    // For now, return a placeholder index
-    // This needs a proper allocation strategy (free list, etc.)
-    if (Resource == nullptr)
-    {
-        LE_LOG(LogRHI, Warn, "AllocateBindlessIndex called with null resource.");
-    }
-    static uint32 NextIndex = 0;
-    return NextIndex++;
-}
-
 // ***********************************************************************************************
 // ********************************** Factory Function *******************************************
 // ***********************************************************************************************

@@ -13,3 +13,4 @@
 #include "BasePassCompositePipeline.h"
 #include "RenderGraphBuilderBridge.h"
 #include "Renderer.h"
+#include "SceneRenderer.h"

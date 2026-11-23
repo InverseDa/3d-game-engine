@@ -8,9 +8,8 @@
 
 #include "Platform/Platform.h"
 #include "RHIMinimal.h"
-#include "RFGMinimal.h"
 #include "Renderer/RenderAssetProvider.h"
-#include "Renderer/RendererMinimal.h"
+#include "Renderer/SceneRenderer.h"
 #include "ShaderRuntimeCompiler.h"
 #include "Scene/Scene.h"
 #include "World/WorldMinimal.h"
@@ -29,95 +28,6 @@ namespace LE
 LE_DECLARE_LOG_CATEGORY_EXTERN(LogXBD);
 LE_DECLARE_LOG_CATEGORY(LogXBD);
 
-struct FDemoRenderResources
-{
-    LE::FRHITexture* SceneColorTexture = nullptr;
-    LE::FRHITextureView* SceneColorView = nullptr;
-    LE::FRHITexture* SceneDepthTexture = nullptr;
-    LE::FRHITextureView* SceneDepthView = nullptr;
-    LE::FRHISampler* Sampler = nullptr;
-    LE::FRHIBindGroupLayout* BindGroupLayout = nullptr;
-    LE::FRHIBindGroup* BindGroup = nullptr;
-    LE::FRHIPipeline_Graphics* CompositePipeline = nullptr;
-};
-
-static void DestroyDemoRenderResources(FDemoRenderResources& Resources)
-{
-    RHI::DestroyResource(Resources.CompositePipeline);
-    RHI::DestroyResource(Resources.BindGroup);
-    RHI::DestroyResource(Resources.BindGroupLayout);
-    RHI::DestroyResource(Resources.Sampler);
-    RHI::DestroyResource(Resources.SceneDepthView);
-    RHI::DestroyResource(Resources.SceneDepthTexture);
-    RHI::DestroyResource(Resources.SceneColorView);
-    RHI::DestroyResource(Resources.SceneColorTexture);
-
-    Resources.CompositePipeline = nullptr;
-    Resources.BindGroup = nullptr;
-    Resources.BindGroupLayout = nullptr;
-    Resources.Sampler = nullptr;
-    Resources.SceneDepthView = nullptr;
-    Resources.SceneDepthTexture = nullptr;
-    Resources.SceneColorView = nullptr;
-    Resources.SceneColorTexture = nullptr;
-}
-
-static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(LE::FRHIDevice* Device, LE::FRHIShader* VertexShader, LE::FRHIShader* PixelShader, LE::FRHIBindGroupLayout* MaterialLayout, LE::FRHIBindGroupLayout* LightLayout)
-{
-    LE::FRHIPipelineDesc_Graphics PipelineDesc;
-    PipelineDesc.Name = "BasePassPipeline";
-    PipelineDesc.VertexShader = VertexShader;
-    PipelineDesc.PixelShader = PixelShader;
-
-    LE::FRHIVertexInputBinding Binding;
-    Binding.Binding = 0;
-    Binding.Stride = sizeof(FBasePassVertex);
-    Binding.bPerInstance = false;
-    PipelineDesc.VertexBindings.PushBack(Binding);
-
-    LE::FRHIVertexInputAttribute PosAttr;
-    PosAttr.Location = 0;
-    PosAttr.Binding = 0;
-    PosAttr.Format = LE::EPixelFormat::R32G32B32_FLOAT;
-    PosAttr.Offset = offsetof(FBasePassVertex, Position);
-    PipelineDesc.VertexAttributes.PushBack(PosAttr);
-
-    LE::FRHIVertexInputAttribute ColorAttr;
-    ColorAttr.Location = 1;
-    ColorAttr.Binding = 0;
-    ColorAttr.Format = LE::EPixelFormat::R32G32B32_FLOAT;
-    ColorAttr.Offset = offsetof(FBasePassVertex, Color);
-    PipelineDesc.VertexAttributes.PushBack(ColorAttr);
-
-    LE::FRHIVertexInputAttribute UVAttr;
-    UVAttr.Location = 2;
-    UVAttr.Binding = 0;
-    UVAttr.Format = LE::EPixelFormat::R32G32_FLOAT;
-    UVAttr.Offset = offsetof(FBasePassVertex, UV);
-    PipelineDesc.VertexAttributes.PushBack(UVAttr);
-    LE::FRHIVertexInputAttribute NormalAttr;
-    NormalAttr.Location = 3;
-    NormalAttr.Binding = 0;
-    NormalAttr.Format = LE::EPixelFormat::R32G32B32_FLOAT;
-    NormalAttr.Offset = offsetof(FBasePassVertex, Normal);
-    PipelineDesc.VertexAttributes.PushBack(NormalAttr);
-    PipelineDesc.BindGroupLayouts.PushBack(MaterialLayout);
-    PipelineDesc.BindGroupLayouts.PushBack(LightLayout);
-
-    PipelineDesc.RenderTargetCount = 1;
-    PipelineDesc.RenderTargetFormats[0] = LE::EPixelFormat::B8G8R8A8_SRGB;
-    PipelineDesc.DepthStencilFormat = LE::EPixelFormat::D32_FLOAT;
-    PipelineDesc.DepthStencilState.bDepthTestEnable = true;
-    PipelineDesc.DepthStencilState.bDepthWriteEnable = true;
-    PipelineDesc.DepthStencilState.DepthFunc = LE::ECompareFunction::Less;
-    PipelineDesc.RasterizerState.CullMode = LE::ECullMode::None;
-    PipelineDesc.RasterizerState.FillMode = LE::EFillMode::Solid;
-    PipelineDesc.BlendState.bEnable = false;
-    PipelineDesc.PushConstants.StageFlags = LE::EShaderStage::Vertex | LE::EShaderStage::Pixel;
-    PipelineDesc.PushConstants.Size = sizeof(LE::FBasePassObjectConstants);
-    return Device->CreateGraphicsPipeline(PipelineDesc);
-}
-
 struct FDemoSceneAssets final
 {
     explicit FDemoSceneAssets(const FAssetCatalog& Catalog) noexcept : Session(Catalog, {{&Provider, &FRenderAssetProvider::CreateMesh, &FRenderAssetProvider::DestroyMesh}, {&Provider, &FRenderAssetProvider::CreateMaterial, &FRenderAssetProvider::DestroyMaterial}}) {}
@@ -128,183 +38,18 @@ struct FDemoSceneAssets final
     FAssetLoadSession Session;
 };
 
-static LE::FRHIPipeline_Graphics* CreateCompositePipeline(LE::FRHIDevice* Device, LE::FRHIShader* VertexShader, LE::FRHIShader* PixelShader, LE::FRHIBindGroupLayout* BindGroupLayout, LE::EPixelFormat RenderTargetFormat)
+static constexpr EPixelFormat DemoBackBufferFormat = EPixelFormat::B8G8R8A8_SRGB;
+
+static FSceneRenderTargetDesc GetBackBufferTarget(const FRHISwapchain& Swapchain, const FPlatformWindowSize FallbackSize)
 {
-    LE::FRHIPipelineDesc_Graphics PipelineDesc;
-    PipelineDesc.Name = "CompositePipeline";
-    PipelineDesc.VertexShader = VertexShader;
-    PipelineDesc.PixelShader = PixelShader;
-    PipelineDesc.RenderTargetCount = 1;
-    PipelineDesc.RenderTargetFormats[0] = RenderTargetFormat;
-    PipelineDesc.DepthStencilFormat = LE::EPixelFormat::Unknown;
-    PipelineDesc.DepthStencilState.bDepthTestEnable = false;
-    PipelineDesc.DepthStencilState.bDepthWriteEnable = false;
-    PipelineDesc.RasterizerState.CullMode = LE::ECullMode::None;
-    PipelineDesc.RasterizerState.FillMode = LE::EFillMode::Solid;
-    PipelineDesc.BlendState.bEnable = false;
-    PipelineDesc.BindGroupLayouts.PushBack(BindGroupLayout);
-
-    return Device->CreateGraphicsPipeline(PipelineDesc);
-}
-
-struct FDemoRenderResourcesDesc
-{
-    FRHIShader* CompositeVertexShader = nullptr;
-    FRHIShader* CompositePixelShader = nullptr;
-    FPlatformWindowSize Extent;
-};
-
-static bool TryCreateDemoRenderResources(FRHIDevice* Device, const FDemoRenderResourcesDesc& Desc, FDemoRenderResources& OutResources)
-{
-    if (Device == nullptr || Desc.Extent.Width == 0 || Desc.Extent.Height == 0 || OutResources.SceneColorTexture != nullptr || OutResources.SceneDepthTexture != nullptr || OutResources.CompositePipeline != nullptr)
+    const FRHITextureView* const View = Swapchain.GetCurrentBackBufferView();
+    if (View == nullptr || View->GetTexture() == nullptr)
     {
-        return false;
+        return {FallbackSize.Width, FallbackSize.Height, DemoBackBufferFormat};
     }
-
-    LE::FRHITextureDesc TextureDesc;
-    TextureDesc.Name = "SceneColor";
-    TextureDesc.Width = Desc.Extent.Width;
-    TextureDesc.Height = Desc.Extent.Height;
-    TextureDesc.Depth = 1;
-    TextureDesc.MipLevels = 1;
-    TextureDesc.ArrayLayers = 1;
-    TextureDesc.Format = LE::EPixelFormat::B8G8R8A8_SRGB;
-    TextureDesc.bIsRenderTarget = true;
-    TextureDesc.bIsShaderResource = true;
-
-    OutResources.SceneColorTexture = Device->CreateTexture(TextureDesc);
-    if (OutResources.SceneColorTexture == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create offscreen texture.");
-        return false;
-    }
-
-    LE::FRHITextureViewDesc TextureViewDesc;
-    TextureViewDesc.Texture = OutResources.SceneColorTexture;
-    TextureViewDesc.Format = TextureDesc.Format;
-    TextureViewDesc.MipSlice = 0;
-    TextureViewDesc.ArraySlice = 0;
-    TextureViewDesc.MipLevels = 1;
-    TextureViewDesc.ArrayLayers = 1;
-    OutResources.SceneColorView = Device->CreateTextureView(TextureViewDesc);
-    if (OutResources.SceneColorView == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create offscreen texture view.");
-        DestroyDemoRenderResources(OutResources);
-        return false;
-    }
-
-    LE::FRHITextureDesc DepthDesc;
-    DepthDesc.Name = "SceneDepth";
-    DepthDesc.Width = Desc.Extent.Width;
-    DepthDesc.Height = Desc.Extent.Height;
-    DepthDesc.Depth = 1;
-    DepthDesc.MipLevels = 1;
-    DepthDesc.ArrayLayers = 1;
-    DepthDesc.Format = LE::EPixelFormat::D32_FLOAT;
-    DepthDesc.bIsDepthStencil = true;
-    OutResources.SceneDepthTexture = Device->CreateTexture(DepthDesc);
-    if (OutResources.SceneDepthTexture == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create SceneDepth texture.");
-        DestroyDemoRenderResources(OutResources);
-        return false;
-    }
-    LE::FRHITextureViewDesc DepthViewDesc;
-    DepthViewDesc.Texture = OutResources.SceneDepthTexture;
-    DepthViewDesc.Format = DepthDesc.Format;
-    OutResources.SceneDepthView = Device->CreateTextureView(DepthViewDesc);
-    if (OutResources.SceneDepthView == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create SceneDepth texture view.");
-        DestroyDemoRenderResources(OutResources);
-        return false;
-    }
-
-    LE::FRHISamplerDesc SamplerDesc;
-    SamplerDesc.Name = "RFGSceneColorSampler";
-    SamplerDesc.AddressU = LE::ESamplerAddressMode::ClampToEdge;
-    SamplerDesc.AddressV = LE::ESamplerAddressMode::ClampToEdge;
-    SamplerDesc.AddressW = LE::ESamplerAddressMode::ClampToEdge;
-    OutResources.Sampler = Device->CreateSampler(SamplerDesc);
-    if (OutResources.Sampler == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create offscreen sampler.");
-        DestroyDemoRenderResources(OutResources);
-        return false;
-    }
-
-    LE::FRHIBindGroupLayoutDesc BindGroupLayoutDesc;
-    BindGroupLayoutDesc.Name = "CompositeSceneColorLayout";
-    BindGroupLayoutDesc.SetIndex = 0;
-
-    LE::FRHIBindGroupLayoutItem LayoutItem;
-    LayoutItem.Binding = 0;
-    LayoutItem.Count = 1;
-    LayoutItem.Type = LE::ERHIBindGroupItemType::SampledImage;
-    LayoutItem.StageFlags = LE::EShaderStage::Pixel;
-    BindGroupLayoutDesc.Bindings.PushBack(LayoutItem);
-
-    LayoutItem.Binding = 1;
-    LayoutItem.Type = LE::ERHIBindGroupItemType::Sampler;
-    BindGroupLayoutDesc.Bindings.PushBack(LayoutItem);
-
-    OutResources.BindGroupLayout = Device->CreateBindGroupLayout(BindGroupLayoutDesc);
-    if (OutResources.BindGroupLayout == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create composite bind group layout.");
-        DestroyDemoRenderResources(OutResources);
-        return false;
-    }
-
-    LE::FRHIBindGroupDesc BindGroupDesc;
-    BindGroupDesc.Name = "CompositeSceneColorBindGroup";
-    BindGroupDesc.Layout = OutResources.BindGroupLayout;
-
-    LE::FRHIBindGroupItem BindGroupItem;
-    BindGroupItem.Binding = 0;
-    BindGroupItem.TextureView = OutResources.SceneColorView;
-    BindGroupDesc.Items.PushBack(BindGroupItem);
-
-    BindGroupItem = {};
-    BindGroupItem.Binding = 1;
-    BindGroupItem.Sampler = OutResources.Sampler;
-    BindGroupDesc.Items.PushBack(BindGroupItem);
-
-    OutResources.BindGroup = Device->CreateBindGroup(BindGroupDesc);
-    if (OutResources.BindGroup == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create composite bind group.");
-        DestroyDemoRenderResources(OutResources);
-        return false;
-    }
-
-    OutResources.CompositePipeline = CreateCompositePipeline(Device, Desc.CompositeVertexShader, Desc.CompositePixelShader, OutResources.BindGroupLayout, LE::EPixelFormat::B8G8R8A8_SRGB);
-    if (OutResources.CompositePipeline == nullptr)
-    {
-        LE_LOG(LogXBD, Error, "Failed to create Composite pipeline.");
-        DestroyDemoRenderResources(OutResources);
-        return false;
-    }
-
-    return true;
-}
-
-static FPlatformWindowSize GetBackBufferExtent(FRHISwapchain* Swapchain, FPlatformWindowSize FallbackSize)
-{
-    if (Swapchain == nullptr)
-    {
-        return FallbackSize;
-    }
-
-    LE::FRHITextureView* BackBufferView = Swapchain->GetCurrentBackBufferView();
-    if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
-    {
-        return FallbackSize;
-    }
-
-    const LE::FRHITextureDesc& BackBufferDesc = BackBufferView->GetTexture()->GetDesc();
-    return {BackBufferDesc.Width, BackBufferDesc.Height};
+    const FRHITextureDesc& Desc = View->GetTexture()->GetDesc();
+    const EPixelFormat ViewFormat = View->GetDesc().Format;
+    return {Desc.Width, Desc.Height, ViewFormat == EPixelFormat::Unknown ? Desc.Format : ViewFormat};
 }
 
 namespace
@@ -454,7 +199,7 @@ public:
         SwapchainDesc.Surface = Window->GetSurface();
         SwapchainDesc.Width = DefaultWindowWidth;
         SwapchainDesc.Height = DefaultWindowHeight;
-        SwapchainDesc.BackBufferFormat = LE::EPixelFormat::B8G8R8A8_SRGB;
+        SwapchainDesc.BackBufferFormat = DemoBackBufferFormat;
         SwapchainDesc.bEnableVsync = true;
         Swapchain = Device->CreateSwapchain(SwapchainDesc);
         if (Swapchain == nullptr)
@@ -467,42 +212,28 @@ public:
         LE::Array<char> BasePassFragBytecode;
         LE::Array<char> CompositeVertBytecode;
         LE::Array<char> CompositeFragBytecode;
-        if (!Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/BasePassVS.lsf", ERuntimeShaderStage::Vertex, BasePassVertBytecode, "MainVS") || !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/BasePassPS.lsf", ERuntimeShaderStage::Fragment, BasePassFragBytecode, "MainPS") || !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositeVS.lsf", ERuntimeShaderStage::Vertex, CompositeVertBytecode, "MainVS") || !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositePS.lsf", ERuntimeShaderStage::Fragment, CompositeFragBytecode, "MainPS"))
+        LE::Array<char> ShadowDepthBytecode;
+        using Demo::ShaderRuntimeCompiler::CompileHlslToSpirv;
+        if (!CompileHlslToSpirv("Engine/Content/Shaders/BasePassShadowVS.lsf", ERuntimeShaderStage::Vertex, BasePassVertBytecode, "MainVS") ||
+            !CompileHlslToSpirv("Engine/Content/Shaders/BasePassShadowPS.lsf", ERuntimeShaderStage::Fragment, BasePassFragBytecode, "MainPS") ||
+            !CompileHlslToSpirv("Engine/Content/Shaders/CompositeVS.lsf", ERuntimeShaderStage::Vertex, CompositeVertBytecode, "MainVS") ||
+            !CompileHlslToSpirv("Engine/Content/Shaders/CompositePS.lsf", ERuntimeShaderStage::Fragment, CompositeFragBytecode, "MainPS") ||
+            !CompileHlslToSpirv("Engine/Content/Shaders/ShadowDepthVS.lsf", ERuntimeShaderStage::Vertex, ShadowDepthBytecode, "MainVS"))
         {
             return false;
         }
 
-        BasePassVertexShader = Device->CreateShaderFromFile(LE::EShaderStage::Vertex, BasePassVertBytecode.Data(), BasePassVertBytecode.Size(), "MainVS");
-        BasePassPixelShader = Device->CreateShaderFromFile(LE::EShaderStage::Pixel, BasePassFragBytecode.Data(), BasePassFragBytecode.Size(), "MainPS");
-        CompositeVertexShader = Device->CreateShaderFromFile(LE::EShaderStage::Vertex, CompositeVertBytecode.Data(), CompositeVertBytecode.Size(), "MainVS");
-        CompositePixelShader = Device->CreateShaderFromFile(LE::EShaderStage::Pixel, CompositeFragBytecode.Data(), CompositeFragBytecode.Size(), "MainPS");
-        if (BasePassVertexShader == nullptr || BasePassPixelShader == nullptr || CompositeVertexShader == nullptr || CompositePixelShader == nullptr)
+        const FSceneRenderShaders Shaders{
+            {{BasePassVertBytecode.Data(), BasePassVertBytecode.Size()}, "MainVS"},
+            {{BasePassFragBytecode.Data(), BasePassFragBytecode.Size()}, "MainPS"},
+            {{CompositeVertBytecode.Data(), CompositeVertBytecode.Size()}, "MainVS"},
+            {{CompositeFragBytecode.Data(), CompositeFragBytecode.Size()}, "MainPS"},
+            {{ShadowDepthBytecode.Data(), ShadowDepthBytecode.Size()}, "MainVS"},
+        };
+        const FSceneRenderTargetDesc InitialTarget = GetBackBufferTarget(*Swapchain, {DefaultWindowWidth, DefaultWindowHeight});
+        if (!Renderer.Initialize(*Device, Shaders, InitialTarget))
         {
-            LE_LOG(LogXBD, Error, "Failed to create shader modules.");
-            return false;
-        }
-
-        MaterialLayout = CreateBasePassMaterialLayout(*Device);
-        if (MaterialLayout == nullptr)
-        {
-            return false;
-        }
-        if (!FrameLighting.Initialize(*Device))
-        {
-            LE_LOG(LogXBD, Error, "Failed to initialize BasePass frame lighting.");
-            return false;
-        }
-        BasePassPipeline = CreateBasePassPipeline(Device, BasePassVertexShader, BasePassPixelShader, MaterialLayout, FrameLighting.GetLayout());
-        if (BasePassPipeline == nullptr)
-        {
-            LE_LOG(LogXBD, Error, "Failed to create BasePass pipeline.");
-            return false;
-        }
-
-        const FPlatformWindowSize InitialSize = GetBackBufferExtent(Swapchain, {DefaultWindowWidth, DefaultWindowHeight});
-        const FDemoRenderResourcesDesc ResourcesDesc{CompositeVertexShader, CompositePixelShader, InitialSize};
-        if (!TryCreateDemoRenderResources(Device, ResourcesDesc, RenderResources))
-        {
+            LE_LOG(LogXBD, Error, "Failed to initialize scene renderer.");
             return false;
         }
 
@@ -516,9 +247,7 @@ public:
             return false;
         }
 
-        Renderer.Initialize();
-        bRendererInitialized = true;
-        CachedWindowSize = InitialSize;
+        CachedWindowSize = {InitialTarget.Width, InitialTarget.Height};
         bCanRender = true;
         return true;
     }
@@ -535,26 +264,7 @@ public:
         FrameScheduler.Shutdown();
         Scene.Reset();
         Assets.Reset();
-        if (bRendererInitialized)
-        {
-            Renderer.Shutdown();
-            bRendererInitialized = false;
-        }
-
-        DestroyDemoRenderResources(RenderResources);
-        RHI::DestroyResource(BasePassPipeline);
-        BasePassPipeline = nullptr;
-        FrameLighting.Shutdown();
-        RHI::DestroyResource(MaterialLayout);
-        MaterialLayout = nullptr;
-        RHI::DestroyResource(CompositePixelShader);
-        CompositePixelShader = nullptr;
-        RHI::DestroyResource(CompositeVertexShader);
-        CompositeVertexShader = nullptr;
-        RHI::DestroyResource(BasePassPixelShader);
-        BasePassPixelShader = nullptr;
-        RHI::DestroyResource(BasePassVertexShader);
-        BasePassVertexShader = nullptr;
+        Renderer.Shutdown();
         RHI::DestroyResource(Swapchain);
         Swapchain = nullptr;
         RHI::DestroyResource(Device);
@@ -597,29 +307,12 @@ public:
             bSwapchainRecreateRequested = false;
         }
 
-        const FPlatformWindowSize TargetSize = GetBackBufferExtent(Swapchain, CachedWindowSize);
-        if (RenderResources.SceneColorTexture != nullptr && RenderResources.SceneColorTexture->GetDesc().Width == TargetSize.Width && RenderResources.SceneColorTexture->GetDesc().Height == TargetSize.Height)
-        {
-            bCanRender = true;
-            return EApplicationTickResult::Continue;
-        }
-
-        if (!bResizeSwapchain)
-        {
-            FrameScheduler.WaitForAllFrames();
-        }
-        FDemoRenderResources Candidate;
-        const FDemoRenderResourcesDesc ResourcesDesc{CompositeVertexShader, CompositePixelShader, TargetSize};
-        if (!TryCreateDemoRenderResources(Device, ResourcesDesc, Candidate))
+        const FSceneRenderTargetDesc Target = GetBackBufferTarget(*Swapchain, CachedWindowSize);
+        if (!Renderer.Resize(FrameScheduler, Target))
         {
             LE_LOG(LogXBD, Error, "Resize candidate creation failed; preserving the previous render resources.");
-            bCanRender = true;
-            return EApplicationTickResult::Continue;
         }
-        FDemoRenderResources Previous = RenderResources;
-        RenderResources = Candidate;
-        DestroyDemoRenderResources(Previous);
-        bCanRender = true;
+        bCanRender = Renderer.GetTargetDesc().Format == Target.Format;
         return EApplicationTickResult::Continue;
     }
 
@@ -659,8 +352,9 @@ public:
             LE::FWorldRenderSnapshotBuildReport SnapshotReport;
             LE::FWorldRenderSnapshotBuildContext SnapshotContext;
             SnapshotContext.FrameIndex = ScheduledFrame.GetFrameIndex();
-            SnapshotContext.ViewportWidth = RenderResources.SceneColorTexture->GetDesc().Width;
-            SnapshotContext.ViewportHeight = RenderResources.SceneColorTexture->GetDesc().Height;
+            const FSceneRenderTargetDesc Target = Renderer.GetTargetDesc();
+            SnapshotContext.ViewportWidth = Target.Width;
+            SnapshotContext.ViewportHeight = Target.Height;
             SnapshotContext.CameraOverride = {NavigationCameraId, CameraNavigation.GetCameraToWorld()};
             if (WorldRenderer.BuildSnapshot(Scene->GetWorld(), Assets->GetRegistry(), SnapshotContext, RenderSnapshot, &SnapshotReport) != LE::EWorldRenderSnapshotBuildResult::Success)
             {
@@ -668,30 +362,7 @@ public:
                 return LE::ERenderFrameRecordResult::Error;
             }
 
-            LE::FRendererFrameContext FrameContext;
-            FrameContext.FrameIndex = ScheduledFrame.GetFrameIndex();
-            FrameContext.Device = Device;
-            FrameContext.Swapchain = Swapchain;
-            FrameContext.CommandList = ScheduledFrame.GetCommandList();
-            FrameContext.FrameScope = &ScheduledFrame;
-            FrameContext.ViewFamily.PrimarySwapchain = Swapchain;
-            LE::FBasePassCompositePipelineDesc RenderPipelineDesc;
-            const FRenderScene& RenderScene = RenderSnapshot.GetRenderScene();
-            if (!FrameLighting.WriteSlot(ScheduledFrame.GetSlotIndex(), {RenderScene.Lights.Data(), RenderScene.Lights.Size()}, RenderPipelineDesc.BasePassResources.Light))
-            {
-                LE_LOG(LogXBD, Error, "Failed to write BasePass frame lighting for slot {}.", ScheduledFrame.GetSlotIndex());
-                return LE::ERenderFrameRecordResult::Error;
-            }
-            RenderPipelineDesc.BasePassResources.SceneColorTexture = RenderResources.SceneColorTexture;
-            RenderPipelineDesc.BasePassResources.SceneColorView = RenderResources.SceneColorView;
-            RenderPipelineDesc.BasePassResources.SceneDepthTexture = RenderResources.SceneDepthTexture;
-            RenderPipelineDesc.BasePassResources.SceneDepthView = RenderResources.SceneDepthView;
-            RenderPipelineDesc.BackBufferView = ScheduledFrame.GetBackBufferView();
-            RenderPipelineDesc.CompositePipeline = RenderResources.CompositePipeline;
-            RenderPipelineDesc.CompositeBindGroup = RenderResources.BindGroup;
-            LE::FBasePassCompositePipeline RenderPipeline(RenderPipelineDesc);
-            FrameContext.Pipeline = &RenderPipeline;
-            return Renderer.RenderFrame(FrameContext, &RenderSnapshot.GetRenderScene());
+            return Renderer.RecordFrame(ScheduledFrame, *Swapchain, RenderSnapshot.GetRenderScene());
         };
 
         const FRenderFrameResult FrameResult = FrameScheduler.ExecuteFrame(Swapchain, RecordFrame);
@@ -871,7 +542,7 @@ private:
             LE_LOG(LogXBD, Error, "Could not allocate a scene asset session for '{}'.", PrintablePath.Data());
             return false;
         }
-        if (!CandidateAssets->Provider.Initialize(Device, BasePassPipeline, MaterialLayout))
+        if (!Renderer.InitializeAssetProvider(CandidateAssets->Provider))
         {
             LE_LOG(LogXBD, Error, "Could not initialize material GPU resources for '{}'.", PrintablePath.Data());
             return false;
@@ -897,8 +568,9 @@ private:
         FWorldRenderSnapshot Preview;
         FWorldRenderSnapshotBuildReport PreviewReport;
         FWorldRenderSnapshotBuildContext PreviewContext;
-        PreviewContext.ViewportWidth = RenderResources.SceneColorTexture->GetDesc().Width;
-        PreviewContext.ViewportHeight = RenderResources.SceneColorTexture->GetDesc().Height;
+        const FSceneRenderTargetDesc Target = Renderer.GetTargetDesc();
+        PreviewContext.ViewportWidth = Target.Width;
+        PreviewContext.ViewportHeight = Target.Height;
         if (WorldRenderer.BuildSnapshot(CandidateWorld, CandidateAssets->GetRegistry(), PreviewContext, Preview, &PreviewReport) != EWorldRenderSnapshotBuildResult::Success)
         {
             const bool bMissingUV = PreviewReport.Result == EWorldRenderSnapshotBuildResult::MissingMeshUV;
@@ -963,16 +635,8 @@ private:
     FRenderPrimitiveId NavigationCameraId;
     FRHIDevice* Device = nullptr;
     FRHISwapchain* Swapchain = nullptr;
-    FRHIShader* BasePassVertexShader = nullptr;
-    FRHIShader* BasePassPixelShader = nullptr;
-    FRHIShader* CompositeVertexShader = nullptr;
-    FRHIShader* CompositePixelShader = nullptr;
-    FRHIPipeline_Graphics* BasePassPipeline = nullptr;
-    FRHIBindGroupLayout* MaterialLayout = nullptr;
     FRenderFrameScheduler FrameScheduler;
-    FBasePassFrameLighting FrameLighting;
-    FDemoRenderResources RenderResources;
-    FRenderer Renderer;
+    FSceneRenderer Renderer;
     FPlatformWindowSize CachedWindowSize{DefaultWindowWidth, DefaultWindowHeight};
     bool bCanRender = false;
     bool bNavigationUpdated = false;
@@ -981,7 +645,6 @@ private:
     bool bReportPreservedScene = false;
     bool bRenderingSuspended = false;
     bool bSwapchainRecreateRequested = false;
-    bool bRendererInitialized = false;
     bool bShutdown = false;
 };
 

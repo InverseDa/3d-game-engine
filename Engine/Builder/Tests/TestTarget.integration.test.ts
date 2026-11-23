@@ -63,6 +63,8 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         Path.join(GameIntermediate, "compile_commands.json"),
         Path.join(GameRoot, "Core.lib"),
         Path.join(GameRoot, "LimitlessGame.exe"),
+        Path.join(GameRoot, "SolidGeometryContent/Scene.json"),
+        Path.join(GameRoot, "SolidGeometryContent/Assets/Meshes/SolidBox.leasset"),
     ];
     const GameBeforeEditor = await HashFiles(GameArtifacts);
     const Demo = Path.join(GameRoot, "DemoContent");
@@ -70,6 +72,12 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         "Generated/DemoApplication/ContentTools/Binaries/Win64/Debug/SceneTool/Program/SceneTool.exe");
     const AssetImport = Path.join(GameIntermediate,
         "Generated/DemoApplication/ContentTools/Binaries/Win64/Debug/AssetImport/Program/AssetImport.exe");
+    const SolidGeometry = Path.join(GameRoot, "SolidGeometryContent");
+    const SolidCheck = spawnSync(SceneTool, [
+        "check", Path.join(SolidGeometry, "Scene.json"), "Game", Path.join(SolidGeometry, "Assets"),
+    ], { cwd: Root, encoding: "utf-8" });
+    Assert.equal(SolidCheck.status, 0, SolidCheck.error?.message ?? SolidCheck.stdout + SolidCheck.stderr);
+    Assert.match(SolidCheck.stdout, /\(5 entities\)/);
     const Scratch = await Fs.mkdtemp(Path.join(Os.tmpdir(), "limitless-textured-scene-"));
     try {
         await Fs.cp(Demo, Scratch, { recursive: true });
@@ -224,6 +232,8 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         Path.join(EditorRoot, "Core.dll"),
         Path.join(EditorRoot, "Core.lib"),
         Path.join(EditorRoot, "LimitlessEditor.exe"),
+        Path.join(EditorRoot, "SolidGeometryContent/Scene.json"),
+        Path.join(EditorRoot, "SolidGeometryContent/Assets/Meshes/SolidBox.leasset"),
     ];
     const GameAndEditorArtifacts = [...GameArtifacts, ...EditorArtifacts];
     const BeforeTest = await HashFiles(GameAndEditorArtifacts);

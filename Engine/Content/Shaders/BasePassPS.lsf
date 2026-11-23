@@ -11,11 +11,49 @@ struct FBasePassLightConstants
 
 ConstantBuffer<FBasePassLightConstants> FrameLight : register(b0, space1);
 
+#ifdef LIMITLESS_DIRECTIONAL_SHADOW
+struct FShadowFrameConstants
+{
+    float4 CameraClipToLightRow0;
+    float4 CameraClipToLightRow1;
+    float4 CameraClipToLightRow2;
+    float4 CameraClipToLightRow3;
+    float4 BiasAndEnabled;
+};
+
+ConstantBuffer<FShadowFrameConstants> FrameShadow : register(b0, space2);
+Texture2D<float> ShadowDepth : register(t1, space2);
+SamplerState ShadowSampler : register(s2, space2);
+
+float GetLightVisibility(float4 cameraClip)
+{
+    if (FrameShadow.BiasAndEnabled.w == 0.0)
+    {
+        return 1.0;
+    }
+    const float4 shadowClip = float4(
+        dot(FrameShadow.CameraClipToLightRow0, cameraClip),
+        dot(FrameShadow.CameraClipToLightRow1, cameraClip),
+        dot(FrameShadow.CameraClipToLightRow2, cameraClip),
+        dot(FrameShadow.CameraClipToLightRow3, cameraClip));
+    const float3 shadow = shadowClip.xyz / shadowClip.w;
+    if (any(abs(shadow.xy) > 1.0) || shadow.z < 0.0 || shadow.z > 1.0)
+    {
+        return 1.0;
+    }
+    const float blockerDepth = ShadowDepth.SampleLevel(ShadowSampler, shadow.xy * 0.5 + 0.5, 0.0);
+    return shadow.z - FrameShadow.BiasAndEnabled.x <= blockerDepth ? 1.0 : 0.0;
+}
+#endif
+
 struct PSInput
 {
     [[vk::location(0)]] float3 Color : COLOR0;
     [[vk::location(1)]] float2 UV : TEXCOORD0;
     [[vk::location(2)]] float3 WorldNormal : NORMAL0;
+#ifdef LIMITLESS_DIRECTIONAL_SHADOW
+    [[vk::location(3)]] float4 CameraClip : TEXCOORD1;
+#endif
 };
 
 float4 MainPS(PSInput input) : SV_Target0
@@ -33,7 +71,10 @@ float4 MainPS(PSInput input) : SV_Target0
         return float4(0.0, 0.0, 0.0, 1.0);
     }
     const float3 normal = normalize(input.WorldNormal / maxComponent);
-    const float facing = saturate(dot(normal, FrameLight.DirectionAndEnabled.xyz));
+    float facing = saturate(dot(normal, FrameLight.DirectionAndEnabled.xyz));
+#ifdef LIMITLESS_DIRECTIONAL_SHADOW
+    facing *= GetLightVisibility(input.CameraClip);
+#endif
     const float3 factor = input.Color * sampled * FrameLight.Radiance.rgb * facing;
     const float3 bounded = min(ObjectConstants.BaseColor.rgb, 1.0 / max(factor, 1.0));
     const float3 material = float3(

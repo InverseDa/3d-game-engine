@@ -137,8 +137,6 @@ public:
     FRHIFence* CreateFence(bool) override { return nullptr; }
     FRHISwapchain* CreateSwapchain(const FRHISwapchainDesc&) override { return nullptr; }
     FRHISampler* CreateSampler(const FRHISamplerDesc&) override { return nullptr; }
-    void* GetBindlessHeapGPUDescriptor() const override { return nullptr; }
-    uint32 AllocateBindlessIndex(FRHIResource*) override { return 0; }
 
     uint32 GroupAttempts = 0;
     uint32 FailGroupAttempt = 2;
@@ -334,14 +332,11 @@ struct FBasePassFixture
         LightItem.Range = sizeof(FBasePassLightConstants);
         Resources.Light = {&LightBuffer, &LightGroup};
 
-        ConfigurePipeline(Pipelines[0]);
-        ConfigurePipeline(Pipelines[1]);
+        ConfigurePipeline(Pipeline);
+        Resources.Pipeline = &Pipeline;
         Layout.Desc.SetIndex = 0;
-        for (std::size_t Index = 0; Index < 2; ++Index)
-        {
-            Pipelines[Index].Desc.BindGroupLayouts.PushBack(&Layout);
-            Pipelines[Index].Desc.BindGroupLayouts.PushBack(&LightLayout);
-        }
+        Pipeline.Desc.BindGroupLayouts.PushBack(&Layout);
+        Pipeline.Desc.BindGroupLayouts.PushBack(&LightLayout);
         for (std::size_t Index = 0; Index < 3; ++Index)
         {
             Samples[Index].Desc.Format = EPixelFormat::R8G8B8A8_SRGB;
@@ -356,8 +351,13 @@ struct FBasePassFixture
             SamplerItem.Binding = 1;
             SamplerItem.Sampler = &Sampler;
             Groups[Index].Desc.Items.PushBack(SamplerItem);
+            Materials[Index].PassMask = ERenderMeshPassMask::SceneColor;
+            Materials[Index].BaseColorTexture = &Samples[Index];
+            Materials[Index].MaterialBindGroup = &Groups[Index];
         }
         Groups[3].Desc = Groups[0].Desc;
+        Materials[3] = Materials[0];
+        Materials[3].MaterialBindGroup = &Groups[3];
 
         VertexBuffers[0].Desc.Size = 256;
         VertexBuffers[1].Desc.Size = 512;
@@ -384,9 +384,9 @@ struct FBasePassFixture
         ConfigureMesh(Scene.Meshes[0], 2, 0, EPixelFormat::R16_UINT, 3);
         ConfigureMesh(Scene.Meshes[1], 3, 1, EPixelFormat::R32_UINT, 6);
         Scene.Meshes[0].LocalToWorld(0, 3) = 2.0f;
-        Scene.Meshes[0].BaseColor = Math::Vector4f(1.0f, 0.25f, 0.5f, 19.0f);
+        Materials[0].BaseColor = Math::Vector4f(1.0f, 0.25f, 0.5f, 19.0f);
         Scene.Meshes[1].LocalToWorld(1, 3) = -3.0f;
-        Scene.Meshes[1].BaseColor = Math::Vector4f(4.0f, 2.0f, 1.0f, -7.0f);
+        Materials[1].BaseColor = Math::Vector4f(4.0f, 2.0f, 1.0f, -7.0f);
     }
 
     static void ConfigurePipeline(FBasePassTestPipeline& Pipeline)
@@ -405,20 +405,18 @@ struct FBasePassFixture
         Pipeline.Desc.PushConstants.Size = sizeof(FBasePassObjectConstants);
     }
 
-    void ConfigureMesh(FRenderMeshProxy& Mesh, const uint64 PrimitiveValue, const uint32 ResourceIndex, const EPixelFormat IndexFormat, const uint32 IndexCount)
+    void ConfigureMesh(FRenderMeshProxy& Primitive, const uint64 PrimitiveValue, const uint32 ResourceIndex, const EPixelFormat IndexFormat, const uint32 IndexCount)
     {
-        Mesh.PrimitiveId = {7, PrimitiveValue};
-        Mesh.GraphicsPipeline = &Pipelines[ResourceIndex];
+        FMeshAsset& Mesh = Geometry[ResourceIndex];
         Mesh.VertexBuffer = &VertexBuffers[ResourceIndex];
         Mesh.VertexCount = 3;
         Mesh.IndexBuffer = &IndexBuffers[ResourceIndex];
         Mesh.IndexCount = IndexCount;
         Mesh.IndexFormat = IndexFormat;
-        Mesh.MaterialAssetId = MaterialIds[ResourceIndex];
-        Mesh.PassMask = ERenderMeshPassMask::SceneColor;
-        Mesh.LocalToWorld = Math::Matrix4f::Identity();
-        Mesh.BaseColorTexture = &Samples[ResourceIndex];
-        Mesh.MaterialBindGroup = &Groups[ResourceIndex];
+        Primitive.PrimitiveId = {7, PrimitiveValue};
+        Primitive.Mesh = &Mesh;
+        Primitive.Material = &Materials[ResourceIndex];
+        Primitive.MaterialAssetId = MaterialIds[ResourceIndex];
     }
 
     FBasePassTestTexture Color;
@@ -434,7 +432,9 @@ struct FBasePassFixture
     FBasePassTestTexture Samples[3];
     FBasePassTestTextureView SampleViews[3];
     FBasePassTestBindGroup Groups[4];
-    FBasePassTestPipeline Pipelines[2];
+    FBasePassTestPipeline Pipeline;
+    FMeshAsset Geometry[2];
+    FMaterialAsset Materials[4];
     FBasePassTestBuffer VertexBuffers[2];
     FBasePassTestBuffer IndexBuffers[2];
     FAssetId MaterialIds[2];
@@ -484,7 +484,7 @@ int RunBasePassRecordTests()
 {
     int Failures = 0;
     FBasePassFixture Fixture;
-    Fixture.Scene.Meshes[1].bHasNormals = true;
+    Fixture.Geometry[1].bHasNormals = true;
     Fixture.Scene.Meshes[1].NormalToWorld(0, 0) = 0.5f;
     FBasePass Pass(Fixture.Resources);
     FBasePassTestCommandList Commands;
@@ -511,14 +511,12 @@ int RunBasePassRecordTests()
         EBasePassCommandEvent::BeginRenderPass,
         EBasePassCommandEvent::SetViewport,
         EBasePassCommandEvent::SetScissor,
-        EBasePassCommandEvent::BindPipeline,
         EBasePassCommandEvent::BindMaterial,
         EBasePassCommandEvent::BindLight,
         EBasePassCommandEvent::SetVertex,
         EBasePassCommandEvent::SetIndex,
         EBasePassCommandEvent::PushConstants,
         EBasePassCommandEvent::DrawIndexed,
-        EBasePassCommandEvent::BindPipeline,
         EBasePassCommandEvent::BindMaterial,
         EBasePassCommandEvent::BindLight,
         EBasePassCommandEvent::SetVertex,
@@ -532,15 +530,15 @@ int RunBasePassRecordTests()
     {
         bEventOrder = Commands.Events[Index] == ExpectedEvents[Index];
     }
-    Failures += Expect(bEventOrder, "BasePass records attachment, state, per-object binding, push, and indexed draw order");
+    Failures += Expect(bEventOrder && Commands.Pipelines.Size() == 1 && Commands.Pipelines[0] == &Fixture.Pipeline,
+                       "BasePass uses its own pipeline for all draws and preserves command order");
 
     Fixture.Scene.Meshes.PushBack(Fixture.Scene.Meshes[0]);
     Fixture.Scene.Meshes.Back().PrimitiveId = {7, 4};
-    Fixture.Scene.Meshes.Back().BaseColorTexture = &Fixture.Samples[2];
-    Fixture.Scene.Meshes.Back().MaterialBindGroup = &Fixture.Groups[2];
+    Fixture.Scene.Meshes.Back().Material = &Fixture.Materials[2];
     Fixture.Scene.Meshes.PushBack(Fixture.Scene.Meshes[0]);
     Fixture.Scene.Meshes.Back().PrimitiveId = {7, 5};
-    Fixture.Scene.Meshes.Back().MaterialBindGroup = &Fixture.Groups[3];
+    Fixture.Scene.Meshes.Back().Material = &Fixture.Materials[3];
     FBasePassTestCommandList MixedMaterialCommands;
     RecordBasePass(Pass, Fixture.Scene, MixedMaterialCommands);
     bool bMixBound = MixedMaterialCommands.Materials.Size() == 4 && MixedMaterialCommands.Lights.Size() == 4 && MixedMaterialCommands.DrawIndexCounts.Size() == 4;
@@ -553,7 +551,10 @@ int RunBasePassRecordTests()
     Fixture.Scene.Meshes.Clear();
     FBasePassTestCommandList EmptyCommands;
     RecordBasePass(Pass, Fixture.Scene, EmptyCommands);
-    Failures += Expect(EmptyCommands.BeginRenderPassCount == 1 && EmptyCommands.EndRenderPassCount == 1 && EmptyCommands.DrawIndexCounts.IsEmpty() && EmptyCommands.Pipelines.IsEmpty(), "zero-visible BasePass remains valid and clears color plus depth without a pipeline");
+    Failures += Expect(EmptyCommands.BeginRenderPassCount == 1 && EmptyCommands.EndRenderPassCount == 1 &&
+                       EmptyCommands.DrawIndexCounts.IsEmpty() && EmptyCommands.Pipelines.Size() == 1 &&
+                       EmptyCommands.Pipelines[0] == &Fixture.Pipeline,
+                       "zero-visible BasePass binds its own attachment contract and still clears without draws");
     return Failures;
 }
 
@@ -579,17 +580,17 @@ int RunBasePassPlanValidationTests()
     }
     {
         FBasePassFixture Fixture;
-        Fixture.Scene.Meshes[0].IndexFormat = EPixelFormat::R8_UINT;
+        Fixture.Geometry[0].IndexFormat = EPixelFormat::R8_UINT;
         Failures += Expect(!ProducesBasePassPlan(Fixture), "invalid indexed proxy produces an empty renderer plan");
     }
     {
         FBasePassFixture Fixture;
-        Fixture.Pipelines[0].Desc.BlendState.bEnable = true;
-        Failures += Expect(!ProducesBasePassPlan(Fixture), "blended material pipeline is rejected by the opaque BasePass");
+        Fixture.Pipeline.Desc.BlendState.bEnable = true;
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "blending is rejected by the opaque BasePass contract");
     }
     {
         FBasePassFixture Fixture;
-        Fixture.Pipelines[0].Desc.DepthStencilState.DepthFunc = ECompareFunction::LessEqual;
+        Fixture.Pipeline.Desc.DepthStencilState.DepthFunc = ECompareFunction::LessEqual;
         Failures += Expect(!ProducesBasePassPlan(Fixture), "BasePass rejects a pipeline outside the exact Less depth contract");
     }
     {
@@ -619,14 +620,14 @@ int RunBasePassPlanValidationTests()
     }
     {
         FBasePassFixture Fixture;
-        Fixture.Pipelines[0].Desc.VertexBindings[0].Stride = 0;
+        Fixture.Pipeline.Desc.VertexBindings[0].Stride = 0;
         Failures += Expect(!ProducesBasePassPlan(Fixture), "BasePass requires a positive binding-zero vertex stride");
     }
     {
         FBasePassFixture Fixture;
-        Fixture.Pipelines[0].Desc.VertexBindings.TryEmplaceBack();
-        Fixture.Pipelines[0].Desc.VertexBindings.Back().Binding = 1;
-        Fixture.Pipelines[0].Desc.VertexBindings.Back().Stride = 16;
+        Fixture.Pipeline.Desc.VertexBindings.TryEmplaceBack();
+        Fixture.Pipeline.Desc.VertexBindings.Back().Binding = 1;
+        Fixture.Pipeline.Desc.VertexBindings.Back().Stride = 16;
         Failures += Expect(!ProducesBasePassPlan(Fixture), "single-slot BasePass rejects pipelines requiring unbound vertex slots");
     }
     return Failures;
@@ -749,12 +750,8 @@ int RunBasePassGraphContractTests()
 {
     int Failures = 0;
     FBasePassFixture Fixture;
-    Fixture.Scene.Meshes[1].VertexBuffer = Fixture.Scene.Meshes[0].VertexBuffer;
-    Fixture.Scene.Meshes[1].IndexBuffer = Fixture.Scene.Meshes[0].IndexBuffer;
-    Fixture.Scene.Meshes[1].IndexFormat = Fixture.Scene.Meshes[0].IndexFormat;
-    Fixture.Scene.Meshes[1].IndexCount = Fixture.Scene.Meshes[0].IndexCount;
-    Fixture.Scene.Meshes[1].BaseColorTexture = Fixture.Scene.Meshes[0].BaseColorTexture;
-    Fixture.Scene.Meshes[1].MaterialBindGroup = &Fixture.Groups[3];
+    Fixture.Scene.Meshes[1].Mesh = Fixture.Scene.Meshes[0].Mesh;
+    Fixture.Scene.Meshes[1].Material = &Fixture.Materials[3];
     FBasePass Pass(Fixture.Resources);
     FRFGBuilder Builder;
     FRenderGraphBuilderBridge Bridge(Builder);

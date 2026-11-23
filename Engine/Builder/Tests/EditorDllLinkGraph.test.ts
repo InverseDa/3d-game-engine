@@ -310,6 +310,8 @@ Test("Demo WorldRenderer bridge preserves frame and asset lifetime order", async
         import.meta.dirname, "..", "..", "Source", "Runtime",
         "DemoApplication", "Private", "DemoApplication.cpp");
     const Source = await Fs.readFile(DemoSourcePath, "utf-8");
+    const SceneRendererSource = await Fs.readFile(Path.resolve(
+        Path.dirname(DemoSourcePath), "..", "..", "Renderer", "Private", "Renderer", "SceneRenderer.cpp"), "utf-8");
     const TransitionalBridgePath = Path.join(
         Path.dirname(DemoSourcePath), "DemoWorldRenderSceneExtraction.h");
     await Assert.rejects(Fs.access(TransitionalBridgePath));
@@ -319,29 +321,36 @@ Test("Demo WorldRenderer bridge preserves frame and asset lifetime order", async
     const Render = Source.slice(RenderBegin, RenderEnd);
     const Snapshot = Render.indexOf("FWorldRenderSnapshot RenderSnapshot");
     const BuildSnapshot = Render.indexOf("WorldRenderer.BuildSnapshot(");
-    const ScheduledFrame = Render.indexOf("ScheduledFrame.GetFrameIndex()", BuildSnapshot);
+    const ScheduledFrame = Render.indexOf("ScheduledFrame.GetFrameIndex()", Snapshot);
     const ConsumeSnapshot = Render.indexOf(
-        "&RenderSnapshot.GetRenderScene()", BuildSnapshot);
+        "Renderer.RecordFrame(ScheduledFrame, *Swapchain, RenderSnapshot.GetRenderScene())", BuildSnapshot);
     Assert.ok(RenderBegin >= 0 && RenderEnd > RenderBegin && Snapshot >= 0 &&
-        BuildSnapshot > Snapshot && ScheduledFrame > BuildSnapshot &&
-        ConsumeSnapshot > ScheduledFrame,
+        ScheduledFrame > Snapshot && BuildSnapshot > ScheduledFrame &&
+        ConsumeSnapshot > BuildSnapshot,
     "Demo must build and synchronously consume one stack-owned snapshot per frame callback");
 
     const ResizeBegin = Source.indexOf("EApplicationTickResult UpdateRenderResources()");
     const ResizeEnd = Source.indexOf("EApplicationTickResult Update(", ResizeBegin);
     const Resize = Source.slice(ResizeBegin, ResizeEnd);
     const DrainFrames = Resize.indexOf("FrameScheduler.WaitForAllFrames()");
-    const CreateCandidate = Resize.indexOf("TryCreateDemoRenderResources(");
-    const SwapCandidate = Resize.indexOf("RenderResources = Candidate");
-    const DestroyPrevious = Resize.indexOf("DestroyDemoRenderResources(Previous)");
+    const ResizeSwapchain = Resize.indexOf("Swapchain->Resize(");
+    const ResizeSceneRenderer = Resize.indexOf("Renderer.Resize(FrameScheduler, Target)");
     Assert.ok(ResizeBegin >= 0 && ResizeEnd > ResizeBegin && DrainFrames >= 0 &&
-        CreateCandidate > DrainFrames && SwapCandidate > CreateCandidate &&
-        DestroyPrevious > SwapCandidate,
-    "resize must drain frames, complete a candidate, publish, swap, then destroy old resources");
+        ResizeSwapchain > DrainFrames && ResizeSceneRenderer > ResizeSwapchain,
+    "the application drains submitted frames before updating the swapchain then delegates attachment allocation");
+    const ResizeTargets = SceneRendererSource.slice(SceneRendererSource.indexOf("bool FSceneRenderer::Resize("),
+        SceneRendererSource.indexOf("ERenderFrameRecordResult FSceneRenderer::RecordFrame("));
+    const CreateCandidate = ResizeTargets.indexOf("State->CreateTargets(Target)");
+    const DrainTargetFrames = ResizeTargets.indexOf("Scheduler.WaitForAllFrames()");
+    const SwapCandidate = ResizeTargets.indexOf("State->Targets = std::move(Candidate)");
+    Assert.ok(CreateCandidate >= 0 && DrainTargetFrames > CreateCandidate && SwapCandidate > DrainTargetFrames,
+        "the renderer finishes a candidate before retirement or replacement of attachments");
     Assert.doesNotMatch(Resize, /(?:CreateBasePassPipeline|AssetRegistry\.Replace|MaterialAssetHandle)/,
         "changing extent must preserve the shared BasePass pipeline and asset handles");
     Assert.doesNotMatch(Render, /WaitForAllFrames\s*\(/,
         "normal frame rendering must not globally drain frames");
+    Assert.doesNotMatch(Source, /(?:CreateGraphicsPipeline|CreateBindGroupLayout|FBasePassFrameLighting|FBasePassResources)/,
+        "pass-specific graphics recipes and bindings belong to Renderer");
 
     const ShutdownBegin = Source.indexOf("void Shutdown() noexcept");
     const ShutdownEnd = Source.indexOf("EApplicationTickResult UpdateRenderResources()", ShutdownBegin);
@@ -349,7 +358,7 @@ Test("Demo WorldRenderer bridge preserves frame and asset lifetime order", async
     const ResetWorld = Shutdown.indexOf("Scene.Reset()");
     const ReleaseAssets = Shutdown.indexOf("Assets.Reset()");
     const StopFrames = Shutdown.indexOf("FrameScheduler.Shutdown()");
-    const DestroyPipeline = Shutdown.indexOf("DestroyResource(BasePassPipeline)");
+    const DestroyPipeline = Shutdown.indexOf("Renderer.Shutdown()");
     Assert.ok(ShutdownBegin >= 0 && ShutdownEnd > ShutdownBegin &&
         StopFrames >= 0 && ResetWorld > StopFrames && ReleaseAssets > ResetWorld &&
         DestroyPipeline > ReleaseAssets,
@@ -359,7 +368,7 @@ Test("Demo WorldRenderer bridge preserves frame and asset lifetime order", async
     Assert.ok(Publish.indexOf("LoadScene(") < Publish.indexOf("BuildSnapshot("));
     Assert.ok(Publish.indexOf("BuildSnapshot(") < Publish.indexOf("Scene = std::move(Candidate)"));
     Assert.ok(Publish.indexOf("FrameScheduler.WaitForAllFrames()") < Publish.indexOf("Assets = std::move(CandidateAssets)"));
-    Assert.match(Source, /RenderResources\.SceneColorTexture->GetDesc\(\)\.Width/);
+    Assert.match(Source, /SnapshotContext\.ViewportWidth = Target\.Width/);
 });
 
 Test("Vulkan buffer creation honors the usage bitmask used by indexed meshes", async () => {

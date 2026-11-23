@@ -2,7 +2,6 @@
 
 #include "Asset/AssetTypes.h"
 #include "CoreMinimal.h"
-#include "RHI/RHITypes.h"
 
 #include <cmath>
 #include <cstddef>
@@ -12,10 +11,8 @@
 namespace LE
 {
 
-class FRHIBuffer;
-class FRHIPipeline_Graphics;
-class FRHIBindGroup;
-class FRHITexture;
+struct FMeshAsset;
+struct FMaterialAsset;
 
 enum class ERenderMeshPassMask : uint8
 {
@@ -101,20 +98,19 @@ struct FRenderMeshProxy : public FRenderPrimitive
     explicit FRenderMeshProxy(IAllocator& Allocator) noexcept : FRenderPrimitive(Allocator) {}
 
     Math::Matrix4f LocalToWorld = Math::Matrix4f::Identity();
-    LE::FRHIPipeline_Graphics* GraphicsPipeline = nullptr;
-    LE::FRHIBuffer* VertexBuffer = nullptr;
-    uint32 VertexCount = 0;
-    LE::FRHIBuffer* IndexBuffer = nullptr;
-    uint32 IndexCount = 0;
-    EPixelFormat IndexFormat = EPixelFormat::Unknown;
-    ERenderMeshPassMask PassMask = ERenderMeshPassMask::All;
+    Math::Matrix3f NormalToWorld = Math::Matrix3f::Identity();
+    // The published asset session must outlive recording and submitted work.
+    const FMeshAsset* Mesh = nullptr;
+    const FMaterialAsset* Material = nullptr;
     uint64 SortKey = 0;
     FAssetId MaterialAssetId;
-    Math::Vector4f BaseColor{1.0f};
-    FRHITexture* BaseColorTexture = nullptr;
-    FRHIBindGroup* MaterialBindGroup = nullptr;
-    Math::Matrix3f NormalToWorld = Math::Matrix3f::Identity();
-    bool bHasNormals = false;
+};
+
+struct FRenderShadowCaster
+{
+    const FMeshAsset* Mesh = nullptr;
+    Math::Matrix4f LocalToWorld = Math::Matrix4f::Identity();
+    FRenderBounds WorldBounds;
 };
 
 struct FRenderLightProxy : public FRenderPrimitive
@@ -142,11 +138,12 @@ class RENDERER_API FRenderScene
 public:
     FRenderScene() noexcept = default;
 
-    explicit FRenderScene(IAllocator& Allocator) noexcept : Meshes(Allocator), Lights(Allocator), Cameras(Allocator) {}
+    explicit FRenderScene(IAllocator& Allocator) noexcept : Meshes(Allocator), ShadowCasters(Allocator), Lights(Allocator), Cameras(Allocator) {}
 
     void Reset()
     {
         Meshes.Clear();
+        ShadowCasters.Clear();
         Lights.Clear();
         Cameras.Clear();
     }
@@ -155,6 +152,7 @@ public:
 
 public:
     LE::Array<FRenderMeshProxy> Meshes;
+    LE::Array<FRenderShadowCaster> ShadowCasters;
     LE::Array<FRenderLightProxy> Lights;
     LE::Array<FRenderCameraProxy> Cameras;
 };

@@ -50,7 +50,7 @@ FRHIResource
 
 ### 2.3 Bindless 支持（实验性）
 
-`FRHIDevice` 暴露 `AllocateBindlessIndex()` 与 `GetBindlessHeapGPUDescriptor()`，用于支持基于全局描述符索引的纹理访问。当前 Vulkan 后端在设备初始化时检测 `VK_EXT_descriptor_indexing` 或 Vulkan 1.2 核心支持，并创建一个大型的 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER` 描述符集。
+Vulkan 后端在设备初始化时检测 `VK_EXT_descriptor_indexing` 或 Vulkan 1.2 核心支持，并在后端内部创建 `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER` 描述符集。Renderer 通过 `FRHIBindGroup` 声明所需的资源绑定。
 
 ---
 
@@ -171,7 +171,6 @@ RHI 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 | `CreateSwapchain()` | 创建窗口 Swapchain。 |
 | `CreateBindGroup()` / `CreateBindGroupLayout()` | 创建资源绑定组。 |
 | `CreateSampler()` | 创建采样器。 |
-| `GetBindlessHeapGPUDescriptor()` / `AllocateBindlessIndex()` | Bindless 支持接口。 |
 
 工厂入口：`RHI::CreateDevice()`，当前硬编码返回 `FVulkanRHIDevice`。所有由 RHI backend
 创建并以 `FRHIResource*` 暴露的对象必须通过 `RHI::DestroyResource()` 释放；该导出函数
@@ -235,7 +234,7 @@ RHI 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 
 ### 7.1 架构
 
-所有 Vulkan 对象均位于 `RHI/Private/Vulkan/` 目录下，Public 头文件仅暴露 `Vulkan/VulkanRHI.h`（供需要直接访问 Vulkan 句柄的高级用户或调试使用）。核心类前缀为 `FVulkanRHI*`。
+Vulkan 实现类型和原生句柄位于 `RHI/Private/Vulkan/`。RHI 的公开入口使用 `FRHI*` 类型，后端的实现类使用 `FVulkanRHI*` 前缀。
 
 ### 7.2 设备初始化流程
 
@@ -265,7 +264,7 @@ RHI 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 |-----|---------|------|
 | **Core** | Public | 基础类型（`CoreMinimal.h`）、日志分类、`LE::String`、`LE::FNonCopyable` 等。 |
 | **Spdlog** | Public | 日志输出（`LE_LOG` 宏内部使用）。 |
-| **Vulkan** | Public | Vulkan 头文件与加载。 |
+| **Vulkan** | Private | 实现所需的 Vulkan 头文件。RHI 的链接配置提供 Vulkan loader。 |
 
 ---
 
@@ -277,7 +276,7 @@ RHI 定义了引擎内统一的像素格式枚举，后端负责映射到原生 
 4. **单一 Graphics Queue**：当前仅创建并使用一个 Graphics Queue，无独立的 Compute/Transfer Queue 实现（`EQueueType` 参数被忽略）。
 5. **Dynamic Rendering 范围有限**：已覆盖 0–8 个颜色附件与 `D32_FLOAT` / `D24_UNORM_S8_UINT`，但尚未支持 Resolve、MSAA、分层渲染、独立 stencil 状态或只读 depth/stencil 的完整管线策略。
 6. **BlendState 未完整实现**：`FRHIBlendStateDesc` 仅包含 `bEnable` 布尔值，无独立颜色/Alpha 混合因子与操作配置。
-7. **Bindless 分配策略占位**：`FVulkanRHIDevice::AllocateBindlessIndex()` 使用简单的静态递增计数器，无空闲索引回收，存在溢出风险。
+7. **Bindless 后端准备**：描述符堆初始化留在 Vulkan 后端，公开资源绑定走 `FRHIBindGroup`。
 8. **资源状态由调用方负责**：Dynamic Rendering 不隐式转换 image layout；缺少 RHI barrier 或 RFG `DepthStencilWrite` 声明会触发 Vulkan Validation 错误。
 9. **RFG transient 异步 ownership**：record-only/异步执行中的 RFG-owned transient 必须转交给 borrowed `IRFGDeferredReleaseSink`；Renderer 将其适配到当前 frame slot，并在对应 fence 完成后回收。缺少或拒绝 sink 时不会提交，未转移资源由 RFG 精确清理；imported resources 不参与 ownership 转移。
 10. **Buffer 共享模式固定**：`FVulkanRHIBuffer` 创建时 `sharingMode` 固定为 `VK_SHARING_MODE_EXCLUSIVE`，未处理跨 Queue Family 共享场景。

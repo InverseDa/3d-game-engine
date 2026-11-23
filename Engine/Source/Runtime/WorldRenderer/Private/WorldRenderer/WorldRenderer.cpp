@@ -467,7 +467,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(const FWorld& Worl
         Proxy.Radiance = Light.Color * Light.Intensity;
     }
 
-    if (!Candidate.Meshes.TryReserve(MeshComponents.Size()))
+    if (!Candidate.Meshes.TryReserve(MeshComponents.Size()) || (!Candidate.Lights.IsEmpty() && !Candidate.ShadowCasters.TryReserve(MeshComponents.Size())))
     {
         return Fail(EWorldRenderSnapshotBuildResult::AllocationFailed, 0);
     }
@@ -488,7 +488,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(const FWorld& Worl
         {
             return Fail(EWorldRenderSnapshotBuildResult::MeshResolveFailed, Index, PrimitiveId, MeshResult);
         }
-        if (ResolvedMesh == nullptr || ResolvedMesh->VertexBuffer == nullptr || ResolvedMesh->VertexCount == 0 || ResolvedMesh->IndexBuffer == nullptr || ResolvedMesh->IndexCount == 0 || !IsValidIndexFormat(ResolvedMesh->IndexFormat))
+        if (ResolvedMesh == nullptr || !ResolvedMesh->HasValidGeometry())
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidMeshPayload, Index, PrimitiveId);
         }
@@ -496,20 +496,13 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(const FWorld& Worl
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidBounds, Index, PrimitiveId);
         }
-        FRHIBuffer* const VertexBuffer = ResolvedMesh->VertexBuffer;
-        const uint32 VertexCount = ResolvedMesh->VertexCount;
-        FRHIBuffer* const IndexBuffer = ResolvedMesh->IndexBuffer;
-        const uint32 IndexCount = ResolvedMesh->IndexCount;
-        const EPixelFormat IndexFormat = ResolvedMesh->IndexFormat;
-        const FRenderBounds LocalBounds = ResolvedMesh->LocalBounds;
-
         const FMaterialAsset* ResolvedMaterial = nullptr;
         const EAssetResolveResult MaterialResult = Assets.Resolve(Component.Material, ResolvedMaterial);
         if (MaterialResult != EAssetResolveResult::Success)
         {
             return Fail(EWorldRenderSnapshotBuildResult::MaterialResolveFailed, Index, PrimitiveId, MaterialResult);
         }
-        if (ResolvedMaterial == nullptr || ResolvedMaterial->GraphicsPipeline == nullptr || ResolvedMaterial->PassMask == ERenderMeshPassMask::None || ((ResolvedMaterial->BaseColorTexture == nullptr) != (ResolvedMaterial->MaterialBindGroup == nullptr)) || !IsFiniteNonNegativeRgb(ResolvedMaterial->BaseColor))
+        if (ResolvedMaterial == nullptr || ResolvedMaterial->PassMask == ERenderMeshPassMask::None || !ResolvedMaterial->HasConsistentTextureBinding() || !IsFiniteNonNegativeRgb(ResolvedMaterial->BaseColor))
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidMaterialPayload, Index, PrimitiveId);
         }
@@ -517,13 +510,10 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(const FWorld& Worl
         {
             return Fail(EWorldRenderSnapshotBuildResult::MissingMeshUV, Index, PrimitiveId);
         }
-        if (ResolvedMaterial->bRequiresUV && ResolvedMaterial->BaseColorTexture == nullptr)
+        if (ResolvedMaterial->bRequiresUV && !ResolvedMaterial->HasColorTexture())
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidMaterialPayload, Index, PrimitiveId);
         }
-        FRHIPipeline_Graphics* const GraphicsPipeline = ResolvedMaterial->GraphicsPipeline;
-        const ERenderMeshPassMask PassMask = ResolvedMaterial->PassMask;
-        const Math::Vector4f BaseColor = ResolvedMaterial->BaseColor;
         FAssetId MaterialAssetId;
         const EAssetResolveResult MaterialIdResult = Assets.TryGetAssetId(Component.Material, MaterialAssetId);
         if (MaterialIdResult != EAssetResolveResult::Success)
@@ -548,7 +538,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(const FWorld& Worl
             return Fail(EWorldRenderSnapshotBuildResult::InvalidNormalTransform, Index, PrimitiveId);
         }
         FRenderBounds WorldBounds;
-        if (!TryTransformBounds(LocalBounds, LocalToWorld, WorldBounds))
+        if (!TryTransformBounds(ResolvedMesh->LocalBounds, LocalToWorld, WorldBounds))
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidBounds, Index, PrimitiveId);
         }
@@ -556,6 +546,11 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(const FWorld& Worl
         if (FrustumResult == EFrustumBoundsResult::Invalid)
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidClipCoordinates, Index, PrimitiveId);
+        }
+        // Directional shadow geometry is independent of camera visibility and material shading.
+        if (!Candidate.Lights.IsEmpty() && !Candidate.ShadowCasters.TryPushBack({ResolvedMesh, LocalToWorld, WorldBounds}))
+        {
+            return Fail(EWorldRenderSnapshotBuildResult::AllocationFailed, Index, PrimitiveId);
         }
         if (FrustumResult == EFrustumBoundsResult::Culled)
         {
@@ -576,19 +571,10 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(const FWorld& Worl
         Proxy.WorldBounds = WorldBounds;
         Proxy.LocalToWorld = LocalToWorld;
         Proxy.NormalToWorld = NormalToWorld;
-        Proxy.bHasNormals = bHasNormals;
-        Proxy.GraphicsPipeline = GraphicsPipeline;
-        Proxy.VertexBuffer = VertexBuffer;
-        Proxy.VertexCount = VertexCount;
-        Proxy.IndexBuffer = IndexBuffer;
-        Proxy.IndexCount = IndexCount;
-        Proxy.IndexFormat = IndexFormat;
-        Proxy.PassMask = PassMask;
+        Proxy.Mesh = ResolvedMesh;
+        Proxy.Material = ResolvedMaterial;
         Proxy.SortKey = Component.SortKey;
         Proxy.MaterialAssetId = MaterialAssetId;
-        Proxy.BaseColor = BaseColor;
-        Proxy.BaseColorTexture = ResolvedMaterial->BaseColorTexture;
-        Proxy.MaterialBindGroup = ResolvedMaterial->MaterialBindGroup;
         ++Report.VisibleMeshCount;
     }
 

@@ -195,4 +195,7 @@ using Matrix2d = Matrix<double, 2, 2>;
 using Matrix3d = Matrix<double, 3, 3>;
 using Matrix4d = Matrix<double, 4, 4>;
 
+// Uses double precision for elimination and preserves Out on failure.
+CORE_API bool TryInvertMatrix(const Matrix4f& Matrix, Matrix4f& Out) noexcept;
+
 } // namespace LE::Math

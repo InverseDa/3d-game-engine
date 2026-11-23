@@ -1,0 +1,72 @@
+{
+  "version": 2,
+  "entities": [
+    {
+      "id": "96e540d4-209d-47be-8be0-08d14fb5ef01",
+      "transform": {
+        "translation": [-1, 0.6, 0.6],
+        "rotation": [0, 0.2164396139, 0, 0.9762960071],
+        "scale": [1.3, 1.2, 1.1]
+      },
+      "mesh": {
+        "mesh": "5ca59b8f-3784-44cb-ac11-597302ca1301",
+        "material": "5ca59b8f-3784-44cb-ac11-597302ca1304",
+        "debugName": "Textured crate",
+        "sortKey": "0"
+      }
+    },
+    {
+      "id": "96e540d4-209d-47be-8be0-08d14fb5ef02",
+      "transform": {
+        "translation": [8, 1.8, 0.2],
+        "rotation": [0, 0, 0, 1],
+        "scale": [0.7, 3.6, 0.7]
+      },
+      "mesh": {
+        "mesh": "5ca59b8f-3784-44cb-ac11-597302ca1301",
+        "material": "5ca59b8f-3784-44cb-ac11-597302ca1305",
+        "debugName": "Off-view pillar",
+        "sortKey": "1"
+      }
+    },
+    {
+      "id": "96e540d4-209d-47be-8be0-08d14fb5ef03",
+      "transform": {
+        "translation": [0, 0, 0],
+        "rotation": [0, 0, 0, 1],
+        "scale": [1, 1, 1]
+      },
+      "mesh": {
+        "mesh": "5ca59b8f-3784-44cb-ac11-597302ca1302",
+        "material": "5ca59b8f-3784-44cb-ac11-597302ca1306",
+        "debugName": "Ground",
+        "sortKey": "2"
+      }
+    },
+    {
+      "id": "96e540d4-209d-47be-8be0-08d14fb5ef04",
+      "transform": {
+        "translation": [0, 3.2, 6.3],
+        "rotation": [-0.1993679344, 0, 0, 0.9799247046],
+        "scale": [1, 1, 1]
+      },
+      "camera": {
+        "debugName": "Inspection camera",
+        "verticalFieldOfViewRadians": 0.872664626,
+        "nearPlane": 0.1,
+        "farPlane": 50,
+        "priority": 100,
+        "active": true
+      }
+    },
+    {
+      "id": "96e540d4-209d-47be-8be0-08d14fb5ef05",
+      "directionalLight": {
+        "direction": [-1.8, -1, -0.4],
+        "color": [1, 1, 1],
+        "intensity": 1.4,
+        "active": true
+      }
+    }
+  ]
+}

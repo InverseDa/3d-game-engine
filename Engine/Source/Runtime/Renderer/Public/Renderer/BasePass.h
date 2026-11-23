@@ -19,10 +19,21 @@ class FRHIBuffer;
 class FRHIBindGroup;
 class FRHIBindGroupLayout;
 class FRHIDevice;
+class FRHIPipeline_Graphics;
 
 struct FBasePassLightBinding
 {
     FRHIBuffer* Buffer = nullptr;
+    FRHIBindGroup* BindGroup = nullptr;
+};
+
+struct FBasePassShadowBinding
+{
+    static constexpr uint32 SetIndex = 2;
+    static constexpr uint32 ConstantBytes = 80;
+
+    FRHITexture* DepthTexture = nullptr;
+    FRHIBuffer* Constants = nullptr;
     FRHIBindGroup* BindGroup = nullptr;
 };
 
@@ -32,7 +43,9 @@ struct FBasePassResources
     FRHITextureView* SceneColorView = nullptr;
     FRHITexture* SceneDepthTexture = nullptr;
     FRHITextureView* SceneDepthView = nullptr;
+    FRHIPipeline_Graphics* Pipeline = nullptr;
     FBasePassLightBinding Light;
+    FBasePassShadowBinding Shadow;
 };
 
 // Shader-visible bytes. The vertex shader reads the four row-major vectors

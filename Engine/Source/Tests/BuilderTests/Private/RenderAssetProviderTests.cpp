@@ -289,8 +289,6 @@ public:
     }
     FRHIBindGroupLayout* CreateBindGroupLayout(const FRHIBindGroupLayoutDesc& Desc) override { return new FUploadTestLayout(Desc); }
     FRHISampler* CreateSampler(const FRHISamplerDesc& Desc) override { return Desc.MinFilter == ESamplerFilter::Nearest && Desc.MagFilter == ESamplerFilter::Nearest && Desc.AddressU == ESamplerAddressMode::ClampToEdge && Desc.AddressV == ESamplerAddressMode::ClampToEdge && Desc.MaxLOD == 0.0f ? new FUploadTestSampler(Desc) : nullptr; }
-    void* GetBindlessHeapGPUDescriptor() const override { return nullptr; }
-    uint32 AllocateBindlessIndex(FRHIResource*) override { return 0; }
 
     FUploadTrace Trace;
     mutable FUploadTestQueue Queue{Trace};
@@ -303,37 +301,22 @@ public:
     bool bFailBinding = false;
 };
 
-class FProviderTestPipeline final : public FRHIPipeline_Graphics
-{
-public:
-    const FRHIPipelineDesc_Graphics& GetDesc() const override { return Desc; }
-    FRHIPipelineDesc_Graphics Desc;
-};
-
 struct FProviderFixture
 {
     FProviderFixture()
     {
         Layout = CreateBasePassMaterialLayout(Device);
-        Pipeline.Desc.BindGroupLayouts.PushBack(Layout);
-        FRHIBindGroupLayoutDesc LightingLayoutDesc;
-        LightingLayoutDesc.SetIndex = 1;
-        LightingLayout = Device.CreateBindGroupLayout(LightingLayoutDesc);
-        Pipeline.Desc.BindGroupLayouts.PushBack(LightingLayout);
-        bInitialized = Provider.Initialize(&Device, &Pipeline, Layout);
+        bInitialized = Provider.Initialize(&Device, Layout);
     }
 
     ~FProviderFixture()
     {
         Provider.Shutdown();
-        RHI::DestroyResource(LightingLayout);
         RHI::DestroyResource(Layout);
     }
 
     FUploadTestDevice Device;
-    FProviderTestPipeline Pipeline;
     FRHIBindGroupLayout* Layout = nullptr;
-    FRHIBindGroupLayout* LightingLayout = nullptr;
     FRenderAssetProvider Provider;
     bool bInitialized = false;
 };
@@ -488,7 +471,6 @@ bool TestSharedMaterialAcrossExtents()
         return false;
     }
     auto& Device = Fixture.Device;
-    auto& Pipeline = Fixture.Pipeline;
     auto& Provider = Fixture.Provider;
     FMeshAssetData MeshData = MakeMesh();
     FMaterialAssetData MaterialData;
@@ -569,14 +551,15 @@ bool TestSharedMaterialAcrossExtents()
             {
                 for (const FRenderMeshProxy& Proxy : Snapshot.GetRenderScene().Meshes)
                 {
-                    BothVisible &= Proxy.GraphicsPipeline == &Pipeline && Proxy.MaterialAssetId == MaterialId && Proxy.VertexBuffer == Mesh->VertexBuffer && Proxy.IndexBuffer == Mesh->IndexBuffer && Proxy.BaseColor == Math::Vector4f(0.25f, 2.0f, 0.5f, 1.0f) && Proxy.BaseColorTexture == Material->BaseColorTexture && Proxy.MaterialBindGroup == Material->MaterialBindGroup;
+                    BothVisible &= Proxy.MaterialAssetId == MaterialId && Proxy.Mesh == Mesh && Proxy.Material == Material &&
+                                   Proxy.Material->BaseColor == Math::Vector4f(0.25f, 2.0f, 0.5f, 1.0f);
                 }
             }
-            Passed &= ExpectProvider(BothVisible, "both entities resolve the same payload and pipeline after extent changes");
+            Passed &= ExpectProvider(BothVisible, "both entities reference the same mesh and material after extent changes");
         }
     }
 
-    Passed &= ExpectProvider(Registry.Unregister(MaterialHandle) == EAssetUnregisterResult::Success && Registry.Unregister(MeshHandle) == EAssetUnregisterResult::Success && Device.Trace.Destroyed == 3, "registry releases provider-owned buffers and material before the borrowed pipeline");
+    Passed &= ExpectProvider(Registry.Unregister(MaterialHandle) == EAssetUnregisterResult::Success && Registry.Unregister(MeshHandle) == EAssetUnregisterResult::Success && Device.Trace.Destroyed == 3, "registry releases provider-owned buffers and material before the borrowed layout");
     return Passed;
 }
 

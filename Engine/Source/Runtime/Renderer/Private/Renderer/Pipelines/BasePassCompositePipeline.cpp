@@ -34,7 +34,9 @@ void FBasePassCompositePipeline::BuildPasses(const FRendererFrameContext& FrameC
     static_cast<void>(FrameContext);
     static_cast<void>(RenderView);
     OutPlan.Reset();
-    if (!Impl || !FBasePass::IsConfigurationValid(Impl->Desc.BasePassResources, RenderScene) || !IsSceneColorCompositeConfigurationValid(Impl->Desc) || !OutPlan.Passes.TryPushBack(&Impl->BasePass) || !OutPlan.Passes.TryPushBack(&Impl->CompositePass))
+    if (!Impl || !FBasePass::IsConfigurationValid(Impl->Desc.BasePassResources, RenderScene) || !IsSceneColorCompositeConfigurationValid(Impl->Desc) ||
+        (Impl->Desc.ShadowPass != nullptr && !OutPlan.Passes.TryPushBack(Impl->Desc.ShadowPass)) ||
+        !OutPlan.Passes.TryPushBack(&Impl->BasePass) || !OutPlan.Passes.TryPushBack(&Impl->CompositePass))
     {
         OutPlan.Reset();
     }

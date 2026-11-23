@@ -4,18 +4,16 @@
 
 Renderer 是引擎的高层渲染模块，基于 **RFG（Render Frame Graph）** + **RHI（Render Hardware Interface）** 构建可扩展的渲染管线。
 
-Renderer is the sole owner of the complete `FMeshAsset` and `FMaterialAsset`
-GPU payload definitions. Asset owns only their stable logical type IDs, while
-World stores opaque typed handles and has no Renderer/RHI dependency. The
-separate WorldRenderer module resolves those handles into an immutable,
-frame-owned `FRenderScene` snapshot for synchronous command recording.
+World 持有 Mesh 和 Material 的类型化资产句柄。WorldRenderer 将句柄解析成帧级
+`FRenderScene`，其中的网格代理借用 Renderer 的资产 payload。Renderer 的各个 Pass
+从 payload 取得绘制所需的 RHI 资源，并选择各自的管线。
 
 其主要职责包括：
 
 - 接收游戏线程提交的场景描述（`FRenderScene`）和视图参数（`FRenderView`）。
 - 通过可插拔的 `IRenderPipeline` 将高层渲染意图转换为有序的 `IRenderPass` 序列。
 - 借助 `FRenderGraphBuilderBridge` 将 Pass 的资源依赖声明转译为 RFG 的图节点与边。
-- 驱动 RFG 完成图的编译与执行，最终输出到 `FRHISwapchain`。
+- 驱动 RFG 编译图并录制命令。帧调度器负责 Acquire、Submit 和 Present。
 
 简而言之，Renderer 是 **场景逻辑 → 渲染指令 → GPU 提交** 之间的 orchestration 层。
 
@@ -29,11 +27,12 @@ frame-owned `FRenderScene` snapshot for synchronous command recording.
 
 | 成员 | 类型 | 说明 |
 |------|------|------|
-| `Meshes` | `LE::Array<FRenderMeshProxy>` | 已剔除并确定性排序的 indexed mesh proxies，复制 transform/bounds、persistent material ID、VB/IB、pipeline 与最小 opaque base color |
+| `Meshes` | `LE::Array<FRenderMeshProxy>` | 经主相机剔除并确定性排序的绘制代理，携带实体标识、变换、包围盒、材质 UUID 和借用的 Mesh/Material 引用 |
+| `ShadowCasters` | `LE::Array<FRenderShadowCaster>` | 启用方向光时从相机剔除前的几何收集 Mesh 引用、世界变换和包围盒 |
 | `Lights` | `LE::Array<FRenderLightProxy>` | 零或一个方向光，携带世界空间朝光方向与线性 RGB 强度 |
 | `Cameras` | `LE::Array<FRenderCameraProxy>` | 恰好一个 primary camera，复制 View/Projection/ViewProjection、primitive ID 与 viewport |
 
-`ERenderMeshPassMask` 定义了网格可参与的目标通道：`BackBuffer`、`SceneColor`。
+`FMaterialAsset` 包含 `ERenderMeshPassMask`，用于判断网格能否参与相应的颜色 Pass。
 
 ### 2.2 RenderView
 
@@ -118,7 +117,7 @@ class IRenderPipeline {
 
 ### 4.1 `FRenderer`（Renderer.h）
 
-模块入口类，单例式生命周期管理：
+编排和录制渲染图的实例。
 
 | 方法 | 说明 |
 |------|------|
@@ -174,17 +173,19 @@ Pipeline.AddPass(&PassB);
 
 ### 5.1 正式 BasePass vertical slice
 
-`FBasePassCompositePipeline` 规划严格的两 Pass 链路：
+`FSceneRenderer` 是默认场景管线入口，持有着色器模块、管线、布局、SceneColor 和
+SceneDepth 附件、Composite 绑定及帧槽光照资源。应用提供设备、交换链、着色器字节码
+和场景快照，把当前帧作用域交给 `RecordFrame`。调整尺寸时先构建候选附件与
+Composite 资源，等待已提交帧，再替换原资源。
 
-| 管线 | 名称 | Pass 数 | 说明 |
-|------|------|---------|------|
-| `FBasePassCompositePipeline` | `BasePassCompositePipeline` | 2 | indexed opaque BasePass 写 SceneColor+depth，随后 Composite 采样 SceneColor 输出 BackBuffer |
+`FBasePassCompositePipeline` 先录制可选的 ShadowDepth，再录制 BasePass 和 Composite。
+BasePass 写 SceneColor 和 SceneDepth，Composite 将 SceneColor 输出到 BackBuffer。
 
 #### `FBasePass`
 
 `FRenderAssetProvider` 将已解码的 CPU 网格与材质转换为 BasePass payload。
-网格上传位置、白色顶点色、UV 和 R32 索引。v1 网格使用默认 UV，只有带源 UV
-的网格可以与引用颜色纹理的材质组合。应用持有共享的 pipeline 和 set 0 layout。
+网格上传位置、白色顶点色、UV、法线和索引。旧网格使用默认 UV 或法线值。
+引用颜色纹理的材质要求网格提供源 UV。Renderer 创建共享的材质布局（set 0）。
 
 首次请求一个纹理 ID 时，provider 创建 host-visible staging 和单 mip RGBA8 sRGB
 图像，在 Graphics queue 录制 `Undefined → CopyDestination → Copy → ShaderResource`
@@ -202,8 +203,9 @@ pipeline、layout 和设备。固定附件格式支持在 resize 时复用材质
   index format、有效的持久 Material ID、与 pipeline 匹配的材质 bind group 及 sRGB sampled image。
 - Setup 导入 SceneColor/depth、VB/IB 和采样纹理。对共享纹理声明一次 Pixel ShaderResource 读取，
   导入初始状态也是 ShaderResource。附件和 VB/IB 保持各自的状态。
-- Record 不再分配或排序；严格按 immutable snapshot 顺序清除 color/depth、设置 viewport/scissor，
-  每次绘制绑定 pipeline、材质、帧级灯光、VB/IB，上传 128 字节的 LocalToClip、BaseColor 和逆转置法线行。
+- Record 先选择 BasePass 管线，清除 color/depth 并设置 viewport/scissor，再按快照顺序
+  绑定材质、帧级灯光和顶点/索引缓冲。每次绘制上传 128 字节的 LocalToClip、BaseColor
+  和逆转置法线行。
 - 光照使用 mesh v3 的显式顶点法线。Base Color 在 sRGB 纹理解码后进入线性 Lambert 漫反射，
   无启用光源或无作者法线的 draw 沿用原颜色公式。场景灯光和像素基准见 [DirectionalLight.md](DirectionalLight.md)。
 - frame slot 各自持有一个 32 字节 UniformBuffer 和绑定组。槽 fence 完成后写入该帧灯光或停用值，
@@ -211,6 +213,14 @@ pipeline、layout 和设备。固定附件格式支持在 resize 时复用材质
   顶点着色器逐行点乘计算 clip position。像素着色器线性乘以顶点色、材质色和 sRGB 解码
   后的采样颜色，输出 alpha 为 1。
 - 零可见 mesh 仍是有效计划，BasePass 仍清除 SceneColor/depth。
+
+#### `FDirectionalShadowPass`
+
+- 将投影体的世界包围盒投影到光源空间，建立单方向光的正交覆盖范围。使用独立于主相机
+  可见网格的投影体列表，支持屏幕外物体向屏幕内投影。
+- 每个帧槽保存一张 1024×1024 深度纹理和该帧的接收端常量。RFG 根据 ShadowDepth
+  写入和 BasePass 读取声明处理深度附件到采样状态的转换。BasePass 用深度比较调节
+  Lambert 直射光。立体场景与 Win64 取样位置见 [SolidGeometry.md](SolidGeometry.md)。
 
 #### `FSceneColorCompositePass`
 
@@ -276,9 +286,9 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 ## 8. 当前限制
 
 1. **BasePass 仍是最小 vertical slice**：生产级 `Forward+`、`Deferred`、透明与多 Pass 材质尚未实现；`EShadingPath` 枚举存在但未驱动选择。
-2. **无通用材质系统**：`FRenderMeshProxy` 直接复制 resolved pipeline、buffers 与最小 RGB base color，没有纹理参数表、材质实例或 shader variant 抽象。
-3. **场景数据仍精简**：已有 primary camera、CPU frustum culling 和单方向光。LOD、occlusion culling 与 shadows 留给后续阶段。
-4. **单视图限制**：`FRenderer::RenderFrame` 仅取 `ViewFamily.Views.front()`，多视口/分屏/Shadow Cascade 不支持。
+2. **材质范围**：当前支持 opaque base color 和单张颜色纹理。纹理参数表、材质实例和通用 shader variant 仍待扩展。
+3. **场景数据范围**：已有主相机、CPU 视锥剔除、单方向光和单张方向光阴影图。LOD 与 occlusion culling 留给后续阶段。
+4. **单视图限制**：`FRenderer::RenderFrame` 仅取 `ViewFamily.Views.front()`，多视口、分屏和级联阴影仍待扩展。
 5. **同步资产路径**：Asset registry 和 WorldRenderer snapshot build 仍同步执行，没有异步加载或 render thread。
 6. **无后处理框架**：无 Bloom、Tone Mapping、AA 等后处理 Pass 的标准注册与组合机制。
 7. **Transient 暂无跨帧复用池**：RFG-owned transient 已绑定 exact frame slot 并在 fence 完成后安全销毁，但尚未实现跨帧 aliasing/复用池或显存预算策略。
@@ -294,7 +304,7 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 
 ### 9.2 材质系统
 - 引入 `FMaterial` / `FMaterialInstance` 抽象，管理 Shader、纹理采样器、常量缓冲。
-- 在 `FRenderMeshProxy` 中替换裸 `FRHIPipeline_Graphics*` 为材质引用。
+- 根据材质与 Pass 选择着色变体及相应管线。
 - 支持 Shader 变体（Keyword / Feature Level）和运行时热重载。
 
 ### 9.3 后处理
@@ -306,7 +316,7 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 - 在现有 CPU frustum culling 之后增加 LOD、occlusion culling 与批处理。
 
 ### 9.5 多视图与并行
-- 支持 `FRenderViewFamily` 的多视图渲染（Split Screen、Shadow Maps、Reflection Probes）。
+- 支持 `FRenderViewFamily` 的多视图渲染（分屏、级联阴影、反射探针）。
 - 在其余调用方迁移到 `FRenderFrameScheduler` 后，淘汰 RFG 的 legacy immediate-submit / `WaitIdle` 兼容入口。
 
 ---
@@ -316,7 +326,8 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 | 文件 | 说明 |
 |------|------|
 | `Public/Renderer/Renderer.h` | `FRenderer` 主类 |
-| `Public/Renderer/RenderScene.h` | `FRenderScene`、`FRenderMeshProxy`、`FRenderLightProxy`、`FRenderCameraProxy` |
+| `Public/Renderer/SceneRenderer.h` | 默认场景管线、附件调整和帧录制入口 |
+| `Public/Renderer/RenderScene.h` | `FRenderScene` 和网格、投影体、方向光、相机代理 |
 | `Public/Renderer/RenderView.h` | `FRenderView`、`FRenderViewFamily`、`FRenderTargetBinding` |
 | `Public/Renderer/RenderPass.h` | `IRenderPass`、`FRenderPassSetupContext`、`FRenderPassRecordContext` |
 | `Public/Renderer/RenderPipeline.h` | `IRenderPipeline`、`FRenderPipelinePlan` |
@@ -329,11 +340,12 @@ sink 缺失或拒绝时不会提交，未转移资源仍由 RFG 精确清理。
 | `Public/Renderer/SimpleRenderPipeline.h` | `FSimpleRenderPipeline` |
 | `Public/Renderer/BasePass.h` | BasePass attachment、indexed draw、128 字节对象常量和 32 字节帧灯光常量 |
 | `Public/Renderer/RenderAssetProvider.h` | BasePass 网格、材质、同步纹理上传及会话缓存 |
-| `Public/Renderer/BasePassCompositePipeline.h` | 正式 BasePass→Composite 双 Pass pipeline |
+| `Public/Renderer/BasePassCompositePipeline.h` | 默认 Pass 排序与绑定 |
 | `Public/Renderer/RendererMinimal.h` | 模块统一头文件（聚合包含） |
 | `Private/Renderer/Renderer.cpp` | `FRenderer` 实现 |
 | `Private/Renderer/RenderFrameScheduler.cpp` | 两槽 Acquire/record/Submit/Present 状态机 |
 | `Private/Renderer/RenderGraphBuilderBridge.cpp` | `FRenderGraphBuilderBridge` 实现 |
 | `Private/Renderer/Passes/BasePass.cpp` | BasePass preflight、RFG Setup 与 RHI Record |
+| `Private/Renderer/Passes/DirectionalShadow.cpp` | 阴影帧槽资源、光源正交变换和深度 Pass |
 | `Private/Renderer/Passes/SceneColorCompositePass.h` | backend-neutral SceneColor composite pass |
-| `Private/Renderer/Pipelines/BasePassCompositePipeline.cpp` | 正式双 Pass pipeline 实现 |
+| `Private/Renderer/Pipelines/BasePassCompositePipeline.cpp` | ShadowDepth、BasePass、Composite 计划构建 |

@@ -8,7 +8,6 @@ namespace LE
 {
 
 class FRHIBuffer;
-class FRHIPipeline_Graphics;
 class FRHIBindGroup;
 class FRHITexture;
 
@@ -25,11 +24,15 @@ struct FMeshAsset
     FRenderBounds LocalBounds;
     bool bHasUV = false;
     bool bHasNormals = false;
+
+    bool HasValidGeometry() const noexcept
+    {
+        return VertexBuffer != nullptr && VertexCount != 0 && IndexBuffer != nullptr && IndexCount != 0 && IsValidIndexFormat(IndexFormat);
+    }
 };
 
 struct FMaterialAsset
 {
-    FRHIPipeline_Graphics* GraphicsPipeline = nullptr;
     ERenderMeshPassMask PassMask = ERenderMeshPassMask::All;
     // BasePass is opaque: RGB may be HDR but must be finite and non-negative;
     // alpha is intentionally ignored and emitted as one.
@@ -37,6 +40,9 @@ struct FMaterialAsset
     FRHITexture* BaseColorTexture = nullptr;
     FRHIBindGroup* MaterialBindGroup = nullptr;
     bool bRequiresUV = false;
+
+    bool HasColorTexture() const noexcept { return BaseColorTexture != nullptr; }
+    bool HasConsistentTextureBinding() const noexcept { return HasColorTexture() == (MaterialBindGroup != nullptr); }
 };
 
 } // namespace LE

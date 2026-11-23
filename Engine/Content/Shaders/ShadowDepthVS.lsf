@@ -1,0 +1,20 @@
+struct FShadowObject
+{
+    float4 LocalToLightRow0;
+    float4 LocalToLightRow1;
+    float4 LocalToLightRow2;
+    float4 LocalToLightRow3;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<FShadowObject> ShadowObject;
+
+float4 MainVS([[vk::location(0)]] float3 position : POSITION) : SV_Position
+{
+    const float4 local = float4(position, 1.0);
+    return float4(
+        dot(ShadowObject.LocalToLightRow0, local),
+        dot(ShadowObject.LocalToLightRow1, local),
+        dot(ShadowObject.LocalToLightRow2, local),
+        dot(ShadowObject.LocalToLightRow3, local));
+}

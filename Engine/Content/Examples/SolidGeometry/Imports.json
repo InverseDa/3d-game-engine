@@ -1,0 +1,41 @@
+{
+  "mount": "Game",
+  "assets": [
+    {
+      "kind": "mesh",
+      "source": "SolidBox.obj",
+      "id": "5ca59b8f-3784-44cb-ac11-597302ca1301",
+      "path": "Game/Meshes/SolidBox"
+    },
+    {
+      "kind": "mesh",
+      "source": "SolidGround.obj",
+      "id": "5ca59b8f-3784-44cb-ac11-597302ca1302",
+      "path": "Game/Meshes/SolidGround"
+    },
+    {
+      "kind": "texture",
+      "source": "Crate.ppm",
+      "id": "5ca59b8f-3784-44cb-ac11-597302ca1303",
+      "path": "Game/Textures/SolidCrate"
+    },
+    {
+      "kind": "material",
+      "source": "Crate.material",
+      "id": "5ca59b8f-3784-44cb-ac11-597302ca1304",
+      "path": "Game/Materials/SolidCrate"
+    },
+    {
+      "kind": "material",
+      "source": "Pillar.material",
+      "id": "5ca59b8f-3784-44cb-ac11-597302ca1305",
+      "path": "Game/Materials/SolidPillar"
+    },
+    {
+      "kind": "material",
+      "source": "Ground.material",
+      "id": "5ca59b8f-3784-44cb-ac11-597302ca1306",
+      "path": "Game/Materials/SolidGround"
+    }
+  ]
+}

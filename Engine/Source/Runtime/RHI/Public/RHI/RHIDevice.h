@@ -45,10 +45,6 @@ public:
     virtual FRHIBindGroup* CreateBindGroup(const FRHIBindGroupDesc& Desc) = 0;
     virtual FRHIBindGroupLayout* CreateBindGroupLayout(const FRHIBindGroupLayoutDesc& Desc) = 0;
     virtual FRHISampler* CreateSampler(const FRHISamplerDesc& Desc) = 0;
-
-public:
-    virtual void* GetBindlessHeapGPUDescriptor() const = 0;
-    virtual uint32 AllocateBindlessIndex(FRHIResource* Resource) = 0;
 };
 
 namespace RHI

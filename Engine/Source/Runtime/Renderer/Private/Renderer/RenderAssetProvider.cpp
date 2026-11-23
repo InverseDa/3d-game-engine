@@ -9,6 +9,7 @@
 #include "RHI/RHIDevice.h"
 #include "RHI/RHISampler.h"
 #include "RHI/RHITexture.h"
+#include "Renderer/RenderResourceOwnership.h"
 
 #include <cmath>
 #include <cstring>
@@ -19,11 +20,6 @@ namespace LE
 {
 namespace
 {
-
-template <typename Resource> UniquePtr<Resource> OwnRHI(Resource* Value) noexcept
-{
-    return UniquePtr<Resource>::Adopt(Value, nullptr, [](void*, Resource* Object) noexcept { RHI::DestroyResource(Object); });
-}
 
 UniquePtr<FRHIBuffer> CreateUploadBuffer(FRHIDevice& Device, const char* Name, const uint64 Size, const EBufferUsageFlags Usage) noexcept
 {
@@ -129,7 +125,7 @@ bool HasMaterialLayout(const FRHIBindGroupLayout& Layout) noexcept
 
 struct FRenderAssetProvider::FSession
 {
-    FSession(FRHIDevice& InDevice, FRHIPipeline_Graphics& InPipeline, FRHIBindGroupLayout& InLayout) noexcept : Device(InDevice), Pipeline(InPipeline), Layout(InLayout) {}
+    FSession(FRHIDevice& InDevice, FRHIBindGroupLayout& InLayout) noexcept : Device(InDevice), Layout(InLayout) {}
 
     ETextureUploadResult Upload(uint32 Width, uint32 Height, Span<const uint8> Pixels, FTextureResources& Out) noexcept
     {
@@ -279,7 +275,6 @@ struct FRenderAssetProvider::FSession
     }
 
     FRHIDevice& Device;
-    FRHIPipeline_Graphics& Pipeline;
     FRHIBindGroupLayout& Layout;
     UniquePtr<FRHISampler> Sampler;
     FTextureResources White;
@@ -339,9 +334,9 @@ FRenderAssetProvider::~FRenderAssetProvider() noexcept
     Shutdown();
 }
 
-bool FRenderAssetProvider::Initialize(FRHIDevice* Device, FRHIPipeline_Graphics* Pipeline, FRHIBindGroupLayout* Layout) noexcept
+bool FRenderAssetProvider::Initialize(FRHIDevice* Device, FRHIBindGroupLayout* Layout) noexcept
 {
-    if (Session != nullptr || Device == nullptr || Pipeline == nullptr || Layout == nullptr || !HasMaterialLayout(*Layout) || Pipeline->GetDesc().BindGroupLayouts.IsEmpty() || Pipeline->GetDesc().BindGroupLayouts[0] != Layout)
+    if (Session != nullptr || Device == nullptr || Layout == nullptr || !HasMaterialLayout(*Layout))
     {
         LastResult = ETextureUploadResult::InvalidInput;
         return false;
@@ -365,7 +360,7 @@ bool FRenderAssetProvider::Initialize(FRHIDevice* Device, FRHIPipeline_Graphics*
         LastResult = ETextureUploadResult::BindingCreationFailed;
         return false;
     }
-    Session = new (std::nothrow) FSession(*Device, *Pipeline, *Layout);
+    Session = new (std::nothrow) FSession(*Device, *Layout);
     if (Session == nullptr)
     {
         LastResult = ETextureUploadResult::CacheAllocationFailed;
@@ -553,7 +548,6 @@ FMaterialAsset* FRenderAssetProvider::CreateMaterial(void* Context, const FMater
     }
 
     Material->Binding = std::move(Binding);
-    Material->GraphicsPipeline = &Session.Pipeline;
     Material->PassMask = ERenderMeshPassMask::SceneColor;
     Material->BaseColor = Math::Vector4f(Data.BaseColor.Values[0], Data.BaseColor.Values[1], Data.BaseColor.Values[2], 1.0f);
     Material->BaseColorTexture = Resources->Image.Get();

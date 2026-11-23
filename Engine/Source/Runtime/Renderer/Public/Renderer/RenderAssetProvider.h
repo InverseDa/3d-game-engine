@@ -41,7 +41,7 @@ enum class ETextureUploadResult : uint8
 RENDERER_API const char* DescribeTextureUploadResult(ETextureUploadResult Result) noexcept;
 RENDERER_API FRHIBindGroupLayout* CreateBasePassMaterialLayout(FRHIDevice& Device) noexcept;
 
-// Owns a scene's GPU texture cache and sampler. The device, pipeline and layout
+// Owns a scene's GPU texture cache and sampler. The device and layout
 // outlive the provider. Drain submitted frames then release registry objects
 // before shutting down the provider.
 class RENDERER_API FRenderAssetProvider final : public FNonCopyable
@@ -50,7 +50,7 @@ public:
     FRenderAssetProvider() noexcept = default;
     ~FRenderAssetProvider() noexcept;
 
-    bool Initialize(FRHIDevice* Device, FRHIPipeline_Graphics* Pipeline, FRHIBindGroupLayout* Layout) noexcept;
+    bool Initialize(FRHIDevice* Device, FRHIBindGroupLayout* Layout) noexcept;
     void Shutdown() noexcept;
     ETextureUploadResult GetLastTextureUploadResult() const noexcept { return LastResult; }
     // Counts completed uploads for authored asset IDs during this session.

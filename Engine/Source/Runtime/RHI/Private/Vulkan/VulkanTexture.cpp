@@ -166,11 +166,16 @@ FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextu
         LE_LOG(LogRHI, Error, "Texture creation rejected an empty extent, mip/layer count or usage.");
         return;
     }
-    if (Desc.bIsTransferDestination)
+    const bool bSampledDepth = Desc.Format == EPixelFormat::D32_FLOAT && Desc.bIsDepthStencil && Desc.bIsShaderResource;
+    if (Desc.bIsTransferDestination || bSampledDepth)
     {
         VkFormatProperties FormatProperties{};
         vkGetPhysicalDeviceFormatProperties(Device->VkContext.PhysicalDevice, Info.format, &FormatProperties);
-        VkFormatFeatureFlags Required = VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+        VkFormatFeatureFlags Required = Desc.bIsTransferDestination ? VK_FORMAT_FEATURE_TRANSFER_DST_BIT : 0;
+        if (bSampledDepth)
+        {
+            Required |= VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        }
         if (Desc.bIsShaderResource)
         {
             Required |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
@@ -178,7 +183,7 @@ FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextu
         VkImageFormatProperties ImageProperties{};
         if ((FormatProperties.optimalTilingFeatures & Required) != Required || vkGetPhysicalDeviceImageFormatProperties(Device->VkContext.PhysicalDevice, Info.format, Info.imageType, Info.tiling, Info.usage, Info.flags, &ImageProperties) != VK_SUCCESS || Desc.Width > ImageProperties.maxExtent.width || Desc.Height > ImageProperties.maxExtent.height || Desc.Depth > ImageProperties.maxExtent.depth || Desc.MipLevels > ImageProperties.maxMipLevels || Desc.ArrayLayers > ImageProperties.maxArrayLayers)
         {
-            LE_LOG(LogRHI, Error, "Texture creation rejected an unsupported transfer destination.");
+            LE_LOG(LogRHI, Error, "Texture creation rejected an unsupported {}.", bSampledDepth ? "sampled depth attachment" : "transfer destination");
             return;
         }
     }

@@ -14,6 +14,9 @@ struct VSOutput
     [[vk::location(0)]] float3 Color : COLOR0;
     [[vk::location(1)]] float2 UV : TEXCOORD0;
     [[vk::location(2)]] float3 WorldNormal : NORMAL0;
+#ifdef LIMITLESS_DIRECTIONAL_SHADOW
+    [[vk::location(3)]] float4 CameraClip : TEXCOORD1;
+#endif
 };
 
 VSOutput MainVS(VSInput input)
@@ -27,6 +30,9 @@ VSOutput MainVS(VSInput input)
         dot(ObjectConstants.LocalToClipRow3, local));
     output.Color = input.Color;
     output.UV = input.UV;
+#ifdef LIMITLESS_DIRECTIONAL_SHADOW
+    output.CameraClip = output.Position;
+#endif
     output.WorldNormal = float3(
         dot(ObjectConstants.NormalToWorldRow0.xyz, input.Normal),
         dot(ObjectConstants.NormalToWorldRow1.xyz, input.Normal),

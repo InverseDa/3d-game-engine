@@ -23,7 +23,6 @@ export default class DemoApplicationBuild extends ModuleBuild {
             "Platform",
             "Spdlog",
             "RHI",
-            "RFG",
             "Reflection",
             "Renderer",
             "Scene",
@@ -35,6 +34,7 @@ export default class DemoApplicationBuild extends ModuleBuild {
             const Samples = [
                 { Name: "AssetImport", Destination: "[engine.Binaries]/DemoContent" },
                 { Name: "DirectionalLight", Destination: "[engine.Binaries]/DirectionalLightContent" },
+                { Name: "SolidGeometry", Destination: "[engine.Binaries]/SolidGeometryContent" },
             ].map(({ Name, Destination }) => {
                 const Source = `[engine.Root]/Engine/Content/Examples/${Name}`;
                 const Manifest = JSON.parse(readFileSync(new URL(

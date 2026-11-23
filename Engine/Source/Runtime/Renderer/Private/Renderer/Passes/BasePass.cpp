@@ -68,26 +68,60 @@ bool IsLightBindingValid(const FBasePassLightBinding& Light) noexcept
     return Layout.SetIndex == FBasePassFrameLighting::SetIndex && Layout.Bindings.Size() == 1 && Layout.Bindings[0].Binding == FBasePassFrameLighting::BindingIndex && Layout.Bindings[0].Count == 1 && Layout.Bindings[0].Type == ERHIBindGroupItemType::UniformBuffer && Layout.Bindings[0].StageFlags == EShaderStage::Pixel && Item.Binding == FBasePassFrameLighting::BindingIndex && Item.Buffer == Light.Buffer && Item.Offset == 0 && Item.Range == sizeof(FBasePassLightConstants);
 }
 
-bool IsMaterialBindingValid(const FRenderMeshProxy& Mesh, const FBasePassLightBinding& Light) noexcept
+bool AreFrameBindingsValid(const FBasePassResources& Pass) noexcept
 {
-    if (Mesh.MaterialBindGroup == nullptr || Mesh.BaseColorTexture == nullptr)
+    const auto& Layouts = Pass.Pipeline->GetDesc().BindGroupLayouts;
+    const auto& Shadow = Pass.Shadow;
+    const bool bHasShadow = Shadow.BindGroup != nullptr;
+    if (Layouts.Size() != (bHasShadow ? 3u : 2u) || Layouts[FBasePassFrameLighting::SetIndex] != Pass.Light.BindGroup->GetDesc().Layout)
     {
         return false;
     }
-    const auto& Texture = Mesh.BaseColorTexture->GetDesc();
+    if (!bHasShadow)
+    {
+        return Shadow.DepthTexture == nullptr && Shadow.Constants == nullptr;
+    }
+    if (Shadow.DepthTexture == nullptr || Shadow.DepthTexture == Pass.SceneDepthTexture || Shadow.Constants == nullptr)
+    {
+        return false;
+    }
+    const auto& Depth = Shadow.DepthTexture->GetDesc();
+    const auto& Group = Shadow.BindGroup->GetDesc();
+    if (Group.Layout == nullptr || Group.Layout != Layouts[FBasePassShadowBinding::SetIndex] ||
+        Group.Layout->GetDesc().SetIndex != FBasePassShadowBinding::SetIndex || Group.Items.Size() != 3 ||
+        Depth.Format != SceneDepthFormat || !Depth.bIsDepthStencil || !Depth.bIsShaderResource)
+    {
+        return false;
+    }
+    const auto& Constants = Group.Items[0];
+    const auto& Image = Group.Items[1];
+    const auto& Sampler = Group.Items[2];
+    return Constants.Binding == 0 && Constants.Buffer == Shadow.Constants && Constants.Offset == 0 &&
+        Constants.Range == FBasePassShadowBinding::ConstantBytes &&
+        Image.Binding == 1 && Image.TextureView != nullptr && Image.TextureView->GetTexture() == Shadow.DepthTexture &&
+        Sampler.Binding == 2 && Sampler.Sampler != nullptr;
+}
+
+bool IsMaterialBindingValid(const FMaterialAsset& Material, const FRHIPipeline_Graphics& Pipeline) noexcept
+{
+    if (Material.MaterialBindGroup == nullptr || Material.BaseColorTexture == nullptr)
+    {
+        return false;
+    }
+    const auto& Texture = Material.BaseColorTexture->GetDesc();
     if (!Texture.bIsShaderResource || Texture.Format != EPixelFormat::R8G8B8A8_SRGB || Texture.Depth != 1 || Texture.MipLevels != 1 || Texture.ArrayLayers != 1 || Texture.Width == 0 || Texture.Height == 0)
     {
         return false;
     }
-    const auto& Layouts = Mesh.GraphicsPipeline->GetDesc().BindGroupLayouts;
-    const auto& BindGroup = Mesh.MaterialBindGroup->GetDesc();
-    if (Layouts.Size() != 2 || Layouts[FBasePassFrameLighting::SetIndex] != Light.BindGroup->GetDesc().Layout || BindGroup.Layout == nullptr || BindGroup.Layout != Layouts[MaterialSet] || BindGroup.Layout->GetDesc().SetIndex != MaterialSet || BindGroup.Items.Size() != 2)
+    const auto& Layouts = Pipeline.GetDesc().BindGroupLayouts;
+    const auto& BindGroup = Material.MaterialBindGroup->GetDesc();
+    if (BindGroup.Layout == nullptr || BindGroup.Layout != Layouts[MaterialSet] || BindGroup.Layout->GetDesc().SetIndex != MaterialSet || BindGroup.Items.Size() != 2)
     {
         return false;
     }
     const auto& Image = BindGroup.Items[0];
     const auto& Sampler = BindGroup.Items[1];
-    return Image.Binding == 0 && Image.TextureView != nullptr && Image.TextureView->GetTexture() == Mesh.BaseColorTexture && Image.TextureView->GetDesc().Format == Texture.Format && Sampler.Binding == 1 && Sampler.Sampler != nullptr;
+    return Image.Binding == 0 && Image.TextureView != nullptr && Image.TextureView->GetTexture() == Material.BaseColorTexture && Image.TextureView->GetDesc().Format == Texture.Format && Sampler.Binding == 1 && Sampler.Sampler != nullptr;
 }
 
 bool HasBufferUsage(const FRHIBuffer& Buffer, const EBufferUsageFlags Usage) noexcept
@@ -128,7 +162,9 @@ bool FBasePass::IsConfigurationValid(const FBasePassResources& InResources, cons
 {
     uint32 Width = 0;
     uint32 Height = 0;
-    if (!IsTextureContractValid(InResources, Width, Height) || RenderScene.Cameras.Size() != 1 || RenderScene.Lights.Size() > 1 || !IsLightBindingValid(InResources.Light))
+    if (!IsTextureContractValid(InResources, Width, Height) || RenderScene.Cameras.Size() != 1 || RenderScene.Lights.Size() > 1 ||
+        InResources.Pipeline == nullptr || !IsPipelineValid(*InResources.Pipeline) || !IsLightBindingValid(InResources.Light) ||
+        !AreFrameBindingsValid(InResources))
     {
         return false;
     }
@@ -139,20 +175,28 @@ bool FBasePass::IsConfigurationValid(const FBasePassResources& InResources, cons
         return false;
     }
 
-    for (const FRenderMeshProxy& Mesh : RenderScene.Meshes)
+    const uint32 VertexStride = InResources.Pipeline->GetDesc().VertexBindings[0].Stride;
+    for (const FRenderMeshProxy& Primitive : RenderScene.Meshes)
     {
-        if (!Mesh.PrimitiveId.IsValid() || !Mesh.MaterialAssetId.IsValid() || !HasRenderMeshPass(Mesh.PassMask, ERenderMeshPassMask::SceneColor) || Mesh.GraphicsPipeline == nullptr || Mesh.VertexBuffer == nullptr || Mesh.VertexCount == 0 || Mesh.IndexBuffer == nullptr || Mesh.IndexCount == 0 || !IsValidIndexFormat(Mesh.IndexFormat) || !IsFiniteMatrix(Mesh.LocalToWorld) || !IsFiniteNonNegativeRgb(Mesh.BaseColor) || (Mesh.bHasNormals && !IsFiniteMatrix(Mesh.NormalToWorld)) || !IsPipelineValid(*Mesh.GraphicsPipeline) || !IsMaterialBindingValid(Mesh, InResources.Light) || Mesh.BaseColorTexture == InResources.SceneColorTexture || Mesh.BaseColorTexture == InResources.SceneDepthTexture)
+        if (!Primitive.PrimitiveId.IsValid() || !Primitive.MaterialAssetId.IsValid() || Primitive.Mesh == nullptr || Primitive.Material == nullptr || !IsFiniteMatrix(Primitive.LocalToWorld))
         {
             return false;
         }
-        const FRHIPipelineDesc_Graphics& PipelineDesc = Mesh.GraphicsPipeline->GetDesc();
-        const uint32 VertexStride = PipelineDesc.VertexBindings[0].Stride;
+        const FMeshAsset& Mesh = *Primitive.Mesh;
+        const FMaterialAsset& Material = *Primitive.Material;
+        if (!Mesh.HasValidGeometry() || !HasRenderMeshPass(Material.PassMask, ERenderMeshPassMask::SceneColor) ||
+            !IsFiniteNonNegativeRgb(Material.BaseColor) || (Mesh.bHasNormals && !IsFiniteMatrix(Primitive.NormalToWorld)) ||
+            !IsMaterialBindingValid(Material, *InResources.Pipeline) ||
+            Material.BaseColorTexture == InResources.SceneColorTexture || Material.BaseColorTexture == InResources.SceneDepthTexture)
+        {
+            return false;
+        }
         const uint32 IndexStride = Mesh.IndexFormat == EPixelFormat::R16_UINT ? 2u : 4u;
         if (!HasBufferUsage(*Mesh.VertexBuffer, EBufferUsageFlags::VertexBuffer) || !HasBufferUsage(*Mesh.IndexBuffer, EBufferUsageFlags::IndexBuffer) || !FitsBuffer(Mesh.VertexCount, VertexStride, Mesh.VertexBuffer->GetDesc().Size) || !FitsBuffer(Mesh.IndexCount, IndexStride, Mesh.IndexBuffer->GetDesc().Size))
         {
             return false;
         }
-        const Math::Matrix4f LocalToClip = Camera.ViewProjection * Mesh.LocalToWorld;
+        const Math::Matrix4f LocalToClip = Camera.ViewProjection * Primitive.LocalToWorld;
         if (!IsFiniteMatrix(LocalToClip))
         {
             return false;
@@ -206,11 +250,20 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
     LightRead.State = ERHIResourceState::ConstantBuffer;
     const FRFGResourceHandle Light = Context.GraphBridge->ImportBuffer("BasePassFrameLight", Resources.Light.Buffer, ERHIResourceState::ConstantBuffer);
     Context.GraphBridge->Read(Context.PassHandle, Light, LightRead);
+    if (Resources.Shadow.BindGroup != nullptr)
+    {
+        const auto ShadowDepth = Context.GraphBridge->ImportTexture("DirectionalShadowDepth", Resources.Shadow.DepthTexture, ERHIResourceState::Undefined);
+        Context.GraphBridge->Read(Context.PassHandle, ShadowDepth, TextureRead);
+        const auto ShadowConstants = Context.GraphBridge->ImportBuffer("BasePassFrameShadow", Resources.Shadow.Constants, ERHIResourceState::ConstantBuffer);
+        Context.GraphBridge->Read(Context.PassHandle, ShadowConstants, LightRead);
+    }
     HashSet<FRHIBuffer*> VertexBuffers;
     HashSet<FRHIBuffer*> IndexBuffers;
     HashSet<FRHITexture*> SampledTextures;
-    for (const FRenderMeshProxy& Mesh : Context.RenderScene->Meshes)
+    for (const FRenderMeshProxy& Primitive : Context.RenderScene->Meshes)
     {
+        const FMeshAsset& Mesh = *Primitive.Mesh;
+        const FMaterialAsset& Material = *Primitive.Material;
         if (VertexBuffers.Insert(Mesh.VertexBuffer))
         {
             const FRFGResourceHandle VertexBuffer = Context.GraphBridge->ImportBuffer("BasePassVertexBuffer", Mesh.VertexBuffer, ERHIResourceState::VertexBuffer);
@@ -221,9 +274,9 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
             const FRFGResourceHandle IndexBuffer = Context.GraphBridge->ImportBuffer("BasePassIndexBuffer", Mesh.IndexBuffer, ERHIResourceState::IndexBuffer);
             Context.GraphBridge->Read(Context.PassHandle, IndexBuffer, IndexRead);
         }
-        if (SampledTextures.Insert(Mesh.BaseColorTexture))
+        if (SampledTextures.Insert(Material.BaseColorTexture))
         {
-            const FRFGResourceHandle Texture = Context.GraphBridge->ImportTexture("BasePassColorTexture", Mesh.BaseColorTexture, ERHIResourceState::ShaderResource);
+            const FRFGResourceHandle Texture = Context.GraphBridge->ImportTexture("BasePassColorTexture", Material.BaseColorTexture, ERHIResourceState::ShaderResource);
             Context.GraphBridge->Read(Context.PassHandle, Texture, TextureRead);
         }
     }
@@ -242,13 +295,7 @@ void FBasePass::Record(FRenderPassRecordContext& Context)
     }
 
     const FRenderScene& RenderScene = *Context.RenderScene;
-    if (!RenderScene.Meshes.IsEmpty())
-    {
-        // Vulkan dynamic rendering validates attachment formats against the
-        // current pipeline at BeginRenderPass. Each object is still rebound
-        // explicitly below so snapshot order is the sole draw order.
-        CommandList->SetGraphicsPipeline(RenderScene.Meshes.Front().GraphicsPipeline);
-    }
+    CommandList->SetGraphicsPipeline(Resources.Pipeline);
 
     const FRHITextureDesc& ColorDesc = Resources.SceneColorTexture->GetDesc();
     FRHIRenderPassDesc RenderPass;
@@ -280,20 +327,25 @@ void FBasePass::Record(FRenderPassRecordContext& Context)
     CommandList->SetScissorRect(Scissor);
 
     const FRenderCameraProxy& Camera = RenderScene.Cameras[0];
-    for (const FRenderMeshProxy& Mesh : RenderScene.Meshes)
+    if (Resources.Shadow.BindGroup != nullptr)
     {
+        CommandList->SetBindGroup(FBasePassShadowBinding::SetIndex, Resources.Shadow.BindGroup);
+    }
+    for (const FRenderMeshProxy& Primitive : RenderScene.Meshes)
+    {
+        const FMeshAsset& Mesh = *Primitive.Mesh;
+        const FMaterialAsset& Material = *Primitive.Material;
         FBasePassObjectConstants Constants;
-        Constants.LocalToClip = Camera.ViewProjection * Mesh.LocalToWorld;
-        Constants.BaseColor = Math::Vector4f(Mesh.BaseColor.Values[0], Mesh.BaseColor.Values[1], Mesh.BaseColor.Values[2], Mesh.bHasNormals ? 1.0f : 0.0f);
+        Constants.LocalToClip = Camera.ViewProjection * Primitive.LocalToWorld;
+        Constants.BaseColor = Math::Vector4f(Material.BaseColor.Values[0], Material.BaseColor.Values[1], Material.BaseColor.Values[2], Mesh.bHasNormals ? 1.0f : 0.0f);
         if (Mesh.bHasNormals)
         {
             for (std::size_t Row = 0; Row < 3; ++Row)
             {
-                Constants.NormalToWorldRows[Row] = Math::Vector4f(Mesh.NormalToWorld(Row, 0), Mesh.NormalToWorld(Row, 1), Mesh.NormalToWorld(Row, 2), 0.0f);
+                Constants.NormalToWorldRows[Row] = Math::Vector4f(Primitive.NormalToWorld(Row, 0), Primitive.NormalToWorld(Row, 1), Primitive.NormalToWorld(Row, 2), 0.0f);
             }
         }
-        CommandList->SetGraphicsPipeline(Mesh.GraphicsPipeline);
-        CommandList->SetBindGroup(MaterialSet, Mesh.MaterialBindGroup);
+        CommandList->SetBindGroup(MaterialSet, Material.MaterialBindGroup);
         CommandList->SetBindGroup(FBasePassFrameLighting::SetIndex, Resources.Light.BindGroup);
         CommandList->SetVertexBuffer(0, Mesh.VertexBuffer, 0);
         CommandList->SetIndexBuffer(Mesh.IndexBuffer, 0, Mesh.IndexFormat);

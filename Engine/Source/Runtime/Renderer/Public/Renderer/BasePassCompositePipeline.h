@@ -17,6 +17,7 @@ struct FBasePassCompositePipelineDesc
     FRHITextureView* BackBufferView = nullptr;
     FRHIPipeline_Graphics* CompositePipeline = nullptr;
     FRHIBindGroup* CompositeBindGroup = nullptr;
+    IRenderPass* ShadowPass = nullptr;
 };
 
 class FBasePassCompositePipelineImpl;

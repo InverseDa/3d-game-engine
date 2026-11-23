@@ -407,8 +407,6 @@ public:
     LE::FRHIBindGroup* CreateBindGroup(const LE::FRHIBindGroupDesc&) override { return nullptr; }
     LE::FRHIBindGroupLayout* CreateBindGroupLayout(const LE::FRHIBindGroupLayoutDesc&) override { return nullptr; }
     LE::FRHISampler* CreateSampler(const LE::FRHISamplerDesc&) override { return nullptr; }
-    void* GetBindlessHeapGPUDescriptor() const override { return nullptr; }
-    LE::uint32 AllocateBindlessIndex(LE::FRHIResource*) override { return 0; }
 
 private:
     bool ShouldFailCreation()
