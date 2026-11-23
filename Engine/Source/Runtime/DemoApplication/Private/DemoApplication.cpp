@@ -62,12 +62,7 @@ static void DestroyDemoRenderResources(FDemoRenderResources& Resources)
     Resources.SceneColorTexture = nullptr;
 }
 
-static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(
-    LE::FRHIDevice* Device,
-    LE::FRHIShader* VertexShader,
-    LE::FRHIShader* PixelShader,
-    LE::FRHIBindGroupLayout* MaterialLayout,
-    LE::FRHIBindGroupLayout* LightLayout)
+static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(LE::FRHIDevice* Device, LE::FRHIShader* VertexShader, LE::FRHIShader* PixelShader, LE::FRHIBindGroupLayout* MaterialLayout, LE::FRHIBindGroupLayout* LightLayout)
 {
     LE::FRHIPipelineDesc_Graphics PipelineDesc;
     PipelineDesc.Name = "BasePassPipeline";
@@ -118,17 +113,14 @@ static LE::FRHIPipeline_Graphics* CreateBasePassPipeline(
     PipelineDesc.RasterizerState.CullMode = LE::ECullMode::None;
     PipelineDesc.RasterizerState.FillMode = LE::EFillMode::Solid;
     PipelineDesc.BlendState.bEnable = false;
-    PipelineDesc.PushConstants.StageFlags =
-        LE::EShaderStage::Vertex | LE::EShaderStage::Pixel;
+    PipelineDesc.PushConstants.StageFlags = LE::EShaderStage::Vertex | LE::EShaderStage::Pixel;
     PipelineDesc.PushConstants.Size = sizeof(LE::FBasePassObjectConstants);
     return Device->CreateGraphicsPipeline(PipelineDesc);
 }
 
 struct FDemoSceneAssets final
 {
-    explicit FDemoSceneAssets(const FAssetCatalog& Catalog) noexcept
-        : Session(Catalog, {{&Provider, &FRenderAssetProvider::CreateMesh, &FRenderAssetProvider::DestroyMesh},
-            {&Provider, &FRenderAssetProvider::CreateMaterial, &FRenderAssetProvider::DestroyMaterial}}) {}
+    explicit FDemoSceneAssets(const FAssetCatalog& Catalog) noexcept : Session(Catalog, {{&Provider, &FRenderAssetProvider::CreateMesh, &FRenderAssetProvider::DestroyMesh}, {&Provider, &FRenderAssetProvider::CreateMaterial, &FRenderAssetProvider::DestroyMaterial}}) {}
 
     const FAssetRegistry& GetRegistry() const noexcept { return Session.GetRegistry(); }
 
@@ -136,12 +128,7 @@ struct FDemoSceneAssets final
     FAssetLoadSession Session;
 };
 
-static LE::FRHIPipeline_Graphics* CreateCompositePipeline(
-    LE::FRHIDevice* Device,
-    LE::FRHIShader* VertexShader,
-    LE::FRHIShader* PixelShader,
-    LE::FRHIBindGroupLayout* BindGroupLayout,
-    LE::EPixelFormat RenderTargetFormat)
+static LE::FRHIPipeline_Graphics* CreateCompositePipeline(LE::FRHIDevice* Device, LE::FRHIShader* VertexShader, LE::FRHIShader* PixelShader, LE::FRHIBindGroupLayout* BindGroupLayout, LE::EPixelFormat RenderTargetFormat)
 {
     LE::FRHIPipelineDesc_Graphics PipelineDesc;
     PipelineDesc.Name = "CompositePipeline";
@@ -160,26 +147,24 @@ static LE::FRHIPipeline_Graphics* CreateCompositePipeline(
     return Device->CreateGraphicsPipeline(PipelineDesc);
 }
 
-static bool TryCreateDemoRenderResources(
-    LE::FRHIDevice* Device,
-    LE::FRHIShader* CompositeVertexShader,
-    LE::FRHIShader* CompositePixelShader,
-    uint32 Width,
-    uint32 Height,
-    FDemoRenderResources& OutResources)
+struct FDemoRenderResourcesDesc
 {
-    if (Device == nullptr || Width == 0 || Height == 0 ||
-        OutResources.SceneColorTexture != nullptr ||
-        OutResources.SceneDepthTexture != nullptr ||
-        OutResources.CompositePipeline != nullptr)
+    FRHIShader* CompositeVertexShader = nullptr;
+    FRHIShader* CompositePixelShader = nullptr;
+    FPlatformWindowSize Extent;
+};
+
+static bool TryCreateDemoRenderResources(FRHIDevice* Device, const FDemoRenderResourcesDesc& Desc, FDemoRenderResources& OutResources)
+{
+    if (Device == nullptr || Desc.Extent.Width == 0 || Desc.Extent.Height == 0 || OutResources.SceneColorTexture != nullptr || OutResources.SceneDepthTexture != nullptr || OutResources.CompositePipeline != nullptr)
     {
         return false;
     }
 
     LE::FRHITextureDesc TextureDesc;
     TextureDesc.Name = "SceneColor";
-    TextureDesc.Width = Width;
-    TextureDesc.Height = Height;
+    TextureDesc.Width = Desc.Extent.Width;
+    TextureDesc.Height = Desc.Extent.Height;
     TextureDesc.Depth = 1;
     TextureDesc.MipLevels = 1;
     TextureDesc.ArrayLayers = 1;
@@ -211,8 +196,8 @@ static bool TryCreateDemoRenderResources(
 
     LE::FRHITextureDesc DepthDesc;
     DepthDesc.Name = "SceneDepth";
-    DepthDesc.Width = Width;
-    DepthDesc.Height = Height;
+    DepthDesc.Width = Desc.Extent.Width;
+    DepthDesc.Height = Desc.Extent.Height;
     DepthDesc.Depth = 1;
     DepthDesc.MipLevels = 1;
     DepthDesc.ArrayLayers = 1;
@@ -294,12 +279,7 @@ static bool TryCreateDemoRenderResources(
         return false;
     }
 
-    OutResources.CompositePipeline = CreateCompositePipeline(
-        Device,
-        CompositeVertexShader,
-        CompositePixelShader,
-        OutResources.BindGroupLayout,
-        LE::EPixelFormat::B8G8R8A8_SRGB);
+    OutResources.CompositePipeline = CreateCompositePipeline(Device, Desc.CompositeVertexShader, Desc.CompositePixelShader, OutResources.BindGroupLayout, LE::EPixelFormat::B8G8R8A8_SRGB);
     if (OutResources.CompositePipeline == nullptr)
     {
         LE_LOG(LogXBD, Error, "Failed to create Composite pipeline.");
@@ -310,30 +290,21 @@ static bool TryCreateDemoRenderResources(
     return true;
 }
 
-static void GetBackBufferExtent(
-    LE::FRHISwapchain* Swapchain,
-    uint32 FallbackWidth,
-    uint32 FallbackHeight,
-    uint32& OutWidth,
-    uint32& OutHeight)
+static FPlatformWindowSize GetBackBufferExtent(FRHISwapchain* Swapchain, FPlatformWindowSize FallbackSize)
 {
-    OutWidth = FallbackWidth;
-    OutHeight = FallbackHeight;
-
     if (Swapchain == nullptr)
     {
-        return;
+        return FallbackSize;
     }
 
     LE::FRHITextureView* BackBufferView = Swapchain->GetCurrentBackBufferView();
     if (BackBufferView == nullptr || BackBufferView->GetTexture() == nullptr)
     {
-        return;
+        return FallbackSize;
     }
 
     const LE::FRHITextureDesc& BackBufferDesc = BackBufferView->GetTexture()->GetDesc();
-    OutWidth = BackBufferDesc.Width;
-    OutHeight = BackBufferDesc.Height;
+    return {BackBufferDesc.Width, BackBufferDesc.Height};
 }
 
 namespace
@@ -341,17 +312,13 @@ namespace
 class FDemoWindowRuntimeModule final
 {
 public:
-    ~FDemoWindowRuntimeModule()
-    {
-        Shutdown();
-    }
+    ~FDemoWindowRuntimeModule() { Shutdown(); }
 
     bool Startup() noexcept
     {
         LE_LOG(LogXBD, Info, "=== Limitless Engine Phase 6: BasePass Vertical Slice ===")
 
-        if (RegisterDemoApplicationReflection(ReflectionRegistry, ReflectionHandle) !=
-            EReflectionRegisterResult::Success)
+        if (RegisterDemoApplicationReflection(ReflectionRegistry, ReflectionHandle) != EReflectionRegisterResult::Success)
         {
             LE_LOG(LogXBD, Error, "Failed to register demo settings reflection");
             return false;
@@ -362,16 +329,7 @@ public:
         FDemoSettings Defaults;
         FPropertyBag Captured;
         Array<uint8> Encoded;
-        if (SettingsType == nullptr ||
-            TryCapturePropertyBag(
-                ReflectionRegistry, SettingsType->Id, SettingsSchemaVersion, &Defaults, Captured) !=
-                EPropertySerializationResult::Success ||
-            TryEncodePropertyBag(Captured, Encoded) != EPropertySerializationResult::Success ||
-            TryDecodePropertyBag(
-                Span<const uint8>(Encoded.Data(), Encoded.Size()), DecodedSettings) !=
-                EPropertySerializationResult::Success ||
-            ValidatePropertyBag(ReflectionRegistry, DecodedSettings) !=
-                EPropertySerializationResult::Success)
+        if (SettingsType == nullptr || TryCapturePropertyBag(ReflectionRegistry, SettingsType->Id, SettingsSchemaVersion, &Defaults, Captured) != EPropertySerializationResult::Success || TryEncodePropertyBag(Captured, Encoded) != EPropertySerializationResult::Success || TryDecodePropertyBag(Span<const uint8>(Encoded.Data(), Encoded.Size()), DecodedSettings) != EPropertySerializationResult::Success || ValidatePropertyBag(ReflectionRegistry, DecodedSettings) != EPropertySerializationResult::Success)
         {
             LE_LOG(LogXBD, Error, "Failed to capture and round-trip demo settings");
             CleanupReflection();
@@ -384,15 +342,10 @@ public:
         uint32 Width = 0;
         uint32 Height = 0;
         StringView Title;
-        const FPropertyValue* const WidthValue = WidthProperty == nullptr
-            ? nullptr : DecodedSettings.Find(WidthProperty->Id);
-        const FPropertyValue* const HeightValue = HeightProperty == nullptr
-            ? nullptr : DecodedSettings.Find(HeightProperty->Id);
-        const FPropertyValue* const TitleValue = TitleProperty == nullptr
-            ? nullptr : DecodedSettings.Find(TitleProperty->Id);
-        if (WidthValue == nullptr || HeightValue == nullptr || TitleValue == nullptr ||
-            !WidthValue->TryGetUInt32(Width) || !HeightValue->TryGetUInt32(Height) ||
-            !TitleValue->TryGetString(Title) || Width == 0 || Height == 0)
+        const FPropertyValue* const WidthValue = WidthProperty == nullptr ? nullptr : DecodedSettings.Find(WidthProperty->Id);
+        const FPropertyValue* const HeightValue = HeightProperty == nullptr ? nullptr : DecodedSettings.Find(HeightProperty->Id);
+        const FPropertyValue* const TitleValue = TitleProperty == nullptr ? nullptr : DecodedSettings.Find(TitleProperty->Id);
+        if (WidthValue == nullptr || HeightValue == nullptr || TitleValue == nullptr || !WidthValue->TryGetUInt32(Width) || !HeightValue->TryGetUInt32(Height) || !TitleValue->TryGetString(Title) || Width == 0 || Height == 0)
         {
             LE_LOG(LogXBD, Error, "Decoded demo settings are incomplete or invalid");
             CleanupReflection();
@@ -435,38 +388,28 @@ public:
         while (PlatformEvents.Poll(PlatformEvent))
         {
             Input.Apply(Window->GetId(), PlatformEvent);
-            if (PlatformEvent.WindowId == Window->GetId() &&
-                PlatformEvent.Type == EPlatformEventType::CloseRequested)
+            if (PlatformEvent.WindowId == Window->GetId() && PlatformEvent.Type == EPlatformEventType::CloseRequested)
             {
                 return EApplicationTickResult::Exit;
             }
         }
-        return Window->IsCloseRequested()
-            ? EApplicationTickResult::Exit
-            : EApplicationTickResult::Continue;
+        return Window->IsCloseRequested() ? EApplicationTickResult::Exit : EApplicationTickResult::Continue;
     }
 
     FPlatformWindow* GetWindow() const noexcept { return Window.Get(); }
     const FPlatformInputFrame& GetInputFrame() const noexcept { return Input.GetFrame(); }
     void ResetInputForScene() noexcept { Input.ResetKeysAndMotion(); }
 
-    static bool StartupThunk(void* Context) noexcept
-    {
-        return static_cast<FDemoWindowRuntimeModule*>(Context)->Startup();
-    }
+    static bool StartupThunk(void* Context) noexcept { return static_cast<FDemoWindowRuntimeModule*>(Context)->Startup(); }
 
-    static void ShutdownThunk(void* Context) noexcept
-    {
-        static_cast<FDemoWindowRuntimeModule*>(Context)->Shutdown();
-    }
+    static void ShutdownThunk(void* Context) noexcept { static_cast<FDemoWindowRuntimeModule*>(Context)->Shutdown(); }
 
 private:
     void CleanupReflection() noexcept
     {
         if (bReflectionRegistered)
         {
-            static_cast<void>(
-                UnregisterDemoApplicationReflection(ReflectionRegistry, ReflectionHandle));
+            static_cast<void>(UnregisterDemoApplicationReflection(ReflectionRegistry, ReflectionHandle));
             ReflectionHandle.Reset();
             bReflectionRegistered = false;
         }
@@ -487,15 +430,9 @@ private:
 class FDemoRenderRuntimeModule final
 {
 public:
-    explicit FDemoRenderRuntimeModule(FDemoWindowRuntimeModule& InWindowModule) noexcept
-        : WindowModule(InWindowModule)
-    {
-    }
+    explicit FDemoRenderRuntimeModule(FDemoWindowRuntimeModule& InWindowModule) noexcept : WindowModule(InWindowModule) {}
 
-    ~FDemoRenderRuntimeModule()
-    {
-        Shutdown();
-    }
+    ~FDemoRenderRuntimeModule() { Shutdown(); }
 
     bool Startup() noexcept
     {
@@ -530,24 +467,16 @@ public:
         LE::Array<char> BasePassFragBytecode;
         LE::Array<char> CompositeVertBytecode;
         LE::Array<char> CompositeFragBytecode;
-        if (!Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/BasePassVS.lsf", ERuntimeShaderStage::Vertex, BasePassVertBytecode, "MainVS") ||
-            !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/BasePassPS.lsf", ERuntimeShaderStage::Fragment, BasePassFragBytecode, "MainPS") ||
-            !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositeVS.lsf", ERuntimeShaderStage::Vertex, CompositeVertBytecode, "MainVS") ||
-            !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositePS.lsf", ERuntimeShaderStage::Fragment, CompositeFragBytecode, "MainPS"))
+        if (!Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/BasePassVS.lsf", ERuntimeShaderStage::Vertex, BasePassVertBytecode, "MainVS") || !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/BasePassPS.lsf", ERuntimeShaderStage::Fragment, BasePassFragBytecode, "MainPS") || !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositeVS.lsf", ERuntimeShaderStage::Vertex, CompositeVertBytecode, "MainVS") || !Demo::ShaderRuntimeCompiler::CompileHlslToSpirv("Engine/Content/Shaders/CompositePS.lsf", ERuntimeShaderStage::Fragment, CompositeFragBytecode, "MainPS"))
         {
             return false;
         }
 
-        BasePassVertexShader = Device->CreateShaderFromFile(
-            LE::EShaderStage::Vertex, BasePassVertBytecode.Data(), BasePassVertBytecode.Size(), "MainVS");
-        BasePassPixelShader = Device->CreateShaderFromFile(
-            LE::EShaderStage::Pixel, BasePassFragBytecode.Data(), BasePassFragBytecode.Size(), "MainPS");
-        CompositeVertexShader = Device->CreateShaderFromFile(
-            LE::EShaderStage::Vertex, CompositeVertBytecode.Data(), CompositeVertBytecode.Size(), "MainVS");
-        CompositePixelShader = Device->CreateShaderFromFile(
-            LE::EShaderStage::Pixel, CompositeFragBytecode.Data(), CompositeFragBytecode.Size(), "MainPS");
-        if (BasePassVertexShader == nullptr || BasePassPixelShader == nullptr ||
-            CompositeVertexShader == nullptr || CompositePixelShader == nullptr)
+        BasePassVertexShader = Device->CreateShaderFromFile(LE::EShaderStage::Vertex, BasePassVertBytecode.Data(), BasePassVertBytecode.Size(), "MainVS");
+        BasePassPixelShader = Device->CreateShaderFromFile(LE::EShaderStage::Pixel, BasePassFragBytecode.Data(), BasePassFragBytecode.Size(), "MainPS");
+        CompositeVertexShader = Device->CreateShaderFromFile(LE::EShaderStage::Vertex, CompositeVertBytecode.Data(), CompositeVertBytecode.Size(), "MainVS");
+        CompositePixelShader = Device->CreateShaderFromFile(LE::EShaderStage::Pixel, CompositeFragBytecode.Data(), CompositeFragBytecode.Size(), "MainPS");
+        if (BasePassVertexShader == nullptr || BasePassPixelShader == nullptr || CompositeVertexShader == nullptr || CompositePixelShader == nullptr)
         {
             LE_LOG(LogXBD, Error, "Failed to create shader modules.");
             return false;
@@ -563,24 +492,16 @@ public:
             LE_LOG(LogXBD, Error, "Failed to initialize BasePass frame lighting.");
             return false;
         }
-        BasePassPipeline = CreateBasePassPipeline(Device, BasePassVertexShader, BasePassPixelShader,
-            MaterialLayout, FrameLighting.GetLayout());
+        BasePassPipeline = CreateBasePassPipeline(Device, BasePassVertexShader, BasePassPixelShader, MaterialLayout, FrameLighting.GetLayout());
         if (BasePassPipeline == nullptr)
         {
             LE_LOG(LogXBD, Error, "Failed to create BasePass pipeline.");
             return false;
         }
 
-        uint32 InitialRenderWidth = DefaultWindowWidth;
-        uint32 InitialRenderHeight = DefaultWindowHeight;
-        GetBackBufferExtent(Swapchain, DefaultWindowWidth, DefaultWindowHeight, InitialRenderWidth, InitialRenderHeight);
-        if (!TryCreateDemoRenderResources(
-                Device,
-                CompositeVertexShader,
-                CompositePixelShader,
-                InitialRenderWidth,
-                InitialRenderHeight,
-                RenderResources))
+        const FPlatformWindowSize InitialSize = GetBackBufferExtent(Swapchain, {DefaultWindowWidth, DefaultWindowHeight});
+        const FDemoRenderResourcesDesc ResourcesDesc{CompositeVertexShader, CompositePixelShader, InitialSize};
+        if (!TryCreateDemoRenderResources(Device, ResourcesDesc, RenderResources))
         {
             return false;
         }
@@ -597,8 +518,7 @@ public:
 
         Renderer.Initialize();
         bRendererInitialized = true;
-        CachedWindowWidth = InitialRenderWidth;
-        CachedWindowHeight = InitialRenderHeight;
+        CachedWindowSize = InitialSize;
         bCanRender = true;
         return true;
     }
@@ -662,32 +582,23 @@ public:
             bRenderingSuspended = false;
         }
 
-        const bool bResizeSwapchain = bSwapchainRecreateRequested ||
-            WindowSize.Width != CachedWindowWidth ||
-            WindowSize.Height != CachedWindowHeight;
+        const bool bResizeSwapchain = bSwapchainRecreateRequested || WindowSize.Width != CachedWindowSize.Width || WindowSize.Height != CachedWindowSize.Height;
         if (bResizeSwapchain)
         {
             FrameScheduler.WaitForAllFrames();
-            LE_LOG(LogXBD, Info, "Explicitly recreating swapchain at {}x{}.",
-                WindowSize.Width, WindowSize.Height);
-            LE_LOG(LogXBD, Info, "Scene texture uploads at resize: {}.",
-                Assets->Provider.GetTextureUploadCount());
+            LE_LOG(LogXBD, Info, "Explicitly recreating swapchain at {}x{}.", WindowSize.Width, WindowSize.Height);
+            LE_LOG(LogXBD, Info, "Scene texture uploads at resize: {}.", Assets->Provider.GetTextureUploadCount());
             if (!Swapchain->Resize(WindowSize.Width, WindowSize.Height))
             {
                 bCanRender = false;
                 return EApplicationTickResult::Continue;
             }
-            CachedWindowWidth = WindowSize.Width;
-            CachedWindowHeight = WindowSize.Height;
+            CachedWindowSize = WindowSize;
             bSwapchainRecreateRequested = false;
         }
 
-        uint32 TargetRenderWidth = CachedWindowWidth;
-        uint32 TargetRenderHeight = CachedWindowHeight;
-        GetBackBufferExtent(Swapchain, CachedWindowWidth, CachedWindowHeight, TargetRenderWidth, TargetRenderHeight);
-        if (RenderResources.SceneColorTexture != nullptr &&
-            RenderResources.SceneColorTexture->GetDesc().Width == TargetRenderWidth &&
-            RenderResources.SceneColorTexture->GetDesc().Height == TargetRenderHeight)
+        const FPlatformWindowSize TargetSize = GetBackBufferExtent(Swapchain, CachedWindowSize);
+        if (RenderResources.SceneColorTexture != nullptr && RenderResources.SceneColorTexture->GetDesc().Width == TargetSize.Width && RenderResources.SceneColorTexture->GetDesc().Height == TargetSize.Height)
         {
             bCanRender = true;
             return EApplicationTickResult::Continue;
@@ -698,16 +609,10 @@ public:
             FrameScheduler.WaitForAllFrames();
         }
         FDemoRenderResources Candidate;
-        if (!TryCreateDemoRenderResources(
-            Device,
-            CompositeVertexShader,
-            CompositePixelShader,
-            TargetRenderWidth,
-            TargetRenderHeight,
-            Candidate))
+        const FDemoRenderResourcesDesc ResourcesDesc{CompositeVertexShader, CompositePixelShader, TargetSize};
+        if (!TryCreateDemoRenderResources(Device, ResourcesDesc, Candidate))
         {
-            LE_LOG(LogXBD, Error,
-                "Resize candidate creation failed; preserving the previous render resources.");
+            LE_LOG(LogXBD, Error, "Resize candidate creation failed; preserving the previous render resources.");
             bCanRender = true;
             return EApplicationTickResult::Continue;
         }
@@ -728,13 +633,11 @@ public:
             LE_LOG(LogXBD, Error, "Demo World could not begin tick: {}.", static_cast<uint32>(Begin));
             return EApplicationTickResult::Exit;
         }
-        const auto UpdateResult = Begin == EWorldTickResult::Success
-            ? World.UpdateNativeGameplaySystems() : ENativeGameplayUpdateResult::InvalidState;
+        const auto UpdateResult = Begin == EWorldTickResult::Success ? World.UpdateNativeGameplaySystems() : ENativeGameplayUpdateResult::InvalidState;
         const auto End = World.EndTick();
         if (UpdateResult != ENativeGameplayUpdateResult::Success || End != EWorldTickResult::Success)
         {
-            LE_LOG(LogXBD, Error, "Demo World update failed: {} / {}.",
-                static_cast<uint32>(UpdateResult), static_cast<uint32>(End));
+            LE_LOG(LogXBD, Error, "Demo World update failed: {} / {}.", static_cast<uint32>(UpdateResult), static_cast<uint32>(End));
             return EApplicationTickResult::Exit;
         }
         if (CameraNavigation.Update(WindowModule.GetInputFrame(), Context.DeltaSeconds))
@@ -751,30 +654,17 @@ public:
             return EApplicationTickResult::Continue;
         }
 
-        auto RecordFrame = [this](LE::FRenderFrameScope& ScheduledFrame)
-        {
+        auto RecordFrame = [this](LE::FRenderFrameScope& ScheduledFrame) {
             LE::FWorldRenderSnapshot RenderSnapshot;
             LE::FWorldRenderSnapshotBuildReport SnapshotReport;
             LE::FWorldRenderSnapshotBuildContext SnapshotContext;
             SnapshotContext.FrameIndex = ScheduledFrame.GetFrameIndex();
-            SnapshotContext.ViewportWidth =
-                RenderResources.SceneColorTexture->GetDesc().Width;
-            SnapshotContext.ViewportHeight =
-                RenderResources.SceneColorTexture->GetDesc().Height;
+            SnapshotContext.ViewportWidth = RenderResources.SceneColorTexture->GetDesc().Width;
+            SnapshotContext.ViewportHeight = RenderResources.SceneColorTexture->GetDesc().Height;
             SnapshotContext.CameraOverride = {NavigationCameraId, CameraNavigation.GetCameraToWorld()};
-            if (WorldRenderer.BuildSnapshot(
-                    Scene->GetWorld(),
-                    Assets->GetRegistry(),
-                    SnapshotContext,
-                    RenderSnapshot,
-                    &SnapshotReport) !=
-                LE::EWorldRenderSnapshotBuildResult::Success)
+            if (WorldRenderer.BuildSnapshot(Scene->GetWorld(), Assets->GetRegistry(), SnapshotContext, RenderSnapshot, &SnapshotReport) != LE::EWorldRenderSnapshotBuildResult::Success)
             {
-                LE_LOG(LogXBD, Error,
-                    "Demo World snapshot build failed: Result={} MeshIndex={} AssetResolve={}.",
-                    static_cast<uint32>(SnapshotReport.Result),
-                    SnapshotReport.MeshIndex,
-                    static_cast<uint32>(SnapshotReport.AssetResolveResult));
+                LE_LOG(LogXBD, Error, "Demo World snapshot build failed: Result={} MeshIndex={} AssetResolve={}.", static_cast<uint32>(SnapshotReport.Result), SnapshotReport.MeshIndex, static_cast<uint32>(SnapshotReport.AssetResolveResult));
                 return LE::ERenderFrameRecordResult::Error;
             }
 
@@ -787,21 +677,15 @@ public:
             FrameContext.ViewFamily.PrimarySwapchain = Swapchain;
             LE::FBasePassCompositePipelineDesc RenderPipelineDesc;
             const FRenderScene& RenderScene = RenderSnapshot.GetRenderScene();
-            if (!FrameLighting.WriteSlot(ScheduledFrame.GetSlotIndex(),
-                    {RenderScene.Lights.Data(), RenderScene.Lights.Size()}, RenderPipelineDesc.BasePassResources.Light))
+            if (!FrameLighting.WriteSlot(ScheduledFrame.GetSlotIndex(), {RenderScene.Lights.Data(), RenderScene.Lights.Size()}, RenderPipelineDesc.BasePassResources.Light))
             {
-                LE_LOG(LogXBD, Error, "Failed to write BasePass frame lighting for slot {}.",
-                    ScheduledFrame.GetSlotIndex());
+                LE_LOG(LogXBD, Error, "Failed to write BasePass frame lighting for slot {}.", ScheduledFrame.GetSlotIndex());
                 return LE::ERenderFrameRecordResult::Error;
             }
-            RenderPipelineDesc.BasePassResources.SceneColorTexture =
-                RenderResources.SceneColorTexture;
-            RenderPipelineDesc.BasePassResources.SceneColorView =
-                RenderResources.SceneColorView;
-            RenderPipelineDesc.BasePassResources.SceneDepthTexture =
-                RenderResources.SceneDepthTexture;
-            RenderPipelineDesc.BasePassResources.SceneDepthView =
-                RenderResources.SceneDepthView;
+            RenderPipelineDesc.BasePassResources.SceneColorTexture = RenderResources.SceneColorTexture;
+            RenderPipelineDesc.BasePassResources.SceneColorView = RenderResources.SceneColorView;
+            RenderPipelineDesc.BasePassResources.SceneDepthTexture = RenderResources.SceneDepthTexture;
+            RenderPipelineDesc.BasePassResources.SceneDepthView = RenderResources.SceneDepthView;
             RenderPipelineDesc.BackBufferView = ScheduledFrame.GetBackBufferView();
             RenderPipelineDesc.CompositePipeline = RenderResources.CompositePipeline;
             RenderPipelineDesc.CompositeBindGroup = RenderResources.BindGroup;
@@ -818,22 +702,16 @@ public:
         }
         if (FrameResult.Action == ERenderFrameAction::Exit)
         {
-            LE_LOG(LogXBD, Error,
-                "Explicit frame failed. Acquire={}, Submit={}, Present={}.",
-                static_cast<uint32>(FrameResult.AcquireStatus),
-                static_cast<uint32>(FrameResult.SubmitResult),
-                static_cast<uint32>(FrameResult.PresentStatus));
+            LE_LOG(LogXBD, Error, "Explicit frame failed. Acquire={}, Submit={}, Present={}.", static_cast<uint32>(FrameResult.AcquireStatus), static_cast<uint32>(FrameResult.SubmitResult), static_cast<uint32>(FrameResult.PresentStatus));
             return EApplicationTickResult::Exit;
         }
-        if (!bSceneSwitchAttempted && (!bTestAfterNavigation || bNavigationUpdated) &&
-            FrameResult.PresentStatus == ERHISwapchainStatus::Success)
+        if (!bSceneSwitchAttempted && (!bTestAfterNavigation || bNavigationUpdated) && FrameResult.PresentStatus == ERHISwapchainStatus::Success)
         {
             bSceneSwitchAttempted = true;
             if (bTestAfterNavigation)
             {
                 const auto& Pose = CameraNavigation.GetCameraToWorld();
-                LE_LOG(LogXBD, Info, "Presented navigated camera at ({}, {}, {}), forward ({}, {}, {}).",
-                    Pose(0, 3), Pose(1, 3), Pose(2, 3), -Pose(0, 2), -Pose(1, 2), -Pose(2, 2));
+                LE_LOG(LogXBD, Info, "Presented navigated camera at ({}, {}, {}), forward ({}, {}, {}).", Pose(0, 3), Pose(1, 3), Pose(2, 3), -Pose(0, 2), -Pose(1, 2), -Pose(2, 2));
                 if (!SaveRequestedScene())
                 {
                     return EApplicationTickResult::Exit;
@@ -849,21 +727,14 @@ public:
         else if (bReportPreservedScene && FrameResult.PresentStatus == ERHISwapchainStatus::Success)
         {
             bReportPreservedScene = false;
-            LE_LOG(LogXBD, Info, "Presented the preserved scene with {} texture uploads.",
-                Assets->Provider.GetTextureUploadCount());
+            LE_LOG(LogXBD, Info, "Presented the preserved scene with {} texture uploads.", Assets->Provider.GetTextureUploadCount());
         }
         return EApplicationTickResult::Continue;
     }
 
-    static bool StartupThunk(void* Context) noexcept
-    {
-        return static_cast<FDemoRenderRuntimeModule*>(Context)->Startup();
-    }
+    static bool StartupThunk(void* Context) noexcept { return static_cast<FDemoRenderRuntimeModule*>(Context)->Startup(); }
 
-    static void ShutdownThunk(void* Context) noexcept
-    {
-        static_cast<FDemoRenderRuntimeModule*>(Context)->Shutdown();
-    }
+    static void ShutdownThunk(void* Context) noexcept { static_cast<FDemoRenderRuntimeModule*>(Context)->Shutdown(); }
 
 private:
     static bool ResolveMesh(void* Context, FAssetId Id, FMeshAssetHandle& Out) noexcept
@@ -887,21 +758,13 @@ private:
             LogAssetFailure(Diagnostic);
             if (Result == EAssetLoadResult::ProviderFailed)
             {
-                LE_LOG(LogXBD, Error, "Material GPU construction: {}.",
-                    DescribeTextureUploadResult(Assets.Provider.GetLastTextureUploadResult()));
+                LE_LOG(LogXBD, Error, "Material GPU construction: {}.", DescribeTextureUploadResult(Assets.Provider.GetLastTextureUploadResult()));
             }
         }
         return Result == EAssetLoadResult::Success;
     }
 
-    static void LogAssetFailure(const FAssetLoadDiagnostic& Diagnostic) noexcept
-    {
-        LE_LOG(LogXBD, Error, "Content asset '{}' ({}), dependency {}: load={}, file={}, format={}.",
-            Diagnostic.Path.Data(), Diagnostic.Id.ToString().Data(),
-            Diagnostic.DependencyId.ToString().Data(),
-            static_cast<uint32>(Diagnostic.Result), DescribeContentIOResult(Diagnostic.FileResult),
-            static_cast<uint32>(Diagnostic.FormatResult));
-    }
+    static void LogAssetFailure(const FAssetLoadDiagnostic& Diagnostic) noexcept { LE_LOG(LogXBD, Error, "Content asset '{}' ({}), dependency {}: load={}, file={}, format={}.", Diagnostic.Path.Data(), Diagnostic.Id.ToString().Data(), Diagnostic.DependencyId.ToString().Data(), static_cast<uint32>(Diagnostic.Result), DescribeContentIOResult(Diagnostic.FileResult), static_cast<uint32>(Diagnostic.FormatResult)); }
 
     bool InitializeContent() noexcept
     {
@@ -912,8 +775,7 @@ private:
             return false;
         }
         const char* RootOverride = std::getenv("LIMITLESS_DEMO_CONTENT");
-        const String ContentRoot = RootOverride != nullptr
-            ? String(RootOverride) : Demo::ShaderRuntimeCompiler::JoinPath(ExecutableDirectory.View(), "DemoContent");
+        const String ContentRoot = RootOverride != nullptr ? String(RootOverride) : Demo::ShaderRuntimeCompiler::JoinPath(ExecutableDirectory.View(), "DemoContent");
         const String AssetRoot = Demo::ShaderRuntimeCompiler::JoinPath(ContentRoot.View(), "Assets");
         const FAssetMount Mount{"Game", AssetRoot.View()};
         FAssetLoadDiagnostic Diagnostic;
@@ -923,8 +785,7 @@ private:
             return false;
         }
         const char* InputOverride = std::getenv("LIMITLESS_DEMO_SCENE");
-        const String ScenePath = InputOverride != nullptr
-            ? String(InputOverride) : Demo::ShaderRuntimeCompiler::JoinPath(ContentRoot.View(), "Scene.json");
+        const String ScenePath = InputOverride != nullptr ? String(InputOverride) : Demo::ShaderRuntimeCompiler::JoinPath(ContentRoot.View(), "Scene.json");
         bTestAfterNavigation = StringView(std::getenv("LIMITLESS_DEMO_TEST_AFTER_NAVIGATION")) == StringView("1");
         return PublishScene(ScenePath.View(), true) && (bTestAfterNavigation || SaveRequestedScene());
     }
@@ -940,8 +801,7 @@ private:
         const auto SaveResult = SaveScene(SavePath, *Scene, Assets->GetRegistry(), &SaveDiagnostic);
         if (SaveResult != ESceneOperationResult::Success)
         {
-            LE_LOG(LogXBD, Error, "Scene save '{}': {} ({}).", SavePath,
-                DescribeSceneOperationResult(SaveResult), DescribeContentIOResult(SaveDiagnostic.FileResult));
+            LE_LOG(LogXBD, Error, "Scene save '{}': {} ({}).", SavePath, DescribeSceneOperationResult(SaveResult), DescribeContentIOResult(SaveDiagnostic.FileResult));
             return false;
         }
         LE_LOG(LogXBD, Info, "Saved scene '{}'.", SavePath);
@@ -963,8 +823,7 @@ private:
         FTransform Transform;
         float X = 0.0f;
         const StringView Text(Translation);
-        if (EditId == nullptr || Text.IsEmpty() || !FSceneEntityId::TryParse(EditId, Id) ||
-            !Candidate.TryFindEntity(Id, Entity) || !World.TryGetLocalTransform(Entity, Transform))
+        if (EditId == nullptr || Text.IsEmpty() || !FSceneEntityId::TryParse(EditId, Id) || !Candidate.TryFindEntity(Id, Entity) || !World.TryGetLocalTransform(Entity, Transform))
         {
             LE_LOG(LogXBD, Error, "Scene edit requires a known entity UUID and local X translation.");
             return false;
@@ -1017,17 +876,11 @@ private:
             LE_LOG(LogXBD, Error, "Could not initialize material GPU resources for '{}'.", PrintablePath.Data());
             return false;
         }
-        const FSceneAssetResolver Resolver{CandidateAssets.Get(), &CandidateAssets->GetRegistry(),
-            &ResolveMesh, &ResolveMaterial};
+        const FSceneAssetResolver Resolver{CandidateAssets.Get(), &CandidateAssets->GetRegistry(), &ResolveMesh, &ResolveMaterial};
         const auto Result = LoadScene(Path, Resolver, Candidate, &Diagnostic);
         if (Result != ESceneOperationResult::Success)
         {
-            LE_LOG(LogXBD, Error, "Scene '{}': {} ({}:{} {}, entity {}, field {}, asset {}, file {}).",
-                PrintablePath.Data(), DescribeSceneOperationResult(Result), Diagnostic.Document.Line,
-                Diagnostic.Document.Column, DescribeSceneDocumentResult(Diagnostic.Document.Result),
-                Diagnostic.Entity.ToString().Data(), String(Diagnostic.Document.Field).Data(),
-                Diagnostic.Asset.ToString().Data(),
-                DescribeContentIOResult(Diagnostic.FileResult));
+            LE_LOG(LogXBD, Error, "Scene '{}': {} ({}:{} {}, entity {}, field {}, asset {}, file {}).", PrintablePath.Data(), DescribeSceneOperationResult(Result), Diagnostic.Document.Line, Diagnostic.Document.Column, DescribeSceneDocumentResult(Diagnostic.Document.Result), Diagnostic.Entity.ToString().Data(), String(Diagnostic.Document.Field).Data(), Diagnostic.Asset.ToString().Data(), DescribeContentIOResult(Diagnostic.FileResult));
             return false;
         }
         if (bApplyStartupEdit && !ApplyRequestedSceneEdit(*Candidate))
@@ -1046,8 +899,7 @@ private:
         FWorldRenderSnapshotBuildContext PreviewContext;
         PreviewContext.ViewportWidth = RenderResources.SceneColorTexture->GetDesc().Width;
         PreviewContext.ViewportHeight = RenderResources.SceneColorTexture->GetDesc().Height;
-        if (WorldRenderer.BuildSnapshot(CandidateWorld, CandidateAssets->GetRegistry(),
-                PreviewContext, Preview, &PreviewReport) != EWorldRenderSnapshotBuildResult::Success)
+        if (WorldRenderer.BuildSnapshot(CandidateWorld, CandidateAssets->GetRegistry(), PreviewContext, Preview, &PreviewReport) != EWorldRenderSnapshotBuildResult::Success)
         {
             const bool bMissingUV = PreviewReport.Result == EWorldRenderSnapshotBuildResult::MissingMeshUV;
             if (bMissingUV || PreviewReport.Result == EWorldRenderSnapshotBuildResult::InvalidNormalTransform)
@@ -1064,20 +916,16 @@ private:
                     CandidateAssets->GetRegistry().TryGetAssetId(Mesh.Material, MaterialId);
                     if (bMissingUV)
                     {
-                        LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has no UVs for material {}.",
-                            PrintablePath.Data(), EntityId.ToString().Data(), MeshId.ToString().Data(),
-                            MaterialId.ToString().Data());
+                        LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has no UVs for material {}.", PrintablePath.Data(), EntityId.ToString().Data(), MeshId.ToString().Data(), MaterialId.ToString().Data());
                     }
                     else
                     {
-                        LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has an invalid normal transform.",
-                            PrintablePath.Data(), EntityId.ToString().Data(), MeshId.ToString().Data());
+                        LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has an invalid normal transform.", PrintablePath.Data(), EntityId.ToString().Data(), MeshId.ToString().Data());
                     }
                     return false;
                 }
             }
-            LE_LOG(LogXBD, Error, "Scene '{}' is not renderable: {} (mesh {}).",
-                PrintablePath.Data(), static_cast<uint32>(PreviewReport.Result), PreviewReport.MeshIndex);
+            LE_LOG(LogXBD, Error, "Scene '{}' is not renderable: {} (mesh {}).", PrintablePath.Data(), static_cast<uint32>(PreviewReport.Result), PreviewReport.MeshIndex);
             return false;
         }
 
@@ -1095,13 +943,10 @@ private:
         NavigationCameraId = CameraPose.PrimitiveId;
         CameraNavigation.Start(CameraPose.CameraToWorld);
         WindowModule.ResetInputForScene();
-        LE_LOG(LogXBD, Info, "Loaded scene '{}' with {} entities and {} visible meshes.",
-            PrintablePath.Data(), Scene->GetWorld().GetEntityCount(), Preview.GetRenderScene().Meshes.Size());
+        LE_LOG(LogXBD, Info, "Loaded scene '{}' with {} entities and {} visible meshes.", PrintablePath.Data(), Scene->GetWorld().GetEntityCount(), Preview.GetRenderScene().Meshes.Size());
         const auto& Pose = CameraPose.CameraToWorld;
         const auto& Projection = Preview.GetRenderScene().Cameras[0].Projection;
-        LE_LOG(LogXBD, Info, "Authored camera position ({}, {}, {}), forward ({}, {}, {}), vertical FOV {} rad.",
-            Pose(0, 3), Pose(1, 3), Pose(2, 3), -Pose(0, 2), -Pose(1, 2), -Pose(2, 2),
-            2.0f * std::atan(1.0f / std::abs(Projection(1, 1))));
+        LE_LOG(LogXBD, Info, "Authored camera position ({}, {}, {}), forward ({}, {}, {}), vertical FOV {} rad.", Pose(0, 3), Pose(1, 3), Pose(2, 3), -Pose(0, 2), -Pose(1, 2), -Pose(2, 2), 2.0f * std::atan(1.0f / std::abs(Projection(1, 1))));
         LE_LOG(LogXBD, Info, "Scene texture uploads at publication: {}.", Assets->Provider.GetTextureUploadCount());
         return true;
     }
@@ -1128,8 +973,7 @@ private:
     FBasePassFrameLighting FrameLighting;
     FDemoRenderResources RenderResources;
     FRenderer Renderer;
-    uint32 CachedWindowWidth = DefaultWindowWidth;
-    uint32 CachedWindowHeight = DefaultWindowHeight;
+    FPlatformWindowSize CachedWindowSize{DefaultWindowWidth, DefaultWindowHeight};
     bool bCanRender = false;
     bool bNavigationUpdated = false;
     bool bTestAfterNavigation = false;
@@ -1144,15 +988,9 @@ private:
 class FDemoApplication final : public IApplication
 {
 public:
-    FDemoApplication() noexcept
-        : RenderModule(WindowModule)
-    {
-    }
+    FDemoApplication() noexcept : RenderModule(WindowModule) {}
 
-    ~FDemoApplication() override
-    {
-        Shutdown();
-    }
+    ~FDemoApplication() override { Shutdown(); }
 
     void RegisterModules(FRuntimeModuleRegistry& Registry) override
     {
@@ -1163,7 +1001,7 @@ public:
         WindowDescriptor.Shutdown = &FDemoWindowRuntimeModule::ShutdownThunk;
         static_cast<void>(Registry.RegisterModule(WindowDescriptor));
 
-        const StringView RenderDependencies[] = { "Demo.Window" };
+        const StringView RenderDependencies[] = {"Demo.Window"};
         FRuntimeModuleDescriptor RenderDescriptor;
         RenderDescriptor.Name = "Demo.Render";
         RenderDescriptor.Dependencies = Span<const StringView>(RenderDependencies);

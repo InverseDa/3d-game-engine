@@ -29,18 +29,14 @@ int RunWindowsAssetImport(const int ArgumentCount, wchar_t* const* Arguments) no
     Array<char> Buffer;
     for (int Index = 1; Index < ArgumentCount; ++Index)
     {
-        const int ByteCount = WideCharToMultiByte(
-            CP_UTF8, WC_ERR_INVALID_CHARS, Arguments[Index], -1, nullptr, 0, nullptr, nullptr);
-        if (ByteCount <= 0 || !Buffer.TryResize(static_cast<std::size_t>(ByteCount)) ||
-            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, Arguments[Index], -1,
-                Buffer.Data(), ByteCount, nullptr, nullptr) != ByteCount)
+        const int ByteCount = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, Arguments[Index], -1, nullptr, 0, nullptr, nullptr);
+        if (ByteCount <= 0 || !Buffer.TryResize(static_cast<std::size_t>(ByteCount)) || WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, Arguments[Index], -1, Buffer.Data(), ByteCount, nullptr, nullptr) != ByteCount)
         {
             std::fputs("AssetImport: could not convert a command argument to UTF-8.\n", stderr);
             return 1;
         }
         String Argument;
-        if (!Argument.TryAssign(StringView(Buffer.Data(), static_cast<std::size_t>(ByteCount - 1))) ||
-            !Text.TryPushBack(std::move(Argument)) || !Views.TryPushBack(Text.Back().View()))
+        if (!Argument.TryAssign(StringView(Buffer.Data(), static_cast<std::size_t>(ByteCount - 1))) || !Text.TryPushBack(std::move(Argument)) || !Views.TryPushBack(Text.Back().View()))
         {
             std::fputs("AssetImport: could not allocate a command argument.\n", stderr);
             return 1;

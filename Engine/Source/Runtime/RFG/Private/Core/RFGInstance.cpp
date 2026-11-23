@@ -6,10 +6,7 @@
 namespace LE
 {
 
-FRFGInstance::FRFGInstance()
-    : Executor(new FRFGExecutor())
-{
-}
+FRFGInstance::FRFGInstance() : Executor(new FRFGExecutor()) {}
 
 FRFGInstance::~FRFGInstance()
 {
@@ -61,11 +58,7 @@ FRFGCompileResult FRFGInstance::Compile(const FRFGRecordedGraph& RecordedGraph, 
     return Runtime != nullptr ? Runtime->Compile(RecordedGraph, Signature) : FRFGCompileResult{};
 }
 
-ERHIQueueSubmitResult FRFGInstance::Execute(
-    const FRFGCompileResult& CompileResult,
-    const FRFGRecordedGraph& RecordedGraph,
-    FRFGExecutionContext& ExecutionContext,
-    const FRFGExecuteOptions& ExecuteOptions)
+ERHIQueueSubmitResult FRFGInstance::Execute(const FRFGCompileResult& CompileResult, const FRFGRecordedGraph& RecordedGraph, FRFGExecutionContext& ExecutionContext, const FRFGExecuteOptions& ExecuteOptions)
 {
     if (Executor == nullptr || !CompileResult.Plan)
     {

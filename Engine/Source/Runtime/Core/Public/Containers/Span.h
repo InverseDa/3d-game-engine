@@ -8,8 +8,7 @@
 namespace LE
 {
 
-template <typename T>
-class Span
+template <typename T> class Span
 {
 public:
     using ElementType = T;
@@ -19,9 +18,7 @@ public:
 
     constexpr Span() noexcept = default;
 
-    constexpr Span(T* const Data, const SizeType Size) noexcept
-        : DataValue(Size == 0 ? nullptr : Data)
-        , SizeValue(Size)
+    constexpr Span(T* const Data, const SizeType Size) noexcept : DataValue(Size == 0 ? nullptr : Data), SizeValue(Size)
     {
         if (Data == nullptr && Size != 0)
         {
@@ -29,28 +26,13 @@ public:
         }
     }
 
-    template <std::size_t N>
-    constexpr Span(T (&Items)[N]) noexcept
-        : DataValue(Items)
-        , SizeValue(N)
-    {
-    }
+    template <std::size_t N> constexpr Span(T (&Items)[N]) noexcept : DataValue(Items), SizeValue(N) {}
 
-    template <
-        typename U,
-        typename std::enable_if<std::is_convertible<U (*)[], T (*)[]>::value, int>::type = 0>
-    constexpr Span(const Span<U> Other) noexcept
-        : DataValue(Other.Data())
-        , SizeValue(Other.Size())
-    {
-    }
+    template <typename U, typename std::enable_if<std::is_convertible<U (*)[], T (*)[]>::value, int>::type = 0> constexpr Span(const Span<U> Other) noexcept : DataValue(Other.Data()), SizeValue(Other.Size()) {}
 
     constexpr T* Data() const noexcept { return DataValue; }
     constexpr SizeType Size() const noexcept { return SizeValue; }
-    bool TrySizeBytes(SizeType& Result) const noexcept
-    {
-        return TryMultiplySize(SizeValue, sizeof(T), Result);
-    }
+    bool TrySizeBytes(SizeType& Result) const noexcept { return TryMultiplySize(SizeValue, sizeof(T), Result); }
 
     SizeType SizeBytes() const
     {
@@ -74,10 +56,7 @@ public:
         return DataValue[Index];
     }
 
-    T* TryGet(const SizeType Index) const noexcept
-    {
-        return Index < SizeValue ? DataValue + Index : nullptr;
-    }
+    T* TryGet(const SizeType Index) const noexcept { return Index < SizeValue ? DataValue + Index : nullptr; }
 
     Span Subspan(const SizeType Offset, const SizeType Count) const
     {

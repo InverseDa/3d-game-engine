@@ -10,8 +10,10 @@ static VkFilter ToVkFilter(ESamplerFilter Filter)
 {
     switch (Filter)
     {
-        case ESamplerFilter::Nearest: return VK_FILTER_NEAREST;
-        case ESamplerFilter::Linear: return VK_FILTER_LINEAR;
+    case ESamplerFilter::Nearest:
+        return VK_FILTER_NEAREST;
+    case ESamplerFilter::Linear:
+        return VK_FILTER_LINEAR;
     }
     return VK_FILTER_LINEAR;
 }
@@ -20,8 +22,10 @@ static VkSamplerMipmapMode ToVkMipmapMode(ESamplerMipmapMode MipmapMode)
 {
     switch (MipmapMode)
     {
-        case ESamplerMipmapMode::Nearest: return VK_SAMPLER_MIPMAP_MODE_NEAREST;
-        case ESamplerMipmapMode::Linear: return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    case ESamplerMipmapMode::Nearest:
+        return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    case ESamplerMipmapMode::Linear:
+        return VK_SAMPLER_MIPMAP_MODE_LINEAR;
     }
     return VK_SAMPLER_MIPMAP_MODE_NEAREST;
 }
@@ -30,10 +34,14 @@ static VkSamplerAddressMode ToVkAddressMode(ESamplerAddressMode AddressMode)
 {
     switch (AddressMode)
     {
-        case ESamplerAddressMode::Repeat: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        case ESamplerAddressMode::MirroredRepeat: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-        case ESamplerAddressMode::ClampToEdge: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        case ESamplerAddressMode::ClampToBorder: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    case ESamplerAddressMode::Repeat:
+        return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    case ESamplerAddressMode::MirroredRepeat:
+        return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    case ESamplerAddressMode::ClampToEdge:
+        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    case ESamplerAddressMode::ClampToBorder:
+        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     }
     return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 }
@@ -42,14 +50,22 @@ static VkCompareOp ToVkCompareOp(ECompareFunction CompareFunc)
 {
     switch (CompareFunc)
     {
-        case ECompareFunction::Never: return VK_COMPARE_OP_NEVER;
-        case ECompareFunction::Less: return VK_COMPARE_OP_LESS;
-        case ECompareFunction::Equal: return VK_COMPARE_OP_EQUAL;
-        case ECompareFunction::LessEqual: return VK_COMPARE_OP_LESS_OR_EQUAL;
-        case ECompareFunction::Greater: return VK_COMPARE_OP_GREATER;
-        case ECompareFunction::NotEqual: return VK_COMPARE_OP_NOT_EQUAL;
-        case ECompareFunction::GreaterEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
-        case ECompareFunction::Always: return VK_COMPARE_OP_ALWAYS;
+    case ECompareFunction::Never:
+        return VK_COMPARE_OP_NEVER;
+    case ECompareFunction::Less:
+        return VK_COMPARE_OP_LESS;
+    case ECompareFunction::Equal:
+        return VK_COMPARE_OP_EQUAL;
+    case ECompareFunction::LessEqual:
+        return VK_COMPARE_OP_LESS_OR_EQUAL;
+    case ECompareFunction::Greater:
+        return VK_COMPARE_OP_GREATER;
+    case ECompareFunction::NotEqual:
+        return VK_COMPARE_OP_NOT_EQUAL;
+    case ECompareFunction::GreaterEqual:
+        return VK_COMPARE_OP_GREATER_OR_EQUAL;
+    case ECompareFunction::Always:
+        return VK_COMPARE_OP_ALWAYS;
     }
     return VK_COMPARE_OP_NEVER;
 }
@@ -83,9 +99,7 @@ static VkBorderColor ToVkBorderColor(const float* BorderColor)
     return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 }
 
-FVulkanRHISampler::FVulkanRHISampler(FVulkanRHIDevice* InDevice, const FRHISamplerDesc& InDesc)
-    : Device(InDevice)
-    , Desc(InDesc)
+FVulkanRHISampler::FVulkanRHISampler(FVulkanRHIDevice* InDevice, const FRHISamplerDesc& InDesc) : Device(InDevice), Desc(InDesc)
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {

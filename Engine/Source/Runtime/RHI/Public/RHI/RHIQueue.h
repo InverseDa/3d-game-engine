@@ -35,8 +35,7 @@ struct FRHISubmitInfo
 
     bool IsStructurallyValid() const noexcept
     {
-        if (CmdList == nullptr && WaitSemaphores.IsEmpty() && SignalSemaphores.IsEmpty() &&
-            FenceToSignal == nullptr)
+        if (CmdList == nullptr && WaitSemaphores.IsEmpty() && SignalSemaphores.IsEmpty() && FenceToSignal == nullptr)
         {
             return false;
         }

@@ -58,12 +58,9 @@ inline void ReleaseStrongReference(SharedControlBlock* const Control) noexcept
     }
 }
 
-template <typename T>
-struct InplaceSharedControl final : SharedControlBlock
+template <typename T> struct InplaceSharedControl final : SharedControlBlock
 {
-    template <typename... Arguments>
-    explicit InplaceSharedControl(IAllocator& InAllocator, Arguments&&... Values) noexcept
-        : Allocator(&InAllocator)
+    template <typename... Arguments> explicit InplaceSharedControl(IAllocator& InAllocator, Arguments&&... Values) noexcept : Allocator(&InAllocator)
     {
         Object = new (&Storage) T(std::forward<Arguments>(Values)...);
         DestroyObject = &DestroyStoredObject;
@@ -89,16 +86,9 @@ struct InplaceSharedControl final : SharedControlBlock
     typename std::aligned_storage<sizeof(T), alignof(T)>::type Storage;
 };
 
-template <typename T, typename Deleter>
-struct ExternalSharedControl final : SharedControlBlock
+template <typename T, typename Deleter> struct ExternalSharedControl final : SharedControlBlock
 {
-    template <typename DeleterArgument>
-    ExternalSharedControl(
-        IAllocator& InAllocator,
-        T* const InObject,
-        DeleterArgument&& InDeleter) noexcept
-        : Allocator(&InAllocator)
-        , Destroyer(std::forward<DeleterArgument>(InDeleter))
+    template <typename DeleterArgument> ExternalSharedControl(IAllocator& InAllocator, T* const InObject, DeleterArgument&& InDeleter) noexcept : Allocator(&InAllocator), Destroyer(std::forward<DeleterArgument>(InDeleter))
     {
         Object = InObject;
         DestroyObject = &DestroyExternalObject;
@@ -127,47 +117,28 @@ struct ExternalSharedControl final : SharedControlBlock
 
 template <typename T> class WeakPtr;
 
-template <typename T>
-class SharedPtr
+template <typename T> class SharedPtr
 {
     template <typename> friend class SharedPtr;
     template <typename> friend class WeakPtr;
-    template <typename U, typename... Arguments>
-    friend SharedPtr<U> TryMakeSharedWithAllocator(IAllocator&, Arguments&&...);
-    template <typename U, typename Deleter>
-    friend SharedPtr<U> TryAdoptShared(U*, IAllocator&, Deleter&&);
+    template <typename U, typename... Arguments> friend SharedPtr<U> TryMakeSharedWithAllocator(IAllocator&, Arguments&&...);
+    template <typename U, typename Deleter> friend SharedPtr<U> TryAdoptShared(U*, IAllocator&, Deleter&&);
 
 public:
     SharedPtr() noexcept = default;
     SharedPtr(std::nullptr_t) noexcept {}
 
-    SharedPtr(const SharedPtr& Other) noexcept
-        : ObjectValue(Other.ObjectValue)
-        , ControlValue(Other.ControlValue)
-    {
-        AddReference();
-    }
+    SharedPtr(const SharedPtr& Other) noexcept : ObjectValue(Other.ObjectValue), ControlValue(Other.ControlValue) { AddReference(); }
 
-    template <typename U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
-    SharedPtr(const SharedPtr<U>& Other) noexcept
-        : ObjectValue(Other.ObjectValue)
-        , ControlValue(Other.ControlValue)
-    {
-        AddReference();
-    }
+    template <typename U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0> SharedPtr(const SharedPtr<U>& Other) noexcept : ObjectValue(Other.ObjectValue), ControlValue(Other.ControlValue) { AddReference(); }
 
-    SharedPtr(SharedPtr&& Other) noexcept
-        : ObjectValue(Other.ObjectValue)
-        , ControlValue(Other.ControlValue)
+    SharedPtr(SharedPtr&& Other) noexcept : ObjectValue(Other.ObjectValue), ControlValue(Other.ControlValue)
     {
         Other.ObjectValue = nullptr;
         Other.ControlValue = nullptr;
     }
 
-    template <typename U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
-    SharedPtr(SharedPtr<U>&& Other) noexcept
-        : ObjectValue(Other.ObjectValue)
-        , ControlValue(Other.ControlValue)
+    template <typename U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0> SharedPtr(SharedPtr<U>&& Other) noexcept : ObjectValue(Other.ObjectValue), ControlValue(Other.ControlValue)
     {
         Other.ObjectValue = nullptr;
         Other.ControlValue = nullptr;
@@ -197,12 +168,17 @@ public:
 
     T* Get() const noexcept { return ObjectValue; }
     explicit operator bool() const noexcept { return ObjectValue != nullptr; }
-    T& operator*() const { Validate(); return *ObjectValue; }
-    T* operator->() const { Validate(); return ObjectValue; }
-    std::size_t UseCount() const noexcept
+    T& operator*() const
     {
-        return ControlValue == nullptr ? 0 : ControlValue->StrongCount.load(std::memory_order_acquire);
+        Validate();
+        return *ObjectValue;
     }
+    T* operator->() const
+    {
+        Validate();
+        return ObjectValue;
+    }
+    std::size_t UseCount() const noexcept { return ControlValue == nullptr ? 0 : ControlValue->StrongCount.load(std::memory_order_acquire); }
 
     void Reset() noexcept
     {
@@ -222,9 +198,7 @@ public:
     }
 
 private:
-    SharedPtr(T* const Object, Detail::SharedControlBlock* const Control, const bool bAddReference) noexcept
-        : ObjectValue(Object)
-        , ControlValue(Control)
+    SharedPtr(T* const Object, Detail::SharedControlBlock* const Control, const bool bAddReference) noexcept : ObjectValue(Object), ControlValue(Control)
     {
         if (bAddReference)
         {
@@ -252,40 +226,20 @@ private:
     Detail::SharedControlBlock* ControlValue = nullptr;
 };
 
-template <typename T>
-class WeakPtr
+template <typename T> class WeakPtr
 {
     template <typename> friend class WeakPtr;
 
 public:
     WeakPtr() noexcept = default;
 
-    template <typename U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
-    WeakPtr(const SharedPtr<U>& Owner) noexcept
-        : ObjectValue(Owner.ObjectValue)
-        , ControlValue(Owner.ControlValue)
-    {
-        AddReference();
-    }
+    template <typename U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0> WeakPtr(const SharedPtr<U>& Owner) noexcept : ObjectValue(Owner.ObjectValue), ControlValue(Owner.ControlValue) { AddReference(); }
 
-    WeakPtr(const WeakPtr& Other) noexcept
-        : ObjectValue(Other.ObjectValue)
-        , ControlValue(Other.ControlValue)
-    {
-        AddReference();
-    }
+    WeakPtr(const WeakPtr& Other) noexcept : ObjectValue(Other.ObjectValue), ControlValue(Other.ControlValue) { AddReference(); }
 
-    template <typename U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
-    WeakPtr(const WeakPtr<U>& Other) noexcept
-        : ObjectValue(Other.ObjectValue)
-        , ControlValue(Other.ControlValue)
-    {
-        AddReference();
-    }
+    template <typename U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0> WeakPtr(const WeakPtr<U>& Other) noexcept : ObjectValue(Other.ObjectValue), ControlValue(Other.ControlValue) { AddReference(); }
 
-    WeakPtr(WeakPtr&& Other) noexcept
-        : ObjectValue(Other.ObjectValue)
-        , ControlValue(Other.ControlValue)
+    WeakPtr(WeakPtr&& Other) noexcept : ObjectValue(Other.ObjectValue), ControlValue(Other.ControlValue)
     {
         Other.ObjectValue = nullptr;
         Other.ControlValue = nullptr;
@@ -313,11 +267,7 @@ public:
         return *this;
     }
 
-    bool IsExpired() const noexcept
-    {
-        return ControlValue == nullptr
-            || ControlValue->StrongCount.load(std::memory_order_acquire) == 0;
-    }
+    bool IsExpired() const noexcept { return ControlValue == nullptr || ControlValue->StrongCount.load(std::memory_order_acquire) == 0; }
 
     SharedPtr<T> Lock() const noexcept
     {
@@ -332,8 +282,7 @@ public:
             {
                 HandleContractViolation("SharedPtr strong reference count overflow", __FILE__, __LINE__);
             }
-            if (ControlValue->StrongCount.compare_exchange_weak(
-                    Count, Count + 1, std::memory_order_acq_rel, std::memory_order_acquire))
+            if (ControlValue->StrongCount.compare_exchange_weak(Count, Count + 1, std::memory_order_acq_rel, std::memory_order_acquire))
             {
                 return SharedPtr<T>(ObjectValue, ControlValue, false);
             }
@@ -371,13 +320,10 @@ private:
     Detail::SharedControlBlock* ControlValue = nullptr;
 };
 
-template <typename T, typename... Arguments>
-SharedPtr<T> TryMakeSharedWithAllocator(IAllocator& Allocator, Arguments&&... Values)
+template <typename T, typename... Arguments> SharedPtr<T> TryMakeSharedWithAllocator(IAllocator& Allocator, Arguments&&... Values)
 {
-    static_assert(std::is_nothrow_constructible<T, Arguments...>::value,
-        "TryMakeShared requires non-throwing object construction");
-    static_assert(std::is_nothrow_destructible<T>::value,
-        "TryMakeShared requires non-throwing object destruction");
+    static_assert(std::is_nothrow_constructible<T, Arguments...>::value, "TryMakeShared requires non-throwing object construction");
+    static_assert(std::is_nothrow_destructible<T>::value, "TryMakeShared requires non-throwing object destruction");
     using Control = Detail::InplaceSharedControl<T>;
     Control* const Storage = TryAllocateArray<Control>(Allocator, 1);
     if (Storage == nullptr)
@@ -388,8 +334,7 @@ SharedPtr<T> TryMakeSharedWithAllocator(IAllocator& Allocator, Arguments&&... Va
     return SharedPtr<T>(static_cast<T*>(Created->Object), Created, false);
 }
 
-template <typename T, typename... Arguments>
-SharedPtr<T> MakeSharedWithAllocator(IAllocator& Allocator, Arguments&&... Values)
+template <typename T, typename... Arguments> SharedPtr<T> MakeSharedWithAllocator(IAllocator& Allocator, Arguments&&... Values)
 {
     SharedPtr<T> Result = TryMakeSharedWithAllocator<T>(Allocator, std::forward<Arguments>(Values)...);
     if (!Result)
@@ -399,45 +344,37 @@ SharedPtr<T> MakeSharedWithAllocator(IAllocator& Allocator, Arguments&&... Value
     return Result;
 }
 
-template <typename T, typename... Arguments>
-SharedPtr<T> MakeShared(Arguments&&... Values)
+template <typename T, typename... Arguments> SharedPtr<T> MakeShared(Arguments&&... Values)
 {
     return MakeSharedWithAllocator<T>(GetDefaultAllocator(), std::forward<Arguments>(Values)...);
 }
 
-template <typename T, typename... Arguments>
-SharedPtr<T> TryMakeShared(Arguments&&... Values)
+template <typename T, typename... Arguments> SharedPtr<T> TryMakeShared(Arguments&&... Values)
 {
     return TryMakeSharedWithAllocator<T>(GetDefaultAllocator(), std::forward<Arguments>(Values)...);
 }
 
-template <typename T, typename Deleter>
-SharedPtr<T> TryAdoptShared(T* const Object, IAllocator& Allocator, Deleter&& Destroyer)
+template <typename T, typename Deleter> SharedPtr<T> TryAdoptShared(T* const Object, IAllocator& Allocator, Deleter&& Destroyer)
 {
     if (Object == nullptr)
     {
         return {};
     }
     using StoredDeleter = typename std::decay<Deleter>::type;
-    static_assert(std::is_nothrow_constructible<StoredDeleter, Deleter&&>::value,
-        "TryAdoptShared requires non-throwing deleter construction");
-    static_assert(std::is_nothrow_invocable<StoredDeleter&, T*>::value,
-        "TryAdoptShared requires a non-throwing deleter invocation");
-    static_assert(std::is_nothrow_destructible<StoredDeleter>::value,
-        "TryAdoptShared requires a non-throwing deleter destructor");
+    static_assert(std::is_nothrow_constructible<StoredDeleter, Deleter&&>::value, "TryAdoptShared requires non-throwing deleter construction");
+    static_assert(std::is_nothrow_invocable<StoredDeleter&, T*>::value, "TryAdoptShared requires a non-throwing deleter invocation");
+    static_assert(std::is_nothrow_destructible<StoredDeleter>::value, "TryAdoptShared requires a non-throwing deleter destructor");
     using Control = Detail::ExternalSharedControl<T, StoredDeleter>;
     Control* const Storage = TryAllocateArray<Control>(Allocator, 1);
     if (Storage == nullptr)
     {
         return {};
     }
-    Control* const Created = new (Storage) Control(
-        Allocator, Object, std::forward<Deleter>(Destroyer));
+    Control* const Created = new (Storage) Control(Allocator, Object, std::forward<Deleter>(Destroyer));
     return SharedPtr<T>(Object, Created, false);
 }
 
-template <typename T, typename Deleter>
-SharedPtr<T> AdoptShared(T* const Object, IAllocator& Allocator, Deleter&& Destroyer)
+template <typename T, typename Deleter> SharedPtr<T> AdoptShared(T* const Object, IAllocator& Allocator, Deleter&& Destroyer)
 {
     SharedPtr<T> Result = TryAdoptShared(Object, Allocator, std::forward<Deleter>(Destroyer));
     if (Object != nullptr && !Result)

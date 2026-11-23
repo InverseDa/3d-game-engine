@@ -35,15 +35,9 @@ public:
     FRFGBuilder CreateBuilder() const;
 
 public:
-    FRFGCompileResult Compile(
-        const FRFGRecordedGraph& RecordedGraph,
-        const FRFGGraphSignature& Signature = {});
+    FRFGCompileResult Compile(const FRFGRecordedGraph& RecordedGraph, const FRFGGraphSignature& Signature = {});
 
-    ERHIQueueSubmitResult Execute(
-        const FRFGCompileResult& CompileResult,
-        const FRFGRecordedGraph& RecordedGraph,
-        FRFGExecutionContext& ExecutionContext,
-        const FRFGExecuteOptions& ExecuteOptions = {});
+    ERHIQueueSubmitResult Execute(const FRFGCompileResult& CompileResult, const FRFGRecordedGraph& RecordedGraph, FRFGExecutionContext& ExecutionContext, const FRFGExecuteOptions& ExecuteOptions = {});
 
 public:
     void SetCompileOptions(const FRFGCompileOptions& InCompileOptions);

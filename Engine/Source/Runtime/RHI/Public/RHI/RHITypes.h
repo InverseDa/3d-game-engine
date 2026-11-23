@@ -57,15 +57,15 @@ enum class EPixelFormat : uint8
 
 enum class EShaderStage : uint8
 {
-    None        = 0,
-    Vertex      = 1 << 0,
-    Pixel       = 1 << 1,
-    Compute     = 1 << 2,
-    Geometry    = 1 << 3,
-    Hull        = 1 << 4,
-    Domain      = 1 << 5,
-    Graphics    = Vertex | Pixel | Geometry | Hull | Domain,
-    AllStage    = Graphics | Compute,
+    None = 0,
+    Vertex = 1 << 0,
+    Pixel = 1 << 1,
+    Compute = 1 << 2,
+    Geometry = 1 << 3,
+    Hull = 1 << 4,
+    Domain = 1 << 5,
+    Graphics = Vertex | Pixel | Geometry | Hull | Domain,
+    AllStage = Graphics | Compute,
 };
 
 inline EShaderStage operator|(EShaderStage A, EShaderStage B)
@@ -96,9 +96,9 @@ enum class EShaderResourceType : uint8
 
 enum class EResourceUsage : uint8
 {
-    Local,      // GPU local memory only, the fastest access, CPU has not accessed to read
-    Upload,     // CPU write -> GPU read, usually used form uniform buffer and dynamic vertex buffer
-    Readback,   // GPU write -> CPU read, usually used for readback buffer
+    Local,    // GPU local memory only, the fastest access, CPU has not accessed to read
+    Upload,   // CPU write -> GPU read, usually used form uniform buffer and dynamic vertex buffer
+    Readback, // GPU write -> CPU read, usually used for readback buffer
 };
 
 // Backend-independent resource usage state used by explicit barriers.

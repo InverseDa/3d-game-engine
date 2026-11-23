@@ -25,20 +25,14 @@ CORE_API OutOfMemoryHandler SetOutOfMemoryHandler(OutOfMemoryHandler Handler) no
 CORE_API ContractViolationHandler SetContractViolationHandler(ContractViolationHandler Handler) noexcept;
 
 [[noreturn]] CORE_API void HandleOutOfMemory(std::size_t Size, std::size_t Alignment) noexcept;
-[[noreturn]] CORE_API void HandleContractViolation(
-    const char* Message,
-    const char* File,
-    int Line) noexcept;
+[[noreturn]] CORE_API void HandleContractViolation(const char* Message, const char* File, int Line) noexcept;
 
 constexpr bool IsValidAlignment(const std::size_t Alignment) noexcept
 {
     return Alignment != 0 && (Alignment & (Alignment - 1)) == 0;
 }
 
-constexpr bool TryMultiplySize(
-    const std::size_t Left,
-    const std::size_t Right,
-    std::size_t& Result) noexcept
+constexpr bool TryMultiplySize(const std::size_t Left, const std::size_t Right, std::size_t& Result) noexcept
 {
     if (Left != 0 && Right > (std::numeric_limits<std::size_t>::max)() / Left)
     {
@@ -58,10 +52,7 @@ inline void ValidateAlignment(const std::size_t Alignment)
     }
 }
 
-inline void* TryAllocateBytes(
-    IAllocator& Allocator,
-    const std::size_t Size,
-    const std::size_t Alignment) noexcept
+inline void* TryAllocateBytes(IAllocator& Allocator, const std::size_t Size, const std::size_t Alignment) noexcept
 {
     if (!IsValidAlignment(Alignment))
     {
@@ -70,10 +61,7 @@ inline void* TryAllocateBytes(
     return Size == 0 ? nullptr : Allocator.Allocate(Size, Alignment);
 }
 
-inline void* AllocateBytes(
-    IAllocator& Allocator,
-    const std::size_t Size,
-    const std::size_t Alignment)
+inline void* AllocateBytes(IAllocator& Allocator, const std::size_t Size, const std::size_t Alignment)
 {
     void* const Address = TryAllocateBytes(Allocator, Size, Alignment);
     if (Address == nullptr && Size != 0)
@@ -83,8 +71,7 @@ inline void* AllocateBytes(
     return Address;
 }
 
-template <typename T>
-T* TryAllocateArray(IAllocator& Allocator, const std::size_t Count) noexcept
+template <typename T> T* TryAllocateArray(IAllocator& Allocator, const std::size_t Count) noexcept
 {
     std::size_t Size = 0;
     if (!TryMultiplySize(sizeof(T), Count, Size))
@@ -94,8 +81,7 @@ T* TryAllocateArray(IAllocator& Allocator, const std::size_t Count) noexcept
     return static_cast<T*>(TryAllocateBytes(Allocator, Size, alignof(T)));
 }
 
-template <typename T>
-T* AllocateArray(IAllocator& Allocator, const std::size_t Count)
+template <typename T> T* AllocateArray(IAllocator& Allocator, const std::size_t Count)
 {
     std::size_t Size = 0;
     if (!TryMultiplySize(sizeof(T), Count, Size))
@@ -105,8 +91,7 @@ T* AllocateArray(IAllocator& Allocator, const std::size_t Count)
     return static_cast<T*>(AllocateBytes(Allocator, Size, alignof(T)));
 }
 
-template <typename T>
-void DeallocateArray(IAllocator& Allocator, T* const Address, const std::size_t Count) noexcept
+template <typename T> void DeallocateArray(IAllocator& Allocator, T* const Address, const std::size_t Count) noexcept
 {
     if (Address == nullptr)
     {
@@ -124,30 +109,15 @@ void DeallocateArray(IAllocator& Allocator, T* const Address, const std::size_t 
 class AllocatorRef
 {
 public:
-    AllocatorRef() noexcept
-        : Instance(&GetDefaultAllocator())
-    {
-    }
+    AllocatorRef() noexcept : Instance(&GetDefaultAllocator()) {}
 
-    explicit AllocatorRef(IAllocator& Allocator) noexcept
-        : Instance(&Allocator)
-    {
-    }
+    explicit AllocatorRef(IAllocator& Allocator) noexcept : Instance(&Allocator) {}
 
-    IAllocator& Get() const noexcept
-    {
-        return *Instance;
-    }
+    IAllocator& Get() const noexcept { return *Instance; }
 
-    friend bool operator==(const AllocatorRef Left, const AllocatorRef Right) noexcept
-    {
-        return Left.Instance == Right.Instance;
-    }
+    friend bool operator==(const AllocatorRef Left, const AllocatorRef Right) noexcept { return Left.Instance == Right.Instance; }
 
-    friend bool operator!=(const AllocatorRef Left, const AllocatorRef Right) noexcept
-    {
-        return !(Left == Right);
-    }
+    friend bool operator!=(const AllocatorRef Left, const AllocatorRef Right) noexcept { return !(Left == Right); }
 
 private:
     IAllocator* Instance;

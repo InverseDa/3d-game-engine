@@ -4,13 +4,13 @@
 #include <limits>
 
 #if PLATFORM_WINDOWS
-    #ifndef WIN32_LEAN_AND_MEAN
-        #define WIN32_LEAN_AND_MEAN
-    #endif
-    #ifndef NOMINMAX
-        #define NOMINMAX
-    #endif
-    #include <Windows.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
 #endif
 
 #include "Vulkan/VulkanRHI.h"
@@ -24,10 +24,14 @@ VkFormat ToVkFormat(EPixelFormat Format)
 {
     switch (Format)
     {
-    case EPixelFormat::R8G8B8A8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
-    case EPixelFormat::R8G8B8A8_SRGB:  return VK_FORMAT_R8G8B8A8_SRGB;
-    case EPixelFormat::B8G8R8A8_SRGB:  return VK_FORMAT_B8G8R8A8_SRGB;
-    default:                           return VK_FORMAT_B8G8R8A8_SRGB;
+    case EPixelFormat::R8G8B8A8_UNORM:
+        return VK_FORMAT_R8G8B8A8_UNORM;
+    case EPixelFormat::R8G8B8A8_SRGB:
+        return VK_FORMAT_R8G8B8A8_SRGB;
+    case EPixelFormat::B8G8R8A8_SRGB:
+        return VK_FORMAT_B8G8R8A8_SRGB;
+    default:
+        return VK_FORMAT_B8G8R8A8_SRGB;
     }
 }
 
@@ -50,9 +54,7 @@ VkSurfaceFormatKHR ChooseSurfaceFormat(const LE::Array<VkSurfaceFormatKHR>& Avai
         }
     }
 
-    return AvailableFormats.IsEmpty()
-        ? VkSurfaceFormatKHR{ VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }
-        : AvailableFormats[0];
+    return AvailableFormats.IsEmpty() ? VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR} : AvailableFormats[0];
 }
 
 VkPresentModeKHR ChoosePresentMode(const LE::Array<VkPresentModeKHR>& AvailableModes, bool bEnableVsync)
@@ -82,10 +84,7 @@ VkPresentModeKHR ChoosePresentMode(const LE::Array<VkPresentModeKHR>& AvailableM
 }
 }
 
-FVulkanRHISwapchain::FVulkanRHISwapchain(FVulkanRHIDevice* InDevice, const FRHISwapchainDesc& InDesc)
-    : FRHISwapchain()
-    , Device(InDevice)
-    , Desc(InDesc)
+FVulkanRHISwapchain::FVulkanRHISwapchain(FVulkanRHIDevice* InDevice, const FRHISwapchainDesc& InDesc) : FRHISwapchain(), Device(InDevice), Desc(InDesc)
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
@@ -201,15 +200,10 @@ void FVulkanRHISwapchain::InternalCreateSurface()
     }
 
     VkBool32 bPresentSupported = VK_FALSE;
-    const VkResult PresentSupportResult = vkGetPhysicalDeviceSurfaceSupportKHR(
-        this->Device->VkContext.PhysicalDevice,
-        this->Device->VkContext.GraphicsFamilyIndex,
-        this->SurfaceHandle,
-        &bPresentSupported);
+    const VkResult PresentSupportResult = vkGetPhysicalDeviceSurfaceSupportKHR(this->Device->VkContext.PhysicalDevice, this->Device->VkContext.GraphicsFamilyIndex, this->SurfaceHandle, &bPresentSupported);
     if (PresentSupportResult != VK_SUCCESS || bPresentSupported != VK_TRUE)
     {
-        LE_LOG(LogRHI, Error, "Selected graphics queue does not support present. VkResult={}, Supported={}",
-            static_cast<int32>(PresentSupportResult), bPresentSupported == VK_TRUE);
+        LE_LOG(LogRHI, Error, "Selected graphics queue does not support present. VkResult={}, Supported={}", static_cast<int32>(PresentSupportResult), bPresentSupported == VK_TRUE);
         vkDestroySurfaceKHR(this->Device->VkContext.Instance, this->SurfaceHandle, nullptr);
         this->SurfaceHandle = VK_NULL_HANDLE;
         return;
@@ -240,8 +234,7 @@ void FVulkanRHISwapchain::InternalCreateSwapchain()
     VkResult Result = vkGetPhysicalDeviceSurfaceFormatsKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &SurfaceFormatCount, nullptr);
     if (Result != VK_SUCCESS || SurfaceFormatCount == 0)
     {
-        LE_LOG(LogRHI, Error, "vkGetPhysicalDeviceSurfaceFormatsKHR(count) failed. VkResult={}, Count={}",
-            static_cast<int32>(Result), SurfaceFormatCount);
+        LE_LOG(LogRHI, Error, "vkGetPhysicalDeviceSurfaceFormatsKHR(count) failed. VkResult={}, Count={}", static_cast<int32>(Result), SurfaceFormatCount);
         this->SwapchainHandle = VK_NULL_HANDLE;
         return;
     }
@@ -259,8 +252,7 @@ void FVulkanRHISwapchain::InternalCreateSwapchain()
     Result = vkGetPhysicalDeviceSurfacePresentModesKHR(this->Device->VkContext.PhysicalDevice, this->SurfaceHandle, &PresentModeCount, nullptr);
     if (Result != VK_SUCCESS || PresentModeCount == 0)
     {
-        LE_LOG(LogRHI, Error, "vkGetPhysicalDeviceSurfacePresentModesKHR(count) failed. VkResult={}, Count={}",
-            static_cast<int32>(Result), PresentModeCount);
+        LE_LOG(LogRHI, Error, "vkGetPhysicalDeviceSurfacePresentModesKHR(count) failed. VkResult={}, Count={}", static_cast<int32>(Result), PresentModeCount);
         this->SwapchainHandle = VK_NULL_HANDLE;
         return;
     }
@@ -456,18 +448,11 @@ FRHIAcquireResult FVulkanRHISwapchain::AcquireNextImage(FRHISemaphore* SignalSem
         return {};
     }
 
-    const VkResult Result = vkAcquireNextImageKHR(
-        this->Device->VkContext.LogicalDevice,
-        SwapchainHandle,
-        Timeout,
-        SignalHandle,
-        VK_NULL_HANDLE,
-        &this->CurrentImageIndex
-    );
+    const VkResult Result = vkAcquireNextImageKHR(this->Device->VkContext.LogicalDevice, SwapchainHandle, Timeout, SignalHandle, VK_NULL_HANDLE, &this->CurrentImageIndex);
     if (Result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         LE_LOG(LogRHI, Info, "AcquireNextImage reported OUT_OF_DATE.");
-        return { ERHISwapchainStatus::OutOfDate, nullptr };
+        return {ERHISwapchainStatus::OutOfDate, nullptr};
     }
     if (Result != VK_SUCCESS && Result != VK_SUBOPTIMAL_KHR)
     {
@@ -475,18 +460,14 @@ FRHIAcquireResult FVulkanRHISwapchain::AcquireNextImage(FRHISemaphore* SignalSem
         return {};
     }
 
-    if (this->CurrentImageIndex >= this->BackBufferViews.Size() ||
-        this->BackBufferViews[this->CurrentImageIndex] == nullptr)
+    if (this->CurrentImageIndex >= this->BackBufferViews.Size() || this->BackBufferViews[this->CurrentImageIndex] == nullptr)
     {
         LE_LOG(LogRHI, Error, "AcquireNextImage returned an invalid image index {}.", this->CurrentImageIndex);
         return {};
     }
 
     this->bImageAcquired = true;
-    return {
-        Result == VK_SUBOPTIMAL_KHR ? ERHISwapchainStatus::Suboptimal : ERHISwapchainStatus::Success,
-        this->BackBufferViews[this->CurrentImageIndex]
-    };
+    return {Result == VK_SUBOPTIMAL_KHR ? ERHISwapchainStatus::Suboptimal : ERHISwapchainStatus::Success, this->BackBufferViews[this->CurrentImageIndex]};
 }
 
 FRHITextureView* FVulkanRHISwapchain::GetCurrentBackBufferView() const
@@ -567,7 +548,7 @@ ERHISwapchainStatus FVulkanRHISwapchain::Present(FRHISemaphore* WaitSemaphore)
         PresentInfo.waitSemaphoreCount = 1;
         PresentInfo.pWaitSemaphores = &WaitHandle;
 
-        VkSwapchainKHR Swapchains[] = { this->SwapchainHandle };
+        VkSwapchainKHR Swapchains[] = {this->SwapchainHandle};
         PresentInfo.swapchainCount = 1;
         PresentInfo.pSwapchains = Swapchains;
         PresentInfo.pImageIndices = &this->CurrentImageIndex;

@@ -20,12 +20,9 @@ namespace
 constexpr EPixelFormat SceneColorFormat = EPixelFormat::B8G8R8A8_SRGB;
 constexpr EPixelFormat SceneDepthFormat = EPixelFormat::D32_FLOAT;
 constexpr uint32 MaterialSet = 0;
-constexpr EShaderStage BasePassPushStages = static_cast<EShaderStage>(
-    static_cast<uint8>(EShaderStage::Vertex) |
-    static_cast<uint8>(EShaderStage::Pixel));
+constexpr EShaderStage BasePassPushStages = static_cast<EShaderStage>(static_cast<uint8>(EShaderStage::Vertex) | static_cast<uint8>(EShaderStage::Pixel));
 
-template <std::size_t Size>
-bool IsFiniteMatrix(const Math::Matrix<float, Size, Size>& Matrix) noexcept
+template <std::size_t Size> bool IsFiniteMatrix(const Math::Matrix<float, Size, Size>& Matrix) noexcept
 {
     for (const float Value : Matrix.Values)
     {
@@ -52,27 +49,12 @@ bool IsFiniteNonNegativeRgb(const Math::Vector4f& Color) noexcept
 bool IsPipelineValid(const FRHIPipeline_Graphics& Pipeline) noexcept
 {
     const FRHIPipelineDesc_Graphics& Desc = Pipeline.GetDesc();
-    return Desc.RenderTargetCount == 1 &&
-        Desc.RenderTargetFormats[0] == SceneColorFormat &&
-        Desc.DepthStencilFormat == SceneDepthFormat &&
-        !Desc.BlendState.bEnable &&
-        Desc.DepthStencilState.bDepthTestEnable &&
-        Desc.DepthStencilState.bDepthWriteEnable &&
-        Desc.DepthStencilState.DepthFunc == ECompareFunction::Less &&
-        Desc.VertexBindings.Size() == 1 &&
-        Desc.VertexBindings[0].Binding == 0 &&
-        Desc.VertexBindings[0].Stride == sizeof(FBasePassVertex) &&
-        !Desc.VertexBindings[0].bPerInstance &&
-        Desc.PushConstants.StageFlags == BasePassPushStages &&
-        Desc.PushConstants.Size == sizeof(FBasePassObjectConstants) &&
-        Desc.PushConstants.IsValid();
+    return Desc.RenderTargetCount == 1 && Desc.RenderTargetFormats[0] == SceneColorFormat && Desc.DepthStencilFormat == SceneDepthFormat && !Desc.BlendState.bEnable && Desc.DepthStencilState.bDepthTestEnable && Desc.DepthStencilState.bDepthWriteEnable && Desc.DepthStencilState.DepthFunc == ECompareFunction::Less && Desc.VertexBindings.Size() == 1 && Desc.VertexBindings[0].Binding == 0 && Desc.VertexBindings[0].Stride == sizeof(FBasePassVertex) && !Desc.VertexBindings[0].bPerInstance && Desc.PushConstants.StageFlags == BasePassPushStages && Desc.PushConstants.Size == sizeof(FBasePassObjectConstants) && Desc.PushConstants.IsValid();
 }
 
 bool IsLightBindingValid(const FBasePassLightBinding& Light) noexcept
 {
-    if (Light.Buffer == nullptr || Light.BindGroup == nullptr ||
-        Light.Buffer->GetDesc().Size != sizeof(FBasePassLightConstants) ||
-        (Light.Buffer->GetDesc().UsageFlag & static_cast<uint32>(EBufferUsageFlags::UniformBuffer)) == 0)
+    if (Light.Buffer == nullptr || Light.BindGroup == nullptr || Light.Buffer->GetDesc().Size != sizeof(FBasePassLightConstants) || (Light.Buffer->GetDesc().UsageFlag & static_cast<uint32>(EBufferUsageFlags::UniformBuffer)) == 0)
     {
         return false;
     }
@@ -83,14 +65,7 @@ bool IsLightBindingValid(const FBasePassLightBinding& Light) noexcept
     }
     const auto& Layout = Group.Layout->GetDesc();
     const auto& Item = Group.Items[0];
-    return Layout.SetIndex == FBasePassFrameLighting::SetIndex &&
-        Layout.Bindings.Size() == 1 &&
-        Layout.Bindings[0].Binding == FBasePassFrameLighting::BindingIndex &&
-        Layout.Bindings[0].Count == 1 &&
-        Layout.Bindings[0].Type == ERHIBindGroupItemType::UniformBuffer &&
-        Layout.Bindings[0].StageFlags == EShaderStage::Pixel &&
-        Item.Binding == FBasePassFrameLighting::BindingIndex && Item.Buffer == Light.Buffer &&
-        Item.Offset == 0 && Item.Range == sizeof(FBasePassLightConstants);
+    return Layout.SetIndex == FBasePassFrameLighting::SetIndex && Layout.Bindings.Size() == 1 && Layout.Bindings[0].Binding == FBasePassFrameLighting::BindingIndex && Layout.Bindings[0].Count == 1 && Layout.Bindings[0].Type == ERHIBindGroupItemType::UniformBuffer && Layout.Bindings[0].StageFlags == EShaderStage::Pixel && Item.Binding == FBasePassFrameLighting::BindingIndex && Item.Buffer == Light.Buffer && Item.Offset == 0 && Item.Range == sizeof(FBasePassLightConstants);
 }
 
 bool IsMaterialBindingValid(const FRenderMeshProxy& Mesh, const FBasePassLightBinding& Light) noexcept
@@ -100,26 +75,19 @@ bool IsMaterialBindingValid(const FRenderMeshProxy& Mesh, const FBasePassLightBi
         return false;
     }
     const auto& Texture = Mesh.BaseColorTexture->GetDesc();
-    if (!Texture.bIsShaderResource || Texture.Format != EPixelFormat::R8G8B8A8_SRGB ||
-        Texture.Depth != 1 || Texture.MipLevels != 1 || Texture.ArrayLayers != 1 ||
-        Texture.Width == 0 || Texture.Height == 0)
+    if (!Texture.bIsShaderResource || Texture.Format != EPixelFormat::R8G8B8A8_SRGB || Texture.Depth != 1 || Texture.MipLevels != 1 || Texture.ArrayLayers != 1 || Texture.Width == 0 || Texture.Height == 0)
     {
         return false;
     }
     const auto& Layouts = Mesh.GraphicsPipeline->GetDesc().BindGroupLayouts;
     const auto& BindGroup = Mesh.MaterialBindGroup->GetDesc();
-    if (Layouts.Size() != 2 || Layouts[FBasePassFrameLighting::SetIndex] != Light.BindGroup->GetDesc().Layout ||
-        BindGroup.Layout == nullptr || BindGroup.Layout != Layouts[MaterialSet] ||
-        BindGroup.Layout->GetDesc().SetIndex != MaterialSet || BindGroup.Items.Size() != 2)
+    if (Layouts.Size() != 2 || Layouts[FBasePassFrameLighting::SetIndex] != Light.BindGroup->GetDesc().Layout || BindGroup.Layout == nullptr || BindGroup.Layout != Layouts[MaterialSet] || BindGroup.Layout->GetDesc().SetIndex != MaterialSet || BindGroup.Items.Size() != 2)
     {
         return false;
     }
     const auto& Image = BindGroup.Items[0];
     const auto& Sampler = BindGroup.Items[1];
-    return Image.Binding == 0 && Image.TextureView != nullptr &&
-        Image.TextureView->GetTexture() == Mesh.BaseColorTexture &&
-        Image.TextureView->GetDesc().Format == Texture.Format &&
-        Sampler.Binding == 1 && Sampler.Sampler != nullptr;
+    return Image.Binding == 0 && Image.TextureView != nullptr && Image.TextureView->GetTexture() == Mesh.BaseColorTexture && Image.TextureView->GetDesc().Format == Texture.Format && Sampler.Binding == 1 && Sampler.Sampler != nullptr;
 }
 
 bool HasBufferUsage(const FRHIBuffer& Buffer, const EBufferUsageFlags Usage) noexcept
@@ -127,24 +95,14 @@ bool HasBufferUsage(const FRHIBuffer& Buffer, const EBufferUsageFlags Usage) noe
     return (Buffer.GetDesc().UsageFlag & static_cast<uint32>(Usage)) != 0;
 }
 
-bool FitsBuffer(
-    const uint32 ElementCount,
-    const uint32 ElementSize,
-    const uint64 BufferSize) noexcept
+bool FitsBuffer(const uint32 ElementCount, const uint32 ElementSize, const uint64 BufferSize) noexcept
 {
-    return ElementCount > 0 && ElementSize > 0 && BufferSize > 0 &&
-        static_cast<uint64>(ElementCount) <= BufferSize / ElementSize;
+    return ElementCount > 0 && ElementSize > 0 && BufferSize > 0 && static_cast<uint64>(ElementCount) <= BufferSize / ElementSize;
 }
 
-bool IsTextureContractValid(
-    const FBasePassResources& Resources,
-    uint32& OutWidth,
-    uint32& OutHeight) noexcept
+bool IsTextureContractValid(const FBasePassResources& Resources, uint32& OutWidth, uint32& OutHeight) noexcept
 {
-    if (Resources.SceneColorTexture == nullptr || Resources.SceneColorView == nullptr ||
-        Resources.SceneDepthTexture == nullptr || Resources.SceneDepthView == nullptr ||
-        Resources.SceneColorView->GetTexture() != Resources.SceneColorTexture ||
-        Resources.SceneDepthView->GetTexture() != Resources.SceneDepthTexture)
+    if (Resources.SceneColorTexture == nullptr || Resources.SceneColorView == nullptr || Resources.SceneDepthTexture == nullptr || Resources.SceneDepthView == nullptr || Resources.SceneColorView->GetTexture() != Resources.SceneColorTexture || Resources.SceneDepthView->GetTexture() != Resources.SceneDepthTexture)
     {
         return false;
     }
@@ -153,11 +111,7 @@ bool IsTextureContractValid(
     const FRHITextureDesc& Depth = Resources.SceneDepthTexture->GetDesc();
     const FRHITextureViewDesc& ColorView = Resources.SceneColorView->GetDesc();
     const FRHITextureViewDesc& DepthView = Resources.SceneDepthView->GetDesc();
-    if (Color.Width == 0 || Color.Height == 0 || Color.Width != Depth.Width ||
-        Color.Height != Depth.Height || Color.Format != SceneColorFormat ||
-        Depth.Format != SceneDepthFormat || ColorView.Format != SceneColorFormat ||
-        DepthView.Format != SceneDepthFormat || !Color.bIsRenderTarget ||
-        !Depth.bIsDepthStencil)
+    if (Color.Width == 0 || Color.Height == 0 || Color.Width != Depth.Width || Color.Height != Depth.Height || Color.Format != SceneColorFormat || Depth.Format != SceneDepthFormat || ColorView.Format != SceneColorFormat || DepthView.Format != SceneDepthFormat || !Color.bIsRenderTarget || !Depth.bIsDepthStencil)
     {
         return false;
     }
@@ -168,55 +122,33 @@ bool IsTextureContractValid(
 
 } // namespace
 
-FBasePass::FBasePass(const FBasePassResources& InResources) noexcept
-    : Resources(InResources)
-{
-}
+FBasePass::FBasePass(const FBasePassResources& InResources) noexcept : Resources(InResources) {}
 
-bool FBasePass::IsConfigurationValid(
-    const FBasePassResources& InResources,
-    const FRenderScene& RenderScene) noexcept
+bool FBasePass::IsConfigurationValid(const FBasePassResources& InResources, const FRenderScene& RenderScene) noexcept
 {
     uint32 Width = 0;
     uint32 Height = 0;
-    if (!IsTextureContractValid(InResources, Width, Height) ||
-        RenderScene.Cameras.Size() != 1 || RenderScene.Lights.Size() > 1 ||
-        !IsLightBindingValid(InResources.Light))
+    if (!IsTextureContractValid(InResources, Width, Height) || RenderScene.Cameras.Size() != 1 || RenderScene.Lights.Size() > 1 || !IsLightBindingValid(InResources.Light))
     {
         return false;
     }
 
     const FRenderCameraProxy& Camera = RenderScene.Cameras[0];
-    if (!Camera.PrimitiveId.IsValid() || Camera.ViewportWidth != Width ||
-        Camera.ViewportHeight != Height || !IsFiniteMatrix(Camera.View) ||
-        !IsFiniteMatrix(Camera.Projection) || !IsFiniteMatrix(Camera.ViewProjection))
+    if (!Camera.PrimitiveId.IsValid() || Camera.ViewportWidth != Width || Camera.ViewportHeight != Height || !IsFiniteMatrix(Camera.View) || !IsFiniteMatrix(Camera.Projection) || !IsFiniteMatrix(Camera.ViewProjection))
     {
         return false;
     }
 
     for (const FRenderMeshProxy& Mesh : RenderScene.Meshes)
     {
-        if (!Mesh.PrimitiveId.IsValid() ||
-            !Mesh.MaterialAssetId.IsValid() ||
-            !HasRenderMeshPass(Mesh.PassMask, ERenderMeshPassMask::SceneColor) ||
-            Mesh.GraphicsPipeline == nullptr || Mesh.VertexBuffer == nullptr ||
-            Mesh.VertexCount == 0 || Mesh.IndexBuffer == nullptr ||
-            Mesh.IndexCount == 0 || !IsValidIndexFormat(Mesh.IndexFormat) ||
-            !IsFiniteMatrix(Mesh.LocalToWorld) || !IsFiniteNonNegativeRgb(Mesh.BaseColor) ||
-            (Mesh.bHasNormals && !IsFiniteMatrix(Mesh.NormalToWorld)) ||
-            !IsPipelineValid(*Mesh.GraphicsPipeline) || !IsMaterialBindingValid(Mesh, InResources.Light) ||
-            Mesh.BaseColorTexture == InResources.SceneColorTexture ||
-            Mesh.BaseColorTexture == InResources.SceneDepthTexture)
+        if (!Mesh.PrimitiveId.IsValid() || !Mesh.MaterialAssetId.IsValid() || !HasRenderMeshPass(Mesh.PassMask, ERenderMeshPassMask::SceneColor) || Mesh.GraphicsPipeline == nullptr || Mesh.VertexBuffer == nullptr || Mesh.VertexCount == 0 || Mesh.IndexBuffer == nullptr || Mesh.IndexCount == 0 || !IsValidIndexFormat(Mesh.IndexFormat) || !IsFiniteMatrix(Mesh.LocalToWorld) || !IsFiniteNonNegativeRgb(Mesh.BaseColor) || (Mesh.bHasNormals && !IsFiniteMatrix(Mesh.NormalToWorld)) || !IsPipelineValid(*Mesh.GraphicsPipeline) || !IsMaterialBindingValid(Mesh, InResources.Light) || Mesh.BaseColorTexture == InResources.SceneColorTexture || Mesh.BaseColorTexture == InResources.SceneDepthTexture)
         {
             return false;
         }
         const FRHIPipelineDesc_Graphics& PipelineDesc = Mesh.GraphicsPipeline->GetDesc();
         const uint32 VertexStride = PipelineDesc.VertexBindings[0].Stride;
         const uint32 IndexStride = Mesh.IndexFormat == EPixelFormat::R16_UINT ? 2u : 4u;
-        if (!HasBufferUsage(*Mesh.VertexBuffer, EBufferUsageFlags::VertexBuffer) ||
-            !HasBufferUsage(*Mesh.IndexBuffer, EBufferUsageFlags::IndexBuffer) ||
-            !FitsBuffer(Mesh.VertexCount, VertexStride, Mesh.VertexBuffer->GetDesc().Size) ||
-            !FitsBuffer(Mesh.IndexCount, IndexStride, Mesh.IndexBuffer->GetDesc().Size))
+        if (!HasBufferUsage(*Mesh.VertexBuffer, EBufferUsageFlags::VertexBuffer) || !HasBufferUsage(*Mesh.IndexBuffer, EBufferUsageFlags::IndexBuffer) || !FitsBuffer(Mesh.VertexCount, VertexStride, Mesh.VertexBuffer->GetDesc().Size) || !FitsBuffer(Mesh.IndexCount, IndexStride, Mesh.IndexBuffer->GetDesc().Size))
         {
             return false;
         }
@@ -241,8 +173,7 @@ ERFGQueueType FBasePass::GetQueueType() const
 
 void FBasePass::Setup(FRenderPassSetupContext& Context)
 {
-    if (Context.GraphBridge == nullptr || Context.RenderScene == nullptr ||
-        !IsConfigurationValid(Resources, *Context.RenderScene))
+    if (Context.GraphBridge == nullptr || Context.RenderScene == nullptr || !IsConfigurationValid(Resources, *Context.RenderScene))
     {
         return;
     }
@@ -254,10 +185,8 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
     FRFGAccessDesc DepthAccess = ColorWrite;
     DepthAccess.State = ERHIResourceState::DepthStencilWrite;
 
-    const FRFGResourceHandle SceneColor = Context.GraphBridge->ImportTexture(
-        "SceneColor", Resources.SceneColorTexture, ERHIResourceState::Undefined);
-    const FRFGResourceHandle SceneDepth = Context.GraphBridge->ImportTexture(
-        "Depth", Resources.SceneDepthTexture, ERHIResourceState::Undefined);
+    const FRFGResourceHandle SceneColor = Context.GraphBridge->ImportTexture("SceneColor", Resources.SceneColorTexture, ERHIResourceState::Undefined);
+    const FRFGResourceHandle SceneDepth = Context.GraphBridge->ImportTexture("Depth", Resources.SceneDepthTexture, ERHIResourceState::Undefined);
     Context.GraphBridge->Write(Context.PassHandle, SceneColor, ColorWrite);
     Context.GraphBridge->Write(Context.PassHandle, SceneDepth, DepthAccess);
     Context.GraphBridge->MarkOutput(SceneColor);
@@ -275,8 +204,7 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
     TextureRead.ShaderStage = EShaderStage::Pixel;
     FRFGAccessDesc LightRead = TextureRead;
     LightRead.State = ERHIResourceState::ConstantBuffer;
-    const FRFGResourceHandle Light = Context.GraphBridge->ImportBuffer(
-        "BasePassFrameLight", Resources.Light.Buffer, ERHIResourceState::ConstantBuffer);
+    const FRFGResourceHandle Light = Context.GraphBridge->ImportBuffer("BasePassFrameLight", Resources.Light.Buffer, ERHIResourceState::ConstantBuffer);
     Context.GraphBridge->Read(Context.PassHandle, Light, LightRead);
     HashSet<FRHIBuffer*> VertexBuffers;
     HashSet<FRHIBuffer*> IndexBuffers;
@@ -285,20 +213,17 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
     {
         if (VertexBuffers.Insert(Mesh.VertexBuffer))
         {
-            const FRFGResourceHandle VertexBuffer = Context.GraphBridge->ImportBuffer(
-                "BasePassVertexBuffer", Mesh.VertexBuffer, ERHIResourceState::VertexBuffer);
+            const FRFGResourceHandle VertexBuffer = Context.GraphBridge->ImportBuffer("BasePassVertexBuffer", Mesh.VertexBuffer, ERHIResourceState::VertexBuffer);
             Context.GraphBridge->Read(Context.PassHandle, VertexBuffer, VertexRead);
         }
         if (IndexBuffers.Insert(Mesh.IndexBuffer))
         {
-            const FRFGResourceHandle IndexBuffer = Context.GraphBridge->ImportBuffer(
-                "BasePassIndexBuffer", Mesh.IndexBuffer, ERHIResourceState::IndexBuffer);
+            const FRFGResourceHandle IndexBuffer = Context.GraphBridge->ImportBuffer("BasePassIndexBuffer", Mesh.IndexBuffer, ERHIResourceState::IndexBuffer);
             Context.GraphBridge->Read(Context.PassHandle, IndexBuffer, IndexRead);
         }
         if (SampledTextures.Insert(Mesh.BaseColorTexture))
         {
-            const FRFGResourceHandle Texture = Context.GraphBridge->ImportTexture(
-                "BasePassColorTexture", Mesh.BaseColorTexture, ERHIResourceState::ShaderResource);
+            const FRFGResourceHandle Texture = Context.GraphBridge->ImportTexture("BasePassColorTexture", Mesh.BaseColorTexture, ERHIResourceState::ShaderResource);
             Context.GraphBridge->Read(Context.PassHandle, Texture, TextureRead);
         }
     }
@@ -306,8 +231,7 @@ void FBasePass::Setup(FRenderPassSetupContext& Context)
 
 void FBasePass::Record(FRenderPassRecordContext& Context)
 {
-    if (Context.PassContext == nullptr || Context.RenderScene == nullptr ||
-        !IsConfigurationValid(Resources, *Context.RenderScene))
+    if (Context.PassContext == nullptr || Context.RenderScene == nullptr || !IsConfigurationValid(Resources, *Context.RenderScene))
     {
         return;
     }
@@ -360,15 +284,12 @@ void FBasePass::Record(FRenderPassRecordContext& Context)
     {
         FBasePassObjectConstants Constants;
         Constants.LocalToClip = Camera.ViewProjection * Mesh.LocalToWorld;
-        Constants.BaseColor = Math::Vector4f(
-            Mesh.BaseColor.Values[0], Mesh.BaseColor.Values[1],
-            Mesh.BaseColor.Values[2], Mesh.bHasNormals ? 1.0f : 0.0f);
+        Constants.BaseColor = Math::Vector4f(Mesh.BaseColor.Values[0], Mesh.BaseColor.Values[1], Mesh.BaseColor.Values[2], Mesh.bHasNormals ? 1.0f : 0.0f);
         if (Mesh.bHasNormals)
         {
             for (std::size_t Row = 0; Row < 3; ++Row)
             {
-                Constants.NormalToWorldRows[Row] = Math::Vector4f(
-                    Mesh.NormalToWorld(Row, 0), Mesh.NormalToWorld(Row, 1), Mesh.NormalToWorld(Row, 2), 0.0f);
+                Constants.NormalToWorldRows[Row] = Math::Vector4f(Mesh.NormalToWorld(Row, 0), Mesh.NormalToWorld(Row, 1), Mesh.NormalToWorld(Row, 2), 0.0f);
             }
         }
         CommandList->SetGraphicsPipeline(Mesh.GraphicsPipeline);
@@ -376,18 +297,13 @@ void FBasePass::Record(FRenderPassRecordContext& Context)
         CommandList->SetBindGroup(FBasePassFrameLighting::SetIndex, Resources.Light.BindGroup);
         CommandList->SetVertexBuffer(0, Mesh.VertexBuffer, 0);
         CommandList->SetIndexBuffer(Mesh.IndexBuffer, 0, Mesh.IndexFormat);
-        CommandList->SetPushConstants(
-            BasePassPushStages, &Constants, sizeof(FBasePassObjectConstants));
+        CommandList->SetPushConstants(BasePassPushStages, &Constants, sizeof(FBasePassObjectConstants));
         CommandList->DrawIndexed(Mesh.IndexCount, 1, 0, 0, 0);
     }
     CommandList->EndRenderPass();
 }
 
-FBasePassPipeline::FBasePassPipeline(const FBasePassResources& InResources) noexcept
-    : Resources(InResources)
-    , Pass(InResources)
-{
-}
+FBasePassPipeline::FBasePassPipeline(const FBasePassResources& InResources) noexcept : Resources(InResources), Pass(InResources) {}
 
 const char* FBasePassPipeline::GetName() const
 {
@@ -399,11 +315,7 @@ EShadingPath FBasePassPipeline::GetShadingPath() const
     return EShadingPath::Deferred;
 }
 
-void FBasePassPipeline::BuildPasses(
-    const FRendererFrameContext& FrameContext,
-    const FRenderScene& RenderScene,
-    const FRenderView& RenderView,
-    FRenderPipelinePlan& OutPlan)
+void FBasePassPipeline::BuildPasses(const FRendererFrameContext& FrameContext, const FRenderScene& RenderScene, const FRenderView& RenderView, FRenderPipelinePlan& OutPlan)
 {
     static_cast<void>(FrameContext);
     static_cast<void>(RenderView);

@@ -12,22 +12,22 @@
 // Windows.h must be included before vulkan_win32.h to define HANDLE, HWND, etc.
 // Include it AFTER all RHI headers to avoid macro pollution
 #if PLATFORM_WINDOWS
-    #define WIN32_LEAN_AND_MEAN
-    #define NOMINMAX
-    #include <Windows.h>
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
 #endif
 
 #if PLATFORM_MAC
-    #define VK_USE_PLATFORM_METAL_EXT 1
+#define VK_USE_PLATFORM_METAL_EXT 1
 #endif
 
 #include <vulkan/vulkan.h>
 
 #if PLATFORM_WINDOWS
-    #include <vulkan/vulkan_win32.h>
+#include <vulkan/vulkan_win32.h>
 #endif
 #if PLATFORM_MAC
-    #include <vulkan/vulkan_metal.h>
+#include <vulkan/vulkan_metal.h>
 #endif
 
 #if PLATFORM_WINDOWS
@@ -41,60 +41,54 @@ LE_DECLARE_LOG_CATEGORY_EXTERN(LogRHI);
 
 namespace RHI
 {
-    namespace Vulkan
-    {
-        static const char* const DeviceExtensions[] = {
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME
-        };
-        static const uint32 DeviceExtensionCount = 1;
+namespace Vulkan
+{
+static const char* const DeviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+static const uint32 DeviceExtensionCount = 1;
 
-        static const char* const InstanceExtensions[] = {
-            VK_KHR_SURFACE_EXTENSION_NAME,
+static const char* const InstanceExtensions[] = {VK_KHR_SURFACE_EXTENSION_NAME,
 #if PLATFORM_WINDOWS
-            VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+    VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 #endif
 #if PLATFORM_MAC
-            VK_EXT_METAL_SURFACE_EXTENSION_NAME,
-            VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
+    VK_EXT_METAL_SURFACE_EXTENSION_NAME, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
 #endif
 #if LE_RHI_ENABLE_VALIDATION
-            VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+    VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 #endif
-        };
+};
 #if PLATFORM_WINDOWS
 #if LE_RHI_ENABLE_VALIDATION
-        static const uint32 InstanceExtensionCount = 3;
+static const uint32 InstanceExtensionCount = 3;
 #else
-        static const uint32 InstanceExtensionCount = 2;
+static const uint32 InstanceExtensionCount = 2;
 #endif
 #else
 #if PLATFORM_MAC
 #if LE_RHI_ENABLE_VALIDATION
-        static const uint32 InstanceExtensionCount = 4;
+static const uint32 InstanceExtensionCount = 4;
 #else
-        static const uint32 InstanceExtensionCount = 3;
+static const uint32 InstanceExtensionCount = 3;
 #endif
 #else
 #if LE_RHI_ENABLE_VALIDATION
-        static const uint32 InstanceExtensionCount = 2;
+static const uint32 InstanceExtensionCount = 2;
 #else
-        static const uint32 InstanceExtensionCount = 1;
+static const uint32 InstanceExtensionCount = 1;
 #endif
 #endif
 #endif
 
 #if LE_RHI_ENABLE_VALIDATION
-        static const char* const InstanceLayers[] = {
-            "VK_LAYER_KHRONOS_validation"
-        };
-        static const uint32 InstanceLayerCount = 1;
+static const char* const InstanceLayers[] = {"VK_LAYER_KHRONOS_validation"};
+static const uint32 InstanceLayerCount = 1;
 #else
-        static const char* const InstanceLayers[] = { nullptr };
-        static const uint32 InstanceLayerCount = 0;
+static const char* const InstanceLayers[] = {nullptr};
+static const uint32 InstanceLayerCount = 0;
 #endif
 
-        static const uint32 MaxBindlessDescriptorCount = 1000000;
-    }
+static const uint32 MaxBindlessDescriptorCount = 1000000;
+}
 }
 
 class FVulkanRHITexture;
@@ -102,11 +96,10 @@ class FVulkanRHITextureView;
 class FVulkanRHIDevice;
 class FVulkanRHIPipeline_Graphics;
 
-template <typename TDesc>
-class TVulkanResourceBase
+template <typename TDesc> class TVulkanResourceBase
 {
 protected:
-    TVulkanResourceBase(FVulkanRHIDevice* InDevice, const TDesc& InDesc): Device(InDevice), Desc(InDesc) {}
+    TVulkanResourceBase(FVulkanRHIDevice* InDevice, const TDesc& InDesc) : Device(InDevice), Desc(InDesc) {}
 
     FVulkanRHIDevice* Device = nullptr;
     TDesc Desc;
@@ -230,7 +223,6 @@ private:
 
 protected:
     void InternalDestroySwapchainResources();
-
 };
 
 // ***********************************************************************************************
@@ -254,7 +246,7 @@ private:
 class FVulkanRHIFence : public FRHIFence
 {
 public:
-    FVulkanRHIFence(FVulkanRHIDevice* InDevice, bool bSignaled= false);
+    FVulkanRHIFence(FVulkanRHIDevice* InDevice, bool bSignaled = false);
     ~FVulkanRHIFence() override;
 
 public:
@@ -466,7 +458,7 @@ public:
 
 public:
     void* Map(uint64 Offset, uint64 Size) override;
-    void  Unmap() override;
+    void Unmap() override;
 
 public:
     VkBuffer Buffer = VK_NULL_HANDLE;

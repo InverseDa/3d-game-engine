@@ -7,96 +7,126 @@ namespace LE
 
 namespace
 {
-    uint32 FindMemoryTypeIndex(VkPhysicalDevice PhysDev, uint32 TypeBits, VkMemoryPropertyFlags Props)
-    {
-        VkPhysicalDeviceMemoryProperties MemProps;
-        vkGetPhysicalDeviceMemoryProperties(PhysDev, &MemProps);
-
-        for (uint32 i = 0; i < MemProps.memoryTypeCount; ++i)
-        {
-            if ((TypeBits & (1u << i)) && (MemProps.memoryTypes[i].propertyFlags & Props) == Props)
-            {
-                return i;
-            }
-        }
-        return VK_MAX_MEMORY_TYPES;
-    }
-
-    VkFormat ToVkFormat(EPixelFormat Format)
-    {
-        switch (Format)
-        {
-        case EPixelFormat::R8_UNORM:         return VK_FORMAT_R8_UNORM;
-        case EPixelFormat::R8_SNORM:         return VK_FORMAT_R8_SNORM;
-        case EPixelFormat::R8_UINT:          return VK_FORMAT_R8_UINT;
-        case EPixelFormat::R8_SINT:          return VK_FORMAT_R8_SINT;
-        case EPixelFormat::R16_UINT:         return VK_FORMAT_R16_UINT;
-        case EPixelFormat::R32_UINT:         return VK_FORMAT_R32_UINT;
-        case EPixelFormat::R8G8B8A8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
-        case EPixelFormat::R8G8B8A8_SNORM: return VK_FORMAT_R8G8B8A8_SNORM;
-        case EPixelFormat::R8G8B8A8_UINT:  return VK_FORMAT_R8G8B8A8_UINT;
-        case EPixelFormat::R8G8B8A8_SINT:  return VK_FORMAT_R8G8B8A8_SINT;
-        case EPixelFormat::R8G8B8A8_SRGB:  return VK_FORMAT_R8G8B8A8_SRGB;
-        case EPixelFormat::B8G8R8A8_SRGB:  return VK_FORMAT_B8G8R8A8_SRGB;
-        case EPixelFormat::R16G16_FLOAT:      return VK_FORMAT_R16G16_SFLOAT;
-        case EPixelFormat::R16G16B16A16_FLOAT:return VK_FORMAT_R16G16B16A16_SFLOAT;
-        case EPixelFormat::R32_FLOAT:         return VK_FORMAT_R32_SFLOAT;
-        case EPixelFormat::R32G32_FLOAT:      return VK_FORMAT_R32G32_SFLOAT;
-        case EPixelFormat::R32G32B32_FLOAT:   return VK_FORMAT_R32G32B32_SFLOAT;
-        case EPixelFormat::R32G32B32A32_FLOAT:return VK_FORMAT_R32G32B32A32_SFLOAT;
-        case EPixelFormat::D32_FLOAT:      return VK_FORMAT_D32_SFLOAT;
-        case EPixelFormat::D24_UNORM_S8_UINT: return VK_FORMAT_D24_UNORM_S8_UINT;
-        default: return VK_FORMAT_UNDEFINED;
-        }
-    }
-
-    VkImageUsageFlags ToVkImageUsage(const FRHITextureDesc& Desc)
-    {
-        VkImageUsageFlags Flags = 0;
-        if (Desc.bIsRenderTarget)   Flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        if (Desc.bIsDepthStencil)   Flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        if (Desc.bIsShaderResource) Flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
-        if (Desc.bIsUAV)            Flags |= VK_IMAGE_USAGE_STORAGE_BIT;
-        if (Desc.bIsTransferDestination) Flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        return Flags;
-    }
-
-    VkImageAspectFlags ToVkImageAspect(const FRHITextureDesc& Desc)
-    {
-        if (Desc.bIsDepthStencil)
-        {
-            if (Desc.Format == EPixelFormat::D24_UNORM_S8_UINT)
-            {
-                return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-            }
-            return VK_IMAGE_ASPECT_DEPTH_BIT;
-        }
-        return VK_IMAGE_ASPECT_COLOR_BIT;
-    }
-
-    VkImageViewType ToVkImageViewType(const FRHITextureDesc& Desc, const FRHITextureViewDesc& ViewDesc)
-    {
-        if (Desc.Depth > 1)
-        {
-            return VK_IMAGE_VIEW_TYPE_3D;
-        }
-        if (ViewDesc.ArrayLayers > 1)
-        {
-            return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-        }
-        return VK_IMAGE_VIEW_TYPE_2D;
-    }
-}
-
-FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextureDesc& InDesc)
-    : FVulkanRHITexture(InDevice, InDesc, VK_NULL_HANDLE, true)
+uint32 FindMemoryTypeIndex(VkPhysicalDevice PhysDev, uint32 TypeBits, VkMemoryPropertyFlags Props)
 {
+    VkPhysicalDeviceMemoryProperties MemProps;
+    vkGetPhysicalDeviceMemoryProperties(PhysDev, &MemProps);
+
+    for (uint32 i = 0; i < MemProps.memoryTypeCount; ++i)
+    {
+        if ((TypeBits & (1u << i)) && (MemProps.memoryTypes[i].propertyFlags & Props) == Props)
+        {
+            return i;
+        }
+    }
+    return VK_MAX_MEMORY_TYPES;
 }
 
-FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextureDesc& InDesc, VkImage InImage, bool bInOwnsImage)
-    : TVulkanResourceBase<FRHITextureDesc>(InDevice, InDesc)
-    , Image(InImage)
-    , bOwnsImage(bInOwnsImage)
+VkFormat ToVkFormat(EPixelFormat Format)
+{
+    switch (Format)
+    {
+    case EPixelFormat::R8_UNORM:
+        return VK_FORMAT_R8_UNORM;
+    case EPixelFormat::R8_SNORM:
+        return VK_FORMAT_R8_SNORM;
+    case EPixelFormat::R8_UINT:
+        return VK_FORMAT_R8_UINT;
+    case EPixelFormat::R8_SINT:
+        return VK_FORMAT_R8_SINT;
+    case EPixelFormat::R16_UINT:
+        return VK_FORMAT_R16_UINT;
+    case EPixelFormat::R32_UINT:
+        return VK_FORMAT_R32_UINT;
+    case EPixelFormat::R8G8B8A8_UNORM:
+        return VK_FORMAT_R8G8B8A8_UNORM;
+    case EPixelFormat::R8G8B8A8_SNORM:
+        return VK_FORMAT_R8G8B8A8_SNORM;
+    case EPixelFormat::R8G8B8A8_UINT:
+        return VK_FORMAT_R8G8B8A8_UINT;
+    case EPixelFormat::R8G8B8A8_SINT:
+        return VK_FORMAT_R8G8B8A8_SINT;
+    case EPixelFormat::R8G8B8A8_SRGB:
+        return VK_FORMAT_R8G8B8A8_SRGB;
+    case EPixelFormat::B8G8R8A8_SRGB:
+        return VK_FORMAT_B8G8R8A8_SRGB;
+    case EPixelFormat::R16G16_FLOAT:
+        return VK_FORMAT_R16G16_SFLOAT;
+    case EPixelFormat::R16G16B16A16_FLOAT:
+        return VK_FORMAT_R16G16B16A16_SFLOAT;
+    case EPixelFormat::R32_FLOAT:
+        return VK_FORMAT_R32_SFLOAT;
+    case EPixelFormat::R32G32_FLOAT:
+        return VK_FORMAT_R32G32_SFLOAT;
+    case EPixelFormat::R32G32B32_FLOAT:
+        return VK_FORMAT_R32G32B32_SFLOAT;
+    case EPixelFormat::R32G32B32A32_FLOAT:
+        return VK_FORMAT_R32G32B32A32_SFLOAT;
+    case EPixelFormat::D32_FLOAT:
+        return VK_FORMAT_D32_SFLOAT;
+    case EPixelFormat::D24_UNORM_S8_UINT:
+        return VK_FORMAT_D24_UNORM_S8_UINT;
+    default:
+        return VK_FORMAT_UNDEFINED;
+    }
+}
+
+VkImageUsageFlags ToVkImageUsage(const FRHITextureDesc& Desc)
+{
+    VkImageUsageFlags Flags = 0;
+    if (Desc.bIsRenderTarget)
+    {
+        Flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    }
+    if (Desc.bIsDepthStencil)
+    {
+        Flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    }
+    if (Desc.bIsShaderResource)
+    {
+        Flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+    if (Desc.bIsUAV)
+    {
+        Flags |= VK_IMAGE_USAGE_STORAGE_BIT;
+    }
+    if (Desc.bIsTransferDestination)
+    {
+        Flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+    return Flags;
+}
+
+VkImageAspectFlags ToVkImageAspect(const FRHITextureDesc& Desc)
+{
+    if (Desc.bIsDepthStencil)
+    {
+        if (Desc.Format == EPixelFormat::D24_UNORM_S8_UINT)
+        {
+            return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
+        return VK_IMAGE_ASPECT_DEPTH_BIT;
+    }
+    return VK_IMAGE_ASPECT_COLOR_BIT;
+}
+
+VkImageViewType ToVkImageViewType(const FRHITextureDesc& Desc, const FRHITextureViewDesc& ViewDesc)
+{
+    if (Desc.Depth > 1)
+    {
+        return VK_IMAGE_VIEW_TYPE_3D;
+    }
+    if (ViewDesc.ArrayLayers > 1)
+    {
+        return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    }
+    return VK_IMAGE_VIEW_TYPE_2D;
+}
+}
+
+FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextureDesc& InDesc) : FVulkanRHITexture(InDevice, InDesc, VK_NULL_HANDLE, true) {}
+
+FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextureDesc& InDesc, VkImage InImage, bool bInOwnsImage) : TVulkanResourceBase<FRHITextureDesc>(InDevice, InDesc), Image(InImage), bOwnsImage(bInOwnsImage)
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE || this->Device->VkContext.PhysicalDevice == VK_NULL_HANDLE)
     {
@@ -122,7 +152,7 @@ FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextu
             LE_LOG(LogRHI, Error, "Texture creation failed: unsupported format={}.", static_cast<uint32>(InDesc.Format));
             return;
         }
-        Info.extent = { Desc.Width, Desc.Height, Desc.Depth};
+        Info.extent = {Desc.Width, Desc.Height, Desc.Depth};
         Info.mipLevels = Desc.MipLevels;
         Info.arrayLayers = Desc.ArrayLayers;
         Info.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -131,8 +161,7 @@ FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextu
         Info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         Info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     }
-    if (Info.usage == 0 || Desc.Width == 0 || Desc.Height == 0 || Desc.Depth == 0 ||
-        Desc.MipLevels == 0 || Desc.ArrayLayers == 0)
+    if (Info.usage == 0 || Desc.Width == 0 || Desc.Height == 0 || Desc.Depth == 0 || Desc.MipLevels == 0 || Desc.ArrayLayers == 0)
     {
         LE_LOG(LogRHI, Error, "Texture creation rejected an empty extent, mip/layer count or usage.");
         return;
@@ -147,12 +176,7 @@ FVulkanRHITexture::FVulkanRHITexture(FVulkanRHIDevice* InDevice, const FRHITextu
             Required |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
         }
         VkImageFormatProperties ImageProperties{};
-        if ((FormatProperties.optimalTilingFeatures & Required) != Required ||
-            vkGetPhysicalDeviceImageFormatProperties(Device->VkContext.PhysicalDevice, Info.format,
-                Info.imageType, Info.tiling, Info.usage, Info.flags, &ImageProperties) != VK_SUCCESS ||
-            Desc.Width > ImageProperties.maxExtent.width || Desc.Height > ImageProperties.maxExtent.height ||
-            Desc.Depth > ImageProperties.maxExtent.depth || Desc.MipLevels > ImageProperties.maxMipLevels ||
-            Desc.ArrayLayers > ImageProperties.maxArrayLayers)
+        if ((FormatProperties.optimalTilingFeatures & Required) != Required || vkGetPhysicalDeviceImageFormatProperties(Device->VkContext.PhysicalDevice, Info.format, Info.imageType, Info.tiling, Info.usage, Info.flags, &ImageProperties) != VK_SUCCESS || Desc.Width > ImageProperties.maxExtent.width || Desc.Height > ImageProperties.maxExtent.height || Desc.Depth > ImageProperties.maxExtent.depth || Desc.MipLevels > ImageProperties.maxMipLevels || Desc.ArrayLayers > ImageProperties.maxArrayLayers)
         {
             LE_LOG(LogRHI, Error, "Texture creation rejected an unsupported transfer destination.");
             return;
@@ -227,14 +251,12 @@ FVulkanRHITexture::~FVulkanRHITexture()
     }
 }
 
-FVulkanRHITextureView::FVulkanRHITextureView(FVulkanRHIDevice* InDevice, const FRHITextureViewDesc& InDesc)
-    : TVulkanResourceBase<FRHITextureViewDesc>(InDevice, InDesc)
+FVulkanRHITextureView::FVulkanRHITextureView(FVulkanRHIDevice* InDevice, const FRHITextureViewDesc& InDesc) : TVulkanResourceBase<FRHITextureViewDesc>(InDevice, InDesc)
 {
     this->InitTextureView(static_cast<FVulkanRHITexture*>(Desc.Texture), VK_NULL_HANDLE);
 }
 
-FVulkanRHITextureView::FVulkanRHITextureView(FVulkanRHIDevice* InDevice, FVulkanRHITexture* InOwner, VkImageView InView, const FRHITextureViewDesc& InDesc)
-    : TVulkanResourceBase<FRHITextureViewDesc>(InDevice, InDesc)
+FVulkanRHITextureView::FVulkanRHITextureView(FVulkanRHIDevice* InDevice, FVulkanRHITexture* InOwner, VkImageView InView, const FRHITextureViewDesc& InDesc) : TVulkanResourceBase<FRHITextureViewDesc>(InDevice, InDesc)
 {
     this->Desc.Texture = InOwner != nullptr ? InOwner : Desc.Texture;
     this->InitTextureView(static_cast<FVulkanRHITexture*>(Desc.Texture), InView);

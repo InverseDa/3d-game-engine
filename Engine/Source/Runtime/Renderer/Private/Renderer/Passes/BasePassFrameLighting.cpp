@@ -73,8 +73,7 @@ void FBasePassFrameLighting::Shutdown() noexcept
     Layout = nullptr;
 }
 
-bool FBasePassFrameLighting::WriteSlot(const uint32 SlotIndex, const Span<const FRenderLightProxy> Lights,
-    FBasePassLightBinding& OutBinding) noexcept
+bool FBasePassFrameLighting::WriteSlot(const uint32 SlotIndex, const Span<const FRenderLightProxy> Lights, FBasePassLightBinding& OutBinding) noexcept
 {
     if (Layout == nullptr || SlotIndex >= FRenderFrameScheduler::FrameSlotCount || Lights.Size() > 1)
     {
@@ -85,8 +84,7 @@ bool FBasePassFrameLighting::WriteSlot(const uint32 SlotIndex, const Span<const 
     {
         const FRenderLightProxy& Light = Lights[0];
         const float LengthSquared = Light.DirectionToLight.LengthSquared();
-        if (!Light.PrimitiveId.IsValid() || !std::isfinite(LengthSquared) ||
-            std::abs(LengthSquared - 1.0f) > 1e-4f)
+        if (!Light.PrimitiveId.IsValid() || !std::isfinite(LengthSquared) || std::abs(LengthSquared - 1.0f) > 1e-4f)
         {
             return false;
         }
@@ -97,8 +95,7 @@ bool FBasePassFrameLighting::WriteSlot(const uint32 SlotIndex, const Span<const 
                 return false;
             }
         }
-        Constants.DirectionAndEnabled = Math::Vector4f(
-            Light.DirectionToLight[0], Light.DirectionToLight[1], Light.DirectionToLight[2], 1.0f);
+        Constants.DirectionAndEnabled = Math::Vector4f(Light.DirectionToLight[0], Light.DirectionToLight[1], Light.DirectionToLight[2], 1.0f);
         Constants.Radiance = Math::Vector4f(Light.Radiance[0], Light.Radiance[1], Light.Radiance[2], 0.0f);
     }
 

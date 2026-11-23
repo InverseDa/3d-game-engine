@@ -4,7 +4,6 @@
 #include "Core/RFGHandles.h"
 #include "Core/RFGTypes.h"
 
-
 namespace LE
 {
 
@@ -19,13 +18,13 @@ struct FRFGBarrierTransition
 {
     FRFGResourceHandle Resource;
     LE::ERHIResourceState BeforeState = LE::ERHIResourceState::Unknown;
-    LE::ERHIResourceState AfterState  = LE::ERHIResourceState::Unknown;
+    LE::ERHIResourceState AfterState = LE::ERHIResourceState::Unknown;
     LE::EShaderStage BeforeShaderStage = LE::EShaderStage::None;
-    LE::EShaderStage AfterShaderStage  = LE::EShaderStage::None;
+    LE::EShaderStage AfterShaderStage = LE::EShaderStage::None;
     ERFGPipelineStage BeforeStage = ERFGPipelineStage::None;
-    ERFGPipelineStage AfterStage  = ERFGPipelineStage::None;
-    ERFGAccessType BeforeAccess   = ERFGAccessType::None;
-    ERFGAccessType AfterAccess    = ERFGAccessType::None;
+    ERFGPipelineStage AfterStage = ERFGPipelineStage::None;
+    ERFGAccessType BeforeAccess = ERFGAccessType::None;
+    ERFGAccessType AfterAccess = ERFGAccessType::None;
     uint32 BaseMipLevel = 0;
     uint32 MipCount = 1;
     uint32 BaseArrayLayer = 0;

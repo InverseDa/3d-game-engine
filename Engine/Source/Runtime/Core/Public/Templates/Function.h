@@ -9,38 +9,20 @@
 namespace LE
 {
 
-template <typename Signature>
-class Function;
+template <typename Signature> class Function;
 
-template <typename Return, typename... Arguments>
-class Function<Return(Arguments...)>
+template <typename Return, typename... Arguments> class Function<Return(Arguments...)>
 {
 public:
     Function() noexcept = default;
     Function(std::nullptr_t) noexcept {}
     explicit Function(IAllocator& Allocator) noexcept : AllocatorValue(Allocator) {}
 
-    template <
-        typename Callable,
-        typename Stored = typename std::decay<Callable>::type,
-        typename std::enable_if<!std::is_same<Stored, Function>::value, int>::type = 0>
-    Function(Callable&& Value)
-    {
-        AssignCallableOrFail(GetDefaultAllocator(), std::forward<Callable>(Value));
-    }
+    template <typename Callable, typename Stored = typename std::decay<Callable>::type, typename std::enable_if<!std::is_same<Stored, Function>::value, int>::type = 0> Function(Callable&& Value) { AssignCallableOrFail(GetDefaultAllocator(), std::forward<Callable>(Value)); }
 
-    template <
-        typename Callable,
-        typename Stored = typename std::decay<Callable>::type,
-        typename std::enable_if<!std::is_same<Stored, Function>::value, int>::type = 0>
-    Function(IAllocator& Allocator, Callable&& Value)
-        : AllocatorValue(Allocator)
-    {
-        AssignCallableOrFail(Allocator, std::forward<Callable>(Value));
-    }
+    template <typename Callable, typename Stored = typename std::decay<Callable>::type, typename std::enable_if<!std::is_same<Stored, Function>::value, int>::type = 0> Function(IAllocator& Allocator, Callable&& Value) : AllocatorValue(Allocator) { AssignCallableOrFail(Allocator, std::forward<Callable>(Value)); }
 
-    Function(const Function& Other)
-        : AllocatorValue(Other.AllocatorValue)
+    Function(const Function& Other) : AllocatorValue(Other.AllocatorValue)
     {
         if (Other.CallableValue != nullptr)
         {
@@ -57,17 +39,7 @@ public:
         }
     }
 
-    Function(Function&& Other) noexcept
-        : CallableValue(Other.CallableValue)
-        , InvokeValue(Other.InvokeValue)
-        , CopyValue(Other.CopyValue)
-        , DestroyValue(Other.DestroyValue)
-        , SizeValue(Other.SizeValue)
-        , AlignmentValue(Other.AlignmentValue)
-        , AllocatorValue(Other.AllocatorValue)
-    {
-        Other.ClearWithoutDestroy();
-    }
+    Function(Function&& Other) noexcept : CallableValue(Other.CallableValue), InvokeValue(Other.InvokeValue), CopyValue(Other.CopyValue), DestroyValue(Other.DestroyValue), SizeValue(Other.SizeValue), AlignmentValue(Other.AlignmentValue), AllocatorValue(Other.AllocatorValue) { Other.ClearWithoutDestroy(); }
 
     ~Function() { Reset(); }
 
@@ -97,22 +69,14 @@ public:
         return *this;
     }
 
-    template <
-        typename Callable,
-        typename Stored = typename std::decay<Callable>::type,
-        typename std::enable_if<!std::is_same<Stored, Function>::value, int>::type = 0>
-    Function& operator=(Callable&& Value)
+    template <typename Callable, typename Stored = typename std::decay<Callable>::type, typename std::enable_if<!std::is_same<Stored, Function>::value, int>::type = 0> Function& operator=(Callable&& Value)
     {
         Function Replacement(AllocatorValue.Get(), std::forward<Callable>(Value));
         Swap(Replacement);
         return *this;
     }
 
-    template <
-        typename Callable,
-        typename Stored = typename std::decay<Callable>::type,
-        typename std::enable_if<!std::is_same<Stored, Function>::value, int>::type = 0>
-    bool TryAssign(Callable&& Value) noexcept
+    template <typename Callable, typename Stored = typename std::decay<Callable>::type, typename std::enable_if<!std::is_same<Stored, Function>::value, int>::type = 0> bool TryAssign(Callable&& Value) noexcept
     {
         Function Replacement(AllocatorValue.Get());
         if (!Replacement.TryAssignCallable(AllocatorValue.Get(), std::forward<Callable>(Value)))
@@ -162,14 +126,9 @@ private:
     using CopyFunction = void* (*)(IAllocator&, const void*) noexcept;
     using DestroyFunction = void (*)(IAllocator&, void*) noexcept;
 
-    template <typename Callable>
-    static Return InvokeCallable(void* const Storage, Arguments&&... Values)
-    {
-        return (*static_cast<Callable*>(Storage))(std::forward<Arguments>(Values)...);
-    }
+    template <typename Callable> static Return InvokeCallable(void* const Storage, Arguments&&... Values) { return (*static_cast<Callable*>(Storage))(std::forward<Arguments>(Values)...); }
 
-    template <typename Callable>
-    static void* CopyCallable(IAllocator& Allocator, const void* const Storage) noexcept
+    template <typename Callable> static void* CopyCallable(IAllocator& Allocator, const void* const Storage) noexcept
     {
         Callable* const Copy = TryAllocateArray<Callable>(Allocator, 1);
         if (Copy == nullptr)
@@ -180,28 +139,21 @@ private:
         return Copy;
     }
 
-    template <typename Callable>
-    static void DestroyCallable(IAllocator& Allocator, void* const Storage) noexcept
+    template <typename Callable> static void DestroyCallable(IAllocator& Allocator, void* const Storage) noexcept
     {
         Callable* const Value = static_cast<Callable*>(Storage);
         Value->~Callable();
         DeallocateArray(Allocator, Value, 1);
     }
 
-    template <typename Callable>
-    bool TryAssignCallable(IAllocator& Allocator, Callable&& Value) noexcept
+    template <typename Callable> bool TryAssignCallable(IAllocator& Allocator, Callable&& Value) noexcept
     {
         using Stored = typename std::decay<Callable>::type;
-        static_assert(std::is_copy_constructible<Stored>::value,
-            "Function requires a copy-constructible callable");
-        static_assert(std::is_nothrow_copy_constructible<Stored>::value,
-            "Function requires non-throwing callable copies");
-        static_assert(std::is_nothrow_constructible<Stored, Callable&&>::value,
-            "Function requires non-throwing callable construction");
-        static_assert(std::is_nothrow_destructible<Stored>::value,
-            "Function requires a non-throwing callable destructor");
-        static_assert(std::is_invocable_r<Return, Stored&, Arguments...>::value,
-            "Function callable does not match its signature");
+        static_assert(std::is_copy_constructible<Stored>::value, "Function requires a copy-constructible callable");
+        static_assert(std::is_nothrow_copy_constructible<Stored>::value, "Function requires non-throwing callable copies");
+        static_assert(std::is_nothrow_constructible<Stored, Callable&&>::value, "Function requires non-throwing callable construction");
+        static_assert(std::is_nothrow_destructible<Stored>::value, "Function requires a non-throwing callable destructor");
+        static_assert(std::is_invocable_r<Return, Stored&, Arguments...>::value, "Function callable does not match its signature");
 
         Stored* const Storage = TryAllocateArray<Stored>(Allocator, 1);
         if (Storage == nullptr)
@@ -218,8 +170,7 @@ private:
         return true;
     }
 
-    template <typename Callable>
-    void AssignCallableOrFail(IAllocator& Allocator, Callable&& Value)
+    template <typename Callable> void AssignCallableOrFail(IAllocator& Allocator, Callable&& Value)
     {
         using Stored = typename std::decay<Callable>::type;
         if (!TryAssignCallable(Allocator, std::forward<Callable>(Value)))

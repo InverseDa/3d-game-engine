@@ -24,7 +24,6 @@ public:
 public:
     virtual FRHITexture* GetTexture() const = 0;
     virtual const FRHITextureViewDesc& GetDesc() const = 0;
-
 };
 
 } // namespace LE

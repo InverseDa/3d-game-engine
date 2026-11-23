@@ -3,10 +3,7 @@
 namespace LE
 {
 
-FRenderGraphBuilderBridge::FRenderGraphBuilderBridge(LE::FRFGBuilder& InBuilder)
-    : Builder(&InBuilder)
-{
-}
+FRenderGraphBuilderBridge::FRenderGraphBuilderBridge(LE::FRFGBuilder& InBuilder) : Builder(&InBuilder) {}
 
 FRenderGraphBuilderBridge::~FRenderGraphBuilderBridge() = default;
 

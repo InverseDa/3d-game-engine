@@ -7,7 +7,6 @@
 #include "Compile/RFGDependencyAnalyzer.h"
 #include "Core/RFGTypes.h"
 
-
 namespace LE
 {
 
@@ -30,9 +29,7 @@ public:
     const FRFGCompileOptions& GetCompileOptions() const;
 
 public:
-    FRFGCompileResult Compile(
-        const FRFGRecordedGraph& RecordedGraph,
-        const FRFGGraphSignature& Signature) const;
+    FRFGCompileResult Compile(const FRFGRecordedGraph& RecordedGraph, const FRFGGraphSignature& Signature) const;
 
 private:
     FRFGCompileOptions CompileOptions;

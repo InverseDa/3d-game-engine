@@ -8,8 +8,7 @@
 namespace LE
 {
 
-template <typename T, std::size_t N>
-class StaticArray
+template <typename T, std::size_t N> class StaticArray
 {
 public:
     using ValueType = T;
@@ -48,9 +47,9 @@ public:
     const T* TryGet(const SizeType Index) const noexcept { return Index < N ? Elements + Index : nullptr; }
 
     Span<T> AsSpan() & noexcept { return Span<T>(Elements, N); }
-    Span<const T> AsSpan() const & noexcept { return Span<const T>(Elements, N); }
+    Span<const T> AsSpan() const& noexcept { return Span<const T>(Elements, N); }
     Span<T> AsSpan() && = delete;
-    Span<const T> AsSpan() const && = delete;
+    Span<const T> AsSpan() const&& = delete;
 
     Iterator begin() noexcept { return Elements; }
     Iterator end() noexcept { return Elements + N; }
@@ -61,8 +60,7 @@ private:
     T Elements[N]{};
 };
 
-template <typename T>
-class StaticArray<T, 0>
+template <typename T> class StaticArray<T, 0>
 {
 public:
     using ValueType = T;
@@ -75,22 +73,16 @@ public:
     constexpr T* Data() noexcept { return nullptr; }
     constexpr const T* Data() const noexcept { return nullptr; }
 
-    T& operator[](const SizeType)
-    {
-        HandleContractViolation("empty StaticArray cannot be indexed", __FILE__, __LINE__);
-    }
-    const T& operator[](const SizeType) const
-    {
-        HandleContractViolation("empty StaticArray cannot be indexed", __FILE__, __LINE__);
-    }
+    T& operator[](const SizeType) { HandleContractViolation("empty StaticArray cannot be indexed", __FILE__, __LINE__); }
+    const T& operator[](const SizeType) const { HandleContractViolation("empty StaticArray cannot be indexed", __FILE__, __LINE__); }
 
     T* TryGet(const SizeType) noexcept { return nullptr; }
     const T* TryGet(const SizeType) const noexcept { return nullptr; }
 
     Span<T> AsSpan() & noexcept { return {}; }
-    Span<const T> AsSpan() const & noexcept { return {}; }
+    Span<const T> AsSpan() const& noexcept { return {}; }
     Span<T> AsSpan() && = delete;
-    Span<const T> AsSpan() const && = delete;
+    Span<const T> AsSpan() const&& = delete;
 
     Iterator begin() noexcept { return nullptr; }
     Iterator end() noexcept { return nullptr; }

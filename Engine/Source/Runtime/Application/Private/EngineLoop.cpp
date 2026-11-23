@@ -17,9 +17,7 @@ FEngineLoop::~FEngineLoop() noexcept
     Shutdown();
 }
 
-EEngineLoopInitializeResult FEngineLoop::Initialize(
-    IApplication& InApplication,
-    const FEngineLoopConfig& Config)
+EEngineLoopInitializeResult FEngineLoop::Initialize(IApplication& InApplication, const FEngineLoopConfig& Config)
 {
     if (State != EEngineLoopState::Uninitialized)
     {

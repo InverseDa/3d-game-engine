@@ -19,8 +19,7 @@ struct FBasePassVertex
     Math::Vector3f Normal;
 };
 
-static_assert(std::is_standard_layout<FBasePassVertex>::value
-    && std::is_trivially_copyable<FBasePassVertex>::value);
+static_assert(std::is_standard_layout<FBasePassVertex>::value && std::is_trivially_copyable<FBasePassVertex>::value);
 
 enum class ETextureUploadResult : uint8
 {
@@ -59,8 +58,7 @@ public:
 
     static FMeshAsset* CreateMesh(void* Context, const FMeshAssetData& Data) noexcept;
     static void DestroyMesh(void* Context, void* Object) noexcept;
-    static FMaterialAsset* CreateMaterial(void* Context, const FMaterialAssetData& Data,
-        const FCpuTextureAsset* Texture) noexcept;
+    static FMaterialAsset* CreateMaterial(void* Context, const FMaterialAssetData& Data, const FCpuTextureAsset* Texture) noexcept;
     static void DestroyMaterial(void* Context, void* Object) noexcept;
 
 private:

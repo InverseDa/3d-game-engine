@@ -22,8 +22,7 @@ struct FRegisteredRuntimeModule
 
 bool IsAsciiLetter(const char Character) noexcept
 {
-    return (Character >= 'A' && Character <= 'Z') ||
-        (Character >= 'a' && Character <= 'z');
+    return (Character >= 'A' && Character <= 'Z') || (Character >= 'a' && Character <= 'z');
 }
 
 bool IsAsciiDigit(const char Character) noexcept
@@ -41,8 +40,7 @@ bool IsValidModuleIdentifier(const StringView Name) noexcept
     for (std::size_t Index = 0; Index < Name.Size(); ++Index)
     {
         const char Character = Name[Index];
-        if (!IsAsciiLetter(Character) && !IsAsciiDigit(Character) &&
-            Character != '.' && Character != '_' && Character != '-')
+        if (!IsAsciiLetter(Character) && !IsAsciiDigit(Character) && Character != '.' && Character != '_' && Character != '-')
         {
             return false;
         }
@@ -50,9 +48,7 @@ bool IsValidModuleIdentifier(const StringView Name) noexcept
     return true;
 }
 
-std::size_t FindModuleIndex(
-    const Array<FRegisteredRuntimeModule>& Modules,
-    const StringView Name) noexcept
+std::size_t FindModuleIndex(const Array<FRegisteredRuntimeModule>& Modules, const StringView Name) noexcept
 {
     for (std::size_t Index = 0; Index < Modules.Size(); ++Index)
     {
@@ -76,10 +72,7 @@ struct FRuntimeModuleRegistry::FImpl
     String DiagnosticModuleName;
     String DiagnosticDependencyName;
 
-    void RecordRegistrationFailure(
-        const ERuntimeModuleRegisterResult Result,
-        const StringView ModuleName,
-        const StringView DependencyName = {})
+    void RecordRegistrationFailure(const ERuntimeModuleRegisterResult Result, const StringView ModuleName, const StringView DependencyName = {})
     {
         LastRegisterResult = Result;
         if (RegistrationFailure == ERuntimeModuleRegisterResult::Success)
@@ -90,9 +83,7 @@ struct FRuntimeModuleRegistry::FImpl
         }
     }
 
-    void SetStartupDiagnostic(
-        const StringView ModuleName,
-        const StringView DependencyName = {})
+    void SetStartupDiagnostic(const StringView ModuleName, const StringView DependencyName = {})
     {
         DiagnosticModuleName = ModuleName;
         DiagnosticDependencyName = DependencyName;
@@ -128,8 +119,7 @@ FRuntimeModuleRegistry::~FRuntimeModuleRegistry() noexcept
     }
 }
 
-ERuntimeModuleRegisterResult FRuntimeModuleRegistry::RegisterModule(
-    const FRuntimeModuleDescriptor& Descriptor)
+ERuntimeModuleRegisterResult FRuntimeModuleRegistry::RegisterModule(const FRuntimeModuleDescriptor& Descriptor)
 {
     if (Impl->State != ERuntimeModuleRegistryState::Registering)
     {
@@ -137,36 +127,25 @@ ERuntimeModuleRegisterResult FRuntimeModuleRegistry::RegisterModule(
         return Impl->LastRegisterResult;
     }
 
-    if (!IsValidModuleIdentifier(Descriptor.Name) ||
-        Descriptor.Startup == nullptr || Descriptor.Shutdown == nullptr)
+    if (!IsValidModuleIdentifier(Descriptor.Name) || Descriptor.Startup == nullptr || Descriptor.Shutdown == nullptr)
     {
-        Impl->RecordRegistrationFailure(
-            ERuntimeModuleRegisterResult::InvalidDescriptor,
-            Descriptor.Name);
+        Impl->RecordRegistrationFailure(ERuntimeModuleRegisterResult::InvalidDescriptor, Descriptor.Name);
         return ERuntimeModuleRegisterResult::InvalidDescriptor;
     }
 
-    for (std::size_t DependencyIndex = 0;
-         DependencyIndex < Descriptor.Dependencies.Size();
-         ++DependencyIndex)
+    for (std::size_t DependencyIndex = 0; DependencyIndex < Descriptor.Dependencies.Size(); ++DependencyIndex)
     {
         const StringView DependencyName = Descriptor.Dependencies[DependencyIndex];
         if (!IsValidModuleIdentifier(DependencyName))
         {
-            Impl->RecordRegistrationFailure(
-                ERuntimeModuleRegisterResult::InvalidDescriptor,
-                Descriptor.Name,
-                DependencyName);
+            Impl->RecordRegistrationFailure(ERuntimeModuleRegisterResult::InvalidDescriptor, Descriptor.Name, DependencyName);
             return ERuntimeModuleRegisterResult::InvalidDescriptor;
         }
         for (std::size_t PreviousIndex = 0; PreviousIndex < DependencyIndex; ++PreviousIndex)
         {
             if (Descriptor.Dependencies[PreviousIndex] == DependencyName)
             {
-                Impl->RecordRegistrationFailure(
-                    ERuntimeModuleRegisterResult::InvalidDescriptor,
-                    Descriptor.Name,
-                    DependencyName);
+                Impl->RecordRegistrationFailure(ERuntimeModuleRegisterResult::InvalidDescriptor, Descriptor.Name, DependencyName);
                 return ERuntimeModuleRegisterResult::InvalidDescriptor;
             }
         }
@@ -174,9 +153,7 @@ ERuntimeModuleRegisterResult FRuntimeModuleRegistry::RegisterModule(
 
     if (FindModuleIndex(Impl->Modules, Descriptor.Name) != Impl->Modules.Size())
     {
-        Impl->RecordRegistrationFailure(
-            ERuntimeModuleRegisterResult::DuplicateName,
-            Descriptor.Name);
+        Impl->RecordRegistrationFailure(ERuntimeModuleRegisterResult::DuplicateName, Descriptor.Name);
         return ERuntimeModuleRegisterResult::DuplicateName;
     }
 
@@ -253,8 +230,7 @@ ERuntimeModuleStartupResult FRuntimeModuleRegistry::StartupAll()
                     break;
                 }
             }
-            if (bReady && (SelectedIndex == Impl->Modules.Size() ||
-                Candidate.Name < Impl->Modules[SelectedIndex].Name))
+            if (bReady && (SelectedIndex == Impl->Modules.Size() || Candidate.Name < Impl->Modules[SelectedIndex].Name))
             {
                 SelectedIndex = ModuleIndex;
             }
@@ -265,9 +241,7 @@ ERuntimeModuleStartupResult FRuntimeModuleRegistry::StartupAll()
             // Pick a stable diagnostic name from the remaining cycle.
             for (std::size_t ModuleIndex = 0; ModuleIndex < Impl->Modules.Size(); ++ModuleIndex)
             {
-                if (Planned[ModuleIndex] == 0 &&
-                    (Impl->DiagnosticModuleName.IsEmpty() ||
-                     Impl->Modules[ModuleIndex].Name < Impl->DiagnosticModuleName))
+                if (Planned[ModuleIndex] == 0 && (Impl->DiagnosticModuleName.IsEmpty() || Impl->Modules[ModuleIndex].Name < Impl->DiagnosticModuleName))
                 {
                     Impl->SetStartupDiagnostic(Impl->Modules[ModuleIndex].Name);
                 }

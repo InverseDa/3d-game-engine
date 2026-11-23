@@ -4,16 +4,35 @@
 namespace LE
 {
 
-namespace {
+namespace
+{
 VkShaderStageFlags ToVkStageFlags(EShaderStage StageFlags)
 {
     VkShaderStageFlags Flags = 0;
-    if (EnumHasAnyFlags(StageFlags, EShaderStage::Vertex))   Flags |= VK_SHADER_STAGE_VERTEX_BIT;
-    if (EnumHasAnyFlags(StageFlags, EShaderStage::Pixel))    Flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
-    if (EnumHasAnyFlags(StageFlags, EShaderStage::Compute))  Flags |= VK_SHADER_STAGE_COMPUTE_BIT;
-    if (EnumHasAnyFlags(StageFlags, EShaderStage::Geometry)) Flags |= VK_SHADER_STAGE_GEOMETRY_BIT;
-    if (EnumHasAnyFlags(StageFlags, EShaderStage::Hull))     Flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
-    if (EnumHasAnyFlags(StageFlags, EShaderStage::Domain))   Flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    if (EnumHasAnyFlags(StageFlags, EShaderStage::Vertex))
+    {
+        Flags |= VK_SHADER_STAGE_VERTEX_BIT;
+    }
+    if (EnumHasAnyFlags(StageFlags, EShaderStage::Pixel))
+    {
+        Flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+    if (EnumHasAnyFlags(StageFlags, EShaderStage::Compute))
+    {
+        Flags |= VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+    if (EnumHasAnyFlags(StageFlags, EShaderStage::Geometry))
+    {
+        Flags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+    }
+    if (EnumHasAnyFlags(StageFlags, EShaderStage::Hull))
+    {
+        Flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    }
+    if (EnumHasAnyFlags(StageFlags, EShaderStage::Domain))
+    {
+        Flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    }
 
     if (Flags == 0)
     {
@@ -27,13 +46,20 @@ VkDescriptorType ToVkDescriptorType(ERHIBindGroupItemType Type)
 {
     switch (Type)
     {
-        case ERHIBindGroupItemType::UniformBuffer:        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        case ERHIBindGroupItemType::StorageBuffer:        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        case ERHIBindGroupItemType::SampledImage:         return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        case ERHIBindGroupItemType::StorageImage:         return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        case ERHIBindGroupItemType::Sampler:              return VK_DESCRIPTOR_TYPE_SAMPLER;
-        case ERHIBindGroupItemType::CombinedImageSampler: return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        default:                                          return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case ERHIBindGroupItemType::UniformBuffer:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case ERHIBindGroupItemType::StorageBuffer:
+        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case ERHIBindGroupItemType::SampledImage:
+        return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    case ERHIBindGroupItemType::StorageImage:
+        return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    case ERHIBindGroupItemType::Sampler:
+        return VK_DESCRIPTOR_TYPE_SAMPLER;
+    case ERHIBindGroupItemType::CombinedImageSampler:
+        return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    default:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     }
 }
 
@@ -69,7 +95,10 @@ const FRHIBindGroupLayoutItem* FindLayoutItem(const FRHIBindGroupLayoutDesc& Lay
 {
     for (const auto& Item : LayoutDesc.Bindings)
     {
-        if (Item.Binding == Binding) return &Item;
+        if (Item.Binding == Binding)
+        {
+            return &Item;
+        }
     }
     return nullptr;
 }
@@ -114,78 +143,74 @@ static void UpdateDescriptorSets(FVulkanRHIDevice* Device, VkDescriptorSet Set, 
 
         switch (LayoutItem->Type)
         {
-            case ERHIBindGroupItemType::UniformBuffer:
-            case ERHIBindGroupItemType::StorageBuffer:
+        case ERHIBindGroupItemType::UniformBuffer:
+        case ERHIBindGroupItemType::StorageBuffer: {
+            if (Item.Buffer == nullptr)
             {
-                if (Item.Buffer == nullptr)
-                {
-                    LE_LOG(LogRHI, Error, "UpdateDescriptorSets failed: buffer item at binding {} is null.", Item.Binding);
-                    continue;
-                }
-                FVulkanRHIBuffer* VkBuffer = static_cast<FVulkanRHIBuffer*>(Item.Buffer);
-                VkDescriptorBufferInfo Info{};
-                {
-                    Info.buffer = VkBuffer->Buffer;
-                    Info.offset = Item.Offset;
-                    Info.range = Item.Range == 0 ? VK_WHOLE_SIZE : Item.Range;
-                }
-                BufferInfos.EmplaceBack(Info);
-                Write.pBufferInfo = &BufferInfos.Back();
-                break;
+                LE_LOG(LogRHI, Error, "UpdateDescriptorSets failed: buffer item at binding {} is null.", Item.Binding);
+                continue;
             }
-            case ERHIBindGroupItemType::SampledImage:
-            case ERHIBindGroupItemType::StorageImage:
+            FVulkanRHIBuffer* VkBuffer = static_cast<FVulkanRHIBuffer*>(Item.Buffer);
+            VkDescriptorBufferInfo Info{};
             {
-                if (Item.TextureView == nullptr)
-                {
-                    LE_LOG(LogRHI, Error, "UpdateDescriptorSets failed: texture view item at binding {} is null.", Item.Binding);
-                    continue;
-                }
-                FVulkanRHITextureView* VkView = static_cast<FVulkanRHITextureView*>(Item.TextureView);
-                VkDescriptorImageInfo Info{};
-                {
-                    Info.imageView = VkView->View;
-                    Info.imageLayout = (LayoutItem->Type == ERHIBindGroupItemType::StorageImage) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                }
-                ImageInfos.EmplaceBack(Info);
-                Write.pImageInfo = &ImageInfos.Back();
-                break;
+                Info.buffer = VkBuffer->Buffer;
+                Info.offset = Item.Offset;
+                Info.range = Item.Range == 0 ? VK_WHOLE_SIZE : Item.Range;
             }
-            case ERHIBindGroupItemType::Sampler:
+            BufferInfos.EmplaceBack(Info);
+            Write.pBufferInfo = &BufferInfos.Back();
+            break;
+        }
+        case ERHIBindGroupItemType::SampledImage:
+        case ERHIBindGroupItemType::StorageImage: {
+            if (Item.TextureView == nullptr)
             {
-                if (Item.Sampler == nullptr)
-                {
-                    LE_LOG(LogRHI, Error, "UpdateDescriptorSets failed: sampler item at binding {} is null.", Item.Binding);
-                    continue;
-                }
-                FVulkanRHISampler* VkSampler = static_cast<FVulkanRHISampler*>(Item.Sampler);
-                VkDescriptorImageInfo Info{};
-                {
-                    Info.sampler = VkSampler->Handle;
-                }
-                ImageInfos.EmplaceBack(Info);
-                Write.pImageInfo = &ImageInfos.Back();
-                break;
+                LE_LOG(LogRHI, Error, "UpdateDescriptorSets failed: texture view item at binding {} is null.", Item.Binding);
+                continue;
             }
-            case ERHIBindGroupItemType::CombinedImageSampler:
+            FVulkanRHITextureView* VkView = static_cast<FVulkanRHITextureView*>(Item.TextureView);
+            VkDescriptorImageInfo Info{};
             {
-                if (Item.TextureView == nullptr || Item.Sampler == nullptr)
-                {
-                    LE_LOG(LogRHI, Error, "UpdateDescriptorSets failed: combined image sampler item at binding {} is invalid.", Item.Binding);
-                    continue;
-                }
-                FVulkanRHITextureView* VkView = static_cast<FVulkanRHITextureView*>(Item.TextureView);
-                FVulkanRHISampler* VkSampler = static_cast<FVulkanRHISampler*>(Item.Sampler);
-                VkDescriptorImageInfo Info{};
-                {
-                    Info.sampler = VkSampler->Handle;
-                    Info.imageView = VkView->View;
-                    Info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                }
-                ImageInfos.EmplaceBack(Info);
-                Write.pImageInfo = &ImageInfos.Back();
-                break;
+                Info.imageView = VkView->View;
+                Info.imageLayout = (LayoutItem->Type == ERHIBindGroupItemType::StorageImage) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             }
+            ImageInfos.EmplaceBack(Info);
+            Write.pImageInfo = &ImageInfos.Back();
+            break;
+        }
+        case ERHIBindGroupItemType::Sampler: {
+            if (Item.Sampler == nullptr)
+            {
+                LE_LOG(LogRHI, Error, "UpdateDescriptorSets failed: sampler item at binding {} is null.", Item.Binding);
+                continue;
+            }
+            FVulkanRHISampler* VkSampler = static_cast<FVulkanRHISampler*>(Item.Sampler);
+            VkDescriptorImageInfo Info{};
+            {
+                Info.sampler = VkSampler->Handle;
+            }
+            ImageInfos.EmplaceBack(Info);
+            Write.pImageInfo = &ImageInfos.Back();
+            break;
+        }
+        case ERHIBindGroupItemType::CombinedImageSampler: {
+            if (Item.TextureView == nullptr || Item.Sampler == nullptr)
+            {
+                LE_LOG(LogRHI, Error, "UpdateDescriptorSets failed: combined image sampler item at binding {} is invalid.", Item.Binding);
+                continue;
+            }
+            FVulkanRHITextureView* VkView = static_cast<FVulkanRHITextureView*>(Item.TextureView);
+            FVulkanRHISampler* VkSampler = static_cast<FVulkanRHISampler*>(Item.Sampler);
+            VkDescriptorImageInfo Info{};
+            {
+                Info.sampler = VkSampler->Handle;
+                Info.imageView = VkView->View;
+                Info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            }
+            ImageInfos.EmplaceBack(Info);
+            Write.pImageInfo = &ImageInfos.Back();
+            break;
+        }
         }
         Writes.EmplaceBack(Write);
     }
@@ -196,8 +221,7 @@ static void UpdateDescriptorSets(FVulkanRHIDevice* Device, VkDescriptorSet Set, 
     }
 }
 
-FVulkanRHIBindGroupLayout::FVulkanRHIBindGroupLayout(FVulkanRHIDevice* InDevice, const FRHIBindGroupLayoutDesc& InDesc)
-    : TVulkanResourceBase<FRHIBindGroupLayoutDesc>(InDevice, InDesc)
+FVulkanRHIBindGroupLayout::FVulkanRHIBindGroupLayout(FVulkanRHIDevice* InDevice, const FRHIBindGroupLayoutDesc& InDesc) : TVulkanResourceBase<FRHIBindGroupLayoutDesc>(InDevice, InDesc)
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
@@ -250,8 +274,7 @@ FVulkanRHIBindGroupLayout::~FVulkanRHIBindGroupLayout()
     }
 }
 
-FVulkanRHIBindGroup::FVulkanRHIBindGroup(FVulkanRHIDevice* InDevice, const FRHIBindGroupDesc& InDesc)
-    : TVulkanResourceBase<FRHIBindGroupDesc>(InDevice, InDesc)
+FVulkanRHIBindGroup::FVulkanRHIBindGroup(FVulkanRHIDevice* InDevice, const FRHIBindGroupDesc& InDesc) : TVulkanResourceBase<FRHIBindGroupDesc>(InDevice, InDesc)
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE || this->Desc.Layout == nullptr)
     {

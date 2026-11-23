@@ -10,17 +10,13 @@ namespace LE
 namespace
 {
 
-template <typename T, typename... Args>
-T* TryNew(IAllocator& Allocator, Args&&... Arguments) noexcept
+template <typename T, typename... Args> T* TryNew(IAllocator& Allocator, Args&&... Arguments) noexcept
 {
     void* const Storage = TryAllocateBytes(Allocator, sizeof(T), alignof(T));
-    return Storage == nullptr
-        ? nullptr
-        : new (Storage) T(std::forward<Args>(Arguments)...);
+    return Storage == nullptr ? nullptr : new (Storage) T(std::forward<Args>(Arguments)...);
 }
 
-template <typename T>
-void Delete(IAllocator& Allocator, T*& Value) noexcept
+template <typename T> void Delete(IAllocator& Allocator, T*& Value) noexcept
 {
     if (Value == nullptr)
     {
@@ -33,11 +29,7 @@ void Delete(IAllocator& Allocator, T*& Value) noexcept
 
 struct FPropertyEntry
 {
-    FPropertyEntry(FPropertyId InId, FPropertyValue&& InValue) noexcept
-        : Id(InId)
-        , Value(std::move(InValue))
-    {
-    }
+    FPropertyEntry(FPropertyId InId, FPropertyValue&& InValue) noexcept : Id(InId), Value(std::move(InValue)) {}
 
     FPropertyEntry(const FPropertyEntry&) = delete;
     FPropertyEntry& operator=(const FPropertyEntry&) = delete;
@@ -52,34 +44,23 @@ struct FPropertyEntry
 
 struct FPropertyBag::FImpl
 {
-    explicit FImpl(IAllocator& Allocator) noexcept
-        : Fields(Allocator)
-    {
-    }
+    explicit FImpl(IAllocator& Allocator) noexcept : Fields(Allocator) {}
 
     FTypeId SchemaTypeId;
     uint32 SchemaVersion = 0;
     Array<FPropertyEntry> Fields;
 };
 
-FPropertyBag::FPropertyBag() noexcept
-    : Allocator(&GetDefaultAllocator())
-{
-}
+FPropertyBag::FPropertyBag() noexcept : Allocator(&GetDefaultAllocator()) {}
 
-FPropertyBag::FPropertyBag(IAllocator& InAllocator) noexcept
-    : Allocator(&InAllocator)
-{
-}
+FPropertyBag::FPropertyBag(IAllocator& InAllocator) noexcept : Allocator(&InAllocator) {}
 
 FPropertyBag::~FPropertyBag() noexcept
 {
     Delete(*Allocator, Impl);
 }
 
-FPropertyBag::FPropertyBag(FPropertyBag&& Other) noexcept
-    : Impl(Other.Impl)
-    , Allocator(Other.Allocator)
+FPropertyBag::FPropertyBag(FPropertyBag&& Other) noexcept : Impl(Other.Impl), Allocator(Other.Allocator)
 {
     Other.Impl = nullptr;
 }
@@ -121,9 +102,7 @@ IAllocator& FPropertyBag::GetAllocator() const noexcept
     return *Allocator;
 }
 
-bool FPropertyBag::TryInitialize(
-    const FTypeId SchemaTypeId,
-    const uint32 SchemaVersion) noexcept
+bool FPropertyBag::TryInitialize(const FTypeId SchemaTypeId, const uint32 SchemaVersion) noexcept
 {
     if (!SchemaTypeId.IsValid() || SchemaVersion == 0)
     {
@@ -146,13 +125,20 @@ void FPropertyBag::Reset() noexcept
     Delete(*Allocator, Impl);
 }
 
-EPropertyBagMutationResult FPropertyBag::TryInsert(
-    const FPropertyId PropertyId,
-    FPropertyValue&& Value) noexcept
+EPropertyBagMutationResult FPropertyBag::TryInsert(const FPropertyId PropertyId, FPropertyValue&& Value) noexcept
 {
-    if (!IsValid()) return EPropertyBagMutationResult::InvalidBag;
-    if (!PropertyId.IsValid()) return EPropertyBagMutationResult::InvalidPropertyId;
-    if (!Value.IsValid()) return EPropertyBagMutationResult::InvalidValue;
+    if (!IsValid())
+    {
+        return EPropertyBagMutationResult::InvalidBag;
+    }
+    if (!PropertyId.IsValid())
+    {
+        return EPropertyBagMutationResult::InvalidPropertyId;
+    }
+    if (!Value.IsValid())
+    {
+        return EPropertyBagMutationResult::InvalidValue;
+    }
 
     std::size_t Position = 0;
     while (Position < Impl->Fields.Size() && Impl->Fields[Position].Id < PropertyId)
@@ -176,8 +162,7 @@ EPropertyBagMutationResult FPropertyBag::TryInsert(
 
     // Reserve before consuming either rvalue. A failed insertion therefore
     // leaves both the bag and the caller's value logically unchanged.
-    if (Impl->Fields.Size() == Array<FPropertyEntry>::MaxSize() ||
-        !Impl->Fields.TryReserve(Impl->Fields.Size() + 1))
+    if (Impl->Fields.Size() == Array<FPropertyEntry>::MaxSize() || !Impl->Fields.TryReserve(Impl->Fields.Size() + 1))
     {
         return EPropertyBagMutationResult::AllocationFailed;
     }
@@ -191,13 +176,20 @@ EPropertyBagMutationResult FPropertyBag::TryInsert(
     return EPropertyBagMutationResult::Success;
 }
 
-EPropertyBagMutationResult FPropertyBag::TrySet(
-    const FPropertyId PropertyId,
-    FPropertyValue&& Value) noexcept
+EPropertyBagMutationResult FPropertyBag::TrySet(const FPropertyId PropertyId, FPropertyValue&& Value) noexcept
 {
-    if (!IsValid()) return EPropertyBagMutationResult::InvalidBag;
-    if (!PropertyId.IsValid()) return EPropertyBagMutationResult::InvalidPropertyId;
-    if (!Value.IsValid()) return EPropertyBagMutationResult::InvalidValue;
+    if (!IsValid())
+    {
+        return EPropertyBagMutationResult::InvalidBag;
+    }
+    if (!PropertyId.IsValid())
+    {
+        return EPropertyBagMutationResult::InvalidPropertyId;
+    }
+    if (!Value.IsValid())
+    {
+        return EPropertyBagMutationResult::InvalidValue;
+    }
     for (FPropertyEntry& Entry : Impl->Fields)
     {
         if (Entry.Id == PropertyId)
@@ -224,8 +216,14 @@ EPropertyBagMutationResult FPropertyBag::TrySet(
 
 EPropertyBagMutationResult FPropertyBag::Erase(const FPropertyId PropertyId) noexcept
 {
-    if (!IsValid()) return EPropertyBagMutationResult::InvalidBag;
-    if (!PropertyId.IsValid()) return EPropertyBagMutationResult::InvalidPropertyId;
+    if (!IsValid())
+    {
+        return EPropertyBagMutationResult::InvalidBag;
+    }
+    if (!PropertyId.IsValid())
+    {
+        return EPropertyBagMutationResult::InvalidPropertyId;
+    }
     for (std::size_t Index = 0; Index < Impl->Fields.Size(); ++Index)
     {
         if (Impl->Fields[Index].Id == PropertyId)
@@ -239,10 +237,16 @@ EPropertyBagMutationResult FPropertyBag::Erase(const FPropertyId PropertyId) noe
 
 const FPropertyValue* FPropertyBag::Find(const FPropertyId PropertyId) const noexcept
 {
-    if (Impl == nullptr) return nullptr;
+    if (Impl == nullptr)
+    {
+        return nullptr;
+    }
     for (const FPropertyEntry& Entry : Impl->Fields)
     {
-        if (Entry.Id == PropertyId) return &Entry.Value;
+        if (Entry.Id == PropertyId)
+        {
+            return &Entry.Value;
+        }
     }
     return nullptr;
 }
@@ -278,8 +282,7 @@ bool FPropertyBag::TryClone(FPropertyBag& OutBag) const noexcept
     for (const FPropertyEntry& Entry : Impl->Fields)
     {
         FPropertyValue Value(Candidate.GetAllocator());
-        if (!Entry.Value.TryClone(Value) ||
-            Candidate.TryInsert(Entry.Id, std::move(Value)) != EPropertyBagMutationResult::Success)
+        if (!Entry.Value.TryClone(Value) || Candidate.TryInsert(Entry.Id, std::move(Value)) != EPropertyBagMutationResult::Success)
         {
             return false;
         }

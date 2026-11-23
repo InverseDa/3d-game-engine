@@ -31,10 +31,7 @@ public:
     const FRenderScene& GetRenderScene() const noexcept { return RenderScene; }
     // The authored pose is valid only on a published snapshot and remains the
     // authored world transform even when RenderScene uses a session override.
-    const FWorldRenderCameraPose& GetAuthoredPrimaryCameraPose() const noexcept
-    {
-        return AuthoredPrimaryCameraPose;
-    }
+    const FWorldRenderCameraPose& GetAuthoredPrimaryCameraPose() const noexcept { return AuthoredPrimaryCameraPose; }
 
 private:
     friend class FWorldRenderer;

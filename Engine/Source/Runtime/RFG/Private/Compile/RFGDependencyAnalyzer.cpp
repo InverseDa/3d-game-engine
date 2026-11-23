@@ -84,8 +84,7 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
     {
         const FRFGPassNode& PassNode = RecordedGraph.GetPassNode(CompiledPass.Handle);
 
-        auto AddDependency = [&](FRFGPassHandle SourcePass, ERFGHazardType HazardType)
-        {
+        auto AddDependency = [&](FRFGPassHandle SourcePass, ERFGHazardType HazardType) {
             if (!SourcePass.IsValid() || SourcePass == CompiledPass.Handle)
             {
                 return;
@@ -206,26 +205,24 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
         }
     }
 
-    auto StableSortAvailable = [&]()
-    {
-        if (AvailablePassIndices.Size() < 2) { return; }
-        std::sort(
-            AvailablePassIndices.Data(),
-            AvailablePassIndices.Data() + AvailablePassIndices.Size(),
-            [&](uint32 LhsIndex, uint32 RhsIndex)
-            {
-                FCompiledPassOrderKey LhsKey;
-                LhsKey.DependencyLevel = StableDependencyLevels[LhsIndex];
-                LhsKey.InsertionOrder = InsertionOrders[LhsIndex];
-                LhsKey.Name = CompiledPasses[LhsIndex].Name;
+    auto StableSortAvailable = [&]() {
+        if (AvailablePassIndices.Size() < 2)
+        {
+            return;
+        }
+        std::sort(AvailablePassIndices.Data(), AvailablePassIndices.Data() + AvailablePassIndices.Size(), [&](uint32 LhsIndex, uint32 RhsIndex) {
+            FCompiledPassOrderKey LhsKey;
+            LhsKey.DependencyLevel = StableDependencyLevels[LhsIndex];
+            LhsKey.InsertionOrder = InsertionOrders[LhsIndex];
+            LhsKey.Name = CompiledPasses[LhsIndex].Name;
 
-                FCompiledPassOrderKey RhsKey;
-                RhsKey.DependencyLevel = StableDependencyLevels[RhsIndex];
-                RhsKey.InsertionOrder = InsertionOrders[RhsIndex];
-                RhsKey.Name = CompiledPasses[RhsIndex].Name;
+            FCompiledPassOrderKey RhsKey;
+            RhsKey.DependencyLevel = StableDependencyLevels[RhsIndex];
+            RhsKey.InsertionOrder = InsertionOrders[RhsIndex];
+            RhsKey.Name = CompiledPasses[RhsIndex].Name;
 
-                return IsPassOrderLess(LhsKey, RhsKey);
-            });
+            return IsPassOrderLess(LhsKey, RhsKey);
+        });
     };
 
     StableSortAvailable();
@@ -249,9 +246,7 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
 
         for (uint32 TargetIndex : *OutgoingEdges)
         {
-            StableDependencyLevels[TargetIndex] = std::max(
-                StableDependencyLevels[TargetIndex],
-                StableDependencyLevels[CurrentIndex] + 1);
+            StableDependencyLevels[TargetIndex] = std::max(StableDependencyLevels[TargetIndex], StableDependencyLevels[CurrentIndex] + 1);
 
             if (InDegree[TargetIndex] == 0)
             {
@@ -277,7 +272,11 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
             bool bAlreadyOrdered = false;
             for (const FRFGCompiledPass& OrderedPass : OrderedPasses)
             {
-                if (OrderedPass.Handle == PassHandle) { bAlreadyOrdered = true; break; }
+                if (OrderedPass.Handle == PassHandle)
+                {
+                    bAlreadyOrdered = true;
+                    break;
+                }
             }
 
             if (!bAlreadyOrdered)
@@ -286,11 +285,9 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
             }
         }
 
-        if (RemainingPassIndices.Size() > 1) std::sort(
-            RemainingPassIndices.Data(),
-            RemainingPassIndices.Data() + RemainingPassIndices.Size(),
-            [&](uint32 LhsIndex, uint32 RhsIndex)
-            {
+        if (RemainingPassIndices.Size() > 1)
+        {
+            std::sort(RemainingPassIndices.Data(), RemainingPassIndices.Data() + RemainingPassIndices.Size(), [&](uint32 LhsIndex, uint32 RhsIndex) {
                 FCompiledPassOrderKey LhsKey;
                 LhsKey.DependencyLevel = StableDependencyLevels[LhsIndex];
                 LhsKey.InsertionOrder = InsertionOrders[LhsIndex];
@@ -303,6 +300,7 @@ void FRFGDependencyAnalyzer::BuildDependencies(const FRFGRecordedGraph& Recorded
 
                 return IsPassOrderLess(LhsKey, RhsKey);
             });
+        }
 
         for (uint32 RemainingIndex : RemainingPassIndices)
         {

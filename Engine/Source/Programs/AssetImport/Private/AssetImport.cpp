@@ -60,12 +60,18 @@ public:
         {
             if (IsWhitespace(Text[Offset]))
             {
-                if (Text[Offset] == '\n') { ++Line; }
+                if (Text[Offset] == '\n')
+                {
+                    ++Line;
+                }
                 ++Offset;
             }
             else if (Text[Offset] == '#')
             {
-                while (Offset < Text.Size() && Text[Offset] != '\n') { ++Offset; }
+                while (Offset < Text.Size() && Text[Offset] != '\n')
+                {
+                    ++Offset;
+                }
             }
             else
             {
@@ -73,9 +79,15 @@ public:
             }
         }
 
-        if (OutLine != nullptr) { *OutLine = Line; }
+        if (OutLine != nullptr)
+        {
+            *OutLine = Line;
+        }
         const std::size_t Start = Offset;
-        while (Offset < Text.Size() && !IsWhitespace(Text[Offset]) && Text[Offset] != '#') { ++Offset; }
+        while (Offset < Text.Size() && !IsWhitespace(Text[Offset]) && Text[Offset] != '#')
+        {
+            ++Offset;
+        }
         return Text.Substr(Start, Offset - Start);
     }
 
@@ -92,11 +104,7 @@ public:
     }
 
 private:
-    static bool IsWhitespace(const char Value) noexcept
-    {
-        return Value == ' ' || Value == '\t' || Value == '\r' ||
-            Value == '\n' || Value == '\v' || Value == '\f';
-    }
+    static bool IsWhitespace(const char Value) noexcept { return Value == ' ' || Value == '\t' || Value == '\r' || Value == '\n' || Value == '\v' || Value == '\f'; }
 
     StringView Text;
     std::size_t Offset = 0;
@@ -108,10 +116,22 @@ class FDecimalParser
 public:
 #if PLATFORM_WINDOWS
     FDecimalParser() noexcept : Locale(_create_locale(LC_NUMERIC, "C")) {}
-    ~FDecimalParser() { if (Locale != nullptr) { _free_locale(Locale); } }
+    ~FDecimalParser()
+    {
+        if (Locale != nullptr)
+        {
+            _free_locale(Locale);
+        }
+    }
 #else
     FDecimalParser() noexcept : Locale(newlocale(LC_NUMERIC_MASK, "C", nullptr)) {}
-    ~FDecimalParser() { if (Locale != nullptr) { freelocale(Locale); } }
+    ~FDecimalParser()
+    {
+        if (Locale != nullptr)
+        {
+            freelocale(Locale);
+        }
+    }
 #endif
 
     FDecimalParser(const FDecimalParser&) = delete;
@@ -129,8 +149,7 @@ public:
         for (std::size_t Index = 0; Index < Token.Size(); ++Index)
         {
             const char Value = Token[Index];
-            if ((Value < '0' || Value > '9') && Value != '.' && Value != '+' &&
-                Value != '-' && Value != 'e' && Value != 'E')
+            if ((Value < '0' || Value > '9') && Value != '.' && Value != '+' && Value != '-' && Value != 'e' && Value != 'E')
             {
                 return false;
             }
@@ -170,8 +189,7 @@ bool ParseUnsigned(const StringView Token, uint32& OutValue) noexcept
     return Result.ec == std::errc{} && Result.ptr == End;
 }
 
-template <typename Vector>
-bool ParseVector(FTokenCursor& Tokens, const FDecimalParser& Decimal, Vector& Out) noexcept
+template <typename Vector> bool ParseVector(FTokenCursor& Tokens, const FDecimalParser& Decimal, Vector& Out) noexcept
 {
     for (float& Component : Out.Values)
     {
@@ -192,9 +210,15 @@ StringView TextWithoutBom(const StringView Source) noexcept
 StringView TakeLine(const StringView Text, std::size_t& Offset) noexcept
 {
     const std::size_t Start = Offset;
-    while (Offset < Text.Size() && Text[Offset] != '\n') { ++Offset; }
+    while (Offset < Text.Size() && Text[Offset] != '\n')
+    {
+        ++Offset;
+    }
     const StringView Line = Text.Substr(Start, Offset - Start);
-    if (Offset < Text.Size()) { ++Offset; }
+    if (Offset < Text.Size())
+    {
+        ++Offset;
+    }
     return Line;
 }
 
@@ -204,17 +228,13 @@ struct FMeshCorner
     uint32 UV = 0;
     uint32 Normal = 0;
 
-    bool HasSameAttributes(const FMeshCorner& Other) const noexcept
-    {
-        return (UV != 0) == (Other.UV != 0) && (Normal != 0) == (Other.Normal != 0);
-    }
+    bool HasSameAttributes(const FMeshCorner& Other) const noexcept { return (UV != 0) == (Other.UV != 0) && (Normal != 0) == (Other.Normal != 0); }
 
     uint64 VertexKey() const noexcept
     {
         constexpr uint32 IndexBits = 20;
         static_assert(MaxAssetMeshVertices < (1u << IndexBits));
-        return (static_cast<uint64>(Position) << (2u * IndexBits))
-            | (static_cast<uint64>(UV) << IndexBits) | Normal;
+        return (static_cast<uint64>(Position) << (2u * IndexBits)) | (static_cast<uint64>(UV) << IndexBits) | Normal;
     }
 };
 
@@ -231,7 +251,10 @@ bool ParseMeshIndex(const StringView Token, uint32& Index) noexcept
 
 std::size_t MeshIndexSeparator(const StringView Token, std::size_t Offset) noexcept
 {
-    while (Offset < Token.Size() && Token[Offset] != '/') { ++Offset; }
+    while (Offset < Token.Size() && Token[Offset] != '/')
+    {
+        ++Offset;
+    }
     return Offset;
 }
 
@@ -252,8 +275,7 @@ bool ParseCorner(const StringView Token, FMeshCorner& Corner) noexcept
     {
         return ParseMeshIndex(UV, Corner.UV);
     }
-    return (UV.IsEmpty() || ParseMeshIndex(UV, Corner.UV))
-        && ParseMeshIndex(Token.Substr(Second + 1, Token.Size()), Corner.Normal);
+    return (UV.IsEmpty() || ParseMeshIndex(UV, Corner.UV)) && ParseMeshIndex(Token.Substr(Second + 1, Token.Size()), Corner.Normal);
 }
 
 bool NormalizeMeshNormal(Math::Vector3f& Normal) noexcept
@@ -326,8 +348,7 @@ FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
         else if (Kind == StringView("vn"))
         {
             Math::Vector3f Normal;
-            if (!ParseVector(Tokens, Decimal, Normal) || !Tokens.Next().IsEmpty()
-                || !NormalizeMeshNormal(Normal))
+            if (!ParseVector(Tokens, Decimal, Normal) || !Tokens.Next().IsEmpty() || !NormalizeMeshNormal(Normal))
             {
                 return {"expected three finite decimal normal coordinates with nonzero length", Line};
             }
@@ -424,9 +445,7 @@ FSourceError ParseMesh(const StringView Source, FMeshAssetData& Mesh) noexcept
                         return {"expanded vertex limit exceeded", Triangle.Line};
                     }
                     Index = static_cast<uint32>(Mesh.Positions.Size());
-                    if (!Mesh.Positions.TryPushBack(SourcePositions[Corner.Position - 1])
-                        || (bHasUVs && !Mesh.UVs.TryPushBack(SourceUVs[Corner.UV - 1]))
-                        || (bHasNormals && !Mesh.Normals.TryPushBack(SourceNormals[Corner.Normal - 1])))
+                    if (!Mesh.Positions.TryPushBack(SourcePositions[Corner.Position - 1]) || (bHasUVs && !Mesh.UVs.TryPushBack(SourceUVs[Corner.UV - 1])) || (bHasNormals && !Mesh.Normals.TryPushBack(SourceNormals[Corner.Normal - 1])))
                     {
                         return {"could not allocate an expanded mesh vertex", Triangle.Line};
                     }
@@ -459,13 +478,11 @@ FSourceError ParseTexture(const StringView Source, FCpuTextureAsset& Texture) no
         return {"expected PPM P3 or P6"};
     }
     uint32 MaxValue = 0;
-    if (!ParseUnsigned(Tokens.Next(), Texture.Width) || !ParseUnsigned(Tokens.Next(), Texture.Height) ||
-        !ParseUnsigned(Tokens.Next(), MaxValue) || MaxValue != 255)
+    if (!ParseUnsigned(Tokens.Next(), Texture.Width) || !ParseUnsigned(Tokens.Next(), Texture.Height) || !ParseUnsigned(Tokens.Next(), MaxValue) || MaxValue != 255)
     {
         return {"expected width, height and a maximum sample of 255"};
     }
-    if (Texture.Width == 0 || Texture.Height == 0 ||
-        Texture.Width > MaxAssetTextureDimension || Texture.Height > MaxAssetTextureDimension)
+    if (Texture.Width == 0 || Texture.Height == 0 || Texture.Width > MaxAssetTextureDimension || Texture.Height > MaxAssetTextureDimension)
     {
         return {"image dimensions exceed v1 limits"};
     }
@@ -504,8 +521,7 @@ FSourceError ParseTexture(const StringView Source, FCpuTextureAsset& Texture) no
         }
         Texture.Pixels[Index * 4 + 3] = 255;
     }
-    return bTextRaster && !Tokens.Next().IsEmpty()
-        ? FSourceError{"unexpected data after final RGB sample"} : FSourceError{};
+    return bTextRaster && !Tokens.Next().IsEmpty() ? FSourceError{"unexpected data after final RGB sample"} : FSourceError{};
 }
 
 FSourceError ParseMaterial(const StringView Source, FMaterialAssetData& Material) noexcept
@@ -527,8 +543,7 @@ FSourceError ParseMaterial(const StringView Source, FMaterialAssetData& Material
             {
                 return {"duplicate base-color directive", Line};
             }
-            if (!ParseVector(Tokens, Decimal, Material.BaseColor) || Material.BaseColor[0] < 0.0f
-                || Material.BaseColor[1] < 0.0f || Material.BaseColor[2] < 0.0f)
+            if (!ParseVector(Tokens, Decimal, Material.BaseColor) || Material.BaseColor[0] < 0.0f || Material.BaseColor[1] < 0.0f || Material.BaseColor[2] < 0.0f)
             {
                 return {"expected base-color followed by three finite non-negative decimal components", Line};
             }
@@ -555,50 +570,87 @@ FSourceError ParseMaterial(const StringView Source, FMaterialAssetData& Material
 
 bool ParseArguments(const Span<const StringView> Arguments, FImportArguments& Out) noexcept
 {
-    if (Arguments.IsEmpty()) { return false; }
-    if (Arguments[0] == StringView("mesh")) { Out.Kind = EImportKind::Mesh; }
-    else if (Arguments[0] == StringView("texture")) { Out.Kind = EImportKind::Texture; }
-    else if (Arguments[0] == StringView("material")) { Out.Kind = EImportKind::Material; }
-    else { return false; }
+    if (Arguments.IsEmpty())
+    {
+        return false;
+    }
+    if (Arguments[0] == StringView("mesh"))
+    {
+        Out.Kind = EImportKind::Mesh;
+    }
+    else if (Arguments[0] == StringView("texture"))
+    {
+        Out.Kind = EImportKind::Texture;
+    }
+    else if (Arguments[0] == StringView("material"))
+    {
+        Out.Kind = EImportKind::Material;
+    }
+    else
+    {
+        return false;
+    }
 
     for (std::size_t Index = 1; Index < Arguments.Size(); ++Index)
     {
         const StringView Flag = Arguments[Index];
         if (Flag == StringView("--check"))
         {
-            if (Out.bCheckOnly) { return false; }
+            if (Out.bCheckOnly)
+            {
+                return false;
+            }
             Out.bCheckOnly = true;
             continue;
         }
         StringView* Destination = nullptr;
-        if (Flag == StringView("--source")) { Destination = &Out.Source; }
-        else if (Flag == StringView("--id")) { Destination = &Out.Id; }
-        else if (Flag == StringView("--path")) { Destination = &Out.Path; }
-        else if (Flag == StringView("--output")) { Destination = &Out.Output; }
-        if (Destination == nullptr || !Destination->IsEmpty() || ++Index == Arguments.Size() ||
-            Arguments[Index].IsEmpty() || Arguments[Index].Substr(0, 2) == StringView("--"))
+        if (Flag == StringView("--source"))
+        {
+            Destination = &Out.Source;
+        }
+        else if (Flag == StringView("--id"))
+        {
+            Destination = &Out.Id;
+        }
+        else if (Flag == StringView("--path"))
+        {
+            Destination = &Out.Path;
+        }
+        else if (Flag == StringView("--output"))
+        {
+            Destination = &Out.Output;
+        }
+        if (Destination == nullptr || !Destination->IsEmpty() || ++Index == Arguments.Size() || Arguments[Index].IsEmpty() || Arguments[Index].Substr(0, 2) == StringView("--"))
         {
             return false;
         }
         *Destination = Arguments[Index];
     }
-    return !Out.Source.IsEmpty() && !Out.Id.IsEmpty() && !Out.Path.IsEmpty() &&
-        (Out.bCheckOnly == Out.Output.IsEmpty());
+    return !Out.Source.IsEmpty() && !Out.Id.IsEmpty() && !Out.Path.IsEmpty() && (Out.bCheckOnly == Out.Output.IsEmpty());
 }
 
 const char* DescribeFormatError(const EAssetFormatResult Result) noexcept
 {
     switch (Result)
     {
-    case EAssetFormatResult::Success: return "success";
-    case EAssetFormatResult::InvalidHeader: return "invalid resource header";
-    case EAssetFormatResult::UnsupportedVersion: return "unsupported resource version";
-    case EAssetFormatResult::InvalidIdentity: return "invalid resource identity";
-    case EAssetFormatResult::InvalidPath: return "invalid or non-canonical virtual path";
-    case EAssetFormatResult::TypeMismatch: return "resource type mismatch";
-    case EAssetFormatResult::LimitExceeded: return "resource exceeds v1 size limits";
-    case EAssetFormatResult::InvalidPayload: return "invalid resource data";
-    case EAssetFormatResult::AllocationFailed: return "could not allocate resource data";
+    case EAssetFormatResult::Success:
+        return "success";
+    case EAssetFormatResult::InvalidHeader:
+        return "invalid resource header";
+    case EAssetFormatResult::UnsupportedVersion:
+        return "unsupported resource version";
+    case EAssetFormatResult::InvalidIdentity:
+        return "invalid resource identity";
+    case EAssetFormatResult::InvalidPath:
+        return "invalid or non-canonical virtual path";
+    case EAssetFormatResult::TypeMismatch:
+        return "resource type mismatch";
+    case EAssetFormatResult::LimitExceeded:
+        return "resource exceeds v1 size limits";
+    case EAssetFormatResult::InvalidPayload:
+        return "invalid resource data";
+    case EAssetFormatResult::AllocationFailed:
+        return "could not allocate resource data";
     }
     return "unexpected resource format failure";
 }
@@ -607,18 +659,15 @@ int ReportError(const StringView File, const char* Message, const std::size_t Li
 {
     std::fputs("AssetImport: ", stderr);
     std::fwrite(File.Data(), 1, File.Size(), stderr);
-    if (Line != 0) { std::fprintf(stderr, ":%zu", Line); }
+    if (Line != 0)
+    {
+        std::fprintf(stderr, ":%zu", Line);
+    }
     std::fprintf(stderr, ": %s\n", Message);
     return 1;
 }
 
-template <typename T>
-int ConvertSource(
-    const FImportArguments& Args,
-    const FAssetId Id,
-    const StringView Source,
-    FSourceError (*Parse)(StringView, T&) noexcept,
-    Array<uint8>& OutBytes) noexcept
+template <typename T> int ConvertSource(const FImportArguments& Args, const FAssetId Id, const StringView Source, FSourceError (*Parse)(StringView, T&) noexcept, Array<uint8>& OutBytes) noexcept
 {
     T Data;
     const FSourceError Error = Parse(Source, Data);
@@ -634,8 +683,7 @@ int PublishAsset(const FImportArguments& Args, const Array<uint8>& Bytes) noexce
 {
     Array<uint8> Prefix;
     uint64 ExistingSize = 0;
-    const EContentIOResult ReadResult =
-        ReadContentFilePrefix(Args.Output, MaxAssetFileHeaderBytes, Prefix, ExistingSize);
+    const EContentIOResult ReadResult = ReadContentFilePrefix(Args.Output, MaxAssetFileHeaderBytes, Prefix, ExistingSize);
     if (ReadResult == EContentIOResult::Success)
     {
         if (ExistingSize > MaxAssetFileBytes)
@@ -643,8 +691,7 @@ int PublishAsset(const FImportArguments& Args, const Array<uint8>& Bytes) noexce
             return ReportError(Args.Output, "existing resource exceeds v1 size limits");
         }
         FAssetFileHeaderView Existing;
-        const EAssetFormatResult ExistingResult =
-            ReadAssetFileHeader(Prefix.AsSpan(), static_cast<std::size_t>(ExistingSize), Existing);
+        const EAssetFormatResult ExistingResult = ReadAssetFileHeader(Prefix.AsSpan(), static_cast<std::size_t>(ExistingSize), Existing);
         if (ExistingResult != EAssetFormatResult::Success)
         {
             return ReportError(Args.Output, DescribeFormatError(ExistingResult));
@@ -654,8 +701,7 @@ int PublishAsset(const FImportArguments& Args, const Array<uint8>& Bytes) noexce
         {
             return ReportError(Args.Output, "could not validate replacement header");
         }
-        if (Existing.Id != Replacement.Id || Existing.TypeId != Replacement.TypeId ||
-            Existing.Path != Replacement.Path)
+        if (Existing.Id != Replacement.Id || Existing.TypeId != Replacement.TypeId || Existing.Path != Replacement.Path)
         {
             return ReportError(Args.Output, "existing resource has a different ID, type or virtual path");
         }
@@ -671,9 +717,9 @@ int PublishAsset(const FImportArguments& Args, const Array<uint8>& Bytes) noexce
 
 void PrintUsage(FILE* Stream) noexcept
 {
-    std::fputs(
-        "Usage: AssetImport <mesh|texture|material> --source FILE --id UUID --path VIRTUAL "
-        "(--output FILE.leasset | --check)\n", Stream);
+    std::fputs("Usage: AssetImport <mesh|texture|material> --source FILE --id UUID --path VIRTUAL "
+               "(--output FILE.leasset | --check)\n",
+        Stream);
 }
 
 } // namespace
@@ -698,15 +744,11 @@ int RunAssetImport(const Span<const StringView> Arguments) noexcept
         return ReportError(Args.Source, "expected a non-nil lowercase canonical UUID");
     }
     FSoftAssetPath Path;
-    if (Args.Path.Size() > MaxAssetPathBytes ||
-        FSoftAssetPath::TryParse(Args.Path, Path) != ESoftAssetPathResult::Success ||
-        Path.View() != Args.Path)
+    if (Args.Path.Size() > MaxAssetPathBytes || FSoftAssetPath::TryParse(Args.Path, Path) != ESoftAssetPathResult::Success || Path.View() != Args.Path)
     {
         return ReportError(Args.Source, "expected a canonical virtual asset path");
     }
-    if (!Args.bCheckOnly &&
-        (Args.Output.Size() <= OutputExtension.Size() ||
-            Args.Output.Substr(Args.Output.Size() - OutputExtension.Size(), OutputExtension.Size()) != OutputExtension))
+    if (!Args.bCheckOnly && (Args.Output.Size() <= OutputExtension.Size() || Args.Output.Substr(Args.Output.Size() - OutputExtension.Size(), OutputExtension.Size()) != OutputExtension))
     {
         return ReportError(Args.Output, "expected a .leasset output file");
     }
@@ -724,9 +766,15 @@ int RunAssetImport(const Span<const StringView> Arguments) noexcept
     int Result = 0;
     switch (Args.Kind)
     {
-    case EImportKind::Mesh: Result = ConvertSource(Args, Id, Source, &ParseMesh, Bytes); break;
-    case EImportKind::Texture: Result = ConvertSource(Args, Id, Source, &ParseTexture, Bytes); break;
-    case EImportKind::Material: Result = ConvertSource(Args, Id, Source, &ParseMaterial, Bytes); break;
+    case EImportKind::Mesh:
+        Result = ConvertSource(Args, Id, Source, &ParseMesh, Bytes);
+        break;
+    case EImportKind::Texture:
+        Result = ConvertSource(Args, Id, Source, &ParseTexture, Bytes);
+        break;
+    case EImportKind::Material:
+        Result = ConvertSource(Args, Id, Source, &ParseMaterial, Bytes);
+        break;
     }
     if (Result != 0 || Args.bCheckOnly)
     {

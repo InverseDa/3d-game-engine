@@ -1,0 +1,26 @@
+BasedOnStyle: Microsoft
+# A high finite limit makes clang-format rejoin existing splits in ordinary parameter lists.
+ColumnLimit: 1000
+BinPackParameters: true
+BinPackArguments: true
+AlignEscapedNewlines: DontAlign
+ReflowComments: false
+InsertBraces: true
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortBlocksOnASingleLine: Never
+BraceWrapping:
+  AfterControlStatement: Always
+AlignAfterOpenBracket: DontAlign
+AccessModifierOffset: -4
+PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: Inline
+FixNamespaceComments: false
+SortIncludes: Never
+StatementMacros: [LE_CLASS, LE_STRUCT, LE_ENUM, LE_PROPERTY, LE_GENERATED_BODY]
+DisableFormat: true
+---
+Language: Cpp
+DisableFormat: false
+---
+Language: ObjC
+DisableFormat: false

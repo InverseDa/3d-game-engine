@@ -53,10 +53,10 @@ public:
 
 namespace RHI
 {
-    RHI_API FRHIDevice* CreateDevice();
-    // RHI objects are allocated by the backend module. Route destruction back
-    // through RHI so Editor DLL consumers never perform a cross-module delete.
-    RHI_API void DestroyResource(FRHIResource* Resource) noexcept;
+RHI_API FRHIDevice* CreateDevice();
+// RHI objects are allocated by the backend module. Route destruction back
+// through RHI so Editor DLL consumers never perform a cross-module delete.
+RHI_API void DestroyResource(FRHIResource* Resource) noexcept;
 }
 
 } // namespace LE

@@ -4,8 +4,7 @@
 namespace LE
 {
 
-FVulkanRHISemaphore::FVulkanRHISemaphore(FVulkanRHIDevice* InDevice)
-    : Device(InDevice)
+FVulkanRHISemaphore::FVulkanRHISemaphore(FVulkanRHIDevice* InDevice) : Device(InDevice)
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
@@ -44,8 +43,7 @@ FVulkanRHISemaphore::~FVulkanRHISemaphore()
 // ********************************** Regular Math Calc ******************************************
 // ***********************************************************************************************
 
-FVulkanRHIFence::FVulkanRHIFence(FVulkanRHIDevice* InDevice, bool bSignaled)
-    : Device(InDevice)
+FVulkanRHIFence::FVulkanRHIFence(FVulkanRHIDevice* InDevice, bool bSignaled) : Device(InDevice)
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
@@ -113,9 +111,12 @@ ERHIFenceWaitResult FVulkanRHIFence::WaitChecked(uint64 Timeout)
     const VkResult Result = vkWaitForFences(this->Device->VkContext.LogicalDevice, 1, &this->Handle, VK_TRUE, Timeout);
     switch (Result)
     {
-    case VK_SUCCESS: return ERHIFenceWaitResult::Success;
-    case VK_TIMEOUT: return ERHIFenceWaitResult::Timeout;
-    default: break;
+    case VK_SUCCESS:
+        return ERHIFenceWaitResult::Success;
+    case VK_TIMEOUT:
+        return ERHIFenceWaitResult::Timeout;
+    default:
+        break;
     }
     LE_LOG(LogRHI, Error, "vkWaitForFences failed. VkResult={}", static_cast<int32>(Result));
     return Result == VK_ERROR_DEVICE_LOST ? ERHIFenceWaitResult::DeviceLost : ERHIFenceWaitResult::Error;

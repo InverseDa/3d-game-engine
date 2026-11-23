@@ -44,61 +44,36 @@ struct FRenderPrimitiveId
 
     bool IsValid() const noexcept { return Scope != 0 && Value != 0; }
 
-    friend bool operator==(
-        const FRenderPrimitiveId& Left,
-        const FRenderPrimitiveId& Right) noexcept
-    {
-        return Left.Scope == Right.Scope && Left.Value == Right.Value;
-    }
+    friend bool operator==(const FRenderPrimitiveId& Left, const FRenderPrimitiveId& Right) noexcept { return Left.Scope == Right.Scope && Left.Value == Right.Value; }
 
-    friend bool operator!=(
-        const FRenderPrimitiveId& Left,
-        const FRenderPrimitiveId& Right) noexcept
-    {
-        return !(Left == Right);
-    }
+    friend bool operator!=(const FRenderPrimitiveId& Left, const FRenderPrimitiveId& Right) noexcept { return !(Left == Right); }
 };
 
-template <>
-struct DefaultHash<FRenderPrimitiveId>
+template <> struct DefaultHash<FRenderPrimitiveId>
 {
     std::size_t operator()(const FRenderPrimitiveId& Id) const noexcept
     {
         const std::size_t ScopeHash = DefaultHash<uint64>{}(Id.Scope);
         const std::size_t ValueHash = DefaultHash<uint64>{}(Id.Value);
-        return ScopeHash ^ (ValueHash + static_cast<std::size_t>(0x9e3779b9U) +
-            (ScopeHash << 6) + (ScopeHash >> 2));
+        return ScopeHash ^ (ValueHash + static_cast<std::size_t>(0x9e3779b9U) + (ScopeHash << 6) + (ScopeHash >> 2));
     }
 };
 
-static_assert(std::is_trivially_copyable<FRenderPrimitiveId>::value,
-    "render primitive IDs must remain trivially copyable runtime values");
+static_assert(std::is_trivially_copyable<FRenderPrimitiveId>::value, "render primitive IDs must remain trivially copyable runtime values");
 
 // Axis-aligned bounds. The default sentinel is intentionally invalid so an
 // asset provider must publish real local bounds before WorldRenderer accepts it.
 struct FRenderBounds
 {
-    FRenderBounds() noexcept
-        : Min((std::numeric_limits<float>::max)())
-        , Max((std::numeric_limits<float>::lowest)())
-    {
-    }
+    FRenderBounds() noexcept : Min((std::numeric_limits<float>::max)()), Max((std::numeric_limits<float>::lowest)()) {}
 
-    FRenderBounds(
-        const Math::Vector3f& InMin,
-        const Math::Vector3f& InMax) noexcept
-        : Min(InMin)
-        , Max(InMax)
-    {
-    }
+    FRenderBounds(const Math::Vector3f& InMin, const Math::Vector3f& InMax) noexcept : Min(InMin), Max(InMax) {}
 
     bool IsValid() const noexcept
     {
         for (std::size_t Axis = 0; Axis < 3; ++Axis)
         {
-            if (!std::isfinite(Min.Values[Axis]) ||
-                !std::isfinite(Max.Values[Axis]) ||
-                Min.Values[Axis] > Max.Values[Axis])
+            if (!std::isfinite(Min.Values[Axis]) || !std::isfinite(Max.Values[Axis]) || Min.Values[Axis] > Max.Values[Axis])
             {
                 return false;
             }
@@ -113,10 +88,7 @@ struct FRenderBounds
 struct FRenderPrimitive
 {
     FRenderPrimitive() noexcept = default;
-    explicit FRenderPrimitive(IAllocator& Allocator) noexcept
-        : DebugName(Allocator)
-    {
-    }
+    explicit FRenderPrimitive(IAllocator& Allocator) noexcept : DebugName(Allocator) {}
 
     FRenderPrimitiveId PrimitiveId;
     LE::String DebugName;
@@ -126,10 +98,7 @@ struct FRenderPrimitive
 struct FRenderMeshProxy : public FRenderPrimitive
 {
     FRenderMeshProxy() noexcept = default;
-    explicit FRenderMeshProxy(IAllocator& Allocator) noexcept
-        : FRenderPrimitive(Allocator)
-    {
-    }
+    explicit FRenderMeshProxy(IAllocator& Allocator) noexcept : FRenderPrimitive(Allocator) {}
 
     Math::Matrix4f LocalToWorld = Math::Matrix4f::Identity();
     LE::FRHIPipeline_Graphics* GraphicsPipeline = nullptr;
@@ -159,10 +128,7 @@ struct FRenderLightProxy : public FRenderPrimitive
 struct FRenderCameraProxy : public FRenderPrimitive
 {
     FRenderCameraProxy() noexcept = default;
-    explicit FRenderCameraProxy(IAllocator& Allocator) noexcept
-        : FRenderPrimitive(Allocator)
-    {
-    }
+    explicit FRenderCameraProxy(IAllocator& Allocator) noexcept : FRenderPrimitive(Allocator) {}
 
     Math::Matrix4f View = Math::Matrix4f::Identity();
     Math::Matrix4f Projection = Math::Matrix4f::Identity();
@@ -176,12 +142,7 @@ class RENDERER_API FRenderScene
 public:
     FRenderScene() noexcept = default;
 
-    explicit FRenderScene(IAllocator& Allocator) noexcept
-        : Meshes(Allocator)
-        , Lights(Allocator)
-        , Cameras(Allocator)
-    {
-    }
+    explicit FRenderScene(IAllocator& Allocator) noexcept : Meshes(Allocator), Lights(Allocator), Cameras(Allocator) {}
 
     void Reset()
     {

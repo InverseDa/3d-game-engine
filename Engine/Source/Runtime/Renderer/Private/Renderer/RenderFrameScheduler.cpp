@@ -93,9 +93,7 @@ void FRenderFrameScheduler::Shutdown() noexcept
     bInitialized = false;
 }
 
-FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(
-    FRHISwapchain* const Swapchain,
-    const FRenderFrameCallback& Callback)
+FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(FRHISwapchain* const Swapchain, const FRenderFrameCallback& Callback)
 {
     FRenderFrameResult Result;
     Result.FrameIndex = NextFrameIndex;
@@ -131,9 +129,7 @@ FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(
     Result.AcquireStatus = AcquireResult.Status;
     if (!AcquireResult.HasImage())
     {
-        Result.Action = AcquireResult.Status == ERHISwapchainStatus::OutOfDate
-            ? ERenderFrameAction::RecreateSwapchain
-            : ERenderFrameAction::Exit;
+        Result.Action = AcquireResult.Status == ERHISwapchainStatus::OutOfDate ? ERenderFrameAction::RecreateSwapchain : ERenderFrameAction::Exit;
         bTerminal = AcquireResult.Status != ERHISwapchainStatus::OutOfDate;
         return Result;
     }
@@ -183,11 +179,7 @@ FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(
         return Result;
     }
 
-    Result.Action = AcquireResult.Status == ERHISwapchainStatus::Suboptimal ||
-        Result.PresentStatus == ERHISwapchainStatus::Suboptimal ||
-        Result.PresentStatus == ERHISwapchainStatus::OutOfDate
-        ? ERenderFrameAction::RecreateSwapchain
-        : ERenderFrameAction::Continue;
+    Result.Action = AcquireResult.Status == ERHISwapchainStatus::Suboptimal || Result.PresentStatus == ERHISwapchainStatus::Suboptimal || Result.PresentStatus == ERHISwapchainStatus::OutOfDate ? ERenderFrameAction::RecreateSwapchain : ERenderFrameAction::Continue;
     return Result;
 }
 
@@ -253,10 +245,7 @@ void FRenderFrameScheduler::DrainQueueForRetirement()
     }
 }
 
-bool FRenderFrameScheduler::DeferReleaseFromScope(
-    const uint32 SlotIndex,
-    const uint64 Generation,
-    FRHIResource* const Resource)
+bool FRenderFrameScheduler::DeferReleaseFromScope(const uint32 SlotIndex, const uint64 Generation, FRHIResource* const Resource)
 {
     if (!bInitialized || Resource == nullptr || SlotIndex >= FrameSlotCount)
     {

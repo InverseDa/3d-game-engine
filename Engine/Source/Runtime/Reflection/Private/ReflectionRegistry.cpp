@@ -15,16 +15,9 @@ namespace
 
 struct FOwnedType
 {
-    explicit FOwnedType(IAllocator& Allocator) noexcept
-        : Name(Allocator)
-        , PropertyNames(Allocator)
-        , Properties(Allocator)
-    {
-    }
+    explicit FOwnedType(IAllocator& Allocator) noexcept : Name(Allocator), PropertyNames(Allocator), Properties(Allocator) {}
 
-    FTypeInfo& RefreshInfo(
-        const StringView ModuleName,
-        const FReflectionModuleHandle ModuleHandle) noexcept
+    FTypeInfo& RefreshInfo(const StringView ModuleName, const FReflectionModuleHandle ModuleHandle) noexcept
     {
         // Public views are rebuilt from final owned storage on every lookup;
         // no view created while assembling the transaction escapes.
@@ -59,16 +52,9 @@ struct FOwnedType
 
 struct FOwnedEnum
 {
-    explicit FOwnedEnum(IAllocator& Allocator) noexcept
-        : Name(Allocator)
-        , ValueNames(Allocator)
-        , Values(Allocator)
-    {
-    }
+    explicit FOwnedEnum(IAllocator& Allocator) noexcept : Name(Allocator), ValueNames(Allocator), Values(Allocator) {}
 
-    FEnumInfo& RefreshInfo(
-        const StringView ModuleName,
-        const FReflectionModuleHandle ModuleHandle) noexcept
+    FEnumInfo& RefreshInfo(const StringView ModuleName, const FReflectionModuleHandle ModuleHandle) noexcept
     {
         for (std::size_t Index = 0; Index < Values.Size(); ++Index)
         {
@@ -93,12 +79,7 @@ struct FOwnedEnum
 
 struct FOwnedModule
 {
-    explicit FOwnedModule(IAllocator& Allocator) noexcept
-        : Name(Allocator)
-        , Types(Allocator)
-        , Enums(Allocator)
-    {
-    }
+    explicit FOwnedModule(IAllocator& Allocator) noexcept : Name(Allocator), Types(Allocator), Enums(Allocator) {}
 
     String Name;
     FReflectionModuleHandle Handle;
@@ -137,11 +118,7 @@ bool IsValidUnderlyingType(const EEnumUnderlyingType Type) noexcept
     return IsValidEnumUnderlyingType(Type);
 }
 
-bool HasTypeIdentity(
-    const FReflectionModuleDescriptor& Descriptor,
-    const std::size_t BeforeType,
-    const FTypeId Id,
-    const StringView Name) noexcept
+bool HasTypeIdentity(const FReflectionModuleDescriptor& Descriptor, const std::size_t BeforeType, const FTypeId Id, const StringView Name) noexcept
 {
     for (std::size_t Index = 0; Index < BeforeType; ++Index)
     {
@@ -160,11 +137,7 @@ bool HasTypeIdentity(
     return false;
 }
 
-bool HasEnumIdentity(
-    const FReflectionModuleDescriptor& Descriptor,
-    const std::size_t BeforeEnum,
-    const FTypeId Id,
-    const StringView Name) noexcept
+bool HasEnumIdentity(const FReflectionModuleDescriptor& Descriptor, const std::size_t BeforeEnum, const FTypeId Id, const StringView Name) noexcept
 {
     for (const FTypeDescriptor& Type : Descriptor.Types)
     {
@@ -187,12 +160,7 @@ bool HasEnumIdentity(
 
 struct FReflectionRegistry::FImpl
 {
-    explicit FImpl(IAllocator& InAllocator) noexcept
-        : Allocator(InAllocator)
-        , Modules(InAllocator)
-        , Handles(InAllocator)
-    {
-    }
+    explicit FImpl(IAllocator& InAllocator) noexcept : Allocator(InAllocator), Modules(InAllocator), Handles(InAllocator) {}
 
     FOwnedModule* FindModule(const FReflectionModuleHandle Handle) noexcept
     {
@@ -282,22 +250,16 @@ struct FReflectionRegistry::FImpl
         return nullptr;
     }
 
-    bool HasAnyIdentity(const FTypeId Id, const StringView Name) const noexcept
-    {
-        return FindOwnedType(Id) != nullptr || FindOwnedType(Name) != nullptr ||
-            FindOwnedEnum(Id) != nullptr || FindOwnedEnum(Name) != nullptr;
-    }
+    bool HasAnyIdentity(const FTypeId Id, const StringView Name) const noexcept { return FindOwnedType(Id) != nullptr || FindOwnedType(Name) != nullptr || FindOwnedEnum(Id) != nullptr || FindOwnedEnum(Name) != nullptr; }
 
-    EReflectionRegisterResult ValidateDescriptor(
-        const FReflectionModuleDescriptor& Descriptor) const noexcept;
+    EReflectionRegisterResult ValidateDescriptor(const FReflectionModuleDescriptor& Descriptor) const noexcept;
 
     IAllocator& Allocator;
     Array<FOwnedModule> Modules;
     TRuntimeHandlePool<FReflectionModuleHandleTag> Handles;
 };
 
-EReflectionRegisterResult FReflectionRegistry::FImpl::ValidateDescriptor(
-    const FReflectionModuleDescriptor& Descriptor) const noexcept
+EReflectionRegisterResult FReflectionRegistry::FImpl::ValidateDescriptor(const FReflectionModuleDescriptor& Descriptor) const noexcept
 {
     if (!IsValidName(Descriptor.Name))
     {
@@ -311,10 +273,7 @@ EReflectionRegisterResult FReflectionRegistry::FImpl::ValidateDescriptor(
     for (std::size_t TypeIndex = 0; TypeIndex < Descriptor.Types.Size(); ++TypeIndex)
     {
         const FTypeDescriptor& Type = Descriptor.Types[TypeIndex];
-        if (!Type.Id.IsValid() || !IsValidName(Type.Name) || !IsValidTypeKind(Type.Kind) ||
-            Type.Size == 0 || !IsPowerOfTwo(Type.Alignment) ||
-            (Type.Size % Type.Alignment) != 0 || Type.Construct == nullptr ||
-            Type.Destruct == nullptr)
+        if (!Type.Id.IsValid() || !IsValidName(Type.Name) || !IsValidTypeKind(Type.Kind) || Type.Size == 0 || !IsPowerOfTwo(Type.Alignment) || (Type.Size % Type.Alignment) != 0 || Type.Construct == nullptr || Type.Destruct == nullptr)
         {
             return EReflectionRegisterResult::InvalidDescriptor;
         }
@@ -353,8 +312,7 @@ EReflectionRegisterResult FReflectionRegistry::FImpl::ValidateDescriptor(
         for (std::size_t PropertyIndex = 0; PropertyIndex < Type.Properties.Size(); ++PropertyIndex)
         {
             const FPropertyDescriptor& Property = Type.Properties[PropertyIndex];
-            if (!Property.Id.IsValid() || !IsValidName(Property.Name) ||
-                !Property.ValueTypeId.IsValid() || Property.Getter == nullptr)
+            if (!Property.Id.IsValid() || !IsValidName(Property.Name) || !Property.ValueTypeId.IsValid() || Property.Getter == nullptr)
             {
                 return EReflectionRegisterResult::InvalidDescriptor;
             }
@@ -375,8 +333,7 @@ EReflectionRegisterResult FReflectionRegistry::FImpl::ValidateDescriptor(
     for (std::size_t EnumIndex = 0; EnumIndex < Descriptor.Enums.Size(); ++EnumIndex)
     {
         const FEnumDescriptor& Enum = Descriptor.Enums[EnumIndex];
-        if (!Enum.Id.IsValid() || !IsValidName(Enum.Name) ||
-            !IsValidUnderlyingType(Enum.UnderlyingType))
+        if (!Enum.Id.IsValid() || !IsValidName(Enum.Name) || !IsValidUnderlyingType(Enum.UnderlyingType))
         {
             return EReflectionRegisterResult::InvalidDescriptor;
         }
@@ -415,8 +372,7 @@ EReflectionRegisterResult FReflectionRegistry::FImpl::ValidateDescriptor(
         for (std::size_t ValueIndex = 0; ValueIndex < Enum.Values.Size(); ++ValueIndex)
         {
             const FEnumValueDescriptor& Value = Enum.Values[ValueIndex];
-            if (!IsValidName(Value.Name) ||
-                !IsCanonicalEnumValueBits(Enum.UnderlyingType, Value.ValueBits))
+            if (!IsValidName(Value.Name) || !IsCanonicalEnumValueBits(Enum.UnderlyingType, Value.ValueBits))
             {
                 return EReflectionRegisterResult::InvalidDescriptor;
             }
@@ -435,10 +391,7 @@ EReflectionRegisterResult FReflectionRegistry::FImpl::ValidateDescriptor(
 namespace
 {
 
-bool TryCopyType(
-    IAllocator& Allocator,
-    const FTypeDescriptor& Descriptor,
-    FOwnedType& OutType) noexcept
+bool TryCopyType(IAllocator& Allocator, const FTypeDescriptor& Descriptor, FOwnedType& OutType) noexcept
 {
     OutType.Id = Descriptor.Id;
     OutType.Kind = Descriptor.Kind;
@@ -446,9 +399,7 @@ bool TryCopyType(
     OutType.Alignment = Descriptor.Alignment;
     OutType.Construct = Descriptor.Construct;
     OutType.Destruct = Descriptor.Destruct;
-    if (!OutType.Name.TryAssign(Descriptor.Name) ||
-        !OutType.PropertyNames.TryReserve(Descriptor.Properties.Size()) ||
-        !OutType.Properties.TryReserve(Descriptor.Properties.Size()))
+    if (!OutType.Name.TryAssign(Descriptor.Name) || !OutType.PropertyNames.TryReserve(Descriptor.Properties.Size()) || !OutType.Properties.TryReserve(Descriptor.Properties.Size()))
     {
         return false;
     }
@@ -456,8 +407,7 @@ bool TryCopyType(
     for (const FPropertyDescriptor& DescriptorProperty : Descriptor.Properties)
     {
         String PropertyName(Allocator);
-        if (!PropertyName.TryAssign(DescriptorProperty.Name) ||
-            !OutType.PropertyNames.TryPushBack(std::move(PropertyName)))
+        if (!PropertyName.TryAssign(DescriptorProperty.Name) || !OutType.PropertyNames.TryPushBack(std::move(PropertyName)))
         {
             return false;
         }
@@ -476,16 +426,11 @@ bool TryCopyType(
     return true;
 }
 
-bool TryCopyEnum(
-    IAllocator& Allocator,
-    const FEnumDescriptor& Descriptor,
-    FOwnedEnum& OutEnum) noexcept
+bool TryCopyEnum(IAllocator& Allocator, const FEnumDescriptor& Descriptor, FOwnedEnum& OutEnum) noexcept
 {
     OutEnum.Id = Descriptor.Id;
     OutEnum.UnderlyingType = Descriptor.UnderlyingType;
-    if (!OutEnum.Name.TryAssign(Descriptor.Name) ||
-        !OutEnum.ValueNames.TryReserve(Descriptor.Values.Size()) ||
-        !OutEnum.Values.TryReserve(Descriptor.Values.Size()))
+    if (!OutEnum.Name.TryAssign(Descriptor.Name) || !OutEnum.ValueNames.TryReserve(Descriptor.Values.Size()) || !OutEnum.Values.TryReserve(Descriptor.Values.Size()))
     {
         return false;
     }
@@ -493,8 +438,7 @@ bool TryCopyEnum(
     for (const FEnumValueDescriptor& DescriptorValue : Descriptor.Values)
     {
         String ValueName(Allocator);
-        if (!ValueName.TryAssign(DescriptorValue.Name) ||
-            !OutEnum.ValueNames.TryPushBack(std::move(ValueName)))
+        if (!ValueName.TryAssign(DescriptorValue.Name) || !OutEnum.ValueNames.TryPushBack(std::move(ValueName)))
         {
             return false;
         }
@@ -510,14 +454,9 @@ bool TryCopyEnum(
     return true;
 }
 
-bool TryCopyModule(
-    IAllocator& Allocator,
-    const FReflectionModuleDescriptor& Descriptor,
-    FOwnedModule& OutModule) noexcept
+bool TryCopyModule(IAllocator& Allocator, const FReflectionModuleDescriptor& Descriptor, FOwnedModule& OutModule) noexcept
 {
-    if (!OutModule.Name.TryAssign(Descriptor.Name) ||
-        !OutModule.Types.TryReserve(Descriptor.Types.Size()) ||
-        !OutModule.Enums.TryReserve(Descriptor.Enums.Size()))
+    if (!OutModule.Name.TryAssign(Descriptor.Name) || !OutModule.Types.TryReserve(Descriptor.Types.Size()) || !OutModule.Enums.TryReserve(Descriptor.Enums.Size()))
     {
         return false;
     }
@@ -525,8 +464,7 @@ bool TryCopyModule(
     for (const FTypeDescriptor& DescriptorType : Descriptor.Types)
     {
         FOwnedType Type(Allocator);
-        if (!TryCopyType(Allocator, DescriptorType, Type) ||
-            !OutModule.Types.TryPushBack(std::move(Type)))
+        if (!TryCopyType(Allocator, DescriptorType, Type) || !OutModule.Types.TryPushBack(std::move(Type)))
         {
             return false;
         }
@@ -534,8 +472,7 @@ bool TryCopyModule(
     for (const FEnumDescriptor& DescriptorEnum : Descriptor.Enums)
     {
         FOwnedEnum Enum(Allocator);
-        if (!TryCopyEnum(Allocator, DescriptorEnum, Enum) ||
-            !OutModule.Enums.TryPushBack(std::move(Enum)))
+        if (!TryCopyEnum(Allocator, DescriptorEnum, Enum) || !OutModule.Enums.TryPushBack(std::move(Enum)))
         {
             return false;
         }
@@ -545,10 +482,7 @@ bool TryCopyModule(
 
 } // namespace
 
-FReflectionRegistry::FReflectionRegistry() noexcept
-    : FReflectionRegistry(GetDefaultAllocator())
-{
-}
+FReflectionRegistry::FReflectionRegistry() noexcept : FReflectionRegistry(GetDefaultAllocator()) {}
 
 FReflectionRegistry::FReflectionRegistry(IAllocator& Allocator) noexcept
 {
@@ -573,9 +507,7 @@ FReflectionRegistry::~FReflectionRegistry() noexcept
     }
 }
 
-EReflectionRegisterResult FReflectionRegistry::RegisterModule(
-    const FReflectionModuleDescriptor& Descriptor,
-    FReflectionModuleHandle& OutHandle) noexcept
+EReflectionRegisterResult FReflectionRegistry::RegisterModule(const FReflectionModuleDescriptor& Descriptor, FReflectionModuleHandle& OutHandle) noexcept
 {
     const EReflectionRegisterResult Validation = Impl->ValidateDescriptor(Descriptor);
     if (Validation != EReflectionRegisterResult::Success)
@@ -610,8 +542,7 @@ EReflectionRegisterResult FReflectionRegistry::RegisterModule(
     return EReflectionRegisterResult::Success;
 }
 
-EReflectionUnregisterResult FReflectionRegistry::UnregisterModule(
-    const FReflectionModuleHandle Handle) noexcept
+EReflectionUnregisterResult FReflectionRegistry::UnregisterModule(const FReflectionModuleHandle Handle) noexcept
 {
     if (Impl->FindModule(Handle) == nullptr)
     {

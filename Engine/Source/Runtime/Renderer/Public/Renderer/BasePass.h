@@ -44,13 +44,10 @@ struct alignas(16) FBasePassObjectConstants
     Math::Vector4f NormalToWorldRows[3]{};
 };
 
-static_assert(sizeof(FBasePassObjectConstants) == 128,
-    "BasePass push constants must remain exactly 128 bytes");
-static_assert(offsetof(FBasePassObjectConstants, BaseColor) == 64,
-    "BasePass color must follow the 64-byte matrix without padding");
+static_assert(sizeof(FBasePassObjectConstants) == 128, "BasePass push constants must remain exactly 128 bytes");
+static_assert(offsetof(FBasePassObjectConstants, BaseColor) == 64, "BasePass color must follow the 64-byte matrix without padding");
 static_assert(offsetof(FBasePassObjectConstants, NormalToWorldRows) == 80);
-static_assert(std::is_trivially_copyable<FBasePassObjectConstants>::value,
-    "BasePass push constants must be copied directly into command recording");
+static_assert(std::is_trivially_copyable<FBasePassObjectConstants>::value, "BasePass push constants must be copied directly into command recording");
 
 struct alignas(16) FBasePassLightConstants
 {
@@ -75,8 +72,7 @@ public:
     FRHIBindGroupLayout* GetLayout() const noexcept { return Layout; }
 
     // The scheduler must have waited for this slot before it is written.
-    bool WriteSlot(uint32 SlotIndex, Span<const FRenderLightProxy> Lights,
-        FBasePassLightBinding& OutBinding) noexcept;
+    bool WriteSlot(uint32 SlotIndex, Span<const FRenderLightProxy> Lights, FBasePassLightBinding& OutBinding) noexcept;
 
 private:
     FRHIBindGroupLayout* Layout = nullptr;
@@ -88,9 +84,7 @@ class RENDERER_API FBasePass final : public IRenderPass
 public:
     explicit FBasePass(const FBasePassResources& InResources) noexcept;
 
-    static bool IsConfigurationValid(
-        const FBasePassResources& Resources,
-        const FRenderScene& RenderScene) noexcept;
+    static bool IsConfigurationValid(const FBasePassResources& Resources, const FRenderScene& RenderScene) noexcept;
 
     const char* GetPassName() const override;
     ERFGQueueType GetQueueType() const override;
@@ -108,11 +102,7 @@ public:
 
     const char* GetName() const override;
     EShadingPath GetShadingPath() const override;
-    void BuildPasses(
-        const FRendererFrameContext& FrameContext,
-        const FRenderScene& RenderScene,
-        const FRenderView& RenderView,
-        FRenderPipelinePlan& OutPlan) override;
+    void BuildPasses(const FRendererFrameContext& FrameContext, const FRenderScene& RenderScene, const FRenderView& RenderView, FRenderPipelinePlan& OutPlan) override;
 
 private:
     FBasePassResources Resources;

@@ -40,12 +40,8 @@ public:
     bool TryInitialize(FTypeId SchemaTypeId, uint32 SchemaVersion) noexcept;
     void Reset() noexcept;
 
-    EPropertyBagMutationResult TryInsert(
-        FPropertyId PropertyId,
-        FPropertyValue&& Value) noexcept;
-    EPropertyBagMutationResult TrySet(
-        FPropertyId PropertyId,
-        FPropertyValue&& Value) noexcept;
+    EPropertyBagMutationResult TryInsert(FPropertyId PropertyId, FPropertyValue&& Value) noexcept;
+    EPropertyBagMutationResult TrySet(FPropertyId PropertyId, FPropertyValue&& Value) noexcept;
     EPropertyBagMutationResult Erase(FPropertyId PropertyId) noexcept;
 
     const FPropertyValue* Find(FPropertyId PropertyId) const noexcept;

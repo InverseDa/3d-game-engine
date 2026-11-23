@@ -17,18 +17,13 @@ FRenderPrimitiveId MakePrimitiveId(const FEntity Entity) noexcept
 {
     FRenderPrimitiveId Result;
     Result.Scope = Entity.WorldDomain;
-    Result.Value = (static_cast<uint64>(Entity.GetGeneration()) << 32) |
-        static_cast<uint64>(Entity.GetIndex());
+    Result.Value = (static_cast<uint64>(Entity.GetGeneration()) << 32) | static_cast<uint64>(Entity.GetIndex());
     return Result;
 }
 
-bool PrimitiveIdLess(
-    const FRenderPrimitiveId& Left,
-    const FRenderPrimitiveId& Right) noexcept
+bool PrimitiveIdLess(const FRenderPrimitiveId& Left, const FRenderPrimitiveId& Right) noexcept
 {
-    return Left.Scope != Right.Scope
-        ? Left.Scope < Right.Scope
-        : Left.Value < Right.Value;
+    return Left.Scope != Right.Scope ? Left.Scope < Right.Scope : Left.Value < Right.Value;
 }
 
 bool IsFiniteMatrix(const Math::Matrix4f& Matrix) noexcept
@@ -55,14 +50,12 @@ bool IsFiniteNonNegativeRgb(const Math::Vector4f& Color) noexcept
     return true;
 }
 
-bool TryBuildNormalToWorld(
-    const Math::Matrix4f& LocalToWorld, Math::Matrix3f& OutNormalToWorld) noexcept
+bool TryBuildNormalToWorld(const Math::Matrix4f& LocalToWorld, Math::Matrix3f& OutNormalToWorld) noexcept
 {
     Math::Vector3d Columns[3];
     for (std::size_t Column = 0; Column < 3; ++Column)
     {
-        Columns[Column] = Math::Vector3d(
-            LocalToWorld(0, Column), LocalToWorld(1, Column), LocalToWorld(2, Column));
+        Columns[Column] = Math::Vector3d(LocalToWorld(0, Column), LocalToWorld(1, Column), LocalToWorld(2, Column));
     }
     const Math::Vector3d Cofactors[] = {
         Math::Vector3d::Cross(Columns[1], Columns[2]),
@@ -103,10 +96,7 @@ bool TryBuildNormalToWorld(
     return true;
 }
 
-bool TryTransformBounds(
-    const FRenderBounds& LocalBounds,
-    const Math::Matrix4f& LocalToWorld,
-    FRenderBounds& OutWorldBounds) noexcept
+bool TryTransformBounds(const FRenderBounds& LocalBounds, const Math::Matrix4f& LocalToWorld, FRenderBounds& OutWorldBounds) noexcept
 {
     if (!LocalBounds.IsValid() || !IsFiniteMatrix(LocalToWorld))
     {
@@ -146,16 +136,10 @@ bool NearlyEqual(const float Left, const float Right, const float Tolerance) noe
 bool AreCameraParametersValid(const FWorldCameraComponent& Camera) noexcept
 {
     constexpr float Pi = 3.14159265358979323846f;
-    return std::isfinite(Camera.VerticalFieldOfViewRadians) &&
-        std::isfinite(Camera.NearPlane) && std::isfinite(Camera.FarPlane) &&
-        Camera.VerticalFieldOfViewRadians > 0.0f &&
-        Camera.VerticalFieldOfViewRadians < Pi && Camera.NearPlane > 0.0f &&
-        Camera.FarPlane > Camera.NearPlane;
+    return std::isfinite(Camera.VerticalFieldOfViewRadians) && std::isfinite(Camera.NearPlane) && std::isfinite(Camera.FarPlane) && Camera.VerticalFieldOfViewRadians > 0.0f && Camera.VerticalFieldOfViewRadians < Pi && Camera.NearPlane > 0.0f && Camera.FarPlane > Camera.NearPlane;
 }
 
-bool TryBuildViewMatrix(
-    const Math::Matrix4f& CameraToWorld,
-    Math::Matrix4f& OutView) noexcept
+bool TryBuildViewMatrix(const Math::Matrix4f& CameraToWorld, Math::Matrix4f& OutView) noexcept
 {
     if (!IsFiniteMatrix(CameraToWorld))
     {
@@ -163,10 +147,7 @@ bool TryBuildViewMatrix(
     }
 
     constexpr float RigidTolerance = 1.0e-4f;
-    if (!NearlyEqual(CameraToWorld(3, 0), 0.0f, RigidTolerance) ||
-        !NearlyEqual(CameraToWorld(3, 1), 0.0f, RigidTolerance) ||
-        !NearlyEqual(CameraToWorld(3, 2), 0.0f, RigidTolerance) ||
-        !NearlyEqual(CameraToWorld(3, 3), 1.0f, RigidTolerance))
+    if (!NearlyEqual(CameraToWorld(3, 0), 0.0f, RigidTolerance) || !NearlyEqual(CameraToWorld(3, 1), 0.0f, RigidTolerance) || !NearlyEqual(CameraToWorld(3, 2), 0.0f, RigidTolerance) || !NearlyEqual(CameraToWorld(3, 3), 1.0f, RigidTolerance))
     {
         return false;
     }
@@ -174,28 +155,18 @@ bool TryBuildViewMatrix(
     Math::Vector3f Basis[3];
     for (std::size_t Column = 0; Column < 3; ++Column)
     {
-        Basis[Column] = Math::Vector3f(
-            CameraToWorld(0, Column),
-            CameraToWorld(1, Column),
-            CameraToWorld(2, Column));
+        Basis[Column] = Math::Vector3f(CameraToWorld(0, Column), CameraToWorld(1, Column), CameraToWorld(2, Column));
         if (!NearlyEqual(Basis[Column].LengthSquared(), 1.0f, RigidTolerance))
         {
             return false;
         }
     }
-    if (!NearlyEqual(Math::Vector3f::Dot(Basis[0], Basis[1]), 0.0f, RigidTolerance) ||
-        !NearlyEqual(Math::Vector3f::Dot(Basis[0], Basis[2]), 0.0f, RigidTolerance) ||
-        !NearlyEqual(Math::Vector3f::Dot(Basis[1], Basis[2]), 0.0f, RigidTolerance) ||
-        !NearlyEqual(
-            Math::Vector3f::Dot(Math::Vector3f::Cross(Basis[0], Basis[1]), Basis[2]),
-            1.0f,
-            RigidTolerance))
+    if (!NearlyEqual(Math::Vector3f::Dot(Basis[0], Basis[1]), 0.0f, RigidTolerance) || !NearlyEqual(Math::Vector3f::Dot(Basis[0], Basis[2]), 0.0f, RigidTolerance) || !NearlyEqual(Math::Vector3f::Dot(Basis[1], Basis[2]), 0.0f, RigidTolerance) || !NearlyEqual(Math::Vector3f::Dot(Math::Vector3f::Cross(Basis[0], Basis[1]), Basis[2]), 1.0f, RigidTolerance))
     {
         return false;
     }
 
-    const Math::Vector3f Translation(
-        CameraToWorld(0, 3), CameraToWorld(1, 3), CameraToWorld(2, 3));
+    const Math::Vector3f Translation(CameraToWorld(0, 3), CameraToWorld(1, 3), CameraToWorld(2, 3));
     Math::Matrix4f View = Math::Matrix4f::Identity();
     for (std::size_t Row = 0; Row < 3; ++Row)
     {
@@ -214,21 +185,15 @@ bool TryBuildViewMatrix(
     return true;
 }
 
-bool TryBuildProjectionMatrix(
-    const FWorldCameraComponent& Camera,
-    const uint32 ViewportWidth,
-    const uint32 ViewportHeight,
-    Math::Matrix4f& OutProjection) noexcept
+bool TryBuildProjectionMatrix(const FWorldCameraComponent& Camera, const uint32 ViewportWidth, const uint32 ViewportHeight, Math::Matrix4f& OutProjection) noexcept
 {
     if (!AreCameraParametersValid(Camera))
     {
         return false;
     }
-    const float Aspect = static_cast<float>(ViewportWidth) /
-        static_cast<float>(ViewportHeight);
+    const float Aspect = static_cast<float>(ViewportWidth) / static_cast<float>(ViewportHeight);
     const float TanHalfFov = std::tan(Camera.VerticalFieldOfViewRadians * 0.5f);
-    if (!std::isfinite(Aspect) || Aspect <= 0.0f ||
-        !std::isfinite(TanHalfFov) || TanHalfFov <= 0.0f)
+    if (!std::isfinite(Aspect) || Aspect <= 0.0f || !std::isfinite(TanHalfFov) || TanHalfFov <= 0.0f)
     {
         return false;
     }
@@ -240,8 +205,7 @@ bool TryBuildProjectionMatrix(
     Projection(0, 0) = 1.0f / (Aspect * TanHalfFov);
     Projection(1, 1) = -1.0f / TanHalfFov;
     Projection(2, 2) = Camera.FarPlane / (Camera.NearPlane - Camera.FarPlane);
-    Projection(2, 3) = (Camera.FarPlane * Camera.NearPlane) /
-        (Camera.NearPlane - Camera.FarPlane);
+    Projection(2, 3) = (Camera.FarPlane * Camera.NearPlane) / (Camera.NearPlane - Camera.FarPlane);
     Projection(3, 2) = -1.0f;
 
     if (!IsFiniteMatrix(Projection))
@@ -259,9 +223,7 @@ enum class EFrustumBoundsResult : uint8
     Invalid,
 };
 
-EFrustumBoundsResult TestBoundsAgainstFrustum(
-    const FRenderBounds& Bounds,
-    const Math::Matrix4f& ViewProjection) noexcept
+EFrustumBoundsResult TestBoundsAgainstFrustum(const FRenderBounds& Bounds, const Math::Matrix4f& ViewProjection) noexcept
 {
     bool bOutsideLeft = true;
     bool bOutsideRight = true;
@@ -271,11 +233,7 @@ EFrustumBoundsResult TestBoundsAgainstFrustum(
     bool bOutsideFar = true;
     for (uint32 Corner = 0; Corner < 8; ++Corner)
     {
-        const Math::Vector4f WorldPosition(
-            (Corner & 1u) != 0 ? Bounds.Max.Values[0] : Bounds.Min.Values[0],
-            (Corner & 2u) != 0 ? Bounds.Max.Values[1] : Bounds.Min.Values[1],
-            (Corner & 4u) != 0 ? Bounds.Max.Values[2] : Bounds.Min.Values[2],
-            1.0f);
+        const Math::Vector4f WorldPosition((Corner & 1u) != 0 ? Bounds.Max.Values[0] : Bounds.Min.Values[0], (Corner & 2u) != 0 ? Bounds.Max.Values[1] : Bounds.Min.Values[1], (Corner & 4u) != 0 ? Bounds.Max.Values[2] : Bounds.Min.Values[2], 1.0f);
         const Math::Vector4f Clip = ViewProjection * WorldPosition;
         for (const float Value : Clip.Values)
         {
@@ -291,10 +249,7 @@ EFrustumBoundsResult TestBoundsAgainstFrustum(
         bOutsideNear &= Clip.Values[2] < 0.0f;
         bOutsideFar &= Clip.Values[2] > Clip.Values[3];
     }
-    return bOutsideLeft || bOutsideRight || bOutsideBottom || bOutsideTop ||
-        bOutsideNear || bOutsideFar
-        ? EFrustumBoundsResult::Culled
-        : EFrustumBoundsResult::Visible;
+    return bOutsideLeft || bOutsideRight || bOutsideBottom || bOutsideTop || bOutsideNear || bOutsideFar ? EFrustumBoundsResult::Culled : EFrustumBoundsResult::Visible;
 }
 
 bool MeshProxyLess(const FRenderMeshProxy& Left, const FRenderMeshProxy& Right) noexcept
@@ -312,23 +267,11 @@ bool MeshProxyLess(const FRenderMeshProxy& Left, const FRenderMeshProxy& Right) 
 
 } // namespace
 
-FWorldRenderSnapshot::FWorldRenderSnapshot() noexcept
-    : FWorldRenderSnapshot(GetDefaultAllocator())
-{
-}
+FWorldRenderSnapshot::FWorldRenderSnapshot() noexcept : FWorldRenderSnapshot(GetDefaultAllocator()) {}
 
-FWorldRenderSnapshot::FWorldRenderSnapshot(IAllocator& InAllocator) noexcept
-    : Allocator(&InAllocator)
-    , RenderScene(InAllocator)
-{
-}
+FWorldRenderSnapshot::FWorldRenderSnapshot(IAllocator& InAllocator) noexcept : Allocator(&InAllocator), RenderScene(InAllocator) {}
 
-FWorldRenderSnapshot::FWorldRenderSnapshot(FWorldRenderSnapshot&& Other) noexcept
-    : Allocator(Other.Allocator)
-    , RenderScene(std::move(Other.RenderScene))
-    , AuthoredPrimaryCameraPose(Other.AuthoredPrimaryCameraPose)
-    , FrameIndex(Other.FrameIndex)
-    , bPublished(Other.bPublished)
+FWorldRenderSnapshot::FWorldRenderSnapshot(FWorldRenderSnapshot&& Other) noexcept : Allocator(Other.Allocator), RenderScene(std::move(Other.RenderScene)), AuthoredPrimaryCameraPose(Other.AuthoredPrimaryCameraPose), FrameIndex(Other.FrameIndex), bPublished(Other.bPublished)
 {
     Other.Allocator = &Other.RenderScene.GetAllocator();
     Other.AuthoredPrimaryCameraPose = {};
@@ -336,8 +279,7 @@ FWorldRenderSnapshot::FWorldRenderSnapshot(FWorldRenderSnapshot&& Other) noexcep
     Other.bPublished = false;
 }
 
-FWorldRenderSnapshot& FWorldRenderSnapshot::operator=(
-    FWorldRenderSnapshot&& Other) noexcept
+FWorldRenderSnapshot& FWorldRenderSnapshot::operator=(FWorldRenderSnapshot&& Other) noexcept
 {
     if (this != &Other)
     {
@@ -362,22 +304,12 @@ void FWorldRenderSnapshot::Reset() noexcept
     bPublished = false;
 }
 
-EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
-    const FWorld& World,
-    const FAssetRegistry& Assets,
-    const FWorldRenderSnapshotBuildContext& Context,
-    FWorldRenderSnapshot& OutSnapshot,
-    FWorldRenderSnapshotBuildReport* const OutReport) const noexcept
+EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(const FWorld& World, const FAssetRegistry& Assets, const FWorldRenderSnapshotBuildContext& Context, FWorldRenderSnapshot& OutSnapshot, FWorldRenderSnapshotBuildReport* const OutReport) const noexcept
 {
     FWorldRenderSnapshotBuildReport Report;
     OutSnapshot.Reset();
 
-    auto Fail = [&Report, &OutSnapshot, OutReport](
-        const EWorldRenderSnapshotBuildResult Result,
-        const std::size_t MeshIndex,
-        const FRenderPrimitiveId PrimitiveId = {},
-        const EAssetResolveResult AssetResult = EAssetResolveResult::Success) noexcept
-    {
+    auto Fail = [&Report, &OutSnapshot, OutReport](const EWorldRenderSnapshotBuildResult Result, const std::size_t MeshIndex, const FRenderPrimitiveId PrimitiveId = {}, const EAssetResolveResult AssetResult = EAssetResolveResult::Success) noexcept {
         OutSnapshot.Reset();
         Report.Result = Result;
         Report.MeshIndex = MeshIndex;
@@ -407,27 +339,20 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         return Fail(EWorldRenderSnapshotBuildResult::InvalidViewport, 0);
     }
 
-    const TComponentStorage<FWorldCameraComponent>* const CameraStorage =
-        World.GetCameraComponents();
-    const TComponentStorage<FWorldMeshComponent>* const MeshStorage =
-        World.GetMeshComponents();
-    const TComponentStorage<FWorldDirectionalLightComponent>* const LightStorage =
-        World.GetDirectionalLightComponents();
+    const TComponentStorage<FWorldCameraComponent>* const CameraStorage = World.GetCameraComponents();
+    const TComponentStorage<FWorldMeshComponent>* const MeshStorage = World.GetMeshComponents();
+    const TComponentStorage<FWorldDirectionalLightComponent>* const LightStorage = World.GetDirectionalLightComponents();
     if (CameraStorage == nullptr || MeshStorage == nullptr || LightStorage == nullptr)
     {
         return Fail(EWorldRenderSnapshotBuildResult::InvalidWorld, 0);
     }
-    const Span<const FWorldCameraComponent> CameraComponents =
-        CameraStorage->GetComponents();
+    const Span<const FWorldCameraComponent> CameraComponents = CameraStorage->GetComponents();
     const Span<const FEntity> CameraEntities = CameraStorage->GetEntities();
-    const Span<const FWorldMeshComponent> MeshComponents =
-        MeshStorage->GetComponents();
+    const Span<const FWorldMeshComponent> MeshComponents = MeshStorage->GetComponents();
     const Span<const FEntity> MeshEntities = MeshStorage->GetEntities();
     const Span<const FWorldDirectionalLightComponent> LightComponents = LightStorage->GetComponents();
     const Span<const FEntity> LightEntities = LightStorage->GetEntities();
-    if (CameraComponents.Size() != CameraEntities.Size() ||
-        MeshComponents.Size() != MeshEntities.Size() ||
-        LightComponents.Size() != LightEntities.Size())
+    if (CameraComponents.Size() != CameraEntities.Size() || MeshComponents.Size() != MeshEntities.Size() || LightComponents.Size() != LightEntities.Size())
     {
         return Fail(EWorldRenderSnapshotBuildResult::StorageMismatch, 0);
     }
@@ -451,10 +376,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         {
             return Fail(EWorldRenderSnapshotBuildResult::StorageMismatch, 0, PrimitiveId);
         }
-        if (PrimaryCameraIndex == CameraComponents.Size() ||
-            CameraComponents[Index].Priority > CameraComponents[PrimaryCameraIndex].Priority ||
-            (CameraComponents[Index].Priority == CameraComponents[PrimaryCameraIndex].Priority &&
-                PrimitiveIdLess(PrimitiveId, PrimaryCameraId)))
+        if (PrimaryCameraIndex == CameraComponents.Size() || CameraComponents[Index].Priority > CameraComponents[PrimaryCameraIndex].Priority || (CameraComponents[Index].Priority == CameraComponents[PrimaryCameraIndex].Priority && PrimitiveIdLess(PrimitiveId, PrimaryCameraId)))
         {
             PrimaryCameraIndex = Index;
             PrimaryCameraId = PrimitiveId;
@@ -481,16 +403,11 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
     {
         return Fail(EWorldRenderSnapshotBuildResult::InvalidCameraTransform, 0, PrimaryCameraId);
     }
-    if (Context.CameraOverride.PrimitiveId == PrimaryCameraId &&
-        !TryBuildViewMatrix(Context.CameraOverride.CameraToWorld, View))
+    if (Context.CameraOverride.PrimitiveId == PrimaryCameraId && !TryBuildViewMatrix(Context.CameraOverride.CameraToWorld, View))
     {
         return Fail(EWorldRenderSnapshotBuildResult::InvalidCameraTransform, 0, PrimaryCameraId);
     }
-    if (!TryBuildProjectionMatrix(
-            CameraComponents[PrimaryCameraIndex],
-            Context.ViewportWidth,
-            Context.ViewportHeight,
-            Projection))
+    if (!TryBuildProjectionMatrix(CameraComponents[PrimaryCameraIndex], Context.ViewportWidth, Context.ViewportHeight, Projection))
     {
         return Fail(EWorldRenderSnapshotBuildResult::InvalidCamera, 0, PrimaryCameraId);
     }
@@ -501,8 +418,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
     }
 
     FRenderScene Candidate(*OutSnapshot.Allocator);
-    if (!Candidate.Cameras.TryReserve(1) ||
-        !Candidate.Cameras.TryEmplaceBack(*OutSnapshot.Allocator))
+    if (!Candidate.Cameras.TryReserve(1) || !Candidate.Cameras.TryEmplaceBack(*OutSnapshot.Allocator))
     {
         return Fail(EWorldRenderSnapshotBuildResult::AllocationFailed, 0);
     }
@@ -527,8 +443,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
             return Fail(EWorldRenderSnapshotBuildResult::StorageMismatch, 0, PrimitiveId);
         }
         const FWorldDirectionalLightComponent& Light = LightComponents[Index];
-        if (ValidateDirectionalLightParameters(Light.Direction, Light.Color, Light.Intensity) !=
-            EDirectionalLightParameterError::None)
+        if (ValidateDirectionalLightParameters(Light.Direction, Light.Color, Light.Intensity) != EDirectionalLightParameterError::None)
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidDirectionalLight, 0, PrimitiveId);
         }
@@ -573,9 +488,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         {
             return Fail(EWorldRenderSnapshotBuildResult::MeshResolveFailed, Index, PrimitiveId, MeshResult);
         }
-        if (ResolvedMesh == nullptr || ResolvedMesh->VertexBuffer == nullptr ||
-            ResolvedMesh->VertexCount == 0 || ResolvedMesh->IndexBuffer == nullptr ||
-            ResolvedMesh->IndexCount == 0 || !IsValidIndexFormat(ResolvedMesh->IndexFormat))
+        if (ResolvedMesh == nullptr || ResolvedMesh->VertexBuffer == nullptr || ResolvedMesh->VertexCount == 0 || ResolvedMesh->IndexBuffer == nullptr || ResolvedMesh->IndexCount == 0 || !IsValidIndexFormat(ResolvedMesh->IndexFormat))
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidMeshPayload, Index, PrimitiveId);
         }
@@ -596,11 +509,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         {
             return Fail(EWorldRenderSnapshotBuildResult::MaterialResolveFailed, Index, PrimitiveId, MaterialResult);
         }
-        if (ResolvedMaterial == nullptr || ResolvedMaterial->GraphicsPipeline == nullptr ||
-            ResolvedMaterial->PassMask == ERenderMeshPassMask::None ||
-            ((ResolvedMaterial->BaseColorTexture == nullptr) !=
-                (ResolvedMaterial->MaterialBindGroup == nullptr)) ||
-            !IsFiniteNonNegativeRgb(ResolvedMaterial->BaseColor))
+        if (ResolvedMaterial == nullptr || ResolvedMaterial->GraphicsPipeline == nullptr || ResolvedMaterial->PassMask == ERenderMeshPassMask::None || ((ResolvedMaterial->BaseColorTexture == nullptr) != (ResolvedMaterial->MaterialBindGroup == nullptr)) || !IsFiniteNonNegativeRgb(ResolvedMaterial->BaseColor))
         {
             return Fail(EWorldRenderSnapshotBuildResult::InvalidMaterialPayload, Index, PrimitiveId);
         }
@@ -616,8 +525,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         const ERenderMeshPassMask PassMask = ResolvedMaterial->PassMask;
         const Math::Vector4f BaseColor = ResolvedMaterial->BaseColor;
         FAssetId MaterialAssetId;
-        const EAssetResolveResult MaterialIdResult = Assets.TryGetAssetId(
-            Component.Material, MaterialAssetId);
+        const EAssetResolveResult MaterialIdResult = Assets.TryGetAssetId(Component.Material, MaterialAssetId);
         if (MaterialIdResult != EAssetResolveResult::Success)
         {
             return Fail(EWorldRenderSnapshotBuildResult::MaterialResolveFailed, Index, PrimitiveId, MaterialIdResult);
@@ -632,9 +540,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(
         const bool bNeedsNormalTransform = bHasNormals && !Candidate.Lights.IsEmpty();
         if (!IsFiniteMatrix(LocalToWorld))
         {
-            return Fail(bNeedsNormalTransform ? EWorldRenderSnapshotBuildResult::InvalidNormalTransform
-                                             : EWorldRenderSnapshotBuildResult::InvalidTransform,
-                Index, PrimitiveId);
+            return Fail(bNeedsNormalTransform ? EWorldRenderSnapshotBuildResult::InvalidNormalTransform : EWorldRenderSnapshotBuildResult::InvalidTransform, Index, PrimitiveId);
         }
         Math::Matrix3f NormalToWorld = Math::Matrix3f::Identity();
         if (bNeedsNormalTransform && !TryBuildNormalToWorld(LocalToWorld, NormalToWorld))

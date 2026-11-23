@@ -5,7 +5,6 @@
 #include "Compile/RFGPlanCache.h"
 #include "Core/RFGTypes.h"
 
-
 namespace LE
 {
 
@@ -28,15 +27,11 @@ public:
     IRFGPassRegistry* GetPassRegistry() const;
 
 public:
-    FRFGCompileResult Compile(
-        const FRFGRecordedGraph& RecordedGraph,
-        const FRFGGraphSignature& Signature = {});
+    FRFGCompileResult Compile(const FRFGRecordedGraph& RecordedGraph, const FRFGGraphSignature& Signature = {});
 
 public:
     LE::SharedPtr<const FRFGCompiledPlan> FindCompiledPlan(const FRFGGraphSignature& Signature) const;
-    void StoreCompiledPlan(
-        const FRFGGraphSignature& Signature,
-        const LE::SharedPtr<const FRFGCompiledPlan>& CompiledPlan);
+    void StoreCompiledPlan(const FRFGGraphSignature& Signature, const LE::SharedPtr<const FRFGCompiledPlan>& CompiledPlan);
 
 public:
     void SetCompileOptions(const FRFGCompileOptions& InCompileOptions);

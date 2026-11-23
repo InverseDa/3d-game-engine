@@ -8,24 +8,14 @@ namespace LE
 class FBasePassCompositePipelineImpl
 {
 public:
-    explicit FBasePassCompositePipelineImpl(
-        const FBasePassCompositePipelineDesc& InDesc) noexcept
-        : Desc(InDesc)
-        , BasePass(InDesc.BasePassResources)
-        , CompositePass(InDesc)
-    {
-    }
+    explicit FBasePassCompositePipelineImpl(const FBasePassCompositePipelineDesc& InDesc) noexcept : Desc(InDesc), BasePass(InDesc.BasePassResources), CompositePass(InDesc) {}
 
     FBasePassCompositePipelineDesc Desc;
     FBasePass BasePass;
     FSceneColorCompositePass CompositePass;
 };
 
-FBasePassCompositePipeline::FBasePassCompositePipeline(
-    const FBasePassCompositePipelineDesc& InDesc)
-    : Impl(MakeUnique<FBasePassCompositePipelineImpl>(InDesc))
-{
-}
+FBasePassCompositePipeline::FBasePassCompositePipeline(const FBasePassCompositePipelineDesc& InDesc) : Impl(MakeUnique<FBasePassCompositePipelineImpl>(InDesc)) {}
 
 FBasePassCompositePipeline::~FBasePassCompositePipeline() = default;
 
@@ -39,20 +29,12 @@ EShadingPath FBasePassCompositePipeline::GetShadingPath() const
     return EShadingPath::Deferred;
 }
 
-void FBasePassCompositePipeline::BuildPasses(
-    const FRendererFrameContext& FrameContext,
-    const FRenderScene& RenderScene,
-    const FRenderView& RenderView,
-    FRenderPipelinePlan& OutPlan)
+void FBasePassCompositePipeline::BuildPasses(const FRendererFrameContext& FrameContext, const FRenderScene& RenderScene, const FRenderView& RenderView, FRenderPipelinePlan& OutPlan)
 {
     static_cast<void>(FrameContext);
     static_cast<void>(RenderView);
     OutPlan.Reset();
-    if (!Impl ||
-        !FBasePass::IsConfigurationValid(Impl->Desc.BasePassResources, RenderScene) ||
-        !IsSceneColorCompositeConfigurationValid(Impl->Desc) ||
-        !OutPlan.Passes.TryPushBack(&Impl->BasePass) ||
-        !OutPlan.Passes.TryPushBack(&Impl->CompositePass))
+    if (!Impl || !FBasePass::IsConfigurationValid(Impl->Desc.BasePassResources, RenderScene) || !IsSceneColorCompositeConfigurationValid(Impl->Desc) || !OutPlan.Passes.TryPushBack(&Impl->BasePass) || !OutPlan.Passes.TryPushBack(&Impl->CompositePass))
     {
         OutPlan.Reset();
     }

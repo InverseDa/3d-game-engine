@@ -60,16 +60,14 @@ struct FUploadTrace
 class FUploadTestBuffer final : public FRHIBuffer
 {
 public:
-    FUploadTestBuffer(const FRHIBufferDesc& InDesc, FUploadTrace& InTrace, const bool FailMap)
-        : Desc(InDesc), Trace(InTrace), bFailMap(FailMap) {}
+    FUploadTestBuffer(const FRHIBufferDesc& InDesc, FUploadTrace& InTrace, const bool FailMap) : Desc(InDesc), Trace(InTrace), bFailMap(FailMap) {}
 
     ~FUploadTestBuffer() override { ++Trace.Destroyed; }
 
     void* Map(const uint64 Offset, const uint64 Size) override
     {
         ++Trace.Mapped;
-        return !bFailMap && Offset == 0 && Size == Desc.Size && Size <= sizeof(Bytes)
-            ? Bytes : nullptr;
+        return !bFailMap && Offset == 0 && Size == Desc.Size && Size <= sizeof(Bytes) ? Bytes : nullptr;
     }
 
     void Unmap() override { ++Trace.Unmapped; }
@@ -149,12 +147,7 @@ public:
     void End() override {}
     bool BeginChecked() override { return Step(1); }
     bool EndChecked() override { return Step(5); }
-    bool TextureUploadBarrier(FRHITexture* Texture, ERHIResourceState Before, ERHIResourceState After) override
-    {
-        return Texture != nullptr &&
-            ((Before == ERHIResourceState::Undefined && After == ERHIResourceState::CopyDestination && Step(2)) ||
-             (Before == ERHIResourceState::CopyDestination && After == ERHIResourceState::ShaderResource && Step(4)));
-    }
+    bool TextureUploadBarrier(FRHITexture* Texture, ERHIResourceState Before, ERHIResourceState After) override { return Texture != nullptr && ((Before == ERHIResourceState::Undefined && After == ERHIResourceState::CopyDestination && Step(2)) || (Before == ERHIResourceState::CopyDestination && After == ERHIResourceState::ShaderResource && Step(4))); }
     bool CopyBufferToTexture2D(FRHIBuffer* Source, FRHITexture* Destination, uint64 Offset) override
     {
         if (Source == nullptr || Destination == nullptr || Offset != 0)
@@ -163,9 +156,7 @@ public:
         }
         const auto& Desc = Destination->GetDesc();
         const auto Bytes = static_cast<std::size_t>(Desc.Width) * Desc.Height * 4;
-        Trace.bCopyMatched = Source->GetDesc().UsageFlag == static_cast<uint32>(EBufferUsageFlags::TransferSrc) &&
-            Desc.bIsTransferDestination && Desc.bIsShaderResource && Desc.Format == EPixelFormat::R8G8B8A8_SRGB &&
-            Bytes == Source->GetDesc().Size && Bytes <= sizeof(Trace.Uploaded);
+        Trace.bCopyMatched = Source->GetDesc().UsageFlag == static_cast<uint32>(EBufferUsageFlags::TransferSrc) && Desc.bIsTransferDestination && Desc.bIsShaderResource && Desc.Format == EPixelFormat::R8G8B8A8_SRGB && Bytes == Source->GetDesc().Size && Bytes <= sizeof(Trace.Uploaded);
         if (Trace.bCopyMatched)
         {
             std::memcpy(Trace.Uploaded, static_cast<FUploadTestBuffer*>(Source)->Bytes, Bytes);
@@ -219,6 +210,7 @@ public:
     }
     EQueueType GetType() const override { return EQueueType::Graphics; }
     unsigned DrainCalls = 0;
+
 private:
     FUploadTrace& Trace;
 };
@@ -228,6 +220,7 @@ class FUploadTestLayout final : public FRHIBindGroupLayout
 public:
     explicit FUploadTestLayout(const FRHIBindGroupLayoutDesc& InDesc) : Desc(InDesc) {}
     const FRHIBindGroupLayoutDesc& GetDesc() const override { return Desc; }
+
 private:
     FRHIBindGroupLayoutDesc Desc;
 };
@@ -238,6 +231,7 @@ public:
     FUploadTestBindGroup(const FRHIBindGroupDesc& InDesc, FUploadTrace& InTrace) : Desc(InDesc), Trace(InTrace) {}
     ~FUploadTestBindGroup() override { ++Trace.BindingsDestroyed; }
     const FRHIBindGroupDesc& GetDesc() const override { return Desc; }
+
 private:
     FRHIBindGroupDesc Desc;
     FUploadTrace& Trace;
@@ -248,6 +242,7 @@ class FUploadTestSampler final : public FRHISampler
 public:
     explicit FUploadTestSampler(const FRHISamplerDesc& InDesc) : Desc(InDesc) {}
     const FRHISamplerDesc& GetDesc() const override { return Desc; }
+
 private:
     FRHISamplerDesc Desc;
 };
@@ -267,8 +262,7 @@ public:
     }
 
     FRHIQueue* GetGraphicsQueue() const override { return &Queue; }
-    FRHITexture* CreateTexture(const FRHITextureDesc& Desc) override
-    { return bFailImage ? nullptr : new FUploadTestTexture(Desc, Trace); }
+    FRHITexture* CreateTexture(const FRHITextureDesc& Desc) override { return bFailImage ? nullptr : new FUploadTestTexture(Desc, Trace); }
     FRHITextureView* CreateTextureView(const FRHITextureViewDesc& Desc) override
     {
         if (bFailView || Trace.Steps != 1234567 || Trace.bFailWait)
@@ -280,30 +274,21 @@ public:
     }
     FRHIShader* CreateShaderFromFile(EShaderStage, const void*, uint64, const String&) override { return nullptr; }
     FRHIPipeline_Graphics* CreateGraphicsPipeline(const FRHIPipelineDesc_Graphics&) override { return nullptr; }
-    FRHICommandAllocator* CreateCommandAllocator(EQueueType) override
-    { return bFailCommands ? nullptr : new FUploadTestAllocator(Trace); }
-    FRHICommandList* CreateCommandList(FRHICommandAllocator* Allocator) override
-    { return Allocator == nullptr ? nullptr : new FUploadTestCommands(Trace); }
+    FRHICommandAllocator* CreateCommandAllocator(EQueueType) override { return bFailCommands ? nullptr : new FUploadTestAllocator(Trace); }
+    FRHICommandList* CreateCommandList(FRHICommandAllocator* Allocator) override { return Allocator == nullptr ? nullptr : new FUploadTestCommands(Trace); }
     FRHISemaphore* CreateBinarySemaphore() override { return nullptr; }
     FRHIFence* CreateFence(bool) override { return new FUploadTestFence(Trace); }
     FRHISwapchain* CreateSwapchain(const FRHISwapchainDesc&) override { return nullptr; }
     FRHIBindGroup* CreateBindGroup(const FRHIBindGroupDesc& Desc) override
     {
-        if (bFailBinding || Desc.Items.Size() != 2 || Desc.Items[0].TextureView == nullptr ||
-            Desc.Items[1].Sampler == nullptr)
+        if (bFailBinding || Desc.Items.Size() != 2 || Desc.Items[0].TextureView == nullptr || Desc.Items[1].Sampler == nullptr)
         {
             return nullptr;
         }
         return new FUploadTestBindGroup(Desc, Trace);
     }
-    FRHIBindGroupLayout* CreateBindGroupLayout(const FRHIBindGroupLayoutDesc& Desc) override
-    { return new FUploadTestLayout(Desc); }
-    FRHISampler* CreateSampler(const FRHISamplerDesc& Desc) override
-    {
-        return Desc.MinFilter == ESamplerFilter::Nearest && Desc.MagFilter == ESamplerFilter::Nearest &&
-            Desc.AddressU == ESamplerAddressMode::ClampToEdge && Desc.AddressV == ESamplerAddressMode::ClampToEdge &&
-            Desc.MaxLOD == 0.0f ? new FUploadTestSampler(Desc) : nullptr;
-    }
+    FRHIBindGroupLayout* CreateBindGroupLayout(const FRHIBindGroupLayoutDesc& Desc) override { return new FUploadTestLayout(Desc); }
+    FRHISampler* CreateSampler(const FRHISamplerDesc& Desc) override { return Desc.MinFilter == ESamplerFilter::Nearest && Desc.MagFilter == ESamplerFilter::Nearest && Desc.AddressU == ESamplerAddressMode::ClampToEdge && Desc.AddressV == ESamplerAddressMode::ClampToEdge && Desc.MaxLOD == 0.0f ? new FUploadTestSampler(Desc) : nullptr; }
     void* GetBindlessHeapGPUDescriptor() const override { return nullptr; }
     uint32 AllocateBindlessIndex(FRHIResource*) override { return 0; }
 
@@ -397,11 +382,7 @@ bool TestNormalVertexUploads()
         Array<uint8> Cooked;
         FAssetFileHeaderView Header;
         FMeshAssetData Decoded;
-        const bool bDecoded = EncodeAssetFile(Id, "Tests/Provider.mesh", Data, Cooked) ==
-                EAssetFormatResult::Success &&
-            ReadAssetFileHeader(Cooked.AsSpan(), Header) == EAssetFormatResult::Success &&
-            Header.Version == (bAuthoredNormals ? MeshNormalsAssetFileVersion : TexturedAssetFileVersion) &&
-            DecodeAssetFile(Cooked.AsSpan(), Decoded) == EAssetFormatResult::Success;
+        const bool bDecoded = EncodeAssetFile(Id, "Tests/Provider.mesh", Data, Cooked) == EAssetFormatResult::Success && ReadAssetFileHeader(Cooked.AsSpan(), Header) == EAssetFormatResult::Success && Header.Version == (bAuthoredNormals ? MeshNormalsAssetFileVersion : TexturedAssetFileVersion) && DecodeAssetFile(Cooked.AsSpan(), Decoded) == EAssetFormatResult::Success;
         FMeshAsset* Mesh = bDecoded ? FRenderAssetProvider::CreateMesh(&Fixture.Provider, Decoded) : nullptr;
         if (!ExpectProvider(Mesh != nullptr, "provider constructs baked mesh with and without authored normals"))
         {
@@ -410,13 +391,10 @@ bool TestNormalVertexUploads()
         const auto* const Vertices = static_cast<const FUploadTestBuffer*>(Mesh->VertexBuffer);
         FBasePassVertex Uploaded[3];
         std::memcpy(Uploaded, Vertices->Bytes, sizeof(Uploaded));
-        bool bMatched = Mesh->bHasUV && Mesh->bHasNormals == bAuthoredNormals &&
-            Vertices->GetDesc().Size == sizeof(Uploaded);
+        bool bMatched = Mesh->bHasUV && Mesh->bHasNormals == bAuthoredNormals && Vertices->GetDesc().Size == sizeof(Uploaded);
         for (std::size_t Index = 0; Index < 3; ++Index)
         {
-            bMatched = bMatched && Uploaded[Index].Position == Data.Positions[Index] &&
-                Uploaded[Index].UV == Data.UVs[Index] &&
-                Uploaded[Index].Normal == (bAuthoredNormals ? ExpectedNormals[Index] : Math::Vector3f{});
+            bMatched = bMatched && Uploaded[Index].Position == Data.Positions[Index] && Uploaded[Index].UV == Data.UVs[Index] && Uploaded[Index].Normal == (bAuthoredNormals ? ExpectedNormals[Index] : Math::Vector3f{});
         }
         Passed &= ExpectProvider(bMatched, "GPU vertex bytes carry authored v3 normals or zero legacy normals");
         FRenderAssetProvider::DestroyMesh(&Fixture.Provider, Mesh);
@@ -425,20 +403,17 @@ bool TestNormalVertexUploads()
     const unsigned AttemptsBeforeInvalidData = Fixture.Device.Attempts;
     Data.Normals = {ExpectedNormals[0], ExpectedNormals[1]};
     FMeshAsset* Mesh = FRenderAssetProvider::CreateMesh(&Fixture.Provider, Data);
-    Passed &= ExpectProvider(Mesh == nullptr && Fixture.Device.Attempts == AttemptsBeforeInvalidData,
-        "malformed vertex normal count never allocates GPU buffers");
+    Passed &= ExpectProvider(Mesh == nullptr && Fixture.Device.Attempts == AttemptsBeforeInvalidData, "malformed vertex normal count never allocates GPU buffers");
     FRenderAssetProvider::DestroyMesh(&Fixture.Provider, Mesh);
 
     Data.Normals = {ExpectedNormals[0], Math::Vector3f{}, ExpectedNormals[2]};
     Mesh = FRenderAssetProvider::CreateMesh(&Fixture.Provider, Data);
-    Passed &= ExpectProvider(Mesh == nullptr && Fixture.Device.Attempts == AttemptsBeforeInvalidData,
-        "zero normal never allocates GPU buffers");
+    Passed &= ExpectProvider(Mesh == nullptr && Fixture.Device.Attempts == AttemptsBeforeInvalidData, "zero normal never allocates GPU buffers");
     FRenderAssetProvider::DestroyMesh(&Fixture.Provider, Mesh);
 
     Data.Normals[1] = Math::Vector3f(0.0f, std::numeric_limits<float>::infinity(), 0.0f);
     Mesh = FRenderAssetProvider::CreateMesh(&Fixture.Provider, Data);
-    Passed &= ExpectProvider(Mesh == nullptr && Fixture.Device.Attempts == AttemptsBeforeInvalidData,
-        "non-finite normal never allocates GPU buffers");
+    Passed &= ExpectProvider(Mesh == nullptr && Fixture.Device.Attempts == AttemptsBeforeInvalidData, "non-finite normal never allocates GPU buffers");
     FRenderAssetProvider::DestroyMesh(&Fixture.Provider, Mesh);
     return Passed;
 }
@@ -446,31 +421,30 @@ bool TestNormalVertexUploads()
 bool TestFailedUploads()
 {
     FMeshAssetData Data = MakeMesh();
-    Data.Normals = {Math::Vector3f(0.0f, 0.0f, 1.0f),
-        Math::Vector3f(0.0f, 0.0f, 1.0f), Math::Vector3f(0.0f, 0.0f, 1.0f)};
+    Data.Normals = {Math::Vector3f(0.0f, 0.0f, 1.0f), Math::Vector3f(0.0f, 0.0f, 1.0f), Math::Vector3f(0.0f, 0.0f, 1.0f)};
     FProviderFixture Fixture;
-    if (!Fixture.bInitialized) { return false; }
+    if (!Fixture.bInitialized)
+    {
+        return false;
+    }
     auto& Device = Fixture.Device;
     auto& Provider = Fixture.Provider;
     Device.FailCreate = 2;
     FMeshAsset* Mesh = FRenderAssetProvider::CreateMesh(&Provider, Data);
-    const bool SecondFailed = Mesh == nullptr && Device.Trace.Created == 1 &&
-        Device.Trace.Mapped == 1 && Device.Trace.Unmapped == 1 && Device.Trace.Destroyed == 1;
+    const bool SecondFailed = Mesh == nullptr && Device.Trace.Created == 1 && Device.Trace.Mapped == 1 && Device.Trace.Unmapped == 1 && Device.Trace.Destroyed == 1;
     FRenderAssetProvider::DestroyMesh(&Provider, Mesh);
     bool Passed = ExpectProvider(SecondFailed, "failed index buffer creation destroys the uploaded vertex buffer");
 
     Device.FailMap = Device.Attempts + 2;
     Mesh = FRenderAssetProvider::CreateMesh(&Provider, Data);
-    const bool IndexMapFailed = Mesh == nullptr && Device.Trace.Created == 3 &&
-        Device.Trace.Mapped == 3 && Device.Trace.Unmapped == 2 && Device.Trace.Destroyed == 3;
+    const bool IndexMapFailed = Mesh == nullptr && Device.Trace.Created == 3 && Device.Trace.Mapped == 3 && Device.Trace.Unmapped == 2 && Device.Trace.Destroyed == 3;
     FRenderAssetProvider::DestroyMesh(&Provider, Mesh);
     Passed &= ExpectProvider(IndexMapFailed, "failed index mapping destroys both buffers");
 
     const unsigned AttemptsBeforeInvalidData = Device.Attempts;
     Data.Indices[1] = 3;
     Mesh = FRenderAssetProvider::CreateMesh(&Provider, Data);
-    Passed &= ExpectProvider(Mesh == nullptr && Device.Attempts == AttemptsBeforeInvalidData,
-        "invalid mesh data is rejected before RHI allocation");
+    Passed &= ExpectProvider(Mesh == nullptr && Device.Attempts == AttemptsBeforeInvalidData, "invalid mesh data is rejected before RHI allocation");
     FRenderAssetProvider::DestroyMesh(&Provider, Mesh);
     return Passed;
 }
@@ -486,9 +460,7 @@ bool AddWorldObjects(FWorld& World, FMeshAssetHandle MeshHandle, FMaterialAssetH
     FEntity Camera;
     FTransform CameraPose;
     CameraPose.Translation = Math::Vector3f(0.0f, 0.0f, 3.0f);
-    if (!World.TryCreateEntity(Camera) ||
-        World.TryAddTransform(Camera, CameraPose) != EComponentMutationResult::Added ||
-        World.TryAddComponent(*Cameras, Camera, FWorldCameraComponent{}) != EComponentMutationResult::Added)
+    if (!World.TryCreateEntity(Camera) || World.TryAddTransform(Camera, CameraPose) != EComponentMutationResult::Added || World.TryAddComponent(*Cameras, Camera, FWorldCameraComponent{}) != EComponentMutationResult::Added)
     {
         return false;
     }
@@ -500,9 +472,7 @@ bool AddWorldObjects(FWorld& World, FMeshAssetHandle MeshHandle, FMaterialAssetH
         FWorldMeshComponent Component;
         Component.Mesh = MeshHandle;
         Component.Material = MaterialHandle;
-        if (!World.TryCreateEntity(Entity) ||
-            World.TryAddTransform(Entity, Pose) != EComponentMutationResult::Added ||
-            World.TryAddComponent(*Meshes, Entity, std::move(Component)) != EComponentMutationResult::Added)
+        if (!World.TryCreateEntity(Entity) || World.TryAddTransform(Entity, Pose) != EComponentMutationResult::Added || World.TryAddComponent(*Meshes, Entity, std::move(Component)) != EComponentMutationResult::Added)
         {
             return false;
         }
@@ -513,7 +483,10 @@ bool AddWorldObjects(FWorld& World, FMeshAssetHandle MeshHandle, FMaterialAssetH
 bool TestSharedMaterialAcrossExtents()
 {
     FProviderFixture Fixture;
-    if (!Fixture.bInitialized) { return false; }
+    if (!Fixture.bInitialized)
+    {
+        return false;
+    }
     auto& Device = Fixture.Device;
     auto& Pipeline = Fixture.Pipeline;
     auto& Provider = Fixture.Provider;
@@ -522,8 +495,7 @@ bool TestSharedMaterialAcrossExtents()
     MaterialData.BaseColor = Math::Vector3f(0.25f, 2.0f, 0.5f);
     FAssetId MeshId;
     FAssetId MaterialId;
-    if (!FAssetId::TryParse("e8100000-0000-4000-8000-000000000001", MeshId) ||
-        !FAssetId::TryParse("e8100000-0000-4000-8000-000000000002", MaterialId))
+    if (!FAssetId::TryParse("e8100000-0000-4000-8000-000000000001", MeshId) || !FAssetId::TryParse("e8100000-0000-4000-8000-000000000002", MaterialId))
     {
         return false;
     }
@@ -544,8 +516,7 @@ bool TestSharedMaterialAcrossExtents()
     MeshRegistration.Ownership = EAssetOwnership::OwnedByProviderThunk;
     MeshRegistration.Destroy = &FRenderAssetProvider::DestroyMesh;
     MeshRegistration.ProviderContext = &Provider;
-    if (!ExpectProvider(Registry.Register(MeshRegistration, MeshHandle) == EAssetRegisterResult::Success,
-        "registry accepts the owned render mesh"))
+    if (!ExpectProvider(Registry.Register(MeshRegistration, MeshHandle) == EAssetRegisterResult::Success, "registry accepts the owned render mesh"))
     {
         FRenderAssetProvider::DestroyMesh(&Provider, Mesh);
         return false;
@@ -565,8 +536,7 @@ bool TestSharedMaterialAcrossExtents()
     MaterialRegistration.Ownership = EAssetOwnership::OwnedByProviderThunk;
     MaterialRegistration.Destroy = &FRenderAssetProvider::DestroyMaterial;
     MaterialRegistration.ProviderContext = &Provider;
-    if (!ExpectProvider(Registry.Register(MaterialRegistration, MaterialHandle) == EAssetRegisterResult::Success,
-        "registry accepts the owned render material"))
+    if (!ExpectProvider(Registry.Register(MaterialRegistration, MaterialHandle) == EAssetRegisterResult::Success, "registry accepts the owned render material"))
     {
         FRenderAssetProvider::DestroyMaterial(&Provider, Material);
         return false;
@@ -576,20 +546,11 @@ bool TestSharedMaterialAcrossExtents()
     const auto* const Indices = static_cast<const FUploadTestBuffer*>(Mesh->IndexBuffer);
     FBasePassVertex FirstVertex;
     std::memcpy(&FirstVertex, Vertices->Bytes, sizeof(FirstVertex));
-    bool Passed = ExpectProvider(
-        Mesh->IndexFormat == EPixelFormat::R32_UINT && Mesh->IndexCount == 3 && Mesh->VertexCount == 3 &&
-        Vertices->GetDesc().Size == VertexBytes && Indices->GetDesc().Size == IndexBytes &&
-        Vertices->GetDesc().UsageFlag == static_cast<uint32>(EBufferUsageFlags::VertexBuffer) &&
-        Indices->GetDesc().UsageFlag == static_cast<uint32>(EBufferUsageFlags::IndexBuffer) &&
-        FirstVertex.Position == MeshData.Positions[0] && FirstVertex.Color == Math::Vector3f(1.0f) &&
-        std::memcmp(Indices->Bytes, MeshData.Indices.Data(), IndexBytes) == 0 &&
-        Device.Trace.Mapped == 3 && Device.Trace.Unmapped == 3,
-        "payload uploads white vertices and R32 indices with appropriate usages");
+    bool Passed = ExpectProvider(Mesh->IndexFormat == EPixelFormat::R32_UINT && Mesh->IndexCount == 3 && Mesh->VertexCount == 3 && Vertices->GetDesc().Size == VertexBytes && Indices->GetDesc().Size == IndexBytes && Vertices->GetDesc().UsageFlag == static_cast<uint32>(EBufferUsageFlags::VertexBuffer) && Indices->GetDesc().UsageFlag == static_cast<uint32>(EBufferUsageFlags::IndexBuffer) && FirstVertex.Position == MeshData.Positions[0] && FirstVertex.Color == Math::Vector3f(1.0f) && std::memcmp(Indices->Bytes, MeshData.Indices.Data(), IndexBytes) == 0 && Device.Trace.Mapped == 3 && Device.Trace.Unmapped == 3, "payload uploads white vertices and R32 indices with appropriate usages");
 
     {
         FWorld World;
-        if (!ExpectProvider(AddWorldObjects(World, MeshHandle, MaterialHandle),
-            "two entities share the same render mesh and material"))
+        if (!ExpectProvider(AddWorldObjects(World, MeshHandle, MaterialHandle), "two entities share the same render mesh and material"))
         {
             return false;
         }
@@ -603,33 +564,29 @@ bool TestSharedMaterialAcrossExtents()
             Context.ViewportHeight = 720;
             FWorldRenderSnapshot Snapshot;
             const auto Status = Bridge.BuildSnapshot(World, Registry, Context, Snapshot);
-            bool BothVisible = Status == EWorldRenderSnapshotBuildResult::Success &&
-                Snapshot.GetRenderScene().Meshes.Size() == 2;
+            bool BothVisible = Status == EWorldRenderSnapshotBuildResult::Success && Snapshot.GetRenderScene().Meshes.Size() == 2;
             if (BothVisible)
             {
                 for (const FRenderMeshProxy& Proxy : Snapshot.GetRenderScene().Meshes)
                 {
-                    BothVisible &= Proxy.GraphicsPipeline == &Pipeline && Proxy.MaterialAssetId == MaterialId
-                        && Proxy.VertexBuffer == Mesh->VertexBuffer && Proxy.IndexBuffer == Mesh->IndexBuffer
-                        && Proxy.BaseColor == Math::Vector4f(0.25f, 2.0f, 0.5f, 1.0f)
-                        && Proxy.BaseColorTexture == Material->BaseColorTexture
-                        && Proxy.MaterialBindGroup == Material->MaterialBindGroup;
+                    BothVisible &= Proxy.GraphicsPipeline == &Pipeline && Proxy.MaterialAssetId == MaterialId && Proxy.VertexBuffer == Mesh->VertexBuffer && Proxy.IndexBuffer == Mesh->IndexBuffer && Proxy.BaseColor == Math::Vector4f(0.25f, 2.0f, 0.5f, 1.0f) && Proxy.BaseColorTexture == Material->BaseColorTexture && Proxy.MaterialBindGroup == Material->MaterialBindGroup;
                 }
             }
             Passed &= ExpectProvider(BothVisible, "both entities resolve the same payload and pipeline after extent changes");
         }
     }
 
-    Passed &= ExpectProvider(Registry.Unregister(MaterialHandle) == EAssetUnregisterResult::Success &&
-        Registry.Unregister(MeshHandle) == EAssetUnregisterResult::Success && Device.Trace.Destroyed == 3,
-        "registry releases provider-owned buffers and material before the borrowed pipeline");
+    Passed &= ExpectProvider(Registry.Unregister(MaterialHandle) == EAssetUnregisterResult::Success && Registry.Unregister(MeshHandle) == EAssetUnregisterResult::Success && Device.Trace.Destroyed == 3, "registry releases provider-owned buffers and material before the borrowed pipeline");
     return Passed;
 }
 
 bool TestFailedTextureUpload()
 {
     FProviderFixture Fixture;
-    if (!Fixture.bInitialized) { return false; }
+    if (!Fixture.bInitialized)
+    {
+        return false;
+    }
     auto& Provider = Fixture.Provider;
     auto& Device = Fixture.Device;
     auto& Trace = Device.Trace;
@@ -642,8 +599,7 @@ bool TestFailedTextureUpload()
     {
         return false;
     }
-    auto Rejected = [&](ETextureUploadResult Result)
-    {
+    auto Rejected = [&](ETextureUploadResult Result) {
         auto* Material = FRenderAssetProvider::CreateMaterial(&Provider, Data, &Texture);
         bool bPass = Material == nullptr && Provider.GetLastTextureUploadResult() == Result;
         FRenderAssetProvider::DestroyMaterial(&Provider, Material);
@@ -651,33 +607,26 @@ bool TestFailedTextureUpload()
     };
     bool Passed = true;
     Device.FailCreate = Device.Attempts + 1;
-    Passed &= ExpectProvider(Rejected(ETextureUploadResult::StagingCreationFailed),
-        "staging creation failure rejects upload");
+    Passed &= ExpectProvider(Rejected(ETextureUploadResult::StagingCreationFailed), "staging creation failure rejects upload");
     Device.FailMap = Device.Attempts + 1;
-    Passed &= ExpectProvider(Rejected(ETextureUploadResult::StagingMappingFailed),
-        "staging map failure rejects upload");
+    Passed &= ExpectProvider(Rejected(ETextureUploadResult::StagingMappingFailed), "staging map failure rejects upload");
     Device.bFailImage = true;
-    Passed &= ExpectProvider(Rejected(ETextureUploadResult::TextureCreationFailed),
-        "image creation failure rejects upload");
+    Passed &= ExpectProvider(Rejected(ETextureUploadResult::TextureCreationFailed), "image creation failure rejects upload");
     Device.bFailImage = false;
     Device.bFailCommands = true;
-    Passed &= ExpectProvider(Rejected(ETextureUploadResult::CommandCreationFailed),
-        "command creation failure rejects upload");
+    Passed &= ExpectProvider(Rejected(ETextureUploadResult::CommandCreationFailed), "command creation failure rejects upload");
     Device.bFailCommands = false;
     for (unsigned Step = 1; Step <= 5; ++Step)
     {
         Trace.FailedRecordStep = Step;
-        Passed &= ExpectProvider(Rejected(ETextureUploadResult::RecordingFailed) && Trace.ViewsCreated == 0,
-            "every checked recording failure prevents submission or publication");
+        Passed &= ExpectProvider(Rejected(ETextureUploadResult::RecordingFailed) && Trace.ViewsCreated == 0, "every checked recording failure prevents submission or publication");
     }
     Trace.FailedRecordStep = 0;
     Trace.bFailSubmit = true;
-    Passed &= ExpectProvider(Rejected(ETextureUploadResult::SubmissionFailed) && Trace.ViewsCreated == 0,
-        "submit failure prevents texture publication");
+    Passed &= ExpectProvider(Rejected(ETextureUploadResult::SubmissionFailed) && Trace.ViewsCreated == 0, "submit failure prevents texture publication");
     Trace.bFailSubmit = false;
     Device.bFailView = true;
-    Passed &= ExpectProvider(Rejected(ETextureUploadResult::ViewCreationFailed),
-        "view creation failure releases completed upload");
+    Passed &= ExpectProvider(Rejected(ETextureUploadResult::ViewCreationFailed), "view creation failure releases completed upload");
     Device.bFailView = false;
 
     Trace.bFailWait = true;
@@ -686,36 +635,27 @@ bool TestFailedTextureUpload()
     const unsigned DestroyedLists = Trace.ListsDestroyed;
     const unsigned DestroyedAllocators = Trace.AllocatorsDestroyed;
     const unsigned DestroyedFences = Trace.FencesDestroyed;
-    Passed &= ExpectProvider(Rejected(ETextureUploadResult::CompletionFailed) &&
-        Rejected(ETextureUploadResult::CompletionFailed) &&
-        Trace.Destroyed == DestroyedBuffers && Trace.ImagesDestroyed == DestroyedImages &&
-        Trace.ListsDestroyed == DestroyedLists && Trace.AllocatorsDestroyed == DestroyedAllocators &&
-        Trace.FencesDestroyed == DestroyedFences && Trace.ViewsCreated == 0 &&
-        Device.Queue.DrainCalls == 0,
-        "unconfirmed completion retains all submitted resources and blocks another upload");
+    Passed &= ExpectProvider(Rejected(ETextureUploadResult::CompletionFailed) && Rejected(ETextureUploadResult::CompletionFailed) && Trace.Destroyed == DestroyedBuffers && Trace.ImagesDestroyed == DestroyedImages && Trace.ListsDestroyed == DestroyedLists && Trace.AllocatorsDestroyed == DestroyedAllocators && Trace.FencesDestroyed == DestroyedFences && Trace.ViewsCreated == 0 && Device.Queue.DrainCalls == 0, "unconfirmed completion retains all submitted resources and blocks another upload");
     Trace.bFailWait = false;
     auto* Material = FRenderAssetProvider::CreateMaterial(&Provider, Data, &Texture);
-    Passed &= ExpectProvider(Material != nullptr && Trace.Steps == 1234567 && Trace.bCopyMatched &&
-        std::memcmp(Texture.Pixels.Data(), Trace.Uploaded, Texture.Pixels.Size()) == 0 &&
-        Trace.Destroyed == DestroyedBuffers + 2 && Trace.ImagesDestroyed == DestroyedImages + 1 &&
-        Provider.GetTextureUploadCount() == 1 && Device.Queue.DrainCalls == 0,
-        "completed retired upload permits a checked retry with exact pixel bytes and no global wait");
+    Passed &= ExpectProvider(Material != nullptr && Trace.Steps == 1234567 && Trace.bCopyMatched && std::memcmp(Texture.Pixels.Data(), Trace.Uploaded, Texture.Pixels.Size()) == 0 && Trace.Destroyed == DestroyedBuffers + 2 && Trace.ImagesDestroyed == DestroyedImages + 1 && Provider.GetTextureUploadCount() == 1 && Device.Queue.DrainCalls == 0, "completed retired upload permits a checked retry with exact pixel bytes and no global wait");
     FRenderAssetProvider::DestroyMaterial(&Provider, Material);
 
     Trace.bFailWait = true;
     const unsigned BeforeTerminalCleanup = Trace.ImagesDestroyed;
-    Passed &= ExpectProvider(Rejected(ETextureUploadResult::CompletionFailed) &&
-        Trace.ImagesDestroyed == BeforeTerminalCleanup, "retain the pending image for terminal retirement");
+    Passed &= ExpectProvider(Rejected(ETextureUploadResult::CompletionFailed) && Trace.ImagesDestroyed == BeforeTerminalCleanup, "retain the pending image for terminal retirement");
     Provider.Shutdown();
-    Passed &= ExpectProvider(Device.Queue.DrainCalls == 1 && Trace.ImagesDestroyed == BeforeTerminalCleanup + 1,
-        "checked terminal queue drain releases the pending image");
+    Passed &= ExpectProvider(Device.Queue.DrainCalls == 1 && Trace.ImagesDestroyed == BeforeTerminalCleanup + 1, "checked terminal queue drain releases the pending image");
     return Passed;
 }
 
 bool TestSharedAuthoredTexture()
 {
     FProviderFixture Fixture;
-    if (!Fixture.bInitialized) { return false; }
+    if (!Fixture.bInitialized)
+    {
+        return false;
+    }
     auto& Provider = Fixture.Provider;
     auto& Device = Fixture.Device;
     auto& Trace = Device.Trace;
@@ -731,22 +671,15 @@ bool TestSharedAuthoredTexture()
     FMaterialAsset* A = FRenderAssetProvider::CreateMaterial(&Provider, Data, &Texture);
     Data.BaseColor = Math::Vector3f(0.5f, 0.8f, 0.9f);
     FMaterialAsset* B = FRenderAssetProvider::CreateMaterial(&Provider, Data, &Texture);
-    bool Passed = ExpectProvider(A != nullptr && B != nullptr &&
-        A->MaterialBindGroup != B->MaterialBindGroup && A->BaseColorTexture == B->BaseColorTexture &&
-        A->bRequiresUV && B->bRequiresUV && Provider.GetTextureUploadCount() == 1 &&
-        Trace.ViewsCreated == 1, "multiple material bindings share one uploaded RGBA8 image");
+    bool Passed = ExpectProvider(A != nullptr && B != nullptr && A->MaterialBindGroup != B->MaterialBindGroup && A->BaseColorTexture == B->BaseColorTexture && A->bRequiresUV && B->bRequiresUV && Provider.GetTextureUploadCount() == 1 && Trace.ViewsCreated == 1, "multiple material bindings share one uploaded RGBA8 image");
     Device.bFailBinding = true;
     FMaterialAsset* Failed = FRenderAssetProvider::CreateMaterial(&Provider, Data, &Texture);
-    Passed &= ExpectProvider(Failed == nullptr && Provider.GetLastTextureUploadResult() ==
-        ETextureUploadResult::BindingCreationFailed && Trace.ImagesDestroyed == 0,
-        "binding failure releases only its candidate reference");
+    Passed &= ExpectProvider(Failed == nullptr && Provider.GetLastTextureUploadResult() == ETextureUploadResult::BindingCreationFailed && Trace.ImagesDestroyed == 0, "binding failure releases only its candidate reference");
     FRenderAssetProvider::DestroyMaterial(&Provider, Failed);
     FRenderAssetProvider::DestroyMaterial(&Provider, A);
-    Passed &= ExpectProvider(Trace.BindingsDestroyed == 1 && Trace.ImagesDestroyed == 0,
-        "returning a failed registration's payload leaves a shared image used by another material");
+    Passed &= ExpectProvider(Trace.BindingsDestroyed == 1 && Trace.ImagesDestroyed == 0, "returning a failed registration's payload leaves a shared image used by another material");
     FRenderAssetProvider::DestroyMaterial(&Provider, B);
-    Passed &= ExpectProvider(Trace.BindingsDestroyed == 2 && Trace.ViewsDestroyed == 1 && Trace.ImagesDestroyed == 1,
-        "last reference releases shared view and image");
+    Passed &= ExpectProvider(Trace.BindingsDestroyed == 2 && Trace.ViewsDestroyed == 1 && Trace.ImagesDestroyed == 1, "last reference releases shared view and image");
     return Passed;
 }
 

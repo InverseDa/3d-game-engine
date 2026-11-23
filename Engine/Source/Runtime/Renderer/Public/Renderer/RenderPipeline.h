@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "ShadingPath.h"
 
-
 namespace LE
 {
 
@@ -16,10 +15,7 @@ struct FRenderPipelinePlan
 {
     LE::Array<IRenderPass*> Passes;
 
-    void Reset()
-    {
-        Passes.Clear();
-    }
+    void Reset() { Passes.Clear(); }
 };
 
 class RENDERER_API IRenderPipeline
@@ -32,11 +28,7 @@ public:
     virtual EShadingPath GetShadingPath() const = 0;
 
 public:
-    virtual void BuildPasses(
-        const FRendererFrameContext& FrameContext,
-        const FRenderScene& RenderScene,
-        const FRenderView& RenderView,
-        FRenderPipelinePlan& OutPlan) = 0;
+    virtual void BuildPasses(const FRendererFrameContext& FrameContext, const FRenderScene& RenderScene, const FRenderView& RenderView, FRenderPipelinePlan& OutPlan) = 0;
 };
 
 } // namespace LE

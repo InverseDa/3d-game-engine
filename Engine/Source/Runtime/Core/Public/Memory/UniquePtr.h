@@ -9,8 +9,7 @@
 namespace LE
 {
 
-template <typename T>
-class UniquePtr
+template <typename T> class UniquePtr
 {
 public:
     using DestroyFunction = void (*)(void* Context, T* Object) noexcept;
@@ -21,10 +20,7 @@ public:
     UniquePtr(const UniquePtr&) = delete;
     UniquePtr& operator=(const UniquePtr&) = delete;
 
-    UniquePtr(UniquePtr&& Other) noexcept
-        : ObjectValue(Other.ObjectValue)
-        , ContextValue(Other.ContextValue)
-        , DestroyValue(Other.DestroyValue)
+    UniquePtr(UniquePtr&& Other) noexcept : ObjectValue(Other.ObjectValue), ContextValue(Other.ContextValue), DestroyValue(Other.DestroyValue)
     {
         Other.ObjectValue = nullptr;
         Other.ContextValue = nullptr;
@@ -48,10 +44,7 @@ public:
 
     ~UniquePtr() { Reset(); }
 
-    static UniquePtr Adopt(
-        T* const Object,
-        void* const Context,
-        const DestroyFunction Destroy) noexcept
+    static UniquePtr Adopt(T* const Object, void* const Context, const DestroyFunction Destroy) noexcept
     {
         if (Object != nullptr && Destroy == nullptr)
         {
@@ -85,15 +78,9 @@ public:
     }
 
 private:
-    template <typename U, typename... Arguments>
-    friend UniquePtr<U> TryMakeUniqueWithAllocator(IAllocator&, Arguments&&...);
+    template <typename U, typename... Arguments> friend UniquePtr<U> TryMakeUniqueWithAllocator(IAllocator&, Arguments&&...);
 
-    UniquePtr(T* const Object, void* const Context, const DestroyFunction Destroy) noexcept
-        : ObjectValue(Object)
-        , ContextValue(Context)
-        , DestroyValue(Destroy)
-    {
-    }
+    UniquePtr(T* const Object, void* const Context, const DestroyFunction Destroy) noexcept : ObjectValue(Object), ContextValue(Context), DestroyValue(Destroy) {}
 
     void Validate() const
     {
@@ -110,8 +97,7 @@ private:
 
 namespace Detail
 {
-template <typename T>
-void DestroyUniqueAllocated(void* const Context, T* const Object) noexcept
+template <typename T> void DestroyUniqueAllocated(void* const Context, T* const Object) noexcept
 {
     IAllocator& Allocator = *static_cast<IAllocator*>(Context);
     Object->~T();
@@ -119,13 +105,10 @@ void DestroyUniqueAllocated(void* const Context, T* const Object) noexcept
 }
 } // namespace Detail
 
-template <typename T, typename... Arguments>
-UniquePtr<T> TryMakeUniqueWithAllocator(IAllocator& Allocator, Arguments&&... Values)
+template <typename T, typename... Arguments> UniquePtr<T> TryMakeUniqueWithAllocator(IAllocator& Allocator, Arguments&&... Values)
 {
-    static_assert(std::is_nothrow_constructible<T, Arguments...>::value,
-        "TryMakeUnique requires non-throwing object construction");
-    static_assert(std::is_nothrow_destructible<T>::value,
-        "TryMakeUnique requires non-throwing object destruction");
+    static_assert(std::is_nothrow_constructible<T, Arguments...>::value, "TryMakeUnique requires non-throwing object construction");
+    static_assert(std::is_nothrow_destructible<T>::value, "TryMakeUnique requires non-throwing object destruction");
     T* const Storage = TryAllocateArray<T>(Allocator, 1);
     if (Storage == nullptr)
     {
@@ -135,8 +118,7 @@ UniquePtr<T> TryMakeUniqueWithAllocator(IAllocator& Allocator, Arguments&&... Va
     return UniquePtr<T>(Storage, &Allocator, &Detail::DestroyUniqueAllocated<T>);
 }
 
-template <typename T, typename... Arguments>
-UniquePtr<T> MakeUniqueWithAllocator(IAllocator& Allocator, Arguments&&... Values)
+template <typename T, typename... Arguments> UniquePtr<T> MakeUniqueWithAllocator(IAllocator& Allocator, Arguments&&... Values)
 {
     UniquePtr<T> Result = TryMakeUniqueWithAllocator<T>(Allocator, std::forward<Arguments>(Values)...);
     if (!Result)
@@ -146,14 +128,12 @@ UniquePtr<T> MakeUniqueWithAllocator(IAllocator& Allocator, Arguments&&... Value
     return Result;
 }
 
-template <typename T, typename... Arguments>
-UniquePtr<T> MakeUnique(Arguments&&... Values)
+template <typename T, typename... Arguments> UniquePtr<T> MakeUnique(Arguments&&... Values)
 {
     return MakeUniqueWithAllocator<T>(GetDefaultAllocator(), std::forward<Arguments>(Values)...);
 }
 
-template <typename T, typename... Arguments>
-UniquePtr<T> TryMakeUnique(Arguments&&... Values)
+template <typename T, typename... Arguments> UniquePtr<T> TryMakeUnique(Arguments&&... Values)
 {
     return TryMakeUniqueWithAllocator<T>(GetDefaultAllocator(), std::forward<Arguments>(Values)...);
 }

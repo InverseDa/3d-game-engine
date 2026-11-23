@@ -67,9 +67,7 @@ enum class EPropertyWireTag : uint8
 // UUIDs returned here are the single C++ source of truth used by generated
 // descriptors, property values, validation, and serialization.
 REFLECTION_API FTypeId GetBuiltinPropertyTypeId(EPropertyBuiltinType Type) noexcept;
-REFLECTION_API bool TryGetBuiltinPropertyType(
-    FTypeId TypeId,
-    EPropertyBuiltinType& OutType) noexcept;
+REFLECTION_API bool TryGetBuiltinPropertyType(FTypeId TypeId, EPropertyBuiltinType& OutType) noexcept;
 
 class REFLECTION_API FPropertyValue final
 {
@@ -103,11 +101,7 @@ public:
     bool TrySetEnum(FTypeId EnumTypeId, uint64 ValueBits) noexcept;
     bool TrySetObject(const FPropertyBag& Value) noexcept;
     bool TrySetObject(FPropertyBag&& Value) noexcept;
-    bool TrySetOpaque(
-        FTypeId TypeId,
-        uint8 WireTag,
-        uint8 WireFlags,
-        Span<const uint8> Payload) noexcept;
+    bool TrySetOpaque(FTypeId TypeId, uint8 WireTag, uint8 WireFlags, Span<const uint8> Payload) noexcept;
 
     bool TryGetBool(bool& OutValue) const noexcept;
     bool TryGetInt8(int8& OutValue) const noexcept;
@@ -122,10 +116,7 @@ public:
     bool TryGetBytes(Span<const uint8>& OutValue) const noexcept;
     bool TryGetEnum(uint64& OutValueBits) const noexcept;
     const FPropertyBag* TryGetObject() const noexcept;
-    bool TryGetOpaque(
-        uint8& OutWireTag,
-        uint8& OutWireFlags,
-        Span<const uint8>& OutPayload) const noexcept;
+    bool TryGetOpaque(uint8& OutWireTag, uint8& OutWireFlags, Span<const uint8>& OutPayload) const noexcept;
 
     // Returned String/Bytes/Opaque views and Object pointers are borrowed and
     // invalidated by any successful setter, Reset, move, or destruction.

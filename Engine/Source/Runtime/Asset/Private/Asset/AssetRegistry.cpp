@@ -22,14 +22,8 @@ uint64 AcquireAssetRegistryDomain() noexcept
     uint64 Candidate = GNextAssetRegistryDomain.load(std::memory_order_relaxed);
     while (Candidate != 0)
     {
-        const uint64 Next = Candidate == (std::numeric_limits<uint64>::max)()
-            ? uint64{0}
-            : Candidate + 1;
-        if (GNextAssetRegistryDomain.compare_exchange_weak(
-                Candidate,
-                Next,
-                std::memory_order_relaxed,
-                std::memory_order_relaxed))
+        const uint64 Next = Candidate == (std::numeric_limits<uint64>::max)() ? uint64{0} : Candidate + 1;
+        if (GNextAssetRegistryDomain.compare_exchange_weak(Candidate, Next, std::memory_order_relaxed, std::memory_order_relaxed))
         {
             return Candidate;
         }
@@ -53,9 +47,7 @@ bool IsValidMetadata(const StringView Value, const bool bAllowEmpty) noexcept
     return true;
 }
 
-bool IsValidOwnership(
-    const EAssetOwnership Ownership,
-    const FAssetDestroyThunk Destroy) noexcept
+bool IsValidOwnership(const EAssetOwnership Ownership, const FAssetDestroyThunk Destroy) noexcept
 {
     if (Ownership == EAssetOwnership::Borrowed)
     {
@@ -68,8 +60,7 @@ bool IsValidOwnership(
     return false;
 }
 
-template <typename T>
-bool TryReserveOneMore(Array<T>& Values) noexcept
+template <typename T> bool TryReserveOneMore(Array<T>& Values) noexcept
 {
     if (Values.Size() < Values.Capacity())
     {
@@ -97,25 +88,11 @@ bool TryReserveOneMore(Array<T>& Values) noexcept
 
 struct FOwnedAssetEntry
 {
-    explicit FOwnedAssetEntry(IAllocator& Allocator) noexcept
-        : SoftPath(Allocator)
-        , DisplayName(Allocator)
-        , ProviderName(Allocator)
-    {
-    }
+    explicit FOwnedAssetEntry(IAllocator& Allocator) noexcept : SoftPath(Allocator), DisplayName(Allocator), ProviderName(Allocator) {}
 
     FOwnedAssetEntry(const FOwnedAssetEntry&) = delete;
     FOwnedAssetEntry& operator=(const FOwnedAssetEntry&) = delete;
-    FOwnedAssetEntry(FOwnedAssetEntry&& Other) noexcept
-        : Id(Other.Id)
-        , TypeId(Other.TypeId)
-        , SoftPath(std::move(Other.SoftPath))
-        , DisplayName(std::move(Other.DisplayName))
-        , ProviderName(std::move(Other.ProviderName))
-        , Object(Other.Object)
-        , Ownership(Other.Ownership)
-        , Destroy(Other.Destroy)
-        , ProviderContext(Other.ProviderContext)
+    FOwnedAssetEntry(FOwnedAssetEntry&& Other) noexcept : Id(Other.Id), TypeId(Other.TypeId), SoftPath(std::move(Other.SoftPath)), DisplayName(std::move(Other.DisplayName)), ProviderName(std::move(Other.ProviderName)), Object(Other.Object), Ownership(Other.Ownership), Destroy(Other.Destroy), ProviderContext(Other.ProviderContext)
     {
         Other.Id = {};
         Other.TypeId = {};
@@ -175,9 +152,7 @@ struct FAssetSlot
     bool bRetired = false;
 };
 
-static_assert(std::is_nothrow_move_constructible<FAssetSlot>::value &&
-    std::is_nothrow_move_assignable<FAssetSlot>::value,
-    "asset slots must relocate without introducing a fallible commit step");
+static_assert(std::is_nothrow_move_constructible<FAssetSlot>::value && std::is_nothrow_move_assignable<FAssetSlot>::value, "asset slots must relocate without introducing a fallible commit step");
 
 enum class ESlotValidation : uint8
 {
@@ -192,23 +167,9 @@ enum class ESlotValidation : uint8
 
 struct FAssetRegistry::FImpl
 {
-    explicit FImpl(IAllocator& InAllocator, const uint64 InDomain) noexcept
-        : Allocator(InAllocator)
-        , Domain(InDomain)
-        , Slots(InAllocator)
-        , FreeIndices(InAllocator)
-        , RegistrationOrder(InAllocator)
-        , IdToSlot(InAllocator)
-        , PathToSlot(InAllocator)
-        , ObjectToSlot(InAllocator)
-    {
-    }
+    explicit FImpl(IAllocator& InAllocator, const uint64 InDomain) noexcept : Allocator(InAllocator), Domain(InDomain), Slots(InAllocator), FreeIndices(InAllocator), RegistrationOrder(InAllocator), IdToSlot(InAllocator), PathToSlot(InAllocator), ObjectToSlot(InAllocator) {}
 
-    ESlotValidation Validate(
-        const FAssetSlotHandle Handle,
-        const uint64 HandleDomain,
-        const FAssetTypeId ExpectedType,
-        const FAssetSlot*& OutSlot) const noexcept
+    ESlotValidation Validate(const FAssetSlotHandle Handle, const uint64 HandleDomain, const FAssetTypeId ExpectedType, const FAssetSlot*& OutSlot) const noexcept
     {
         if (!Handle.IsValid() || HandleDomain == 0)
         {
@@ -236,18 +197,10 @@ struct FAssetRegistry::FImpl
         return ESlotValidation::Success;
     }
 
-    ESlotValidation Validate(
-        const FAssetSlotHandle Handle,
-        const uint64 HandleDomain,
-        const FAssetTypeId ExpectedType,
-        FAssetSlot*& OutSlot) noexcept
+    ESlotValidation Validate(const FAssetSlotHandle Handle, const uint64 HandleDomain, const FAssetTypeId ExpectedType, FAssetSlot*& OutSlot) noexcept
     {
         const FAssetSlot* ConstSlot = nullptr;
-        const ESlotValidation Result = static_cast<const FImpl&>(*this).Validate(
-            Handle,
-            HandleDomain,
-            ExpectedType,
-            ConstSlot);
+        const ESlotValidation Result = static_cast<const FImpl&>(*this).Validate(Handle, HandleDomain, ExpectedType, ConstSlot);
         OutSlot = const_cast<FAssetSlot*>(ConstSlot);
         return Result;
     }
@@ -260,8 +213,7 @@ struct FAssetRegistry::FImpl
         Entry.Object = nullptr;
         Entry.Destroy = nullptr;
         Entry.ProviderContext = nullptr;
-        if (Entry.Ownership == EAssetOwnership::OwnedByProviderThunk &&
-            Object != nullptr && Destroy != nullptr)
+        if (Entry.Ownership == EAssetOwnership::OwnedByProviderThunk && Object != nullptr && Destroy != nullptr)
         {
             Destroy(ProviderContext, Object);
         }
@@ -306,11 +258,16 @@ EAssetResolveResult ToResolveResult(const ESlotValidation Result) noexcept
 {
     switch (Result)
     {
-    case ESlotValidation::Success: return EAssetResolveResult::Success;
-    case ESlotValidation::InvalidHandle: return EAssetResolveResult::InvalidHandle;
-    case ESlotValidation::ForeignRegistry: return EAssetResolveResult::ForeignRegistry;
-    case ESlotValidation::StaleHandle: return EAssetResolveResult::StaleHandle;
-    case ESlotValidation::TypeMismatch: return EAssetResolveResult::TypeMismatch;
+    case ESlotValidation::Success:
+        return EAssetResolveResult::Success;
+    case ESlotValidation::InvalidHandle:
+        return EAssetResolveResult::InvalidHandle;
+    case ESlotValidation::ForeignRegistry:
+        return EAssetResolveResult::ForeignRegistry;
+    case ESlotValidation::StaleHandle:
+        return EAssetResolveResult::StaleHandle;
+    case ESlotValidation::TypeMismatch:
+        return EAssetResolveResult::TypeMismatch;
     }
     return EAssetResolveResult::InvalidHandle;
 }
@@ -319,11 +276,16 @@ EAssetUnregisterResult ToUnregisterResult(const ESlotValidation Result) noexcept
 {
     switch (Result)
     {
-    case ESlotValidation::Success: return EAssetUnregisterResult::Success;
-    case ESlotValidation::InvalidHandle: return EAssetUnregisterResult::InvalidHandle;
-    case ESlotValidation::ForeignRegistry: return EAssetUnregisterResult::ForeignRegistry;
-    case ESlotValidation::StaleHandle: return EAssetUnregisterResult::StaleHandle;
-    case ESlotValidation::TypeMismatch: return EAssetUnregisterResult::TypeMismatch;
+    case ESlotValidation::Success:
+        return EAssetUnregisterResult::Success;
+    case ESlotValidation::InvalidHandle:
+        return EAssetUnregisterResult::InvalidHandle;
+    case ESlotValidation::ForeignRegistry:
+        return EAssetUnregisterResult::ForeignRegistry;
+    case ESlotValidation::StaleHandle:
+        return EAssetUnregisterResult::StaleHandle;
+    case ESlotValidation::TypeMismatch:
+        return EAssetUnregisterResult::TypeMismatch;
     }
     return EAssetUnregisterResult::InvalidHandle;
 }
@@ -332,19 +294,21 @@ EAssetReplaceResult ToReplaceResult(const ESlotValidation Result) noexcept
 {
     switch (Result)
     {
-    case ESlotValidation::Success: return EAssetReplaceResult::Success;
-    case ESlotValidation::InvalidHandle: return EAssetReplaceResult::InvalidHandle;
-    case ESlotValidation::ForeignRegistry: return EAssetReplaceResult::ForeignRegistry;
-    case ESlotValidation::StaleHandle: return EAssetReplaceResult::StaleHandle;
-    case ESlotValidation::TypeMismatch: return EAssetReplaceResult::TypeMismatch;
+    case ESlotValidation::Success:
+        return EAssetReplaceResult::Success;
+    case ESlotValidation::InvalidHandle:
+        return EAssetReplaceResult::InvalidHandle;
+    case ESlotValidation::ForeignRegistry:
+        return EAssetReplaceResult::ForeignRegistry;
+    case ESlotValidation::StaleHandle:
+        return EAssetReplaceResult::StaleHandle;
+    case ESlotValidation::TypeMismatch:
+        return EAssetReplaceResult::TypeMismatch;
     }
     return EAssetReplaceResult::InvalidHandle;
 }
 
-ESoftAssetPathResult CanonicalizePath(
-    IAllocator& Allocator,
-    const StringView Source,
-    FSoftAssetPath& OutPath) noexcept
+ESoftAssetPathResult CanonicalizePath(IAllocator& Allocator, const StringView Source, FSoftAssetPath& OutPath) noexcept
 {
     FSoftAssetPath Candidate(Allocator);
     const ESoftAssetPathResult Result = Candidate.TryAssign(Source);
@@ -357,10 +321,7 @@ ESoftAssetPathResult CanonicalizePath(
 
 } // namespace
 
-FAssetRegistry::FAssetRegistry() noexcept
-    : FAssetRegistry(GetDefaultAllocator())
-{
-}
+FAssetRegistry::FAssetRegistry() noexcept : FAssetRegistry(GetDefaultAllocator()) {}
 
 FAssetRegistry::FAssetRegistry(IAllocator& Allocator) noexcept
 {
@@ -401,10 +362,7 @@ std::size_t FAssetRegistry::GetAssetCount() const noexcept
     return IsValid() ? Impl->AssetCount : 0;
 }
 
-EAssetRegisterResult FAssetRegistry::RegisterErased(
-    const FErasedRegistration& Registration,
-    FAssetSlotHandle& OutSlot,
-    uint64& OutDomain) noexcept
+EAssetRegisterResult FAssetRegistry::RegisterErased(const FErasedRegistration& Registration, FAssetSlotHandle& OutSlot, uint64& OutDomain) noexcept
 {
     if (!IsValid())
     {
@@ -426,8 +384,7 @@ EAssetRegisterResult FAssetRegistry::RegisterErased(
     {
         return EAssetRegisterResult::NullObject;
     }
-    if (!IsValidMetadata(Registration.DisplayName, true) ||
-        !IsValidMetadata(Registration.ProviderName, false))
+    if (!IsValidMetadata(Registration.DisplayName, true) || !IsValidMetadata(Registration.ProviderName, false))
     {
         return EAssetRegisterResult::InvalidMetadata;
     }
@@ -437,10 +394,7 @@ EAssetRegisterResult FAssetRegistry::RegisterErased(
     }
 
     FSoftAssetPath CanonicalPath(Impl->Allocator);
-    const ESoftAssetPathResult PathResult = CanonicalizePath(
-        Impl->Allocator,
-        Registration.SoftPath,
-        CanonicalPath);
+    const ESoftAssetPathResult PathResult = CanonicalizePath(Impl->Allocator, Registration.SoftPath, CanonicalPath);
     if (PathResult == ESoftAssetPathResult::AllocationFailed)
     {
         return EAssetRegisterResult::AllocationFailed;
@@ -469,9 +423,7 @@ EAssetRegisterResult FAssetRegistry::RegisterErased(
     Staged.Ownership = Registration.Ownership;
     Staged.Destroy = Registration.Destroy;
     Staged.ProviderContext = Registration.ProviderContext;
-    if (!Staged.SoftPath.TryAssign(CanonicalPath.View()) ||
-        !Staged.DisplayName.TryAssign(Registration.DisplayName) ||
-        !Staged.ProviderName.TryAssign(Registration.ProviderName))
+    if (!Staged.SoftPath.TryAssign(CanonicalPath.View()) || !Staged.DisplayName.TryAssign(Registration.DisplayName) || !Staged.ProviderName.TryAssign(Registration.ProviderName))
     {
         return EAssetRegisterResult::AllocationFailed;
     }
@@ -504,10 +456,7 @@ EAssetRegisterResult FAssetRegistry::RegisterErased(
         }
     }
 
-    if (!TryReserveOneMore(Impl->RegistrationOrder) ||
-        !Impl->IdToSlot.TryReserve(Impl->IdToSlot.Size() + 1) ||
-        !Impl->PathToSlot.TryReserve(Impl->PathToSlot.Size() + 1) ||
-        !Impl->ObjectToSlot.TryReserve(Impl->ObjectToSlot.Size() + 1))
+    if (!TryReserveOneMore(Impl->RegistrationOrder) || !Impl->IdToSlot.TryReserve(Impl->IdToSlot.Size() + 1) || !Impl->PathToSlot.TryReserve(Impl->PathToSlot.Size() + 1) || !Impl->ObjectToSlot.TryReserve(Impl->ObjectToSlot.Size() + 1))
     {
         return EAssetRegisterResult::AllocationFailed;
     }
@@ -516,14 +465,12 @@ EAssetRegisterResult FAssetRegistry::RegisterErased(
     {
         return EAssetRegisterResult::AllocationFailed;
     }
-    if (Impl->PathToSlot.TryInsert(std::move(PathIndexKey), SlotIndex) !=
-        EHashInsertResult::Inserted)
+    if (Impl->PathToSlot.TryInsert(std::move(PathIndexKey), SlotIndex) != EHashInsertResult::Inserted)
     {
         Impl->IdToSlot.Erase(Registration.Id);
         return EAssetRegisterResult::AllocationFailed;
     }
-    if (Impl->ObjectToSlot.TryInsert(Registration.Object, SlotIndex) !=
-        EHashInsertResult::Inserted)
+    if (Impl->ObjectToSlot.TryInsert(Registration.Object, SlotIndex) != EHashInsertResult::Inserted)
     {
         Impl->PathToSlot.Erase(Staged.SoftPath.View());
         Impl->IdToSlot.Erase(Registration.Id);
@@ -567,40 +514,50 @@ EAssetRegisterResult FAssetRegistry::RegisterErased(
     return EAssetRegisterResult::Success;
 }
 
-EAssetFindResult FAssetRegistry::FindByIdErased(
-    const FAssetId Id,
-    const FAssetTypeId TypeId,
-    FAssetSlotHandle& OutSlot,
-    uint64& OutDomain) const noexcept
+EAssetFindResult FAssetRegistry::FindByIdErased(const FAssetId Id, const FAssetTypeId TypeId, FAssetSlotHandle& OutSlot, uint64& OutDomain) const noexcept
 {
-    if (!IsValid()) return EAssetFindResult::InvalidRegistry;
-    if (Impl->bMutating) return EAssetFindResult::InvalidState;
-    if (!Id.IsValid()) return EAssetFindResult::InvalidAssetId;
+    if (!IsValid())
+    {
+        return EAssetFindResult::InvalidRegistry;
+    }
+    if (Impl->bMutating)
+    {
+        return EAssetFindResult::InvalidState;
+    }
+    if (!Id.IsValid())
+    {
+        return EAssetFindResult::InvalidAssetId;
+    }
 
     const uint32* const Index = Impl->IdToSlot.Find(Id);
-    if (Index == nullptr) return EAssetFindResult::NotFound;
+    if (Index == nullptr)
+    {
+        return EAssetFindResult::NotFound;
+    }
     const FAssetSlot& Slot = Impl->Slots[static_cast<std::size_t>(*Index)];
-    if (Slot.Entry.TypeId != TypeId) return EAssetFindResult::TypeMismatch;
+    if (Slot.Entry.TypeId != TypeId)
+    {
+        return EAssetFindResult::TypeMismatch;
+    }
 
     OutSlot = FAssetSlotHandle{*Index, Slot.Generation};
     OutDomain = Impl->Domain;
     return EAssetFindResult::Success;
 }
 
-EAssetFindResult FAssetRegistry::FindByPathErased(
-    const StringView Path,
-    const FAssetTypeId TypeId,
-    FAssetSlotHandle& OutSlot,
-    uint64& OutDomain) const noexcept
+EAssetFindResult FAssetRegistry::FindByPathErased(const StringView Path, const FAssetTypeId TypeId, FAssetSlotHandle& OutSlot, uint64& OutDomain) const noexcept
 {
-    if (!IsValid()) return EAssetFindResult::InvalidRegistry;
-    if (Impl->bMutating) return EAssetFindResult::InvalidState;
+    if (!IsValid())
+    {
+        return EAssetFindResult::InvalidRegistry;
+    }
+    if (Impl->bMutating)
+    {
+        return EAssetFindResult::InvalidState;
+    }
 
     FSoftAssetPath CanonicalPath(Impl->Allocator);
-    const ESoftAssetPathResult PathResult = CanonicalizePath(
-        Impl->Allocator,
-        Path,
-        CanonicalPath);
+    const ESoftAssetPathResult PathResult = CanonicalizePath(Impl->Allocator, Path, CanonicalPath);
     if (PathResult == ESoftAssetPathResult::AllocationFailed)
     {
         return EAssetFindResult::AllocationFailed;
@@ -611,26 +568,33 @@ EAssetFindResult FAssetRegistry::FindByPathErased(
     }
 
     const uint32* const Index = Impl->PathToSlot.Find(CanonicalPath.View());
-    if (Index == nullptr) return EAssetFindResult::NotFound;
+    if (Index == nullptr)
+    {
+        return EAssetFindResult::NotFound;
+    }
     const FAssetSlot& Slot = Impl->Slots[static_cast<std::size_t>(*Index)];
-    if (Slot.Entry.TypeId != TypeId) return EAssetFindResult::TypeMismatch;
+    if (Slot.Entry.TypeId != TypeId)
+    {
+        return EAssetFindResult::TypeMismatch;
+    }
 
     OutSlot = FAssetSlotHandle{*Index, Slot.Generation};
     OutDomain = Impl->Domain;
     return EAssetFindResult::Success;
 }
 
-EAssetResolveResult FAssetRegistry::ResolveErased(
-    const FAssetSlotHandle SlotHandle,
-    const uint64 Domain,
-    const FAssetTypeId TypeId,
-    const void*& OutObject) const noexcept
+EAssetResolveResult FAssetRegistry::ResolveErased(const FAssetSlotHandle SlotHandle, const uint64 Domain, const FAssetTypeId TypeId, const void*& OutObject) const noexcept
 {
-    if (!IsValid()) return EAssetResolveResult::InvalidRegistry;
-    if (Impl->bMutating) return EAssetResolveResult::InvalidState;
+    if (!IsValid())
+    {
+        return EAssetResolveResult::InvalidRegistry;
+    }
+    if (Impl->bMutating)
+    {
+        return EAssetResolveResult::InvalidState;
+    }
     const FAssetSlot* Slot = nullptr;
-    const EAssetResolveResult Result = ToResolveResult(
-        Impl->Validate(SlotHandle, Domain, TypeId, Slot));
+    const EAssetResolveResult Result = ToResolveResult(Impl->Validate(SlotHandle, Domain, TypeId, Slot));
     if (Result == EAssetResolveResult::Success)
     {
         OutObject = Slot->Entry.Object;
@@ -638,17 +602,18 @@ EAssetResolveResult FAssetRegistry::ResolveErased(
     return Result;
 }
 
-EAssetResolveResult FAssetRegistry::GetAssetIdErased(
-    const FAssetSlotHandle SlotHandle,
-    const uint64 Domain,
-    const FAssetTypeId TypeId,
-    FAssetId& OutId) const noexcept
+EAssetResolveResult FAssetRegistry::GetAssetIdErased(const FAssetSlotHandle SlotHandle, const uint64 Domain, const FAssetTypeId TypeId, FAssetId& OutId) const noexcept
 {
-    if (!IsValid()) return EAssetResolveResult::InvalidRegistry;
-    if (Impl->bMutating) return EAssetResolveResult::InvalidState;
+    if (!IsValid())
+    {
+        return EAssetResolveResult::InvalidRegistry;
+    }
+    if (Impl->bMutating)
+    {
+        return EAssetResolveResult::InvalidState;
+    }
     const FAssetSlot* Slot = nullptr;
-    const EAssetResolveResult Result = ToResolveResult(
-        Impl->Validate(SlotHandle, Domain, TypeId, Slot));
+    const EAssetResolveResult Result = ToResolveResult(Impl->Validate(SlotHandle, Domain, TypeId, Slot));
     if (Result == EAssetResolveResult::Success)
     {
         OutId = Slot->Entry.Id;
@@ -656,17 +621,18 @@ EAssetResolveResult FAssetRegistry::GetAssetIdErased(
     return Result;
 }
 
-EAssetResolveResult FAssetRegistry::GetInfoErased(
-    const FAssetSlotHandle SlotHandle,
-    const uint64 Domain,
-    const FAssetTypeId TypeId,
-    FAssetInfo& OutInfo) const noexcept
+EAssetResolveResult FAssetRegistry::GetInfoErased(const FAssetSlotHandle SlotHandle, const uint64 Domain, const FAssetTypeId TypeId, FAssetInfo& OutInfo) const noexcept
 {
-    if (!IsValid()) return EAssetResolveResult::InvalidRegistry;
-    if (Impl->bMutating) return EAssetResolveResult::InvalidState;
+    if (!IsValid())
+    {
+        return EAssetResolveResult::InvalidRegistry;
+    }
+    if (Impl->bMutating)
+    {
+        return EAssetResolveResult::InvalidState;
+    }
     const FAssetSlot* Slot = nullptr;
-    const EAssetResolveResult Result = ToResolveResult(
-        Impl->Validate(SlotHandle, Domain, TypeId, Slot));
+    const EAssetResolveResult Result = ToResolveResult(Impl->Validate(SlotHandle, Domain, TypeId, Slot));
     if (Result == EAssetResolveResult::Success)
     {
         FAssetInfo Info;
@@ -681,20 +647,19 @@ EAssetResolveResult FAssetRegistry::GetInfoErased(
     return Result;
 }
 
-EAssetUnregisterResult FAssetRegistry::UnregisterErased(
-    const FAssetSlotHandle SlotHandle,
-    const uint64 Domain,
-    const FAssetTypeId TypeId) noexcept
+EAssetUnregisterResult FAssetRegistry::UnregisterErased(const FAssetSlotHandle SlotHandle, const uint64 Domain, const FAssetTypeId TypeId) noexcept
 {
-    if (!IsValid()) return EAssetUnregisterResult::InvalidRegistry;
-    if (Impl->bMutating) return EAssetUnregisterResult::InvalidState;
+    if (!IsValid())
+    {
+        return EAssetUnregisterResult::InvalidRegistry;
+    }
+    if (Impl->bMutating)
+    {
+        return EAssetUnregisterResult::InvalidState;
+    }
 
     FAssetSlot* Slot = nullptr;
-    const ESlotValidation Validation = Impl->Validate(
-        SlotHandle,
-        Domain,
-        TypeId,
-        Slot);
+    const ESlotValidation Validation = Impl->Validate(SlotHandle, Domain, TypeId, Slot);
     if (Validation != ESlotValidation::Success)
     {
         return ToUnregisterResult(Validation);
@@ -723,28 +688,31 @@ EAssetUnregisterResult FAssetRegistry::UnregisterErased(
     return EAssetUnregisterResult::Success;
 }
 
-EAssetReplaceResult FAssetRegistry::ReplaceErased(
-    const FAssetSlotHandle SlotHandle,
-    const uint64 Domain,
-    const FErasedRegistration& Registration,
-    FAssetSlotHandle& OutNewSlot,
-    uint64& OutDomain) noexcept
+EAssetReplaceResult FAssetRegistry::ReplaceErased(const FAssetSlotHandle SlotHandle, const uint64 Domain, const FErasedRegistration& Registration, FAssetSlotHandle& OutNewSlot, uint64& OutDomain) noexcept
 {
-    if (!IsValid()) return EAssetReplaceResult::InvalidRegistry;
-    if (Impl->bMutating) return EAssetReplaceResult::InvalidState;
+    if (!IsValid())
+    {
+        return EAssetReplaceResult::InvalidRegistry;
+    }
+    if (Impl->bMutating)
+    {
+        return EAssetReplaceResult::InvalidState;
+    }
 
     // Descriptor identity validation precedes handle validation. This keeps an
     // invalid provider trait or persistent ID diagnosable even when the caller
     // also supplied stale runtime bytes.
-    if (!Registration.Id.IsValid()) return EAssetReplaceResult::InvalidAssetId;
-    if (!Registration.TypeId.IsValid()) return EAssetReplaceResult::InvalidTypeId;
+    if (!Registration.Id.IsValid())
+    {
+        return EAssetReplaceResult::InvalidAssetId;
+    }
+    if (!Registration.TypeId.IsValid())
+    {
+        return EAssetReplaceResult::InvalidTypeId;
+    }
 
     FAssetSlot* Slot = nullptr;
-    const ESlotValidation Validation = Impl->Validate(
-        SlotHandle,
-        Domain,
-        Registration.TypeId,
-        Slot);
+    const ESlotValidation Validation = Impl->Validate(SlotHandle, Domain, Registration.TypeId, Slot);
     if (Validation != ESlotValidation::Success)
     {
         return ToReplaceResult(Validation);
@@ -753,9 +721,11 @@ EAssetReplaceResult FAssetRegistry::ReplaceErased(
     {
         return EAssetReplaceResult::IdentityMismatch;
     }
-    if (Registration.Object == nullptr) return EAssetReplaceResult::NullObject;
-    if (!IsValidMetadata(Registration.DisplayName, true) ||
-        !IsValidMetadata(Registration.ProviderName, false))
+    if (Registration.Object == nullptr)
+    {
+        return EAssetReplaceResult::NullObject;
+    }
+    if (!IsValidMetadata(Registration.DisplayName, true) || !IsValidMetadata(Registration.ProviderName, false))
     {
         return EAssetReplaceResult::InvalidMetadata;
     }
@@ -769,10 +739,7 @@ EAssetReplaceResult FAssetRegistry::ReplaceErased(
     }
 
     FSoftAssetPath CanonicalPath(Impl->Allocator);
-    const ESoftAssetPathResult PathResult = CanonicalizePath(
-        Impl->Allocator,
-        Registration.SoftPath,
-        CanonicalPath);
+    const ESoftAssetPathResult PathResult = CanonicalizePath(Impl->Allocator, Registration.SoftPath, CanonicalPath);
     if (PathResult == ESoftAssetPathResult::AllocationFailed)
     {
         return EAssetReplaceResult::AllocationFailed;
@@ -782,8 +749,7 @@ EAssetReplaceResult FAssetRegistry::ReplaceErased(
         return EAssetReplaceResult::InvalidPath;
     }
 
-    if (const uint32* const Existing = Impl->PathToSlot.Find(CanonicalPath.View());
-        Existing != nullptr && *Existing != SlotHandle.Index)
+    if (const uint32* const Existing = Impl->PathToSlot.Find(CanonicalPath.View()); Existing != nullptr && *Existing != SlotHandle.Index)
     {
         return EAssetReplaceResult::DuplicatePath;
     }
@@ -799,9 +765,7 @@ EAssetReplaceResult FAssetRegistry::ReplaceErased(
     Staged.Ownership = Registration.Ownership;
     Staged.Destroy = Registration.Destroy;
     Staged.ProviderContext = Registration.ProviderContext;
-    if (!Staged.SoftPath.TryAssign(CanonicalPath.View()) ||
-        !Staged.DisplayName.TryAssign(Registration.DisplayName) ||
-        !Staged.ProviderName.TryAssign(Registration.ProviderName))
+    if (!Staged.SoftPath.TryAssign(CanonicalPath.View()) || !Staged.DisplayName.TryAssign(Registration.DisplayName) || !Staged.ProviderName.TryAssign(Registration.ProviderName))
     {
         return EAssetReplaceResult::AllocationFailed;
     }
@@ -812,22 +776,16 @@ EAssetReplaceResult FAssetRegistry::ReplaceErased(
     {
         return EAssetReplaceResult::AllocationFailed;
     }
-    if (!TryReserveOneMore(Impl->RegistrationOrder) ||
-        !Impl->ObjectToSlot.TryReserve(Impl->ObjectToSlot.Size() + 1) ||
-        (bPathChanges &&
-            !Impl->PathToSlot.TryReserve(Impl->PathToSlot.Size() + 1)))
+    if (!TryReserveOneMore(Impl->RegistrationOrder) || !Impl->ObjectToSlot.TryReserve(Impl->ObjectToSlot.Size() + 1) || (bPathChanges && !Impl->PathToSlot.TryReserve(Impl->PathToSlot.Size() + 1)))
     {
         return EAssetReplaceResult::AllocationFailed;
     }
 
-    if (Impl->ObjectToSlot.TryInsert(Registration.Object, SlotHandle.Index) !=
-        EHashInsertResult::Inserted)
+    if (Impl->ObjectToSlot.TryInsert(Registration.Object, SlotHandle.Index) != EHashInsertResult::Inserted)
     {
         return EAssetReplaceResult::AllocationFailed;
     }
-    if (bPathChanges &&
-        Impl->PathToSlot.TryInsert(std::move(PathIndexKey), SlotHandle.Index) !=
-            EHashInsertResult::Inserted)
+    if (bPathChanges && Impl->PathToSlot.TryInsert(std::move(PathIndexKey), SlotHandle.Index) != EHashInsertResult::Inserted)
     {
         Impl->ObjectToSlot.Erase(Registration.Object);
         return EAssetReplaceResult::AllocationFailed;
@@ -836,7 +794,10 @@ EAssetReplaceResult FAssetRegistry::ReplaceErased(
     const FAssetSlotHandle NewHandle{SlotHandle.Index, Slot->Generation + 1};
     if (!Impl->RegistrationOrder.TryPushBack(NewHandle))
     {
-        if (bPathChanges) Impl->PathToSlot.Erase(Staged.SoftPath.View());
+        if (bPathChanges)
+        {
+            Impl->PathToSlot.Erase(Staged.SoftPath.View());
+        }
         Impl->ObjectToSlot.Erase(Registration.Object);
         return EAssetReplaceResult::AllocationFailed;
     }

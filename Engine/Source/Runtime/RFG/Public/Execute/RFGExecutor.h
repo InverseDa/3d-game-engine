@@ -28,11 +28,7 @@ public:
     ~FRFGExecutor() = default;
 
 public:
-    ERHIQueueSubmitResult Execute(
-        const FRFGCompiledPlan& CompiledPlan,
-        const FRFGRecordedGraph& RecordedGraph,
-        FRFGExecutionContext& ExecutionContext,
-        const FRFGExecuteOptions& ExecuteOptions = {}) const;
+    ERHIQueueSubmitResult Execute(const FRFGCompiledPlan& CompiledPlan, const FRFGRecordedGraph& RecordedGraph, FRFGExecutionContext& ExecutionContext, const FRFGExecuteOptions& ExecuteOptions = {}) const;
 };
 
 } // namespace LE

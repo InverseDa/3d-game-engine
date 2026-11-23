@@ -21,6 +21,7 @@ All engine source code is located in the `Source` directory, including:
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues, fork the repository, and create pull requests.
+See the [C++ formatting and API conventions](Docs/CppGovernance.md#c-formatting) when adding or changing engine code.
 
 ## Acknowledgments
 

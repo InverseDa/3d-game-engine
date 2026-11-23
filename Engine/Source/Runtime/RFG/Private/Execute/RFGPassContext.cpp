@@ -28,8 +28,7 @@ void FRFGExecutionContext::ResetTransientResources()
     OwnedBuffers.Clear();
 }
 
-bool FRFGExecutionContext::TransferTransientResources(
-    IRFGDeferredReleaseSink& DeferredReleaseSink) noexcept
+bool FRFGExecutionContext::TransferTransientResources(IRFGDeferredReleaseSink& DeferredReleaseSink) noexcept
 {
     bool bAcceptedAll = true;
     for (LE::FRHITexture*& Texture : OwnedTextures)

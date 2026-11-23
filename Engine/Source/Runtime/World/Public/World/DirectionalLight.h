@@ -13,7 +13,6 @@ enum class EDirectionalLightParameterError : uint8
     Intensity,
 };
 
-WORLD_API EDirectionalLightParameterError ValidateDirectionalLightParameters(
-    const Math::Vector3f& Direction, const Math::Vector3f& Color, float Intensity) noexcept;
+WORLD_API EDirectionalLightParameterError ValidateDirectionalLightParameters(const Math::Vector3f& Direction, const Math::Vector3f& Color, float Intensity) noexcept;
 
 } // namespace LE

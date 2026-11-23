@@ -31,11 +31,7 @@ public:
     ~FRFGTemplateInstancer() = default;
 
 public:
-    FRFGTemplateInstantiateResult Instantiate(
-        const FRFGTemplate& Template,
-        const FRFGParameterStore& ParameterStore,
-        FRFGInstance& Instance,
-        const FRFGTemplateInstantiateOptions& Options = {}) const;
+    FRFGTemplateInstantiateResult Instantiate(const FRFGTemplate& Template, const FRFGParameterStore& ParameterStore, FRFGInstance& Instance, const FRFGTemplateInstantiateOptions& Options = {}) const;
 };
 
 } // namespace LE

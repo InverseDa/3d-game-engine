@@ -4,7 +4,6 @@
 #include "RHI/RHITypes.h"
 #include "Core/RFGHandles.h"
 
-
 namespace LE
 {
 
@@ -40,20 +39,20 @@ enum class ERFGHazardType : uint8
 
 enum class ERFGPipelineStage : uint8
 {
-    None      = 0,
-    Graphics  = 1 << 0,
-    Compute   = 1 << 1,
-    Copy      = 1 << 2,
-    Host      = 1 << 3,
-    All       = 0xFF,
+    None = 0,
+    Graphics = 1 << 0,
+    Compute = 1 << 1,
+    Copy = 1 << 2,
+    Host = 1 << 3,
+    All = 0xFF,
 };
 
 enum class ERFGPassFlags : uint32
 {
-    None                   = 0,
-    HasSideEffects         = 1 << 0,
-    NeverCull              = 1 << 1,
-    AsyncComputeCandidate  = 1 << 2,
+    None = 0,
+    HasSideEffects = 1 << 0,
+    NeverCull = 1 << 1,
+    AsyncComputeCandidate = 1 << 2,
 };
 
 inline ERFGPassFlags operator|(ERFGPassFlags Lhs, ERFGPassFlags Rhs)
@@ -68,10 +67,10 @@ inline bool EnumHasAnyFlags(ERFGPassFlags Value, ERFGPassFlags Flags)
 
 enum class ERFGResourceFlags : uint32
 {
-    None        = 0,
-    Imported    = 1 << 0,
-    External    = 1 << 1,
-    Persistent  = 1 << 2,
+    None = 0,
+    Imported = 1 << 0,
+    External = 1 << 1,
+    Persistent = 1 << 2,
 };
 
 inline ERFGResourceFlags operator|(ERFGResourceFlags Lhs, ERFGResourceFlags Rhs)

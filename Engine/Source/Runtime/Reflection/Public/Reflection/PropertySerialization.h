@@ -38,30 +38,15 @@ enum class EPropertySerializationResult : uint8
 
 // Both functions are transactional: OutBytes/OutBag are unchanged on any
 // failure. The binary representation is canonical and little-endian.
-REFLECTION_API EPropertySerializationResult TryEncodePropertyBag(
-    const FPropertyBag& Bag,
-    Array<uint8>& OutBytes,
-    const FPropertySerializationLimits& Limits = {}) noexcept;
-REFLECTION_API EPropertySerializationResult TryDecodePropertyBag(
-    Span<const uint8> Bytes,
-    FPropertyBag& OutBag,
-    const FPropertySerializationLimits& Limits = {}) noexcept;
+REFLECTION_API EPropertySerializationResult TryEncodePropertyBag(const FPropertyBag& Bag, Array<uint8>& OutBytes, const FPropertySerializationLimits& Limits = {}) noexcept;
+REFLECTION_API EPropertySerializationResult TryDecodePropertyBag(Span<const uint8> Bytes, FPropertyBag& OutBag, const FPropertySerializationLimits& Limits = {}) noexcept;
 
 // Unknown property IDs are retained and accepted. Known properties must carry
 // the exact reflected ValueTypeId and a compatible value kind.
-REFLECTION_API EPropertySerializationResult ValidatePropertyBag(
-    const FReflectionRegistry& Registry,
-    const FPropertyBag& Bag,
-    const FPropertySerializationLimits& Limits = {}) noexcept;
+REFLECTION_API EPropertySerializationResult ValidatePropertyBag(const FReflectionRegistry& Registry, const FPropertyBag& Bag, const FPropertySerializationLimits& Limits = {}) noexcept;
 
 // Captures a native object through generated getter metadata. SchemaVersion is
 // the version of the entire captured object graph and is applied recursively.
-REFLECTION_API EPropertySerializationResult TryCapturePropertyBag(
-    const FReflectionRegistry& Registry,
-    FTypeId SchemaTypeId,
-    uint32 SchemaVersion,
-    const void* Instance,
-    FPropertyBag& OutBag,
-    const FPropertySerializationLimits& Limits = {}) noexcept;
+REFLECTION_API EPropertySerializationResult TryCapturePropertyBag(const FReflectionRegistry& Registry, FTypeId SchemaTypeId, uint32 SchemaVersion, const void* Instance, FPropertyBag& OutBag, const FPropertySerializationLimits& Limits = {}) noexcept;
 
 } // namespace LE

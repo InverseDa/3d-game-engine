@@ -42,10 +42,7 @@ public:
     bool IsValid() const noexcept;
     std::size_t GetAssetCount() const noexcept;
 
-    template <typename AssetType>
-    EAssetRegisterResult Register(
-        const TAssetRegistration<AssetType>& Registration,
-        TAssetHandle<AssetType>& OutHandle) noexcept
+    template <typename AssetType> EAssetRegisterResult Register(const TAssetRegistration<AssetType>& Registration, TAssetHandle<AssetType>& OutHandle) noexcept
     {
         FErasedRegistration Erased;
         Erased.Id = Registration.Id;
@@ -68,18 +65,11 @@ public:
         return Result;
     }
 
-    template <typename AssetType>
-    EAssetFindResult TryFindById(
-        const FAssetId Id,
-        TAssetHandle<AssetType>& OutHandle) const noexcept
+    template <typename AssetType> EAssetFindResult TryFindById(const FAssetId Id, TAssetHandle<AssetType>& OutHandle) const noexcept
     {
         FAssetSlotHandle Slot;
         uint64 Domain = 0;
-        const EAssetFindResult Result = FindByIdErased(
-            Id,
-            GetAssetTypeId<AssetType>(),
-            Slot,
-            Domain);
+        const EAssetFindResult Result = FindByIdErased(Id, GetAssetTypeId<AssetType>(), Slot, Domain);
         if (Result == EAssetFindResult::Success)
         {
             OutHandle = TAssetHandle<AssetType>(Slot, Domain);
@@ -87,18 +77,11 @@ public:
         return Result;
     }
 
-    template <typename AssetType>
-    EAssetFindResult TryFindByPath(
-        const StringView Path,
-        TAssetHandle<AssetType>& OutHandle) const noexcept
+    template <typename AssetType> EAssetFindResult TryFindByPath(const StringView Path, TAssetHandle<AssetType>& OutHandle) const noexcept
     {
         FAssetSlotHandle Slot;
         uint64 Domain = 0;
-        const EAssetFindResult Result = FindByPathErased(
-            Path,
-            GetAssetTypeId<AssetType>(),
-            Slot,
-            Domain);
+        const EAssetFindResult Result = FindByPathErased(Path, GetAssetTypeId<AssetType>(), Slot, Domain);
         if (Result == EAssetFindResult::Success)
         {
             OutHandle = TAssetHandle<AssetType>(Slot, Domain);
@@ -106,17 +89,10 @@ public:
         return Result;
     }
 
-    template <typename AssetType>
-    EAssetResolveResult Resolve(
-        const TAssetHandle<AssetType> Handle,
-        const AssetType*& OutObject) const noexcept
+    template <typename AssetType> EAssetResolveResult Resolve(const TAssetHandle<AssetType> Handle, const AssetType*& OutObject) const noexcept
     {
         const void* Object = nullptr;
-        const EAssetResolveResult Result = ResolveErased(
-            Handle.Slot,
-            Handle.RegistryDomain,
-            GetAssetTypeId<AssetType>(),
-            Object);
+        const EAssetResolveResult Result = ResolveErased(Handle.Slot, Handle.RegistryDomain, GetAssetTypeId<AssetType>(), Object);
         if (Result == EAssetResolveResult::Success)
         {
             OutObject = static_cast<const AssetType*>(Object);
@@ -124,45 +100,13 @@ public:
         return Result;
     }
 
-    template <typename AssetType>
-    EAssetResolveResult TryGetAssetId(
-        const TAssetHandle<AssetType> Handle,
-        FAssetId& OutId) const noexcept
-    {
-        return GetAssetIdErased(
-            Handle.Slot,
-            Handle.RegistryDomain,
-            GetAssetTypeId<AssetType>(),
-            OutId);
-    }
+    template <typename AssetType> EAssetResolveResult TryGetAssetId(const TAssetHandle<AssetType> Handle, FAssetId& OutId) const noexcept { return GetAssetIdErased(Handle.Slot, Handle.RegistryDomain, GetAssetTypeId<AssetType>(), OutId); }
 
-    template <typename AssetType>
-    EAssetResolveResult TryGetInfo(
-        const TAssetHandle<AssetType> Handle,
-        FAssetInfo& OutInfo) const noexcept
-    {
-        return GetInfoErased(
-            Handle.Slot,
-            Handle.RegistryDomain,
-            GetAssetTypeId<AssetType>(),
-            OutInfo);
-    }
+    template <typename AssetType> EAssetResolveResult TryGetInfo(const TAssetHandle<AssetType> Handle, FAssetInfo& OutInfo) const noexcept { return GetInfoErased(Handle.Slot, Handle.RegistryDomain, GetAssetTypeId<AssetType>(), OutInfo); }
 
-    template <typename AssetType>
-    EAssetUnregisterResult Unregister(
-        const TAssetHandle<AssetType> Handle) noexcept
-    {
-        return UnregisterErased(
-            Handle.Slot,
-            Handle.RegistryDomain,
-            GetAssetTypeId<AssetType>());
-    }
+    template <typename AssetType> EAssetUnregisterResult Unregister(const TAssetHandle<AssetType> Handle) noexcept { return UnregisterErased(Handle.Slot, Handle.RegistryDomain, GetAssetTypeId<AssetType>()); }
 
-    template <typename AssetType>
-    EAssetReplaceResult Replace(
-        const TAssetHandle<AssetType> Handle,
-        const TAssetRegistration<AssetType>& Registration,
-        TAssetHandle<AssetType>& OutNewHandle) noexcept
+    template <typename AssetType> EAssetReplaceResult Replace(const TAssetHandle<AssetType> Handle, const TAssetRegistration<AssetType>& Registration, TAssetHandle<AssetType>& OutNewHandle) noexcept
     {
         FErasedRegistration Erased;
         Erased.Id = Registration.Id;
@@ -177,12 +121,7 @@ public:
 
         FAssetSlotHandle NewSlot;
         uint64 Domain = 0;
-        const EAssetReplaceResult Result = ReplaceErased(
-            Handle.Slot,
-            Handle.RegistryDomain,
-            Erased,
-            NewSlot,
-            Domain);
+        const EAssetReplaceResult Result = ReplaceErased(Handle.Slot, Handle.RegistryDomain, Erased, NewSlot, Domain);
         if (Result == EAssetReplaceResult::Success)
         {
             OutNewHandle = TAssetHandle<AssetType>(NewSlot, Domain);
@@ -191,45 +130,14 @@ public:
     }
 
 private:
-    EAssetRegisterResult RegisterErased(
-        const FErasedRegistration& Registration,
-        FAssetSlotHandle& OutSlot,
-        uint64& OutDomain) noexcept;
-    EAssetFindResult FindByIdErased(
-        FAssetId Id,
-        FAssetTypeId TypeId,
-        FAssetSlotHandle& OutSlot,
-        uint64& OutDomain) const noexcept;
-    EAssetFindResult FindByPathErased(
-        StringView Path,
-        FAssetTypeId TypeId,
-        FAssetSlotHandle& OutSlot,
-        uint64& OutDomain) const noexcept;
-    EAssetResolveResult ResolveErased(
-        FAssetSlotHandle Slot,
-        uint64 Domain,
-        FAssetTypeId TypeId,
-        const void*& OutObject) const noexcept;
-    EAssetResolveResult GetAssetIdErased(
-        FAssetSlotHandle Slot,
-        uint64 Domain,
-        FAssetTypeId TypeId,
-        FAssetId& OutId) const noexcept;
-    EAssetResolveResult GetInfoErased(
-        FAssetSlotHandle Slot,
-        uint64 Domain,
-        FAssetTypeId TypeId,
-        FAssetInfo& OutInfo) const noexcept;
-    EAssetUnregisterResult UnregisterErased(
-        FAssetSlotHandle Slot,
-        uint64 Domain,
-        FAssetTypeId TypeId) noexcept;
-    EAssetReplaceResult ReplaceErased(
-        FAssetSlotHandle Slot,
-        uint64 Domain,
-        const FErasedRegistration& Registration,
-        FAssetSlotHandle& OutNewSlot,
-        uint64& OutDomain) noexcept;
+    EAssetRegisterResult RegisterErased(const FErasedRegistration& Registration, FAssetSlotHandle& OutSlot, uint64& OutDomain) noexcept;
+    EAssetFindResult FindByIdErased(FAssetId Id, FAssetTypeId TypeId, FAssetSlotHandle& OutSlot, uint64& OutDomain) const noexcept;
+    EAssetFindResult FindByPathErased(StringView Path, FAssetTypeId TypeId, FAssetSlotHandle& OutSlot, uint64& OutDomain) const noexcept;
+    EAssetResolveResult ResolveErased(FAssetSlotHandle Slot, uint64 Domain, FAssetTypeId TypeId, const void*& OutObject) const noexcept;
+    EAssetResolveResult GetAssetIdErased(FAssetSlotHandle Slot, uint64 Domain, FAssetTypeId TypeId, FAssetId& OutId) const noexcept;
+    EAssetResolveResult GetInfoErased(FAssetSlotHandle Slot, uint64 Domain, FAssetTypeId TypeId, FAssetInfo& OutInfo) const noexcept;
+    EAssetUnregisterResult UnregisterErased(FAssetSlotHandle Slot, uint64 Domain, FAssetTypeId TypeId) noexcept;
+    EAssetReplaceResult ReplaceErased(FAssetSlotHandle Slot, uint64 Domain, const FErasedRegistration& Registration, FAssetSlotHandle& OutNewSlot, uint64& OutDomain) noexcept;
 
     struct FImpl;
     FImpl* Impl = nullptr;

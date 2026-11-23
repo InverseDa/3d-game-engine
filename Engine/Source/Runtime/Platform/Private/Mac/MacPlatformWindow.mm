@@ -7,7 +7,7 @@
 
 #include <new>
 
-@interface FMacPlatformWindowDelegate : NSObject<NSWindowDelegate>
+@interface FMacPlatformWindowDelegate : NSObject <NSWindowDelegate>
 {
 @public
     LE::FMacPlatformWindow* Owner;
@@ -34,9 +34,7 @@
     }
 
     const NSRect ContentFrame = [[Window contentView] bounds];
-    Owner->NotifyResized(
-        static_cast<LE::uint32>(ContentFrame.size.width),
-        static_cast<LE::uint32>(ContentFrame.size.height));
+    Owner->NotifyResized(static_cast<LE::uint32>(ContentFrame.size.width), static_cast<LE::uint32>(ContentFrame.size.height));
 }
 
 - (void)windowDidMiniaturize:(NSNotification*)Notification
@@ -88,35 +86,21 @@ void DestroyPlatformWindow(void*, FPlatformWindow* const Window) noexcept
 }
 }
 
-FMacPlatformWindow::FMacPlatformWindow(const FPlatformWindowDesc& Description)
-    : Width(Description.Width)
-    , Height(Description.Height)
+FMacPlatformWindow::FMacPlatformWindow(const FPlatformWindowDesc& Description) : Width(Description.Width), Height(Description.Height)
 {
     @autoreleasepool
     {
         InitializeApplication();
 
-        const NSRect Frame = NSMakeRect(
-            0.0,
-            0.0,
-            static_cast<CGFloat>(Width),
-            static_cast<CGFloat>(Height));
-        NSWindow* Window = [[NSWindow alloc]
-            initWithContentRect:Frame
-                      styleMask:(NSWindowStyleMaskTitled |
-                                 NSWindowStyleMaskClosable |
-                                 NSWindowStyleMaskMiniaturizable |
-                                 NSWindowStyleMaskResizable)
-                        backing:NSBackingStoreBuffered
-                          defer:NO];
+        const NSRect Frame = NSMakeRect(0.0, 0.0, static_cast<CGFloat>(Width), static_cast<CGFloat>(Height));
+        NSWindow* Window = [[NSWindow alloc] initWithContentRect:Frame styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable) backing:NSBackingStoreBuffered defer:NO];
         if (Window == nil)
         {
             return;
         }
 
         const LE::String Title(Description.Title);
-        NSString* WindowTitle = [NSString stringWithUTF8String:
-            (Title.IsEmpty() ? "Limitless Engine" : Title.Data())];
+        NSString* WindowTitle = [NSString stringWithUTF8String:(Title.IsEmpty() ? "Limitless Engine" : Title.Data())];
         [Window setTitle:WindowTitle];
 
         NSView* ContentView = [[NSView alloc] initWithFrame:Frame];
@@ -165,8 +149,7 @@ FMacPlatformWindow::~FMacPlatformWindow()
         NSWindow* Window = (__bridge_transfer NSWindow*)WindowHandle;
         NSView* View = (__bridge_transfer NSView*)ViewHandle;
         CAMetalLayer* MetalLayer = (__bridge_transfer CAMetalLayer*)LayerHandle;
-        FMacPlatformWindowDelegate* Delegate =
-            (__bridge_transfer FMacPlatformWindowDelegate*)DelegateHandle;
+        FMacPlatformWindowDelegate* Delegate = (__bridge_transfer FMacPlatformWindowDelegate*)DelegateHandle;
 
         WindowHandle = nullptr;
         ViewHandle = nullptr;
@@ -202,10 +185,7 @@ void FMacPlatformWindow::PumpEvents(FPlatformEventQueue& OutEvents)
     {
         for (;;)
         {
-            NSEvent* Event = [NSApp nextEventMatchingMask:NSEventMaskAny
-                                                untilDate:[NSDate distantPast]
-                                                   inMode:NSDefaultRunLoopMode
-                                                  dequeue:YES];
+            NSEvent* Event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate distantPast] inMode:NSDefaultRunLoopMode dequeue:YES];
             if (Event == nil)
             {
                 break;

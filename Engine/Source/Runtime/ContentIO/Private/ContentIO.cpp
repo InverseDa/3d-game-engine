@@ -49,8 +49,7 @@ bool IsPathText(const StringView Path) noexcept
             return false;
         }
         const auto Next = static_cast<uint8>(Path[Offset]);
-        if ((Lead == 0xe0 && Next < 0xa0) || (Lead == 0xed && Next >= 0xa0) ||
-            (Lead == 0xf0 && Next < 0x90) || (Lead == 0xf4 && Next >= 0x90))
+        if ((Lead == 0xe0 && Next < 0xa0) || (Lead == 0xed && Next >= 0xa0) || (Lead == 0xf0 && Next < 0x90) || (Lead == 0xf4 && Next >= 0x90))
         {
             return false;
         }
@@ -89,9 +88,7 @@ bool IsDriveLetter(const char Value) noexcept
 bool IsAbsoluteRoot(const StringView Path) noexcept
 {
 #if PLATFORM_WINDOWS
-    return (Path.Size() >= 3 && IsDriveLetter(Path[0]) && Path[1] == ':' && IsSeparator(Path[2])) ||
-        (Path.Size() >= 3 && IsSeparator(Path[0]) && IsSeparator(Path[1]) &&
-            Path[2] != '.' && Path[2] != '?');
+    return (Path.Size() >= 3 && IsDriveLetter(Path[0]) && Path[1] == ':' && IsSeparator(Path[2])) || (Path.Size() >= 3 && IsSeparator(Path[0]) && IsSeparator(Path[1]) && Path[2] != '.' && Path[2] != '?');
 #else
     return !Path.IsEmpty() && Path[0] == '/';
 #endif
@@ -99,16 +96,14 @@ bool IsAbsoluteRoot(const StringView Path) noexcept
 
 bool IsContainedSegment(const StringView Segment) noexcept
 {
-    if (Segment.IsEmpty() || Segment[Segment.Size() - 1] == '.' ||
-        Segment[Segment.Size() - 1] == ' ')
+    if (Segment.IsEmpty() || Segment[Segment.Size() - 1] == '.' || Segment[Segment.Size() - 1] == ' ')
     {
         return false;
     }
     for (std::size_t Index = 0; Index < Segment.Size(); ++Index)
     {
         const char Value = Segment[Index];
-        if (Value == ':' || Value == '\\' || Value == '*' || Value == '?' ||
-            Value == '"' || Value == '<' || Value == '>' || Value == '|')
+        if (Value == ':' || Value == '\\' || Value == '*' || Value == '?' || Value == '"' || Value == '<' || Value == '>' || Value == '|')
         {
             return false;
         }
@@ -118,8 +113,7 @@ bool IsContainedSegment(const StringView Segment) noexcept
 
 bool TryAppendSegment(String& Path, const StringView Segment) noexcept
 {
-    return (Path.IsEmpty() || IsSeparator(Path.View()[Path.Size() - 1]) || Path.TryAppend("/")) &&
-        Path.TryAppend(Segment);
+    return (Path.IsEmpty() || IsSeparator(Path.View()[Path.Size() - 1]) || Path.TryAppend("/")) && Path.TryAppend(Segment);
 }
 
 bool EndsWithExtension(const StringView Name, const StringView Extension) noexcept
@@ -152,8 +146,7 @@ using FNativePath = Array<wchar_t>;
 
 EResult ConvertPath(const StringView Path, FNativePath& Out) noexcept
 {
-    if (!IsPathText(Path) ||
-        (Path.Size() > 1 && IsSeparator(Path[0]) && IsSeparator(Path[1]) && !IsAbsoluteRoot(Path)))
+    if (!IsPathText(Path) || (Path.Size() > 1 && IsSeparator(Path[0]) && IsSeparator(Path[1]) && !IsAbsoluteRoot(Path)))
     {
         return EResult::InvalidPath;
     }
@@ -186,8 +179,7 @@ EResult ConvertPath(const StringView Path, FNativePath& Out) noexcept
 
 EResult FromNativeName(const wchar_t* const Name, String& Out) noexcept
 {
-    const int Required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, Name, -1,
-        nullptr, 0, nullptr, nullptr);
+    const int Required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, Name, -1, nullptr, 0, nullptr, nullptr);
     if (Required <= 0)
     {
         return EResult::InvalidPath;
@@ -197,13 +189,11 @@ EResult FromNativeName(const wchar_t* const Name, String& Out) noexcept
     {
         return EResult::OutOfMemory;
     }
-    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, Name, -1,
-            Bytes.Data(), Required, nullptr, nullptr) != Required)
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, Name, -1, Bytes.Data(), Required, nullptr, nullptr) != Required)
     {
         return EResult::InvalidPath;
     }
-    return Out.TryAssign(StringView(Bytes.Data(), static_cast<std::size_t>(Required) - 1))
-        ? EResult::Success : EResult::OutOfMemory;
+    return Out.TryAssign(StringView(Bytes.Data(), static_cast<std::size_t>(Required) - 1)) ? EResult::Success : EResult::OutOfMemory;
 }
 
 bool IsMissing(const DWORD Error) noexcept
@@ -236,16 +226,13 @@ public:
 
     EResult OpenRead(const FNativePath& Path) noexcept
     {
-        Handle = CreateFileW(Path.Data(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE,
-            nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-        return Handle != INVALID_HANDLE_VALUE ? EResult::Success :
-            IsMissing(GetLastError()) ? EResult::NotFound : EResult::ReadFailed;
+        Handle = CreateFileW(Path.Data(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        return Handle != INVALID_HANDLE_VALUE ? EResult::Success : IsMissing(GetLastError()) ? EResult::NotFound : EResult::ReadFailed;
     }
 
     bool OpenNew(const FNativePath& Path) noexcept
     {
-        Handle = CreateFileW(Path.Data(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-            FILE_ATTRIBUTE_NORMAL, nullptr);
+        Handle = CreateFileW(Path.Data(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
         return Handle != INVALID_HANDLE_VALUE;
     }
 
@@ -298,11 +285,7 @@ public:
         return true;
     }
 
-    bool Close() noexcept
-    {
-        return Handle == INVALID_HANDLE_VALUE ||
-            CloseHandle(std::exchange(Handle, INVALID_HANDLE_VALUE)) != FALSE;
-    }
+    bool Close() noexcept { return Handle == INVALID_HANDLE_VALUE || CloseHandle(std::exchange(Handle, INVALID_HANDLE_VALUE)) != FALSE; }
 
 private:
     HANDLE Handle = INVALID_HANDLE_VALUE;
@@ -342,8 +325,7 @@ EResult QueryPath(const FNativePath& Path, EPathKind& Kind) noexcept
     {
         return EResult::RedirectedPath;
     }
-    Kind = S_ISDIR(Info.st_mode) ? EPathKind::Directory :
-        S_ISREG(Info.st_mode) ? EPathKind::RegularFile : EPathKind::Other;
+    Kind = S_ISDIR(Info.st_mode) ? EPathKind::Directory : S_ISREG(Info.st_mode) ? EPathKind::RegularFile : EPathKind::Other;
     return EResult::Success;
 }
 
@@ -428,10 +410,7 @@ public:
         return true;
     }
 
-    bool Close() noexcept
-    {
-        return Descriptor < 0 || close(std::exchange(Descriptor, -1)) == 0;
-    }
+    bool Close() noexcept { return Descriptor < 0 || close(std::exchange(Descriptor, -1)) == 0; }
 
 private:
     int Descriptor = -1;
@@ -488,8 +467,7 @@ EResult RequireRoot(StringView& Path) noexcept
     return Result == EResult::Success && Kind != EPathKind::Directory ? EResult::InvalidPath : Result;
 }
 
-EResult ReadFileBytes(const StringView Path, const std::size_t MaxBytes,
-    const bool bPrefix, Array<uint8>& OutBytes, uint64& OutFileSize) noexcept
+EResult ReadFileBytes(const StringView Path, const std::size_t MaxBytes, const bool bPrefix, Array<uint8>& OutBytes, uint64& OutFileSize) noexcept
 {
     FNativePath Native;
     if (const EResult Result = ConvertPath(Path, Native); Result != EResult::Success)
@@ -527,8 +505,7 @@ EResult ReadFileBytes(const StringView Path, const std::size_t MaxBytes,
         return EResult::OutOfMemory;
     }
     uint64 FinalSize = 0;
-    if (!File.ReadAll(Candidate.AsSpan()) ||
-        File.Size(FinalSize) != EResult::Success || Size != FinalSize || !File.Close())
+    if (!File.ReadAll(Candidate.AsSpan()) || File.Size(FinalSize) != EResult::Success || Size != FinalSize || !File.Close())
     {
         return EResult::ReadFailed;
     }
@@ -568,9 +545,7 @@ EResult MakeTemporaryPath(const StringView Destination, String& OutPath) noexcep
         Suffix[Offset++] = Hex[Byte >> 4];
         Suffix[Offset++] = Hex[Byte & 0xf];
     }
-    return OutPath.TryAssign(Destination.Substr(0, ParentSize)) &&
-        OutPath.TryAppend(".le-tmp-") && OutPath.TryAppend(StringView(Suffix, sizeof(Suffix)))
-        ? EResult::Success : EResult::OutOfMemory;
+    return OutPath.TryAssign(Destination.Substr(0, ParentSize)) && OutPath.TryAppend(".le-tmp-") && OutPath.TryAppend(StringView(Suffix, sizeof(Suffix))) ? EResult::Success : EResult::OutOfMemory;
 }
 
 struct FFileEnumeration
@@ -594,8 +569,7 @@ struct FFileEnumeration
         return Result;
     }
 
-    EResult VisitEntry(const StringView Directory, const StringView Name,
-        const std::size_t Depth) noexcept
+    EResult VisitEntry(const StringView Directory, const StringView Name, const std::size_t Depth) noexcept
     {
         if (Name == StringView(".") || Name == StringView(".."))
         {
@@ -641,21 +615,18 @@ struct FFileEnumeration
         {
             return Fail(EResult::LimitExceeded, Relative.View());
         }
-        return Paths.TryPushBack(std::move(Relative))
-            ? EResult::Success : Fail(EResult::OutOfMemory, Relative.View());
+        return Paths.TryPushBack(std::move(Relative)) ? EResult::Success : Fail(EResult::OutOfMemory, Relative.View());
     }
 };
 
-EResult FFileEnumeration::VisitDirectory(
-    const StringView Relative, const std::size_t Depth) noexcept
+EResult FFileEnumeration::VisitDirectory(const StringView Relative, const std::size_t Depth) noexcept
 {
     if (Depth > MaxTreeDepth)
     {
         return Fail(EResult::LimitExceeded, Relative);
     }
     String Directory;
-    if (!Directory.TryAssign(Root) ||
-        (!Relative.IsEmpty() && !TryAppendSegment(Directory, Relative)))
+    if (!Directory.TryAssign(Root) || (!Relative.IsEmpty() && !TryAppendSegment(Directory, Relative)))
     {
         return Fail(EResult::OutOfMemory, Relative);
     }
@@ -674,8 +645,7 @@ EResult FFileEnumeration::VisitDirectory(
     const HANDLE Find = FindFirstFileW(Native.Data(), &Data);
     if (Find == INVALID_HANDLE_VALUE)
     {
-        return GetLastError() == ERROR_FILE_NOT_FOUND
-            ? EResult::Success : Fail(EResult::EnumerationFailed, Relative);
+        return GetLastError() == ERROR_FILE_NOT_FOUND ? EResult::Success : Fail(EResult::EnumerationFailed, Relative);
     }
     EResult Status = EResult::Success;
     do
@@ -723,21 +693,18 @@ EResult FFileEnumeration::VisitDirectory(
 
 } // namespace
 
-EContentIOResult ReadContentFile(const StringView Path, const std::size_t MaxBytes,
-    Array<uint8>& OutBytes) noexcept
+EContentIOResult ReadContentFile(const StringView Path, const std::size_t MaxBytes, Array<uint8>& OutBytes) noexcept
 {
     uint64 FileSize = 0;
     return ReadFileBytes(Path, MaxBytes, false, OutBytes, FileSize);
 }
 
-EContentIOResult ReadContentFilePrefix(const StringView Path, const std::size_t MaxPrefixBytes,
-    Array<uint8>& OutBytes, uint64& OutFileSize) noexcept
+EContentIOResult ReadContentFilePrefix(const StringView Path, const std::size_t MaxPrefixBytes, Array<uint8>& OutBytes, uint64& OutFileSize) noexcept
 {
     return ReadFileBytes(Path, MaxPrefixBytes, true, OutBytes, OutFileSize);
 }
 
-EContentIOResult WriteContentFileAtomically(
-    const StringView Path, const Span<const uint8> Bytes) noexcept
+EContentIOResult WriteContentFileAtomically(const StringView Path, const Span<const uint8> Bytes) noexcept
 {
     FNativePath Destination;
     if (const EResult Result = ConvertPath(Path, Destination); Result != EResult::Success)
@@ -785,8 +752,7 @@ EContentIOResult WriteContentFileAtomically(
     return EResult::Success;
 }
 
-EContentIOResult ResolveContentFile(StringView AbsoluteRoot, const StringView RelativePath,
-    String& OutPath) noexcept
+EContentIOResult ResolveContentFile(StringView AbsoluteRoot, const StringView RelativePath, String& OutPath) noexcept
 {
     if (!IsPathText(RelativePath))
     {
@@ -839,9 +805,7 @@ EContentIOResult ResolveContentFile(StringView AbsoluteRoot, const StringView Re
     return EResult::Success;
 }
 
-EContentIOResult EnumerateContentFiles(StringView AbsoluteRoot, const StringView Extension,
-    const std::size_t MaxFiles, Array<String>& OutRelativePaths,
-    String* const OutFailureRelativePath) noexcept
+EContentIOResult EnumerateContentFiles(StringView AbsoluteRoot, const StringView Extension, const std::size_t MaxFiles, Array<String>& OutRelativePaths, String* const OutFailureRelativePath) noexcept
 {
     if (!Extension.IsEmpty() && (Extension[0] != '.' || !IsPathText(Extension)))
     {
@@ -860,10 +824,8 @@ EContentIOResult EnumerateContentFiles(StringView AbsoluteRoot, const StringView
         return Root;
     }
     Array<String> Candidate(OutRelativePaths.GetAllocator());
-    String Failure(OutFailureRelativePath != nullptr
-        ? OutFailureRelativePath->GetAllocator() : GetDefaultAllocator());
-    FFileEnumeration Enumeration{AbsoluteRoot, Extension, MaxFiles, Candidate,
-        OutFailureRelativePath != nullptr ? &Failure : nullptr};
+    String Failure(OutFailureRelativePath != nullptr ? OutFailureRelativePath->GetAllocator() : GetDefaultAllocator());
+    FFileEnumeration Enumeration{AbsoluteRoot, Extension, MaxFiles, Candidate, OutFailureRelativePath != nullptr ? &Failure : nullptr};
     const EResult Result = Enumeration.VisitDirectory({}, 0);
     if (OutFailureRelativePath != nullptr)
     {
@@ -875,8 +837,7 @@ EContentIOResult EnumerateContentFiles(StringView AbsoluteRoot, const StringView
     }
     if (Candidate.Size() > 1)
     {
-        std::sort(Candidate.Data(), Candidate.Data() + Candidate.Size(),
-            [](const String& Left, const String& Right) { return Left.View() < Right.View(); });
+        std::sort(Candidate.Data(), Candidate.Data() + Candidate.Size(), [](const String& Left, const String& Right) { return Left.View() < Right.View(); });
     }
     OutRelativePaths = std::move(Candidate);
     return EResult::Success;
@@ -886,18 +847,30 @@ const char* DescribeContentIOResult(const EContentIOResult Result) noexcept
 {
     switch (Result)
     {
-    case EContentIOResult::Success: return "success";
-    case EContentIOResult::InvalidPath: return "invalid UTF-8 file or mount path";
-    case EContentIOResult::OutsideRoot: return "path is not relative to the mounted root";
-    case EContentIOResult::RedirectedPath: return "path contains a symbolic link or reparse point";
-    case EContentIOResult::NotFound: return "file or directory was not found";
-    case EContentIOResult::NotRegularFile: return "path does not name the expected file or directory";
-    case EContentIOResult::LimitExceeded: return "file size or enumeration exceeds the limit";
-    case EContentIOResult::OutOfMemory: return "allocation failed";
-    case EContentIOResult::ReadFailed: return "could not read file";
-    case EContentIOResult::WriteFailed: return "could not write a sibling temporary file";
-    case EContentIOResult::ReplaceFailed: return "could not replace the destination file";
-    case EContentIOResult::EnumerationFailed: return "could not enumerate the mounted directory";
+    case EContentIOResult::Success:
+        return "success";
+    case EContentIOResult::InvalidPath:
+        return "invalid UTF-8 file or mount path";
+    case EContentIOResult::OutsideRoot:
+        return "path is not relative to the mounted root";
+    case EContentIOResult::RedirectedPath:
+        return "path contains a symbolic link or reparse point";
+    case EContentIOResult::NotFound:
+        return "file or directory was not found";
+    case EContentIOResult::NotRegularFile:
+        return "path does not name the expected file or directory";
+    case EContentIOResult::LimitExceeded:
+        return "file size or enumeration exceeds the limit";
+    case EContentIOResult::OutOfMemory:
+        return "allocation failed";
+    case EContentIOResult::ReadFailed:
+        return "could not read file";
+    case EContentIOResult::WriteFailed:
+        return "could not write a sibling temporary file";
+    case EContentIOResult::ReplaceFailed:
+        return "could not replace the destination file";
+    case EContentIOResult::EnumerationFailed:
+        return "could not enumerate the mounted directory";
     }
     return "unknown content I/O failure";
 }

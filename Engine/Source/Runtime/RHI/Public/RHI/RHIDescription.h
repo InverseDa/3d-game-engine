@@ -17,21 +17,21 @@ class FRHIBindGroupLayout;
 enum class EBufferUsageFlags : uint8
 {
     None = 0,
-    VertexBuffer    = 1 << 0,
-    IndexBuffer     = 1 << 1,
-    UniformBuffer   = 1 << 2,
-    StorageBuffer   = 1 << 3, // Bindless Needed
-    IndirectArgs    = 1 << 4,
-    TransferSrc     = 1 << 5,
-    TransferDst     = 1 << 6,
+    VertexBuffer = 1 << 0,
+    IndexBuffer = 1 << 1,
+    UniformBuffer = 1 << 2,
+    StorageBuffer = 1 << 3, // Bindless Needed
+    IndirectArgs = 1 << 4,
+    TransferSrc = 1 << 5,
+    TransferDst = 1 << 6,
 };
 
 struct FRHIBufferDesc
 {
     LE::String Name;
     uint64 Size = 0;
-    uint32 Usage = 0;       // EResourceUsage
-    uint32 UsageFlag = 0;   // EBufferUsageFlags
+    uint32 Usage = 0;     // EResourceUsage
+    uint32 UsageFlag = 0; // EBufferUsageFlags
 };
 
 struct FRHITextureDesc
@@ -121,10 +121,10 @@ struct FRHIVertexInputBinding
 
 struct FRHIVertexInputAttribute
 {
-    uint32 Location = 0;    // Shader 位置
-    uint32 Binding = 0;     // 绑定槽位
+    uint32 Location = 0; // Shader 位置
+    uint32 Binding = 0;  // 绑定槽位
     EPixelFormat Format = EPixelFormat::Unknown;
-    uint32 Offset = 0;      // 顶点内偏移
+    uint32 Offset = 0; // 顶点内偏移
 };
 
 // ***********************************************************************************************
@@ -133,15 +133,15 @@ struct FRHIVertexInputAttribute
 
 enum class EAttachmentLoadOp : uint8
 {
-    Load,       // Contain
-    Clear,      // Clear particular color
-    DontCare,   // Dont care
+    Load,     // Contain
+    Clear,    // Clear particular color
+    DontCare, // Dont care
 };
 
 enum class EAttachmentStoreOp : uint8
 {
-    Store,      // Save the result to GPU memory
-    DontCare,   // Discard the result
+    Store,    // Save the result to GPU memory
+    DontCare, // Discard the result
 };
 
 struct FRHIColorAttachmentDesc
@@ -149,7 +149,7 @@ struct FRHIColorAttachmentDesc
     FRHITextureView* RenderTarget = nullptr;
     EAttachmentLoadOp LoadOp = EAttachmentLoadOp::Clear;
     EAttachmentStoreOp StoreOp = EAttachmentStoreOp::Store;
-    float ClearColor[4] = { 0.f, 0.f, 0.f, 1.f };
+    float ClearColor[4] = {0.f, 0.f, 0.f, 1.f};
 };
 
 struct FRHIDepthStencilAttachmentDesc
@@ -165,15 +165,15 @@ struct FRHIRenderAreaDesc
 {
     int32 X = 0;
     int32 Y = 0;
-    uint32 Width = 0;   // 0 means derive the extent from the attachments.
-    uint32 Height = 0;  // 0 means derive the extent from the attachments.
+    uint32 Width = 0;  // 0 means derive the extent from the attachments.
+    uint32 Height = 0; // 0 means derive the extent from the attachments.
 };
 
 struct FRHIRenderPassDesc
 {
     FRHIRenderAreaDesc RenderArea;
 
-    FRHIColorAttachmentDesc ColorAttachments[8];    // Max support 8 MRT
+    FRHIColorAttachmentDesc ColorAttachments[8]; // Max support 8 MRT
     uint32 ColorAttachmentCount = 0;
 
     FRHIDepthStencilAttachmentDesc DepthStencilAttachment;
@@ -205,28 +205,18 @@ struct FRHIPushConstantRangeDesc
     EShaderStage StageFlags = EShaderStage::None;
     uint32 Size = 0;
 
-    bool IsValid() const noexcept
-    {
-        return StageFlags != EShaderStage::None && Size > 0 &&
-            (Size % 4u) == 0 && Size <= 128;
-    }
+    bool IsValid() const noexcept { return StageFlags != EShaderStage::None && Size > 0 && (Size % 4u) == 0 && Size <= 128; }
 
-    bool IsDisabled() const noexcept
-    {
-        return StageFlags == EShaderStage::None && Size == 0;
-    }
+    bool IsDisabled() const noexcept { return StageFlags == EShaderStage::None && Size == 0; }
 
-    bool AcceptsWrite(const EShaderStage InStageFlags, const uint32 InSize) const noexcept
-    {
-        return IsValid() && InStageFlags == StageFlags && InSize == Size;
-    }
+    bool AcceptsWrite(const EShaderStage InStageFlags, const uint32 InSize) const noexcept { return IsValid() && InStageFlags == StageFlags && InSize == Size; }
 };
 
 struct FRHIRasterizerStateDesc
 {
     ECullMode CullMode = ECullMode::Back;
     EFillMode FillMode = EFillMode::Solid;
-    bool bFrontCounterClockwise = false;  // true: CCW is the right side (OpenGL Default); false: CW is the right side (DirectX Default)
+    bool bFrontCounterClockwise = false; // true: CCW is the right side (OpenGL Default); false: CW is the right side (DirectX Default)
 };
 
 struct FRHIPipelineDesc_Graphics
@@ -273,13 +263,9 @@ struct FRHIRenderingAttachmentSignature
     }
 };
 
-inline bool IsRenderingSignatureCompatible(
-    const FRHIRenderingAttachmentSignature& Signature,
-    const FRHIPipelineDesc_Graphics& Pipeline) noexcept
+inline bool IsRenderingSignatureCompatible(const FRHIRenderingAttachmentSignature& Signature, const FRHIPipelineDesc_Graphics& Pipeline) noexcept
 {
-    if (Signature.RenderTargetCount > 8 || Pipeline.RenderTargetCount > 8 ||
-        Signature.RenderTargetCount != Pipeline.RenderTargetCount ||
-        Signature.DepthStencilFormat != Pipeline.DepthStencilFormat)
+    if (Signature.RenderTargetCount > 8 || Pipeline.RenderTargetCount > 8 || Signature.RenderTargetCount != Pipeline.RenderTargetCount || Signature.DepthStencilFormat != Pipeline.DepthStencilFormat)
     {
         return false;
     }
@@ -354,7 +340,7 @@ struct FRHIBindGroupItem
     FRHISampler* Sampler = nullptr;
 
     uint64 Offset = 0;
-    uint64 Range  = 0;
+    uint64 Range = 0;
 };
 
 struct FRHIBindGroupDesc
@@ -410,7 +396,7 @@ struct FRHISamplerDesc
     bool bEnableCompare = false;
     ECompareFunction CompareFunc = ECompareFunction::LessEqual;
 
-    float BorderColor[4] = { 0.f, 0.f, 0.f, 1.f };
+    float BorderColor[4] = {0.f, 0.f, 0.f, 1.f};
 };
 
 } // namespace LE

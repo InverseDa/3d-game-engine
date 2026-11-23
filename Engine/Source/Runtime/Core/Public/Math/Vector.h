@@ -9,15 +9,13 @@
 namespace LE::Math
 {
 
-template <typename T>
-constexpr T DefaultEpsilon() noexcept
+template <typename T> constexpr T DefaultEpsilon() noexcept
 {
     static_assert(std::is_floating_point<T>::value, "LE::Math scalar must be floating point");
     return std::is_same<T, float>::value ? static_cast<T>(1.0e-6f) : static_cast<T>(1.0e-12);
 }
 
-template <typename T, std::size_t N>
-struct Vector
+template <typename T, std::size_t N> struct Vector
 {
     static_assert(std::is_floating_point<T>::value, "Vector scalar must be float or double");
     static_assert(N > 0, "Vector dimension must be non-zero");
@@ -37,12 +35,7 @@ struct Vector
         }
     }
 
-    template <typename... Args,
-        typename std::enable_if<sizeof...(Args) == N, int>::type = 0>
-    explicit constexpr Vector(Args... Components) noexcept
-        : Values{static_cast<T>(Components)...}
-    {
-    }
+    template <typename... Args, typename std::enable_if<sizeof...(Args) == N, int>::type = 0> explicit constexpr Vector(Args... Components) noexcept : Values{static_cast<T>(Components)...} {}
 
     T* Data() noexcept { return Values; }
     const T* Data() const noexcept { return Values; }
@@ -147,10 +140,7 @@ struct Vector
     static Vector Cross(const Vector& Left, const Vector& Right) noexcept
     {
         static_assert(N == 3, "Cross is defined only for three-dimensional vectors");
-        return Vector(
-            Left.Values[1] * Right.Values[2] - Left.Values[2] * Right.Values[1],
-            Left.Values[2] * Right.Values[0] - Left.Values[0] * Right.Values[2],
-            Left.Values[0] * Right.Values[1] - Left.Values[1] * Right.Values[0]);
+        return Vector(Left.Values[1] * Right.Values[2] - Left.Values[2] * Right.Values[1], Left.Values[2] * Right.Values[0] - Left.Values[0] * Right.Values[2], Left.Values[0] * Right.Values[1] - Left.Values[1] * Right.Values[0]);
     }
 
     static T Cross2D(const Vector& Left, const Vector& Right) noexcept
@@ -186,50 +176,42 @@ private:
     }
 };
 
-template <typename T, std::size_t N>
-Vector<T, N> operator+(Vector<T, N> Left, const Vector<T, N>& Right) noexcept
+template <typename T, std::size_t N> Vector<T, N> operator+(Vector<T, N> Left, const Vector<T, N>& Right) noexcept
 {
     return Left += Right;
 }
 
-template <typename T, std::size_t N>
-Vector<T, N> operator-(Vector<T, N> Left, const Vector<T, N>& Right) noexcept
+template <typename T, std::size_t N> Vector<T, N> operator-(Vector<T, N> Left, const Vector<T, N>& Right) noexcept
 {
     return Left -= Right;
 }
 
-template <typename T, std::size_t N>
-Vector<T, N> operator-(Vector<T, N> Value) noexcept
+template <typename T, std::size_t N> Vector<T, N> operator-(Vector<T, N> Value) noexcept
 {
     return Value *= static_cast<T>(-1);
 }
 
-template <typename T, std::size_t N>
-Vector<T, N> operator*(Vector<T, N> Value, const T ScalarValue) noexcept
+template <typename T, std::size_t N> Vector<T, N> operator*(Vector<T, N> Value, const T ScalarValue) noexcept
 {
     return Value *= ScalarValue;
 }
 
-template <typename T, std::size_t N>
-Vector<T, N> operator*(const T ScalarValue, Vector<T, N> Value) noexcept
+template <typename T, std::size_t N> Vector<T, N> operator*(const T ScalarValue, Vector<T, N> Value) noexcept
 {
     return Value *= ScalarValue;
 }
 
-template <typename T, std::size_t N>
-Vector<T, N> operator*(Vector<T, N> Left, const Vector<T, N>& Right) noexcept
+template <typename T, std::size_t N> Vector<T, N> operator*(Vector<T, N> Left, const Vector<T, N>& Right) noexcept
 {
     return Left *= Right;
 }
 
-template <typename T, std::size_t N>
-Vector<T, N> operator/(Vector<T, N> Value, const T ScalarValue)
+template <typename T, std::size_t N> Vector<T, N> operator/(Vector<T, N> Value, const T ScalarValue)
 {
     return Value /= ScalarValue;
 }
 
-template <typename T, std::size_t N>
-bool operator==(const Vector<T, N>& Left, const Vector<T, N>& Right) noexcept
+template <typename T, std::size_t N> bool operator==(const Vector<T, N>& Left, const Vector<T, N>& Right) noexcept
 {
     for (std::size_t Index = 0; Index < N; ++Index)
     {
@@ -241,8 +223,7 @@ bool operator==(const Vector<T, N>& Left, const Vector<T, N>& Right) noexcept
     return true;
 }
 
-template <typename T, std::size_t N>
-bool operator!=(const Vector<T, N>& Left, const Vector<T, N>& Right) noexcept
+template <typename T, std::size_t N> bool operator!=(const Vector<T, N>& Left, const Vector<T, N>& Right) noexcept
 {
     return !(Left == Right);
 }

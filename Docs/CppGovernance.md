@@ -5,6 +5,45 @@ boundary for the Phase 1.5 Core governance policy. It scans non-ThirdParty C++
 under `Engine/Source`, plus actual non-ThirdParty `Build.ts` and target
 configuration inputs. It is intentionally not a general naming-style linter.
 
+## C++ formatting
+
+Use the repository's [clang-format configuration](../.clang-format) for engine C++.
+Follow the [variable and function naming conventions](ProjectOverview.md#变量与函数) when choosing identifiers.
+
+- Keep a function's name and its entire parameter list on one line in declarations,
+  definitions and calls. This includes constructors and member functions. Keep
+  straightforward assignments, ternaries and `LE_LOG` calls on one line as well.
+- Design the signature when introducing or changing an API. When callers have
+  too many positional arguments to read comfortably, group related inputs in a
+  named type. Reuse an existing extent, descriptor or context where it fits.
+  For example, `GetBackBufferExtent(Swapchain, FallbackSize)` takes a size and
+  returns a size, so callers can pass width and height together. Give complex
+  argument expressions descriptive local names before the call.
+- Always give each `if`, `else if` and `else` body braces, even for a single
+  `return`, `break` or `continue`. Put the opening brace, body and closing brace
+  on separate lines. Use the same layout for loops.
+- Group statements within a function by responsibility. Leave one blank line
+  when moving to a different step or subsystem, such as moving from validation
+  to filling an output parameter. Keep statements for the same step together.
+
+```cpp
+bool FWorld::TryGetTickContext(FWorldTickContext& OutContext) const noexcept
+{
+    if (!IsValid() || !Impl->bHasTickContext)
+    {
+        return false;
+    }
+
+    OutContext = Impl->TickContext;
+    return true;
+}
+```
+
+The formatter uses a high column limit to rejoin previously split parameter
+lists. Review the interface and argument grouping at the call site. To preview
+a file, run `clang-format --style=file <file>`. Add `--dry-run --Werror` to
+check its formatting.
+
 ## Local and CI execution
 
 From `Engine/Builder`, run:

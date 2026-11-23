@@ -5,7 +5,6 @@
 #include "ShadingPath.h"
 #include "RHI/RHICommandList.h"
 
-
 namespace LE
 {
 

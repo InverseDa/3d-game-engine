@@ -13,10 +13,7 @@ namespace LE
 class FDemoCameraNavigation
 {
 public:
-    void Start(const Math::Matrix4f& AuthoredCameraToWorld) noexcept
-    {
-        CameraToWorld = AuthoredCameraToWorld;
-    }
+    void Start(const Math::Matrix4f& AuthoredCameraToWorld) noexcept { CameraToWorld = AuthoredCameraToWorld; }
 
     const Math::Matrix4f& GetCameraToWorld() const noexcept { return CameraToWorld; }
 
@@ -25,8 +22,7 @@ public:
         const float ForwardAxis = ToAxis(Input, EPlatformKey::W, EPlatformKey::S);
         const float RightAxis = ToAxis(Input, EPlatformKey::D, EPlatformKey::A);
         const bool bLook = Input.MouseDeltaX != 0 || Input.MouseDeltaY != 0;
-        const bool bMove = (ForwardAxis != 0.0f || RightAxis != 0.0f) &&
-            std::isfinite(DeltaSeconds) && DeltaSeconds > 0.0;
+        const bool bMove = (ForwardAxis != 0.0f || RightAxis != 0.0f) && std::isfinite(DeltaSeconds) && DeltaSeconds > 0.0;
         if (!bLook && !bMove)
         {
             return false;
@@ -38,8 +34,7 @@ public:
         }
         if (bMove)
         {
-            const Math::Vector3f Direction =
-                (Column(2) * -ForwardAxis + Column(0) * RightAxis).Normalized();
+            const Math::Vector3f Direction = (Column(2) * -ForwardAxis + Column(0) * RightAxis).Normalized();
             const float Step = MoveSpeed * static_cast<float>((std::min)(DeltaSeconds, MaxMoveSeconds));
             SetColumn(3, Column(3) + Direction * Step);
         }
@@ -47,16 +42,9 @@ public:
     }
 
 private:
-    static float ToAxis(const FPlatformInputFrame& Input, const EPlatformKey Positive,
-        const EPlatformKey Negative) noexcept
-    {
-        return static_cast<float>(Input.IsKeyDown(Positive)) - static_cast<float>(Input.IsKeyDown(Negative));
-    }
+    static float ToAxis(const FPlatformInputFrame& Input, const EPlatformKey Positive, const EPlatformKey Negative) noexcept { return static_cast<float>(Input.IsKeyDown(Positive)) - static_cast<float>(Input.IsKeyDown(Negative)); }
 
-    Math::Vector3f Column(const std::size_t Index) const noexcept
-    {
-        return Math::Vector3f(CameraToWorld(0, Index), CameraToWorld(1, Index), CameraToWorld(2, Index));
-    }
+    Math::Vector3f Column(const std::size_t Index) const noexcept { return Math::Vector3f(CameraToWorld(0, Index), CameraToWorld(1, Index), CameraToWorld(2, Index)); }
 
     void SetColumn(const std::size_t Index, const Math::Vector3f& Value) noexcept
     {
@@ -77,8 +65,7 @@ private:
         if (DeltaY != 0)
         {
             const float CurrentPitch = std::asin(std::clamp(-Back[1], -1.0f, 1.0f));
-            const float TargetPitch = std::clamp(CurrentPitch - static_cast<float>(MouseSensitivity * DeltaY),
-                -PitchLimit, PitchLimit);
+            const float TargetPitch = std::clamp(CurrentPitch - static_cast<float>(MouseSensitivity * DeltaY), -PitchLimit, PitchLimit);
             Math::Vector3f PitchAxis = Math::Vector3f::Cross(WorldUp, Back).Normalized();
             if (PitchAxis.LengthSquared() == 0.0f)
             {

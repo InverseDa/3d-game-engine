@@ -75,8 +75,7 @@ int RunCopyDescriptorTests()
     Bad.Height = UINT32_MAX;
     FRHIBufferDesc Huge = Buffer;
     Huge.Size = UINT64_MAX;
-    return Failures + Expect(!IsBufferToTexture2DCopyValid(Huge, Bad),
-        "texel byte check does not wrap");
+    return Failures + Expect(!IsBufferToTexture2DCopyValid(Huge, Bad), "texel byte check does not wrap");
 }
 
 struct FUploadFixture
@@ -139,10 +138,8 @@ int RunVulkanCopyTests()
     ViewDesc.Texture = Fix.Attachment;
     Fix.AttachmentView = Fix.Attachment == nullptr ? nullptr : Fix.Device->CreateTextureView(ViewDesc);
     Fix.ForeignDevice = RHI::CreateDevice();
-    Fix.ForeignBuffer = Fix.ForeignDevice == nullptr ? nullptr :
-        Fix.ForeignDevice->CreateBuffer(MakeBufferDesc());
-    if (Fix.Buffer == nullptr || Fix.Texture == nullptr || Fix.Commands == nullptr || Fix.Fence == nullptr ||
-        Fix.AttachmentView == nullptr || Fix.ForeignBuffer == nullptr)
+    Fix.ForeignBuffer = Fix.ForeignDevice == nullptr ? nullptr : Fix.ForeignDevice->CreateBuffer(MakeBufferDesc());
+    if (Fix.Buffer == nullptr || Fix.Texture == nullptr || Fix.Commands == nullptr || Fix.Fence == nullptr || Fix.AttachmentView == nullptr || Fix.ForeignBuffer == nullptr)
     {
         return Expect(false, "construct required Vulkan upload resources");
     }
@@ -151,21 +148,15 @@ int RunVulkanCopyTests()
     Submit.CmdList = Fix.Commands;
     Submit.FenceToSignal = Fix.Fence;
     auto* const Queue = Fix.Device->GetGraphicsQueue();
-    int Failures = Expect(Fix.Fence->WaitChecked(0) == ERHIFenceWaitResult::Timeout,
-        "new unsignaled fence reports timeout");
-    Failures += Expect(Queue->Submit(Submit) == ERHIQueueSubmitResult::InvalidArguments,
-        "reject non-executable command list");
-    Failures += Expect(!Fix.Commands->CopyBufferToTexture2D(Fix.Buffer, Fix.Texture),
-        "reject recording outside an active command list");
+    int Failures = Expect(Fix.Fence->WaitChecked(0) == ERHIFenceWaitResult::Timeout, "new unsignaled fence reports timeout");
+    Failures += Expect(Queue->Submit(Submit) == ERHIQueueSubmitResult::InvalidArguments, "reject non-executable command list");
+    Failures += Expect(!Fix.Commands->CopyBufferToTexture2D(Fix.Buffer, Fix.Texture), "reject recording outside an active command list");
     if (!Fix.Commands->BeginChecked())
     {
         return Failures + Expect(false, "begin checked recording");
     }
-    Failures += Expect(!Fix.Commands->CopyBufferToTexture2D(Fix.Buffer, Fix.Texture),
-        "reject copying before destination transition");
-    Failures += Expect(!Fix.Commands->TextureUploadBarrier(
-        Fix.Texture, ERHIResourceState::CopyDestination, ERHIResourceState::ShaderResource),
-        "reject finishing before copying");
+    Failures += Expect(!Fix.Commands->CopyBufferToTexture2D(Fix.Buffer, Fix.Texture), "reject copying before destination transition");
+    Failures += Expect(!Fix.Commands->TextureUploadBarrier(Fix.Texture, ERHIResourceState::CopyDestination, ERHIResourceState::ShaderResource), "reject finishing before copying");
     FRHIBarrierBatch Barriers;
     FRHITextureBarrierDesc ColorBarrier;
     ColorBarrier.Texture = Fix.Attachment;
@@ -179,18 +170,14 @@ int RunVulkanCopyTests()
     Render.ColorAttachments[0].LoadOp = EAttachmentLoadOp::Clear;
     Render.ColorAttachments[0].StoreOp = EAttachmentStoreOp::Store;
     Fix.Commands->BeginRenderPass(Render);
-    Failures += Expect(!Fix.Commands->TextureUploadBarrier(
-        Fix.Texture, ERHIResourceState::Undefined, ERHIResourceState::CopyDestination),
-        "reject starting upload in dynamic rendering");
+    Failures += Expect(!Fix.Commands->TextureUploadBarrier(Fix.Texture, ERHIResourceState::Undefined, ERHIResourceState::CopyDestination), "reject starting upload in dynamic rendering");
     Fix.Commands->EndRenderPass();
-    if (!Fix.Commands->TextureUploadBarrier(
-        Fix.Texture, ERHIResourceState::Undefined, ERHIResourceState::CopyDestination))
+    if (!Fix.Commands->TextureUploadBarrier(Fix.Texture, ERHIResourceState::Undefined, ERHIResourceState::CopyDestination))
     {
         return Failures + Expect(false, "record first texture transition");
     }
     Failures += Expect(!Fix.Commands->EndChecked(), "reject unfinished upload");
-    Failures += Expect(!Fix.Commands->CopyBufferToTexture2D(Fix.ForeignBuffer, Fix.Texture),
-        "reject staging buffer from a different device");
+    Failures += Expect(!Fix.Commands->CopyBufferToTexture2D(Fix.ForeignBuffer, Fix.Texture), "reject staging buffer from a different device");
     constexpr uint8 Pixels[] = {255, 0, 0, 255, 0, 128, 0, 255, 0, 0, 64, 255, 255, 255, 0, 255};
     void* const Mapped = Fix.Buffer->Map(0, sizeof(Pixels));
     if (Mapped == nullptr)
@@ -198,13 +185,9 @@ int RunVulkanCopyTests()
         return Failures + Expect(false, "map coherent staging memory");
     }
     std::memcpy(Mapped, Pixels, sizeof(Pixels));
-    Failures += Expect(!Fix.Commands->CopyBufferToTexture2D(Fix.Buffer, Fix.Texture),
-        "reject a staging buffer still mapped by caller");
+    Failures += Expect(!Fix.Commands->CopyBufferToTexture2D(Fix.Buffer, Fix.Texture), "reject a staging buffer still mapped by caller");
     Fix.Buffer->Unmap();
-    if (!Fix.Commands->CopyBufferToTexture2D(Fix.Buffer, Fix.Texture) ||
-        !Fix.Commands->TextureUploadBarrier(
-            Fix.Texture, ERHIResourceState::CopyDestination, ERHIResourceState::ShaderResource) ||
-        !Fix.Commands->EndChecked() || Queue->Submit(Submit) != ERHIQueueSubmitResult::Success)
+    if (!Fix.Commands->CopyBufferToTexture2D(Fix.Buffer, Fix.Texture) || !Fix.Commands->TextureUploadBarrier(Fix.Texture, ERHIResourceState::CopyDestination, ERHIResourceState::ShaderResource) || !Fix.Commands->EndChecked() || Queue->Submit(Submit) != ERHIQueueSubmitResult::Success)
     {
         return Failures + Expect(false, "record and submit a valid full-image copy");
     }

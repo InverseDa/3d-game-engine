@@ -11,8 +11,7 @@ struct FCpuTextureAsset;
 
 ASSET_API FAssetTypeId GetCpuTextureAssetTypeId() noexcept;
 
-template <>
-struct TAssetTypeTraits<FCpuTextureAsset>
+template <> struct TAssetTypeTraits<FCpuTextureAsset>
 {
     static FAssetTypeId GetTypeId() noexcept { return GetCpuTextureAssetTypeId(); }
 };

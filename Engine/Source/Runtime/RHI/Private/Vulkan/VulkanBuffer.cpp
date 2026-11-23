@@ -6,46 +6,71 @@ namespace LE
 
 namespace
 {
-    uint32 FindMemoryTypeIndex(VkPhysicalDevice PhysDev, uint32 TypeBits, VkMemoryPropertyFlags Props)
-    {
-        VkPhysicalDeviceMemoryProperties MemProps;
-        vkGetPhysicalDeviceMemoryProperties(PhysDev, &MemProps);
+uint32 FindMemoryTypeIndex(VkPhysicalDevice PhysDev, uint32 TypeBits, VkMemoryPropertyFlags Props)
+{
+    VkPhysicalDeviceMemoryProperties MemProps;
+    vkGetPhysicalDeviceMemoryProperties(PhysDev, &MemProps);
 
-        for (uint32 i = 0; i < MemProps.memoryTypeCount; ++i)
+    for (uint32 i = 0; i < MemProps.memoryTypeCount; ++i)
+    {
+        if ((TypeBits & (1u << i)) && (MemProps.memoryTypes[i].propertyFlags & Props) == Props)
         {
-            if ((TypeBits & (1u << i)) && (MemProps.memoryTypes[i].propertyFlags & Props) == Props)
-                return i;
+            return i;
         }
-        return VK_MAX_MEMORY_TYPES;
     }
-
-    VkBufferUsageFlags ToVkBufferUsage(uint32 UsageFlags)
-    {
-        VkBufferUsageFlags Flags = 0;
-        if (UsageFlags & (uint32)EBufferUsageFlags::VertexBuffer)  Flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        if (UsageFlags & (uint32)EBufferUsageFlags::IndexBuffer)   Flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        if (UsageFlags & (uint32)EBufferUsageFlags::UniformBuffer) Flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        if (UsageFlags & (uint32)EBufferUsageFlags::StorageBuffer) Flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        if (UsageFlags & (uint32)EBufferUsageFlags::IndirectArgs)  Flags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-        if (UsageFlags & (uint32)EBufferUsageFlags::TransferSrc)   Flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        if (UsageFlags & (uint32)EBufferUsageFlags::TransferDst)   Flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-        return Flags;
-    }
-
-    VkMemoryPropertyFlags ToVkMemoryProps(EResourceUsage Usage)
-    {
-        switch (Usage)
-        {
-        case EResourceUsage::Upload:    return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        case EResourceUsage::Readback:  return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-        case EResourceUsage::Local:     return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        }
-        return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    }
+    return VK_MAX_MEMORY_TYPES;
 }
 
-FVulkanRHIBuffer::FVulkanRHIBuffer(FVulkanRHIDevice* InDevice, const FRHIBufferDesc& InDesc)
-    : TVulkanResourceBase<FRHIBufferDesc>(InDevice, InDesc)
+VkBufferUsageFlags ToVkBufferUsage(uint32 UsageFlags)
+{
+    VkBufferUsageFlags Flags = 0;
+    if (UsageFlags & (uint32)EBufferUsageFlags::VertexBuffer)
+    {
+        Flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    }
+    if (UsageFlags & (uint32)EBufferUsageFlags::IndexBuffer)
+    {
+        Flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    }
+    if (UsageFlags & (uint32)EBufferUsageFlags::UniformBuffer)
+    {
+        Flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    }
+    if (UsageFlags & (uint32)EBufferUsageFlags::StorageBuffer)
+    {
+        Flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    }
+    if (UsageFlags & (uint32)EBufferUsageFlags::IndirectArgs)
+    {
+        Flags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    }
+    if (UsageFlags & (uint32)EBufferUsageFlags::TransferSrc)
+    {
+        Flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    }
+    if (UsageFlags & (uint32)EBufferUsageFlags::TransferDst)
+    {
+        Flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    }
+    return Flags;
+}
+
+VkMemoryPropertyFlags ToVkMemoryProps(EResourceUsage Usage)
+{
+    switch (Usage)
+    {
+    case EResourceUsage::Upload:
+        return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    case EResourceUsage::Readback:
+        return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+    case EResourceUsage::Local:
+        return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    }
+    return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+}
+}
+
+FVulkanRHIBuffer::FVulkanRHIBuffer(FVulkanRHIDevice* InDevice, const FRHIBufferDesc& InDesc) : TVulkanResourceBase<FRHIBufferDesc>(InDevice, InDesc)
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE || this->Device->VkContext.PhysicalDevice == VK_NULL_HANDLE)
     {
@@ -115,8 +140,7 @@ FVulkanRHIBuffer::FVulkanRHIBuffer(FVulkanRHIDevice* InDevice, const FRHIBufferD
         return;
     }
 
-    LE_LOG(LogRHI, Info, "Buffer created. Size={}, ResourceUsage={}, UsageFlags={}",
-        InDesc.Size, InDesc.Usage, InDesc.UsageFlag);
+    LE_LOG(LogRHI, Info, "Buffer created. Size={}, ResourceUsage={}, UsageFlags={}", InDesc.Size, InDesc.Usage, InDesc.UsageFlag);
 }
 
 FVulkanRHIBuffer::~FVulkanRHIBuffer()
@@ -152,8 +176,7 @@ void* FVulkanRHIBuffer::Map(uint64 Offset, uint64 Size)
     }
 
     const auto Usage = static_cast<EResourceUsage>(Desc.Usage);
-    if (this->MappedPtr != nullptr || Offset >= Desc.Size || Size > Desc.Size - Offset ||
-        (Usage != EResourceUsage::Upload && Usage != EResourceUsage::Readback))
+    if (this->MappedPtr != nullptr || Offset >= Desc.Size || Size > Desc.Size - Offset || (Usage != EResourceUsage::Upload && Usage != EResourceUsage::Readback))
     {
         LE_LOG(LogRHI, Error, "Buffer map rejected an invalid range or resource usage.");
         return nullptr;

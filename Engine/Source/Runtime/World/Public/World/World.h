@@ -92,28 +92,19 @@ public:
     bool IsAlive(FEntity Entity) const noexcept;
     bool Reset() noexcept;
 
-    EWorldTickResult BeginTick(
-        const FWorldTickContext& Context,
-        FWorldCommandFlushResult* OutFlushResult = nullptr) noexcept;
-    EWorldTickResult EndTick(
-        FWorldCommandFlushResult* OutFlushResult = nullptr) noexcept;
+    EWorldTickResult BeginTick(const FWorldTickContext& Context, FWorldCommandFlushResult* OutFlushResult = nullptr) noexcept;
+    EWorldTickResult EndTick(FWorldCommandFlushResult* OutFlushResult = nullptr) noexcept;
     EWorldTickState GetTickState() const noexcept;
     bool TryGetTickContext(FWorldTickContext& OutContext) const noexcept;
     FWorldCommandBuffer* GetCommandBuffer() noexcept;
     const FWorldCommandBuffer* GetCommandBuffer() const noexcept;
 
-    ENativeGameplaySystemRegisterResult RegisterNativeGameplaySystem(
-        const FNativeGameplaySystemDescriptor& Descriptor) noexcept;
-    ENativeGameplaySystemUnregisterResult UnregisterNativeGameplaySystem(
-        StringView Name) noexcept;
-    ENativeGameplaySystemEnableResult SetNativeGameplaySystemEnabled(
-        StringView Name,
-        bool bEnabled) noexcept;
-    ENativeGameplayFixedStepConfigResult ConfigureNativeGameplayFixedStep(
-        const FNativeGameplayFixedStepConfig& Config) noexcept;
+    ENativeGameplaySystemRegisterResult RegisterNativeGameplaySystem(const FNativeGameplaySystemDescriptor& Descriptor) noexcept;
+    ENativeGameplaySystemUnregisterResult UnregisterNativeGameplaySystem(StringView Name) noexcept;
+    ENativeGameplaySystemEnableResult SetNativeGameplaySystemEnabled(StringView Name, bool bEnabled) noexcept;
+    ENativeGameplayFixedStepConfigResult ConfigureNativeGameplayFixedStep(const FNativeGameplayFixedStepConfig& Config) noexcept;
     ENativeGameplayScheduleResult CompileNativeGameplaySystemSchedule() noexcept;
-    ENativeGameplayUpdateResult UpdateNativeGameplaySystems(
-        FNativeGameplayUpdateReport* OutReport = nullptr) noexcept;
+    ENativeGameplayUpdateResult UpdateNativeGameplaySystems(FNativeGameplayUpdateReport* OutReport = nullptr) noexcept;
     // Borrowed registry views. A successful register/unregister or World
     // destruction invalidates them.
     StringView GetNativeGameplayDiagnosticSystemName() const noexcept;
@@ -121,12 +112,8 @@ public:
 
     std::size_t GetEntityCount() const noexcept;
 
-    EComponentMutationResult TryAddTransform(
-        FEntity Entity,
-        const FTransform& LocalTransform = FTransform{}) noexcept;
-    ETransformUpdateResult SetLocalTransform(
-        FEntity Entity,
-        const FTransform& LocalTransform) noexcept;
+    EComponentMutationResult TryAddTransform(FEntity Entity, const FTransform& LocalTransform = FTransform{}) noexcept;
+    ETransformUpdateResult SetLocalTransform(FEntity Entity, const FTransform& LocalTransform) noexcept;
     ETransformParentResult SetTransformParent(FEntity Child, FEntity Parent) noexcept;
     ETransformParentResult ClearTransformParent(FEntity Child) noexcept;
     EComponentRemoveResult RemoveTransform(FEntity Entity) noexcept;
@@ -145,17 +132,9 @@ public:
     TComponentStorage<FWorldDirectionalLightComponent>* GetDirectionalLightComponents() noexcept;
     const TComponentStorage<FWorldDirectionalLightComponent>* GetDirectionalLightComponents() const noexcept;
 
-    template <typename T>
-    bool AttachComponentStorage(TComponentStorage<T>& Storage) noexcept
-    {
-        return AttachStorage(Storage);
-    }
+    template <typename T> bool AttachComponentStorage(TComponentStorage<T>& Storage) noexcept { return AttachStorage(Storage); }
 
-    template <typename T>
-    EComponentMutationResult TryAddComponent(
-        TComponentStorage<T>& Storage,
-        const FEntity Entity,
-        const T& Value) noexcept
+    template <typename T> EComponentMutationResult TryAddComponent(TComponentStorage<T>& Storage, const FEntity Entity, const T& Value) noexcept
     {
         if (!IsStorageUsable(Storage))
         {
@@ -174,11 +153,7 @@ public:
         return Result;
     }
 
-    template <typename T>
-    EComponentMutationResult TryAddComponent(
-        TComponentStorage<T>& Storage,
-        const FEntity Entity,
-        T&& Value) noexcept
+    template <typename T> EComponentMutationResult TryAddComponent(TComponentStorage<T>& Storage, const FEntity Entity, T&& Value) noexcept
     {
         if (!IsStorageUsable(Storage))
         {
@@ -197,11 +172,7 @@ public:
         return Result;
     }
 
-    template <typename T>
-    EComponentMutationResult TrySetComponent(
-        TComponentStorage<T>& Storage,
-        const FEntity Entity,
-        const T& Value) noexcept
+    template <typename T> EComponentMutationResult TrySetComponent(TComponentStorage<T>& Storage, const FEntity Entity, const T& Value) noexcept
     {
         if (!IsStorageUsable(Storage))
         {
@@ -220,11 +191,7 @@ public:
         return Result;
     }
 
-    template <typename T>
-    EComponentMutationResult TrySetComponent(
-        TComponentStorage<T>& Storage,
-        const FEntity Entity,
-        T&& Value) noexcept
+    template <typename T> EComponentMutationResult TrySetComponent(TComponentStorage<T>& Storage, const FEntity Entity, T&& Value) noexcept
     {
         if (!IsStorageUsable(Storage))
         {
@@ -243,24 +210,11 @@ public:
         return Result;
     }
 
-    template <typename T>
-    T* GetComponent(TComponentStorage<T>& Storage, const FEntity Entity) noexcept
-    {
-        return IsStorageUsable(Storage) && IsAlive(Entity) ? Storage.Find(Entity) : nullptr;
-    }
+    template <typename T> T* GetComponent(TComponentStorage<T>& Storage, const FEntity Entity) noexcept { return IsStorageUsable(Storage) && IsAlive(Entity) ? Storage.Find(Entity) : nullptr; }
 
-    template <typename T>
-    const T* GetComponent(
-        const TComponentStorage<T>& Storage,
-        const FEntity Entity) const noexcept
-    {
-        return IsStorageUsable(Storage) && IsAlive(Entity) ? Storage.Find(Entity) : nullptr;
-    }
+    template <typename T> const T* GetComponent(const TComponentStorage<T>& Storage, const FEntity Entity) const noexcept { return IsStorageUsable(Storage) && IsAlive(Entity) ? Storage.Find(Entity) : nullptr; }
 
-    template <typename T>
-    EComponentRemoveResult RemoveComponent(
-        TComponentStorage<T>& Storage,
-        const FEntity Entity) noexcept
+    template <typename T> EComponentRemoveResult RemoveComponent(TComponentStorage<T>& Storage, const FEntity Entity) noexcept
     {
         if (!IsStorageUsable(Storage))
         {

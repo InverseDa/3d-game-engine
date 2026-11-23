@@ -57,11 +57,7 @@ private:
 namespace LE
 {
 
-BUILDERTESTS_API EReflectionRegisterResult RegisterBuilderTestsReflection(
-    FReflectionRegistry& Registry,
-    FReflectionModuleHandle& OutHandle) noexcept;
-BUILDERTESTS_API EReflectionUnregisterResult UnregisterBuilderTestsReflection(
-    FReflectionRegistry& Registry,
-    FReflectionModuleHandle Handle) noexcept;
+BUILDERTESTS_API EReflectionRegisterResult RegisterBuilderTestsReflection(FReflectionRegistry& Registry, FReflectionModuleHandle& OutHandle) noexcept;
+BUILDERTESTS_API EReflectionUnregisterResult UnregisterBuilderTestsReflection(FReflectionRegistry& Registry, FReflectionModuleHandle Handle) noexcept;
 
 } // namespace LE

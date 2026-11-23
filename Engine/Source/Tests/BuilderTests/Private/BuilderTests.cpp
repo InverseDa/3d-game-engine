@@ -65,8 +65,14 @@ class FFakeRHICommandList final : public LE::FRHICommandList
 public:
     ~FFakeRHICommandList() override
     {
-        if (DestroyCount != nullptr) ++*DestroyCount;
-        if (Events != nullptr) Events->PushBack(91);
+        if (DestroyCount != nullptr)
+        {
+            ++*DestroyCount;
+        }
+        if (Events != nullptr)
+        {
+            Events->PushBack(91);
+        }
     }
 
     void Begin() override { ++BeginCount; }
@@ -95,14 +101,23 @@ class FFakeRHICommandAllocator final : public LE::FRHICommandAllocator
 public:
     ~FFakeRHICommandAllocator() override
     {
-        if (DestroyCount != nullptr) ++*DestroyCount;
-        if (Events != nullptr) Events->PushBack(92);
+        if (DestroyCount != nullptr)
+        {
+            ++*DestroyCount;
+        }
+        if (Events != nullptr)
+        {
+            Events->PushBack(92);
+        }
     }
 
     bool Reset() override
     {
         ++ResetCount;
-        if (Events != nullptr) Events->PushBack(2);
+        if (Events != nullptr)
+        {
+            Events->PushBack(2);
+        }
         return bResetSucceeds;
     }
 
@@ -115,14 +130,26 @@ public:
 class FFakeRHISemaphore final : public LE::FRHISemaphore
 {
 public:
-    ~FFakeRHISemaphore() override { if (DestroyCount != nullptr) ++*DestroyCount; }
+    ~FFakeRHISemaphore() override
+    {
+        if (DestroyCount != nullptr)
+        {
+            ++*DestroyCount;
+        }
+    }
     int* DestroyCount = nullptr;
 };
 
 class FFakeRHIFence final : public LE::FRHIFence
 {
 public:
-    ~FFakeRHIFence() override { if (DestroyCount != nullptr) ++*DestroyCount; }
+    ~FFakeRHIFence() override
+    {
+        if (DestroyCount != nullptr)
+        {
+            ++*DestroyCount;
+        }
+    }
 
     void Reset() override
     {
@@ -163,8 +190,14 @@ class FFakeRHITexture final : public LE::FRHITexture
 public:
     ~FFakeRHITexture() override
     {
-        if (DestroyCount != nullptr) ++*DestroyCount;
-        if (Events != nullptr) Events->PushBack(8);
+        if (DestroyCount != nullptr)
+        {
+            ++*DestroyCount;
+        }
+        if (Events != nullptr)
+        {
+            Events->PushBack(8);
+        }
     }
     const LE::FRHITextureDesc& GetDesc() const override { return Desc; }
     LE::FRHITextureDesc Desc;
@@ -177,8 +210,14 @@ class FFakeRHIBuffer final : public LE::FRHIBuffer
 public:
     ~FFakeRHIBuffer() override
     {
-        if (DestroyCount != nullptr) ++*DestroyCount;
-        if (Events != nullptr) Events->PushBack(9);
+        if (DestroyCount != nullptr)
+        {
+            ++*DestroyCount;
+        }
+        if (Events != nullptr)
+        {
+            Events->PushBack(9);
+        }
     }
 
     void* Map(LE::uint64, LE::uint64) override { return nullptr; }
@@ -193,11 +232,7 @@ public:
 class FFakeRHITextureView final : public LE::FRHITextureView
 {
 public:
-    explicit FFakeRHITextureView(LE::FRHITexture* const InTexture)
-        : Texture(InTexture)
-    {
-        Desc.Texture = InTexture;
-    }
+    explicit FFakeRHITextureView(LE::FRHITexture* const InTexture) : Texture(InTexture) { Desc.Texture = InTexture; }
 
     LE::FRHITexture* GetTexture() const override { return Texture; }
     const LE::FRHITextureViewDesc& GetDesc() const override { return Desc; }
@@ -238,10 +273,7 @@ public:
 class FFakeRHISwapchain final : public LE::FRHISwapchain
 {
 public:
-    explicit FFakeRHISwapchain(LE::FRHITextureView* const InView)
-        : View(InView)
-    {
-    }
+    explicit FFakeRHISwapchain(LE::FRHITextureView* const InView) : View(InView) {}
 
     LE::FRHIAcquireResult AcquireNextImage(LE::FRHISemaphore* SignalSemaphore, LE::uint64) override
     {
@@ -251,15 +283,11 @@ public:
         {
             Events->PushBack(3);
         }
-        bImageAcquired = AcquireStatus == LE::ERHISwapchainStatus::Success ||
-            AcquireStatus == LE::ERHISwapchainStatus::Suboptimal;
-        return { AcquireStatus, bImageAcquired ? View : nullptr };
+        bImageAcquired = AcquireStatus == LE::ERHISwapchainStatus::Success || AcquireStatus == LE::ERHISwapchainStatus::Suboptimal;
+        return {AcquireStatus, bImageAcquired ? View : nullptr};
     }
 
-    LE::FRHITextureView* GetCurrentBackBufferView() const override
-    {
-        return bImageAcquired ? View : nullptr;
-    }
+    LE::FRHITextureView* GetCurrentBackBufferView() const override { return bImageAcquired ? View : nullptr; }
 
     LE::ERHISwapchainStatus Present(LE::FRHISemaphore* WaitSemaphore) override
     {
@@ -299,7 +327,10 @@ public:
     LE::FRHIQueue* GetGraphicsQueue() const override { return const_cast<FFakeRHIQueue*>(&Queue); }
     LE::FRHIBuffer* CreateBuffer(const LE::FRHIBufferDesc& Desc) override
     {
-        if (!bCreateOwnedBuffers) return nullptr;
+        if (!bCreateOwnedBuffers)
+        {
+            return nullptr;
+        }
         auto* Buffer = new FFakeRHIBuffer();
         Buffer->Desc = Desc;
         Buffer->Events = Events;
@@ -309,7 +340,10 @@ public:
     }
     LE::FRHITexture* CreateTexture(const LE::FRHITextureDesc& Desc) override
     {
-        if (!bCreateOwnedTextures) return nullptr;
+        if (!bCreateOwnedTextures)
+        {
+            return nullptr;
+        }
         auto* Texture = new FFakeRHITexture();
         Texture->Desc = Desc;
         Texture->Events = Events;
@@ -322,7 +356,10 @@ public:
     LE::FRHIPipeline_Graphics* CreateGraphicsPipeline(const LE::FRHIPipelineDesc_Graphics&) override { return nullptr; }
     LE::FRHICommandAllocator* CreateCommandAllocator(LE::EQueueType) override
     {
-        if (ShouldFailCreation()) return nullptr;
+        if (ShouldFailCreation())
+        {
+            return nullptr;
+        }
         auto* Allocator = new FFakeRHICommandAllocator();
         Allocator->Events = Events;
         Allocator->DestroyCount = &DestroyedAllocators;
@@ -331,7 +368,10 @@ public:
     }
     LE::FRHICommandList* CreateCommandList(LE::FRHICommandAllocator*) override
     {
-        if (ShouldFailCreation()) return nullptr;
+        if (ShouldFailCreation())
+        {
+            return nullptr;
+        }
         ++CreatedCommandLists;
         auto* CommandList = new FFakeRHICommandList();
         CommandList->Events = Events;
@@ -340,7 +380,10 @@ public:
     }
     LE::FRHISemaphore* CreateBinarySemaphore() override
     {
-        if (ShouldFailCreation()) return nullptr;
+        if (ShouldFailCreation())
+        {
+            return nullptr;
+        }
         auto* Semaphore = new FFakeRHISemaphore();
         Semaphore->DestroyCount = &DestroyedSemaphores;
         Semaphores.PushBack(Semaphore);
@@ -349,7 +392,10 @@ public:
     LE::FRHIFence* CreateFence(bool bInitiallySignaled) override
     {
         LastFenceInitiallySignaled = bInitiallySignaled;
-        if (ShouldFailCreation()) return nullptr;
+        if (ShouldFailCreation())
+        {
+            return nullptr;
+        }
         auto* Fence = new FFakeRHIFence();
         Fence->bSignaled = bInitiallySignaled;
         Fence->Events = Events;
@@ -395,9 +441,7 @@ public:
 
 struct FRenderFrameSchedulerFixture
 {
-    FRenderFrameSchedulerFixture()
-        : View(&Texture)
-        , Swapchain(&View)
+    FRenderFrameSchedulerFixture() : View(&Texture), Swapchain(&View)
     {
         Device.Events = &Events;
         Device.Queue.Events = &Events;
@@ -408,8 +452,7 @@ struct FRenderFrameSchedulerFixture
 
     LE::FRenderFrameResult Execute()
     {
-        LE::FRenderFrameCallback Callback = [this](LE::FRenderFrameScope& Frame) noexcept
-        {
+        LE::FRenderFrameCallback Callback = [this](LE::FRenderFrameScope& Frame) noexcept {
             ++RecordCount;
             CapturedBackBufferView = Frame.GetBackBufferView();
             CapturedFrameIndex = Frame.GetFrameIndex();
@@ -419,7 +462,10 @@ struct FRenderFrameSchedulerFixture
             if (DeferredResource != nullptr)
             {
                 bDeferredAccepted = Frame.DeferRelease(DeferredResource);
-                if (bDeferredAccepted) DeferredResource = nullptr;
+                if (bDeferredAccepted)
+                {
+                    DeferredResource = nullptr;
+                }
             }
             return RecordResult;
         };
@@ -446,7 +492,13 @@ class FTrackedRHIResource final : public LE::FRHIResource
 {
 public:
     explicit FTrackedRHIResource(int* const InDestroyCount) : DestroyCount(InDestroyCount) {}
-    ~FTrackedRHIResource() override { if (DestroyCount != nullptr) ++*DestroyCount; }
+    ~FTrackedRHIResource() override
+    {
+        if (DestroyCount != nullptr)
+        {
+            ++*DestroyCount;
+        }
+    }
 
 private:
     int* DestroyCount = nullptr;
@@ -483,15 +535,9 @@ public:
 class FFrameScopeRFGDeferredReleaseSink final : public LE::IRFGDeferredReleaseSink
 {
 public:
-    explicit FFrameScopeRFGDeferredReleaseSink(LE::FRenderFrameScope& InFrameScope) noexcept
-        : FrameScope(InFrameScope)
-    {
-    }
+    explicit FFrameScopeRFGDeferredReleaseSink(LE::FRenderFrameScope& InFrameScope) noexcept : FrameScope(InFrameScope) {}
 
-    bool DeferRelease(LE::FRHIResource* const Resource) noexcept override
-    {
-        return FrameScope.DeferRelease(Resource);
-    }
+    bool DeferRelease(LE::FRHIResource* const Resource) noexcept override { return FrameScope.DeferRelease(Resource); }
 
 private:
     LE::FRenderFrameScope& FrameScope;
@@ -502,10 +548,7 @@ struct BitwiseOwned
     explicit BitwiseOwned(const int Value = 0) : Pointer(new int(Value)) { ++LiveCount; }
     BitwiseOwned(const BitwiseOwned&) = delete;
     BitwiseOwned& operator=(const BitwiseOwned&) = delete;
-    BitwiseOwned(BitwiseOwned&& Other) noexcept : Pointer(Other.Pointer)
-    {
-        Other.Pointer = nullptr;
-    }
+    BitwiseOwned(BitwiseOwned&& Other) noexcept : Pointer(Other.Pointer) { Other.Pointer = nullptr; }
     ~BitwiseOwned()
     {
         delete Pointer;
@@ -527,8 +570,7 @@ int BitwiseOwned::DestructionCount = 0;
 
 namespace LE
 {
-template <>
-struct IsBitwiseRelocatable<BitwiseOwned> : std::true_type
+template <> struct IsBitwiseRelocatable<BitwiseOwned> : std::true_type
 {
 };
 }
@@ -547,8 +589,7 @@ int Expect(const bool bCondition, const char* const Name)
     return 1;
 }
 
-template <typename T>
-bool NearlyEqual(const T Left, const T Right, const T Tolerance)
+template <typename T> bool NearlyEqual(const T Left, const T Right, const T Tolerance)
 {
     return std::abs(Left - Right) <= Tolerance;
 }
@@ -556,10 +597,7 @@ bool NearlyEqual(const T Left, const T Right, const T Tolerance)
 class FailingAllocator final : public LE::IAllocator
 {
 public:
-    explicit FailingAllocator(const bool bInFailAllocations = true)
-        : bFailAllocations(bInFailAllocations)
-    {
-    }
+    explicit FailingAllocator(const bool bInFailAllocations = true) : bFailAllocations(bInFailAllocations) {}
 
     void* Allocate(const std::size_t Size, const std::size_t Alignment) noexcept override
     {
@@ -581,10 +619,7 @@ public:
         return Result;
     }
 
-    void Deallocate(
-        void* const Address,
-        const std::size_t Size,
-        const std::size_t Alignment) noexcept override
+    void Deallocate(void* const Address, const std::size_t Size, const std::size_t Alignment) noexcept override
     {
         if (Address != nullptr)
         {
@@ -604,23 +639,20 @@ public:
 
 struct Counted
 {
-    explicit Counted(const int InValue = 0)
-        : Value(InValue)
+    explicit Counted(const int InValue = 0) : Value(InValue)
     {
         ++ConstructionCount;
         ++LiveCount;
     }
 
-    Counted(const Counted& Other)
-        : Value(Other.Value)
+    Counted(const Counted& Other) : Value(Other.Value)
     {
         ++ConstructionCount;
         ++CopyCount;
         ++LiveCount;
     }
 
-    Counted(Counted&& Other) noexcept
-        : Value(Other.Value)
+    Counted(Counted&& Other) noexcept : Value(Other.Value)
     {
         Other.Value = -1;
         ++ConstructionCount;
@@ -704,18 +736,12 @@ struct MoveOnlyKey
 
 struct MoveOnlyKeyHash
 {
-    std::size_t operator()(const MoveOnlyKey& Key) const noexcept
-    {
-        return LE::DefaultHash<int>{}(Key.Value);
-    }
+    std::size_t operator()(const MoveOnlyKey& Key) const noexcept { return LE::DefaultHash<int>{}(Key.Value); }
 };
 
 struct MoveOnlyKeyEqual
 {
-    bool operator()(const MoveOnlyKey& Left, const MoveOnlyKey& Right) const noexcept
-    {
-        return Left.Value == Right.Value;
-    }
+    bool operator()(const MoveOnlyKey& Left, const MoveOnlyKey& Right) const noexcept { return Left.Value == Right.Value; }
 };
 
 struct ConstantIntHash
@@ -726,19 +752,13 @@ struct ConstantIntHash
 struct ModuloHash
 {
     int Modulus = 1;
-    std::size_t operator()(const int Value) const noexcept
-    {
-        return LE::DefaultHash<int>{}(Value % Modulus);
-    }
+    std::size_t operator()(const int Value) const noexcept { return LE::DefaultHash<int>{}(Value % Modulus); }
 };
 
 struct ModuloEqual
 {
     int Modulus = 1;
-    bool operator()(const int Left, const int Right) const noexcept
-    {
-        return Left % Modulus == Right % Modulus;
-    }
+    bool operator()(const int Left, const int Right) const noexcept { return Left % Modulus == Right % Modulus; }
 };
 
 struct ThrowingDefaultHash
@@ -746,10 +766,7 @@ struct ThrowingDefaultHash
     ThrowingDefaultHash() noexcept(false) {}
     ThrowingDefaultHash(ThrowingDefaultHash&&) noexcept = default;
     ThrowingDefaultHash& operator=(ThrowingDefaultHash&&) noexcept = default;
-    std::size_t operator()(const int Value) const noexcept
-    {
-        return LE::DefaultHash<int>{}(Value);
-    }
+    std::size_t operator()(const int Value) const noexcept { return LE::DefaultHash<int>{}(Value); }
 };
 
 class ThrowingCopyAllocatorPolicy
@@ -757,16 +774,11 @@ class ThrowingCopyAllocatorPolicy
 public:
     ThrowingCopyAllocatorPolicy() noexcept : Instance(&LE::GetDefaultAllocator()) {}
     explicit ThrowingCopyAllocatorPolicy(LE::IAllocator& Allocator) noexcept : Instance(&Allocator) {}
-    ThrowingCopyAllocatorPolicy(const ThrowingCopyAllocatorPolicy& Other) noexcept(false)
-        : Instance(Other.Instance)
-    {
-    }
+    ThrowingCopyAllocatorPolicy(const ThrowingCopyAllocatorPolicy& Other) noexcept(false) : Instance(Other.Instance) {}
     ThrowingCopyAllocatorPolicy(ThrowingCopyAllocatorPolicy&&) noexcept = default;
     ThrowingCopyAllocatorPolicy& operator=(ThrowingCopyAllocatorPolicy&&) noexcept = default;
     LE::IAllocator& Get() const noexcept { return *Instance; }
-    friend void swap(
-        ThrowingCopyAllocatorPolicy& Left,
-        ThrowingCopyAllocatorPolicy& Right) noexcept
+    friend void swap(ThrowingCopyAllocatorPolicy& Left, ThrowingCopyAllocatorPolicy& Right) noexcept
     {
         using std::swap;
         swap(Left.Instance, Right.Instance);
@@ -776,28 +788,15 @@ private:
     LE::IAllocator* Instance;
 };
 
-using ThrowingDefaultHashMap =
-    LE::HashMap<int, int, ThrowingDefaultHash, LE::DefaultEqual<int>>;
-using ThrowingDefaultHashSet =
-    LE::HashSet<int, ThrowingDefaultHash, LE::DefaultEqual<int>>;
-using ThrowingAllocatorHashMap = LE::HashMap<
-    int,
-    int,
-    LE::DefaultHash<int>,
-    LE::DefaultEqual<int>,
-    ThrowingCopyAllocatorPolicy>;
+using ThrowingDefaultHashMap = LE::HashMap<int, int, ThrowingDefaultHash, LE::DefaultEqual<int>>;
+using ThrowingDefaultHashSet = LE::HashSet<int, ThrowingDefaultHash, LE::DefaultEqual<int>>;
+using ThrowingAllocatorHashMap = LE::HashMap<int, int, LE::DefaultHash<int>, LE::DefaultEqual<int>, ThrowingCopyAllocatorPolicy>;
 
-static_assert(std::is_nothrow_default_constructible<LE::HashMap<int, int>>::value,
-    "default HashMap constructor should reflect non-throwing default policies");
-static_assert(std::is_nothrow_default_constructible<LE::HashSet<int>>::value,
-    "default HashSet constructor should reflect non-throwing map storage");
-static_assert(!std::is_nothrow_default_constructible<ThrowingDefaultHashMap>::value,
-    "HashMap default noexcept must reflect a potentially throwing Hash constructor");
-static_assert(!std::is_nothrow_default_constructible<ThrowingDefaultHashSet>::value,
-    "HashSet default noexcept must reflect a potentially throwing Hash constructor");
-static_assert(!std::is_nothrow_constructible<
-        ThrowingAllocatorHashMap, const ThrowingCopyAllocatorPolicy&>::value,
-    "HashMap allocator constructor noexcept must reflect allocator copying");
+static_assert(std::is_nothrow_default_constructible<LE::HashMap<int, int>>::value, "default HashMap constructor should reflect non-throwing default policies");
+static_assert(std::is_nothrow_default_constructible<LE::HashSet<int>>::value, "default HashSet constructor should reflect non-throwing map storage");
+static_assert(!std::is_nothrow_default_constructible<ThrowingDefaultHashMap>::value, "HashMap default noexcept must reflect a potentially throwing Hash constructor");
+static_assert(!std::is_nothrow_default_constructible<ThrowingDefaultHashSet>::value, "HashSet default noexcept must reflect a potentially throwing Hash constructor");
+static_assert(!std::is_nothrow_constructible<ThrowingAllocatorHashMap, const ThrowingCopyAllocatorPolicy&>::value, "HashMap allocator constructor noexcept must reflect allocator copying");
 
 struct LookupView
 {
@@ -834,7 +833,11 @@ struct alignas(64) OverAligned
 struct OwnedValue
 {
     explicit OwnedValue(const int InValue = 0) noexcept : Value(InValue) { ++LiveCount; }
-    ~OwnedValue() noexcept { --LiveCount; ++DestroyedCount; }
+    ~OwnedValue() noexcept
+    {
+        --LiveCount;
+        ++DestroyedCount;
+    }
     int Value = 0;
     static int LiveCount;
     static int DestroyedCount;
@@ -862,7 +865,11 @@ struct SharedDerived final : PrefixBase, ObservedBase
         Value = InValue;
         ++LiveCount;
     }
-    ~SharedDerived() noexcept override { --LiveCount; ++DestroyedCount; }
+    ~SharedDerived() noexcept override
+    {
+        --LiveCount;
+        ++DestroyedCount;
+    }
     static int LiveCount;
     static int DestroyedCount;
 };
@@ -897,12 +904,9 @@ struct ThrowingDestruction
     ~ThrowingDestruction() noexcept(false) {}
 };
 
-static_assert(std::is_nothrow_destructible<OwnedValue>::value,
-    "ownership factory test value satisfies the non-throwing destructor contract");
-static_assert(!std::is_nothrow_destructible<ThrowingDestruction>::value,
-    "throwing destructors are detectable and excluded by ownership factories");
-static_assert(std::is_nothrow_constructible<StatefulOwnedDeleter, StatefulOwnedDeleter&>::value,
-    "stateful lvalue deleter is safe to store in the external control block");
+static_assert(std::is_nothrow_destructible<OwnedValue>::value, "ownership factory test value satisfies the non-throwing destructor contract");
+static_assert(!std::is_nothrow_destructible<ThrowingDestruction>::value, "throwing destructors are detectable and excluded by ownership factories");
+static_assert(std::is_nothrow_constructible<StatefulOwnedDeleter, StatefulOwnedDeleter&>::value, "stateful lvalue deleter is safe to store in the external control block");
 
 [[noreturn]] void ExitOnOom(const std::size_t, const std::size_t)
 {
@@ -918,24 +922,16 @@ int RunAllocationTests()
 {
     int Failures = 0;
     std::size_t Product = 0;
-    Failures += Expect(LE::TryMultiplySize(7, 9, Product) && Product == 63,
-        "checked allocation multiplication succeeds");
-    Failures += Expect(!LE::TryMultiplySize((std::size_t(-1)), 2, Product),
-        "checked allocation multiplication rejects overflow");
-    Failures += Expect(LE::IsValidAlignment(1) && LE::IsValidAlignment(64)
-        && !LE::IsValidAlignment(0) && !LE::IsValidAlignment(3),
-        "alignment validation accepts only powers of two");
+    Failures += Expect(LE::TryMultiplySize(7, 9, Product) && Product == 63, "checked allocation multiplication succeeds");
+    Failures += Expect(!LE::TryMultiplySize((std::size_t(-1)), 2, Product), "checked allocation multiplication rejects overflow");
+    Failures += Expect(LE::IsValidAlignment(1) && LE::IsValidAlignment(64) && !LE::IsValidAlignment(0) && !LE::IsValidAlignment(3), "alignment validation accepts only powers of two");
 
     FailingAllocator Allocator(false);
-    Failures += Expect(LE::TryAllocateBytes(Allocator, 0, 16) == nullptr
-        && Allocator.AllocationAttempts == 0,
-        "zero-byte allocation has no allocator call or address identity");
+    Failures += Expect(LE::TryAllocateBytes(Allocator, 0, 16) == nullptr && Allocator.AllocationAttempts == 0, "zero-byte allocation has no allocator call or address identity");
     void* const Block = LE::TryAllocateBytes(Allocator, 32, 16);
-    Failures += Expect(Block != nullptr && Allocator.LiveAllocations == 1,
-        "allocation helper uses injected allocator");
+    Failures += Expect(Block != nullptr && Allocator.LiveAllocations == 1, "allocation helper uses injected allocator");
     Allocator.Deallocate(Block, 32, 16);
-    Failures += Expect(Allocator.LiveAllocations == 0 && Allocator.DeallocationCount >= 1,
-        "deallocation returns through creating allocator");
+    Failures += Expect(Allocator.LiveAllocations == 0 && Allocator.DeallocationCount >= 1, "deallocation returns through creating allocator");
     return Failures;
 }
 
@@ -948,32 +944,24 @@ int RunArrayLifetimeTests()
         Values.EmplaceBack(10);
         Values.EmplaceBack(20);
         Values.Insert(1, Counted(15));
-        Failures += Expect(Values.Size() == 3 && Values[0].Value == 10
-            && Values[1].Value == 15 && Values[2].Value == 20,
-            "Array insert preserves order");
+        Failures += Expect(Values.Size() == 3 && Values[0].Value == 10 && Values[1].Value == 15 && Values[2].Value == 20, "Array insert preserves order");
         Values.Erase(1);
-        Failures += Expect(Values.Size() == 2 && Values[1].Value == 20,
-            "Array erase compacts non-trivial elements");
+        Failures += Expect(Values.Size() == 2 && Values[1].Value == 20, "Array erase compacts non-trivial elements");
 
         LE::Array<Counted> Copy(Values);
-        Failures += Expect(Copy.Size() == 2 && Copy[0].Value == 10 && Counted::CopyCount >= 2,
-            "Array copy constructs elements");
+        Failures += Expect(Copy.Size() == 2 && Copy[0].Value == 10 && Counted::CopyCount >= 2, "Array copy constructs elements");
         auto CopyIterator = Copy.begin();
         ++CopyIterator;
         Failures += Expect(CopyIterator->Value == 20, "copied Array supports iteration");
 #if !defined(NDEBUG)
-        Failures += Expect(CopyIterator.IsValid(),
-            "copied Array initializes iterator diagnostics");
+        Failures += Expect(CopyIterator.IsValid(), "copied Array initializes iterator diagnostics");
 #endif
         LE::Array<Counted> Moved(std::move(Copy));
-        Failures += Expect(Copy.IsEmpty() && Moved.Size() == 2,
-            "Array move transfers storage ownership");
+        Failures += Expect(Copy.IsEmpty() && Moved.Size() == 2, "Array move transfers storage ownership");
         Values.Clear();
         Failures += Expect(Values.IsEmpty(), "Array clear destroys all elements");
     }
-    Failures += Expect(Counted::LiveCount == 0
-        && Counted::ConstructionCount == Counted::DestructionCount,
-        "Array balances every construction and destruction");
+    Failures += Expect(Counted::LiveCount == 0 && Counted::ConstructionCount == Counted::DestructionCount, "Array balances every construction and destruction");
 
     LE::Array<MoveOnly> MoveOnlyValues;
     for (int Index = 0; Index < 12; ++Index)
@@ -982,8 +970,7 @@ int RunArrayLifetimeTests()
     }
     MoveOnlyValues.Insert(3, MoveOnly(99));
     MoveOnlyValues.Erase(4, 2);
-    Failures += Expect(MoveOnlyValues[3].Value == 99 && MoveOnlyValues.Size() == 11,
-        "Array supports move-only growth insert and erase");
+    Failures += Expect(MoveOnlyValues[3].Value == 99 && MoveOnlyValues.Size() == 11, "Array supports move-only growth insert and erase");
 
     LE::Array<int> SelfAliasing;
     SelfAliasing.Reserve(4);
@@ -992,12 +979,9 @@ int RunArrayLifetimeTests()
     SelfAliasing.PushBack(30);
     SelfAliasing.PushBack(40);
     SelfAliasing.PushBack(SelfAliasing[0]);
-    Failures += Expect(SelfAliasing.Size() == 5 && SelfAliasing[0] == 10
-        && SelfAliasing[4] == 10,
-        "self-aliased PushBack survives reallocation");
+    Failures += Expect(SelfAliasing.Size() == 5 && SelfAliasing[0] == 10 && SelfAliasing[4] == 10, "self-aliased PushBack survives reallocation");
     SelfAliasing.Insert(1, SelfAliasing[3]);
-    Failures += Expect(SelfAliasing[1] == 40,
-        "self-aliased Insert survives shifting storage");
+    Failures += Expect(SelfAliasing[1] == 40, "self-aliased Insert survives shifting storage");
 
     LE::Array<MoveOnly> SelfMove;
     SelfMove.Reserve(4);
@@ -1006,8 +990,7 @@ int RunArrayLifetimeTests()
         SelfMove.EmplaceBack(Index + 1);
     }
     SelfMove.PushBack(std::move(SelfMove[0]));
-    Failures += Expect(SelfMove[0].Value == -1 && SelfMove[4].Value == 1,
-        "self-aliased move PushBack rebinds after growth");
+    Failures += Expect(SelfMove[0].Value == -1 && SelfMove[4].Value == 1, "self-aliased move PushBack rebinds after growth");
 
     BitwiseOwned::LiveCount = 0;
     BitwiseOwned::DestructionCount = 0;
@@ -1016,12 +999,9 @@ int RunArrayLifetimeTests()
         Relocated.EmplaceBack(1);
         Relocated.EmplaceBack(2);
         Relocated.Erase(0);
-        Failures += Expect(BitwiseOwned::LiveCount == 1
-            && BitwiseOwned::DestructionCount == 1,
-            "erase destroys removed explicitly bitwise-relocatable element");
+        Failures += Expect(BitwiseOwned::LiveCount == 1 && BitwiseOwned::DestructionCount == 1, "erase destroys removed explicitly bitwise-relocatable element");
     }
-    Failures += Expect(BitwiseOwned::LiveCount == 0 && BitwiseOwned::DestructionCount == 2,
-        "bitwise relocation transfers ownership without leaking destruction");
+    Failures += Expect(BitwiseOwned::LiveCount == 0 && BitwiseOwned::DestructionCount == 2, "bitwise relocation transfers ownership without leaking destruction");
     return Failures;
 }
 
@@ -1033,15 +1013,12 @@ int RunArrayStorageTests()
     for (int Index = 0; Index < 128; ++Index)
     {
         Values.PushBack(Index);
-        Failures += Expect(Values.Capacity() >= Values.Size()
-            && Values.Capacity() >= PreviousCapacity,
-            "Array growth is monotonic and covers size");
+        Failures += Expect(Values.Capacity() >= Values.Size() && Values.Capacity() >= PreviousCapacity, "Array growth is monotonic and covers size");
         PreviousCapacity = Values.Capacity();
     }
     for (int Index = 0; Index < 128; ++Index)
     {
-        Failures += Expect(Values[static_cast<std::size_t>(Index)] == Index,
-            "Array growth preserves values");
+        Failures += Expect(Values[static_cast<std::size_t>(Index)] == Index, "Array growth preserves values");
     }
 
     Values.Reserve(256);
@@ -1051,11 +1028,9 @@ int RunArrayStorageTests()
     auto OldEnd = Values.end();
 #endif
     Values.PushBack(128);
-    Failures += Expect(&Values[0] == StableAddress && *StableIterator == 0,
-        "append without growth preserves earlier references");
+    Failures += Expect(&Values[0] == StableAddress && *StableIterator == 0, "append without growth preserves earlier references");
 #if !defined(NDEBUG)
-    Failures += Expect(StableIterator.IsValid(),
-        "Debug iterator preserves positions before appended element");
+    Failures += Expect(StableIterator.IsValid(), "Debug iterator preserves positions before appended element");
     Failures += Expect(!OldEnd.IsValid(), "Debug iterator detects invalidated old end");
 #endif
 
@@ -1065,10 +1040,8 @@ int RunArrayStorageTests()
     Values.Insert(1, -1);
     Failures += Expect(*BeforeInsert == 0, "insert preserves iterator before insertion point");
 #if !defined(NDEBUG)
-    Failures += Expect(BeforeInsert.IsValid(),
-        "Debug iterator preserves position before insertion point");
-    Failures += Expect(!AtInsert.IsValid(),
-        "Debug iterator detects insertion-point invalidation");
+    Failures += Expect(BeforeInsert.IsValid(), "Debug iterator preserves position before insertion point");
+    Failures += Expect(!AtInsert.IsValid(), "Debug iterator detects insertion-point invalidation");
 #endif
     auto BeforeErase = Values.begin();
     auto AtErase = Values.begin();
@@ -1077,16 +1050,13 @@ int RunArrayStorageTests()
     Values.Erase(2);
     Failures += Expect(*BeforeErase == 0, "erase preserves iterator before erased position");
 #if !defined(NDEBUG)
-    Failures += Expect(BeforeErase.IsValid(),
-        "Debug iterator preserves position before erased element");
-    Failures += Expect(!AtErase.IsValid(),
-        "Debug iterator detects erased-position invalidation");
+    Failures += Expect(BeforeErase.IsValid(), "Debug iterator preserves position before erased element");
+    Failures += Expect(!AtErase.IsValid(), "Debug iterator detects erased-position invalidation");
 #endif
     Values.PushBack(777);
     Values.PushBack(778);
 #if !defined(NDEBUG)
-    Failures += Expect(!AtInsert.IsValid() && !AtErase.IsValid(),
-        "later mutations never revive previously invalidated iterators");
+    Failures += Expect(!AtInsert.IsValid() && !AtErase.IsValid(), "later mutations never revive previously invalidated iterators");
 #endif
 
 #if !defined(NDEBUG)
@@ -1094,40 +1064,32 @@ int RunArrayStorageTests()
 #endif
     Values.Reserve(512);
 #if !defined(NDEBUG)
-    Failures += Expect(!BeforeReserve.IsValid(),
-        "Reserve reallocation invalidates every iterator");
+    Failures += Expect(!BeforeReserve.IsValid(), "Reserve reallocation invalidates every iterator");
 #endif
     Values.Shrink();
-    Failures += Expect(Values.Capacity() == Values.Size(),
-        "Shrink reduces capacity to size");
+    Failures += Expect(Values.Capacity() == Values.Size(), "Shrink reduces capacity to size");
 #if !defined(NDEBUG)
     auto BeforeClear = Values.begin();
 #endif
     Values.Clear();
     Failures += Expect(Values.Size() == 0, "Clear removes every element");
 #if !defined(NDEBUG)
-    Failures += Expect(!BeforeClear.IsValid(),
-        "Debug iterator detects Clear invalidation");
+    Failures += Expect(!BeforeClear.IsValid(), "Debug iterator detects Clear invalidation");
 #endif
     Values.Shrink();
-    Failures += Expect(Values.Data() == nullptr && Values.Capacity() == 0,
-        "empty Shrink returns to zero-allocation state");
+    Failures += Expect(Values.Data() == nullptr && Values.Capacity() == 0, "empty Shrink returns to zero-allocation state");
 
     LE::Array<int> Resized;
     Resized.Resize(3);
-    Failures += Expect(Resized.Size() == 3 && Resized[0] == 0 && Resized[2] == 0,
-        "Resize value-initializes newly grown elements");
+    Failures += Expect(Resized.Size() == 3 && Resized[0] == 0 && Resized[2] == 0, "Resize value-initializes newly grown elements");
     Resized.Resize(6, 7);
-    Failures += Expect(Resized.Size() == 6 && Resized[2] == 0 && Resized[5] == 7,
-        "Resize fill preserves the prefix and copies the fill value");
+    Failures += Expect(Resized.Size() == 6 && Resized[2] == 0 && Resized[5] == 7, "Resize fill preserves the prefix and copies the fill value");
     Resized.Resize(2);
-    Failures += Expect(Resized.Size() == 2 && Resized[1] == 0,
-        "Resize shrink destroys the suffix and preserves the prefix");
+    Failures += Expect(Resized.Size() == 2 && Resized[1] == 0, "Resize shrink destroys the suffix and preserves the prefix");
 
     LE::Array<int> AliasedResize{11};
     AliasedResize.Resize(16, AliasedResize[0]);
-    Failures += Expect(AliasedResize.Size() == 16 && AliasedResize[15] == 11,
-        "Resize fill survives self-aliased reallocation");
+    Failures += Expect(AliasedResize.Size() == 16 && AliasedResize[15] == 11, "Resize fill survives self-aliased reallocation");
 
     LE::Array<int> Iterated{1, 2, 3, 4};
     int Sum = 0;
@@ -1142,9 +1104,7 @@ int RunArrayStorageTests()
     ++ConstIterator;
     auto EndIterator = Iterated.end();
     --EndIterator;
-    Failures += Expect(Sum == 10 && *Iterator == 2 && Iterator == ConstIterator
-        && ConstIterator == Iterator && *EndIterator == 4,
-        "Array bidirectional iterators support range-for and const comparison");
+    Failures += Expect(Sum == 10 && *Iterator == 2 && Iterator == ConstIterator && ConstIterator == Iterator && *EndIterator == 4, "Array bidirectional iterators support range-for and const comparison");
 
     LE::Array<int> MiddleGrowth;
     MiddleGrowth.Reserve(4);
@@ -1159,20 +1119,14 @@ int RunArrayStorageTests()
     for (auto Current = MiddleGrowth.begin(); Current != MiddleGrowth.end(); ++Current)
     {
 #if !defined(NDEBUG)
-        Failures += Expect(Current.IsValid(),
-            "middle reallocation initializes every live iterator token");
+        Failures += Expect(Current.IsValid(), "middle reallocation initializes every live iterator token");
 #endif
         MiddleGrowthSum += *Current;
         ++MiddleGrowthCount;
     }
-    Failures += Expect(MiddleGrowth.Capacity() > CapacityBeforeMiddleInsert
-        && MiddleGrowthCount == 5 && MiddleGrowthSum == 109
-        && MiddleGrowth[0] == 1 && MiddleGrowth[1] == 2
-        && MiddleGrowth[2] == 99 && MiddleGrowth[3] == 3 && MiddleGrowth[4] == 4,
-        "middle insert with reallocation preserves order and full iteration");
+    Failures += Expect(MiddleGrowth.Capacity() > CapacityBeforeMiddleInsert && MiddleGrowthCount == 5 && MiddleGrowthSum == 109 && MiddleGrowth[0] == 1 && MiddleGrowth[1] == 2 && MiddleGrowth[2] == 99 && MiddleGrowth[3] == 3 && MiddleGrowth[4] == 4, "middle insert with reallocation preserves order and full iteration");
 #if !defined(NDEBUG)
-    Failures += Expect(MiddleGrowth.end().IsValid(),
-        "Debug iterator exposes a valid current end position");
+    Failures += Expect(MiddleGrowth.end().IsValid(), "Debug iterator exposes a valid current end position");
 #endif
     return Failures;
 }
@@ -1192,49 +1146,25 @@ int RunArrayFailureAndAlignmentTests()
         int* const OriginalData = Values.Data();
         const std::size_t OriginalSize = Values.Size();
         const std::size_t OriginalCapacity = Values.Capacity();
-        Failures += Expect(!Values.TryPushBack(5)
-            && Values.Data() == OriginalData
-            && Values.Size() == OriginalSize
-            && Values.Capacity() == OriginalCapacity
-            && Values[0] == 1 && Values[3] == 4,
-            "TryPushBack preserves Array after allocation failure");
-        Failures += Expect(!Values.TryInsert(2, Values[0])
-            && Values.Data() == OriginalData && Values.Size() == OriginalSize
-            && Values[0] == 1 && Values[1] == 2 && Values[2] == 3 && Values[3] == 4,
-            "self-aliased TryInsert preserves Array after allocation failure");
-        Failures += Expect(!Values.TryReserve(8)
-            && Values.Data() == OriginalData && Values.Capacity() == OriginalCapacity,
-            "TryReserve preserves Array after allocation failure");
-        Failures += Expect(!Values.TryResize(8)
-            && Values.Data() == OriginalData && Values.Size() == OriginalSize
-            && Values.Capacity() == OriginalCapacity && Values[3] == 4,
-            "TryResize preserves Array after allocation failure");
-        Failures += Expect(!Values.TryResize(8, Values[0])
-            && Values.Data() == OriginalData && Values.Size() == OriginalSize
-            && Values[0] == 1 && Values[3] == 4,
-            "self-aliased fill TryResize preserves Array after allocation failure");
+        Failures += Expect(!Values.TryPushBack(5) && Values.Data() == OriginalData && Values.Size() == OriginalSize && Values.Capacity() == OriginalCapacity && Values[0] == 1 && Values[3] == 4, "TryPushBack preserves Array after allocation failure");
+        Failures += Expect(!Values.TryInsert(2, Values[0]) && Values.Data() == OriginalData && Values.Size() == OriginalSize && Values[0] == 1 && Values[1] == 2 && Values[2] == 3 && Values[3] == 4, "self-aliased TryInsert preserves Array after allocation failure");
+        Failures += Expect(!Values.TryReserve(8) && Values.Data() == OriginalData && Values.Capacity() == OriginalCapacity, "TryReserve preserves Array after allocation failure");
+        Failures += Expect(!Values.TryResize(8) && Values.Data() == OriginalData && Values.Size() == OriginalSize && Values.Capacity() == OriginalCapacity && Values[3] == 4, "TryResize preserves Array after allocation failure");
+        Failures += Expect(!Values.TryResize(8, Values[0]) && Values.Data() == OriginalData && Values.Size() == OriginalSize && Values[0] == 1 && Values[3] == 4, "self-aliased fill TryResize preserves Array after allocation failure");
         Values.Erase(3);
-        Failures += Expect(!Values.TryShrink() && Values.Data() == OriginalData
-            && Values.Size() == 3 && Values.Capacity() == OriginalCapacity,
-            "TryShrink preserves Array after allocation failure");
+        Failures += Expect(!Values.TryShrink() && Values.Data() == OriginalData && Values.Size() == 3 && Values.Capacity() == OriginalCapacity, "TryShrink preserves Array after allocation failure");
         const std::size_t AttemptsBeforeOverflow = Allocator.AllocationAttempts;
-        Failures += Expect(!Values.TryReserve(LE::Array<int>::MaxSize() + 1)
-            && Allocator.AllocationAttempts == AttemptsBeforeOverflow,
-            "TryReserve rejects capacity overflow before allocator call");
+        Failures += Expect(!Values.TryReserve(LE::Array<int>::MaxSize() + 1) && Allocator.AllocationAttempts == AttemptsBeforeOverflow, "TryReserve rejects capacity overflow before allocator call");
     }
-    Failures += Expect(Allocator.LiveAllocations == 0 && Allocator.DeallocationCount >= 1,
-        "Array destructor deallocates through original injected allocator");
+    Failures += Expect(Allocator.LiveAllocations == 0 && Allocator.DeallocationCount >= 1, "Array destructor deallocates through original injected allocator");
 
     FailingAllocator AlignedAllocator(false);
     {
         LE::Array<OverAligned> Values(AlignedAllocator);
         Values.EmplaceBack();
-        Failures += Expect(reinterpret_cast<std::uintptr_t>(Values.Data()) % alignof(OverAligned) == 0
-            && AlignedAllocator.MaximumAlignment >= alignof(OverAligned),
-            "Array preserves over-aligned element allocation");
+        Failures += Expect(reinterpret_cast<std::uintptr_t>(Values.Data()) % alignof(OverAligned) == 0 && AlignedAllocator.MaximumAlignment >= alignof(OverAligned), "Array preserves over-aligned element allocation");
     }
-    Failures += Expect(AlignedAllocator.LiveAllocations == 0,
-        "over-aligned storage returns through creating allocator");
+    Failures += Expect(AlignedAllocator.LiveAllocations == 0, "over-aligned storage returns through creating allocator");
     return Failures;
 }
 
@@ -1246,45 +1176,30 @@ int RunStaticArrayAndSpanTests()
     Values[1] = 4;
     Values[2] = 6;
     const LE::StaticArray<int, 3>& ConstValues = Values;
-    Failures += Expect(ConstValues.Size() == 3 && ConstValues[1] == 4,
-        "StaticArray provides const fixed-size access");
+    Failures += Expect(ConstValues.Size() == 3 && ConstValues[1] == 4, "StaticArray provides const fixed-size access");
 
     LE::Span<int> View = Values.AsSpan();
     LE::Span<const int> ConstView = View;
     View[1] = 5;
-    Failures += Expect(Values[1] == 5 && ConstView[1] == 5,
-        "Span is a non-owning mutable/const view");
+    Failures += Expect(Values[1] == 5 && ConstView[1] == 5, "Span is a non-owning mutable/const view");
     const LE::Span<const int> Tail = ConstView.Subspan(1, 2);
-    Failures += Expect(Tail.Size() == 2 && Tail[0] == 5 && Tail[1] == 6,
-        "Span subspan preserves the borrowed range");
+    Failures += Expect(Tail.Size() == 2 && Tail[0] == 5 && Tail[1] == 6, "Span subspan preserves the borrowed range");
     std::size_t SpanBytes = 0;
-    Failures += Expect(ConstView.TrySizeBytes(SpanBytes) && SpanBytes == 3 * sizeof(int),
-        "Span reports checked byte size");
-    const LE::Span<int> OverflowView(
-        reinterpret_cast<int*>(static_cast<std::uintptr_t>(1)),
-        (std::numeric_limits<std::size_t>::max)());
-    Failures += Expect(!OverflowView.TrySizeBytes(SpanBytes),
-        "Span byte size rejects overflow");
+    Failures += Expect(ConstView.TrySizeBytes(SpanBytes) && SpanBytes == 3 * sizeof(int), "Span reports checked byte size");
+    const LE::Span<int> OverflowView(reinterpret_cast<int*>(static_cast<std::uintptr_t>(1)), (std::numeric_limits<std::size_t>::max)());
+    Failures += Expect(!OverflowView.TrySizeBytes(SpanBytes), "Span byte size rejects overflow");
     const LE::Span<int> NormalizedEmpty(Values.Data(), 0);
-    Failures += Expect(NormalizedEmpty.Data() == nullptr && NormalizedEmpty.IsEmpty(),
-        "zero-length Span has canonical null storage");
+    Failures += Expect(NormalizedEmpty.Data() == nullptr && NormalizedEmpty.IsEmpty(), "zero-length Span has canonical null storage");
 
     LE::StaticArray<int, 0> EmptyArray;
     LE::Span<int> EmptySpan = EmptyArray.AsSpan();
-    Failures += Expect(EmptyArray.IsEmpty() && EmptyArray.Data() == nullptr
-        && EmptySpan.IsEmpty() && EmptySpan.Data() == nullptr
-        && EmptySpan.begin() == EmptySpan.end(),
-        "StaticArray<0> and empty Span have no backing allocation");
+    Failures += Expect(EmptyArray.IsEmpty() && EmptyArray.Data() == nullptr && EmptySpan.IsEmpty() && EmptySpan.Data() == nullptr && EmptySpan.begin() == EmptySpan.end(), "StaticArray<0> and empty Span have no backing allocation");
 
-    static_assert(std::is_constructible<LE::Span<const int>, LE::Span<int>>::value,
-        "mutable Span must convert to const Span");
-    static_assert(!std::is_constructible<LE::Span<int>, LE::Span<const int>>::value,
-        "const Span must not convert to mutable Span");
-    static_assert(!std::is_constructible<LE::Span<int>, LE::StaticArray<int, 3>&&>::value,
-        "Span must not silently bind to a temporary owner");
+    static_assert(std::is_constructible<LE::Span<const int>, LE::Span<int>>::value, "mutable Span must convert to const Span");
+    static_assert(!std::is_constructible<LE::Span<int>, LE::Span<const int>>::value, "const Span must not convert to mutable Span");
+    static_assert(!std::is_constructible<LE::Span<int>, LE::StaticArray<int, 3>&&>::value, "Span must not silently bind to a temporary owner");
     static_assert(LE::IsBitwiseRelocatableV<int>, "trivial values are bitwise relocatable");
-    static_assert(!LE::IsBitwiseRelocatableV<Counted>,
-        "non-trivial values use move construction and destruction");
+    static_assert(!LE::IsBitwiseRelocatableV<Counted>, "non-trivial values use move construction and destruction");
     return Failures;
 }
 
@@ -1292,23 +1207,17 @@ int RunHashContainerSmokeTests()
 {
     int Failures = 0;
     LE::HashMap<int, int> Values;
-    Failures += Expect(Values.Insert(1, 10) && Values.Contains(1)
-        && Values.Find(1) != nullptr && *Values.Find(1) == 10,
-        "HashMap inserts and finds a basic key");
-    Failures += Expect(!Values.Insert(1, 99) && *Values.Find(1) == 10,
-        "HashMap duplicate insert preserves the existing value");
-    Failures += Expect(!Values.InsertOrAssign(1, 20) && *Values.Find(1) == 20,
-        "HashMap InsertOrAssign updates an existing value");
+    Failures += Expect(Values.Insert(1, 10) && Values.Contains(1) && Values.Find(1) != nullptr && *Values.Find(1) == 10, "HashMap inserts and finds a basic key");
+    Failures += Expect(!Values.Insert(1, 99) && *Values.Find(1) == 10, "HashMap duplicate insert preserves the existing value");
+    Failures += Expect(!Values.InsertOrAssign(1, 20) && *Values.Find(1) == 20, "HashMap InsertOrAssign updates an existing value");
 
     LE::HashMap<LookupKey, int, TransparentLookupHash, TransparentLookupEqual> Heterogeneous;
     Heterogeneous.Insert(LookupKey(7), 70);
     const LookupView Seven{7};
-    Failures += Expect(Heterogeneous.Contains(Seven) && *Heterogeneous.Find(Seven) == 70,
-        "transparent HashMap lookup does not construct a temporary key");
+    Failures += Expect(Heterogeneous.Contains(Seven) && *Heterogeneous.Find(Seven) == 70, "transparent HashMap lookup does not construct a temporary key");
 
     LE::HashSet<int> Set;
-    Failures += Expect(Set.Insert(3) && Set.Contains(3) && Set.Erase(3) && Set.IsEmpty(),
-        "HashSet basic operations match HashMap semantics");
+    Failures += Expect(Set.Insert(3) && Set.Contains(3) && Set.Erase(3) && Set.IsEmpty(), "HashSet basic operations match HashMap semantics");
     return Failures;
 }
 
@@ -1318,30 +1227,27 @@ int RunHashMapStorageTests()
     LE::HashMap<int, int> Values;
     Values.Reserve(100);
     const std::size_t ReservedBuckets = Values.BucketCount();
-    Failures += Expect(ReservedBuckets >= 100 && Values.LoadFactor() <= Values.MaxLoadFactor(),
-        "HashMap Reserve provides capacity under the maximum load factor");
+    Failures += Expect(ReservedBuckets >= 100 && Values.LoadFactor() <= Values.MaxLoadFactor(), "HashMap Reserve provides capacity under the maximum load factor");
     for (int Index = 0; Index < 100; ++Index)
     {
         Values.Insert(Index, Index * 3);
     }
 
     LE::HashMap<int, int> SelfAliased;
-    for (int Index = 0; Index < 5; ++Index) { SelfAliased.Insert(Index, Index + 100); }
+    for (int Index = 0; Index < 5; ++Index)
+    {
+        SelfAliased.Insert(Index, Index + 100);
+    }
     const int& AliasedValue = *SelfAliased.Find(0);
     SelfAliased.Insert(99, AliasedValue);
-    Failures += Expect(SelfAliased.Contains(99) && *SelfAliased.Find(99) == 100,
-        "HashMap stages a self-aliased mapped value before forced growth");
-    Failures += Expect(Values.BucketCount() == ReservedBuckets
-        && Values.LoadFactor() <= Values.MaxLoadFactor(),
-        "HashMap Reserve prevents growth through the requested live count");
+    Failures += Expect(SelfAliased.Contains(99) && *SelfAliased.Find(99) == 100, "HashMap stages a self-aliased mapped value before forced growth");
+    Failures += Expect(Values.BucketCount() == ReservedBuckets && Values.LoadFactor() <= Values.MaxLoadFactor(), "HashMap Reserve prevents growth through the requested live count");
 
     Values.Rehash(512);
-    Failures += Expect(Values.BucketCount() >= 512 && Values.Size() == 100,
-        "HashMap Rehash changes bucket storage while preserving size");
+    Failures += Expect(Values.BucketCount() >= 512 && Values.Size() == 100, "HashMap Rehash changes bucket storage while preserving size");
     for (int Index = 0; Index < 100; ++Index)
     {
-        Failures += Expect(Values.Find(Index) != nullptr && *Values.Find(Index) == Index * 3,
-            "HashMap Rehash preserves every key and value");
+        Failures += Expect(Values.Find(Index) != nullptr && *Values.Find(Index) == Index * 3, "HashMap Rehash preserves every key and value");
     }
 
     bool Seen[100]{};
@@ -1349,13 +1255,14 @@ int RunHashMapStorageTests()
     for (const auto& Item : Values)
     {
         const int Key = Item.GetKey();
-        Failures += Expect(Key >= 0 && Key < 100 && !Seen[Key],
-            "HashMap iteration visits no key twice");
-        if (Key >= 0 && Key < 100) { Seen[Key] = true; }
+        Failures += Expect(Key >= 0 && Key < 100 && !Seen[Key], "HashMap iteration visits no key twice");
+        if (Key >= 0 && Key < 100)
+        {
+            Seen[Key] = true;
+        }
         ++IterationCount;
     }
-    Failures += Expect(IterationCount == Values.Size(),
-        "HashMap iteration visits every live entry without an order assumption");
+    Failures += Expect(IterationCount == Values.Size(), "HashMap iteration visits every live entry without an order assumption");
 
     LE::HashMap<int, int> Copy(Values);
     LE::HashMap<int, int> CopyAssigned;
@@ -1363,24 +1270,17 @@ int RunHashMapStorageTests()
     LE::HashMap<int, int> Moved(std::move(Copy));
     LE::HashMap<int, int> MoveAssigned;
     MoveAssigned = std::move(CopyAssigned);
-    Failures += Expect(Copy.IsEmpty() && CopyAssigned.IsEmpty()
-        && Moved.Size() == 100 && MoveAssigned.Size() == 100
-        && *Moved.Find(42) == 126 && *MoveAssigned.Find(99) == 297,
-        "HashMap copy and move preserve values and transfer ownership");
+    Failures += Expect(Copy.IsEmpty() && CopyAssigned.IsEmpty() && Moved.Size() == 100 && MoveAssigned.Size() == 100 && *Moved.Find(42) == 126 && *MoveAssigned.Find(99) == 297, "HashMap copy and move preserve values and transfer ownership");
 
     LE::HashMap<MoveOnlyKey, MoveOnly, MoveOnlyKeyHash, MoveOnlyKeyEqual> MoveOnlyValues;
     MoveOnlyValues.Insert(MoveOnlyKey(4), MoveOnly(40));
     MoveOnlyValues.Insert(MoveOnlyKey(5), MoveOnly(50));
     MoveOnlyKey DuplicateKey(4);
     MoveOnly DuplicateValue(400);
-    Failures += Expect(!MoveOnlyValues.Insert(std::move(DuplicateKey), std::move(DuplicateValue))
-        && DuplicateKey.Value == 4 && DuplicateValue.Value == 400,
-        "duplicate HashMap insertion does not consume rvalue arguments");
+    Failures += Expect(!MoveOnlyValues.Insert(std::move(DuplicateKey), std::move(DuplicateValue)) && DuplicateKey.Value == 4 && DuplicateValue.Value == 400, "duplicate HashMap insertion does not consume rvalue arguments");
     MoveOnlyValues.Reserve(32);
     MoveOnlyKey Four(4);
-    Failures += Expect(MoveOnlyValues.Find(Four) != nullptr
-        && MoveOnlyValues.Find(Four)->Value == 40,
-        "HashMap supports move-only keys and values across rehash");
+    Failures += Expect(MoveOnlyValues.Find(Four) != nullptr && MoveOnlyValues.Find(Four)->Value == 40, "HashMap supports move-only keys and values across rehash");
     return Failures;
 }
 
@@ -1388,39 +1288,45 @@ int RunHashMapCollisionTests()
 {
     int Failures = 0;
     LE::HashMap<int, int, ConstantIntHash> Collisions;
-    for (int Index = 0; Index < 200; ++Index) { Collisions.Insert(Index, Index + 1); }
     for (int Index = 0; Index < 200; ++Index)
     {
-        Failures += Expect(Collisions.Find(Index) != nullptr && *Collisions.Find(Index) == Index + 1,
-            "constant-hash probing finds every colliding key");
+        Collisions.Insert(Index, Index + 1);
+    }
+    for (int Index = 0; Index < 200; ++Index)
+    {
+        Failures += Expect(Collisions.Find(Index) != nullptr && *Collisions.Find(Index) == Index + 1, "constant-hash probing finds every colliding key");
     }
     const std::size_t SizeBeforeDuplicate = Collisions.Size();
-    Failures += Expect(!Collisions.Insert(50, -1) && Collisions.Size() == SizeBeforeDuplicate
-        && *Collisions.Find(50) == 51,
-        "duplicate colliding key neither grows nor replaces the entry");
+    Failures += Expect(!Collisions.Insert(50, -1) && Collisions.Size() == SizeBeforeDuplicate && *Collisions.Find(50) == 51, "duplicate colliding key neither grows nor replaces the entry");
 
-    for (int Index = 0; Index < 120; ++Index) { Collisions.Erase(Index); }
+    for (int Index = 0; Index < 120; ++Index)
+    {
+        Collisions.Erase(Index);
+    }
     const std::size_t TombstonesBeforeReuse = Collisions.Tombstones();
-    for (int Index = 200; Index < 280; ++Index) { Collisions.Insert(Index, Index + 1); }
-    Failures += Expect(Collisions.Tombstones() < TombstonesBeforeReuse,
-        "linear probing reuses tombstones before empty buckets");
+    for (int Index = 200; Index < 280; ++Index)
+    {
+        Collisions.Insert(Index, Index + 1);
+    }
+    Failures += Expect(Collisions.Tombstones() < TombstonesBeforeReuse, "linear probing reuses tombstones before empty buckets");
     for (int Index = 120; Index < 280; ++Index)
     {
-        Failures += Expect(Collisions.Contains(Index),
-            "collision chain remains searchable across tombstone reuse");
+        Failures += Expect(Collisions.Contains(Index), "collision chain remains searchable across tombstone reuse");
     }
 
     LE::HashMap<int, int, ConstantIntHash> AllTombstones;
     AllTombstones.Reserve(5);
-    for (int Index = 0; Index < 5; ++Index) { AllTombstones.Insert(Index, Index); }
-    for (int Index = 0; Index < 5; ++Index) { AllTombstones.Erase(Index); }
-    Failures += Expect(AllTombstones.Tombstones() == 5
-        && AllTombstones.Find(999) == nullptr
-        && AllTombstones.Insert(999, 1) && AllTombstones.Contains(999),
-        "all-tombstone and adversarial probes terminate and reuse storage");
+    for (int Index = 0; Index < 5; ++Index)
+    {
+        AllTombstones.Insert(Index, Index);
+    }
+    for (int Index = 0; Index < 5; ++Index)
+    {
+        AllTombstones.Erase(Index);
+    }
+    Failures += Expect(AllTombstones.Tombstones() == 5 && AllTombstones.Find(999) == nullptr && AllTombstones.Insert(999, 1) && AllTombstones.Contains(999), "all-tombstone and adversarial probes terminate and reuse storage");
     AllTombstones.Clear();
-    Failures += Expect(AllTombstones.IsEmpty() && AllTombstones.Tombstones() == 0,
-        "HashMap Clear resets live entries and tombstones");
+    Failures += Expect(AllTombstones.IsEmpty() && AllTombstones.Tombstones() == 0, "HashMap Clear resets live entries and tombstones");
     return Failures;
 }
 
@@ -1430,62 +1336,47 @@ int RunHashMapPolicyAndFailureTests()
     LE::HashMap<LookupKey, int, TransparentLookupHash, TransparentLookupEqual> Heterogeneous;
     Heterogeneous.Insert(LookupKey(8), 80);
     const LookupView Eight{8};
-    Failures += Expect(Heterogeneous.Contains(Eight) && *Heterogeneous.Find(Eight) == 80
-        && Heterogeneous.Erase(Eight) && Heterogeneous.IsEmpty(),
-        "transparent hash/equality support Find Contains and Erase without key conversion");
+    Failures += Expect(Heterogeneous.Contains(Eight) && *Heterogeneous.Find(Eight) == 80 && Heterogeneous.Erase(Eight) && Heterogeneous.IsEmpty(), "transparent hash/equality support Find Contains and Erase without key conversion");
 
-    LE::HashMap<int, int, ModuloHash, ModuloEqual> Stateful(
-        ModuloHash{10}, ModuloEqual{10});
-    Failures += Expect(Stateful.Insert(1, 10) && !Stateful.Insert(11, 110)
-        && Stateful.Contains(21) && *Stateful.Find(31) == 10,
-        "HashMap stores and applies stateful hash and equality policies");
+    LE::HashMap<int, int, ModuloHash, ModuloEqual> Stateful(ModuloHash{10}, ModuloEqual{10});
+    Failures += Expect(Stateful.Insert(1, 10) && !Stateful.Insert(11, 110) && Stateful.Contains(21) && *Stateful.Find(31) == 10, "HashMap stores and applies stateful hash and equality policies");
 
     FailingAllocator StatefulAllocator(false);
     {
-        LE::HashMap<int, int, ModuloHash, ModuloEqual> StatefulWithAllocator(
-            ModuloHash{7}, ModuloEqual{7}, LE::AllocatorRef(StatefulAllocator));
+        LE::HashMap<int, int, ModuloHash, ModuloEqual> StatefulWithAllocator(ModuloHash{7}, ModuloEqual{7}, LE::AllocatorRef(StatefulAllocator));
         StatefulWithAllocator.Insert(2, 20);
-        Failures += Expect(&StatefulWithAllocator.GetAllocator() == &StatefulAllocator
-            && StatefulWithAllocator.Contains(9),
-            "stateful policies and exact allocator identity can be supplied together");
+        Failures += Expect(&StatefulWithAllocator.GetAllocator() == &StatefulAllocator && StatefulWithAllocator.Contains(9), "stateful policies and exact allocator identity can be supplied together");
     }
-    Failures += Expect(StatefulAllocator.LiveAllocations == 0,
-        "stateful-policy HashMap frees through its supplied allocator");
+    Failures += Expect(StatefulAllocator.LiveAllocations == 0, "stateful-policy HashMap frees through its supplied allocator");
 
     FailingAllocator Allocator(false);
     {
         LE::HashMap<int, int> Values(Allocator);
-        for (int Index = 0; Index < 5; ++Index) { Values.Insert(Index, Index + 10); }
+        for (int Index = 0; Index < 5; ++Index)
+        {
+            Values.Insert(Index, Index + 10);
+        }
         const std::size_t OriginalBuckets = Values.BucketCount();
         Allocator.bFailAllocations = true;
-        Failures += Expect(!Values.TryReserve(1000)
-            && Values.Size() == 5 && Values.BucketCount() == OriginalBuckets
-            && *Values.Find(2) == 12,
-            "HashMap TryReserve allocation failure preserves the original map");
-        Failures += Expect(Values.TryInsert(99, 99) == LE::EHashInsertResult::AllocationFailed
-            && Values.Size() == 5 && !Values.Contains(99) && *Values.Find(4) == 14,
-            "HashMap TryInsert growth failure preserves the original map");
+        Failures += Expect(!Values.TryReserve(1000) && Values.Size() == 5 && Values.BucketCount() == OriginalBuckets && *Values.Find(2) == 12, "HashMap TryReserve allocation failure preserves the original map");
+        Failures += Expect(Values.TryInsert(99, 99) == LE::EHashInsertResult::AllocationFailed && Values.Size() == 5 && !Values.Contains(99) && *Values.Find(4) == 14, "HashMap TryInsert growth failure preserves the original map");
         const std::size_t AttemptsBeforeOverflow = Allocator.AllocationAttempts;
-        Failures += Expect(!Values.TryReserve((std::numeric_limits<std::size_t>::max)())
-            && Allocator.AllocationAttempts == AttemptsBeforeOverflow,
-            "HashMap rejects reserve overflow before allocator invocation");
+        Failures += Expect(!Values.TryReserve((std::numeric_limits<std::size_t>::max)()) && Allocator.AllocationAttempts == AttemptsBeforeOverflow, "HashMap rejects reserve overflow before allocator invocation");
     }
-    Failures += Expect(Allocator.LiveAllocations == 0 && Allocator.DeallocationCount >= 1,
-        "HashMap deallocates bucket storage through its original allocator identity");
+    Failures += Expect(Allocator.LiveAllocations == 0 && Allocator.DeallocationCount >= 1, "HashMap deallocates bucket storage through its original allocator identity");
 
     FailingAllocator RvalueAliasAllocator(false);
     {
         LE::HashMap<int, MoveOnly> Values(RvalueAliasAllocator);
-        for (int Index = 0; Index < 5; ++Index) { Values.Insert(Index, MoveOnly(Index + 30)); }
+        for (int Index = 0; Index < 5; ++Index)
+        {
+            Values.Insert(Index, MoveOnly(Index + 30));
+        }
         MoveOnly* const AliasedValue = Values.Find(0);
         RvalueAliasAllocator.bFailAllocations = true;
-        Failures += Expect(Values.TryInsert(99, std::move(*AliasedValue))
-                == LE::EHashInsertResult::AllocationFailed
-            && Values.Size() == 5 && Values.Find(0)->Value == 30 && !Values.Contains(99),
-            "failed HashMap growth does not move-from an internally aliased rvalue");
+        Failures += Expect(Values.TryInsert(99, std::move(*AliasedValue)) == LE::EHashInsertResult::AllocationFailed && Values.Size() == 5 && Values.Find(0)->Value == 30 && !Values.Contains(99), "failed HashMap growth does not move-from an internally aliased rvalue");
     }
-    Failures += Expect(RvalueAliasAllocator.LiveAllocations == 0,
-        "rvalue-alias failure test retains the allocator ownership route");
+    Failures += Expect(RvalueAliasAllocator.LiveAllocations == 0, "rvalue-alias failure test retains the allocator ownership route");
     return Failures;
 }
 
@@ -1494,30 +1385,38 @@ int RunHashSetParityTests()
     int Failures = 0;
     LE::HashSet<int, ConstantIntHash> Values;
     Values.Reserve(64);
-    for (int Index = 0; Index < 40; ++Index) { Values.Insert(Index); }
-    Failures += Expect(!Values.Insert(10) && Values.Size() == 40,
-        "HashSet rejects a duplicate key under extreme collision");
-    for (int Index = 0; Index < 20; ++Index) { Values.Erase(Index); }
-    for (int Index = 40; Index < 60; ++Index) { Values.Insert(Index); }
+    for (int Index = 0; Index < 40; ++Index)
+    {
+        Values.Insert(Index);
+    }
+    Failures += Expect(!Values.Insert(10) && Values.Size() == 40, "HashSet rejects a duplicate key under extreme collision");
+    for (int Index = 0; Index < 20; ++Index)
+    {
+        Values.Erase(Index);
+    }
+    for (int Index = 40; Index < 60; ++Index)
+    {
+        Values.Insert(Index);
+    }
     bool Seen[60]{};
     std::size_t Iterated = 0;
     for (const int Key : Values)
     {
-        Failures += Expect(Key >= 20 && Key < 60 && !Seen[Key],
-            "HashSet iteration visits unique live keys without order assumptions");
-        if (Key >= 0 && Key < 60) { Seen[Key] = true; }
+        Failures += Expect(Key >= 20 && Key < 60 && !Seen[Key], "HashSet iteration visits unique live keys without order assumptions");
+        if (Key >= 0 && Key < 60)
+        {
+            Seen[Key] = true;
+        }
         ++Iterated;
     }
-    Failures += Expect(Iterated == 40 && Values.LoadFactor() <= Values.MaxLoadFactor(),
-        "HashSet matches HashMap size load and iteration contracts");
+    Failures += Expect(Iterated == 40 && Values.LoadFactor() <= Values.MaxLoadFactor(), "HashSet matches HashMap size load and iteration contracts");
     Values.Rehash(256);
     for (int Index = 20; Index < 60; ++Index)
     {
         Failures += Expect(Values.Contains(Index), "HashSet Rehash preserves every live key");
     }
     Values.Clear();
-    Failures += Expect(Values.IsEmpty() && Values.Tombstones() == 0,
-        "HashSet Clear resets storage state");
+    Failures += Expect(Values.IsEmpty() && Values.Tombstones() == 0, "HashSet Clear resets storage state");
     return Failures;
 }
 
@@ -1528,65 +1427,46 @@ int RunStringTests()
     LE::String Empty;
     const LE::StringView NullView;
     const LE::StringView EmptyPointerView("", 0);
-    Failures += Expect(Empty.IsEmpty() && Empty.Data() != nullptr && Empty.Data()[0] == '\0'
-        && NullView == EmptyPointerView && Empty == NullView,
-        "String and null/empty StringView have consistent empty semantics");
+    Failures += Expect(Empty.IsEmpty() && Empty.Data() != nullptr && Empty.Data()[0] == '\0' && NullView == EmptyPointerView && Empty == NullView, "String and null/empty StringView have consistent empty semantics");
 
     const char EmbeddedBytes[] = {'a', '\0', 'b'};
     LE::String Embedded(EmbeddedBytes, sizeof(EmbeddedBytes));
-    Failures += Expect(Embedded.Size() == 3 && Embedded[1] == '\0' && Embedded.Data()[3] == '\0',
-        "String preserves embedded NUL bytes and adds a trailing terminator");
+    Failures += Expect(Embedded.Size() == 3 && Embedded[1] == '\0' && Embedded.Data()[3] == '\0', "String preserves embedded NUL bytes and adds a trailing terminator");
 
     LE::String SelfAppend("0123456789abcdef");
     const LE::StringView AliasedSuffix = SelfAppend.View().Substr(2, 10);
     SelfAppend.Append(AliasedSuffix);
-    Failures += Expect(SelfAppend == LE::StringView("0123456789abcdef23456789ab"),
-        "String stages self-aliased append across growth");
+    Failures += Expect(SelfAppend == LE::StringView("0123456789abcdef23456789ab"), "String stages self-aliased append across growth");
 
     LE::String Overlap("abcdef");
     Overlap.Reserve(32);
     Overlap.Append(Overlap.View().Substr(1, 4));
-    Failures += Expect(Overlap == LE::StringView("abcdefbcde"),
-        "String uses overlap-safe append without growth");
+    Failures += Expect(Overlap == LE::StringView("abcdefbcde"), "String uses overlap-safe append without growth");
     Overlap.Assign(Overlap.View().Substr(2, 5));
-    Failures += Expect(Overlap == LE::StringView("cdefb"),
-        "String uses overlap-safe assign");
+    Failures += Expect(Overlap == LE::StringView("cdefb"), "String uses overlap-safe assign");
 
     const LE::String EqualEmbedded(EmbeddedBytes, sizeof(EmbeddedBytes));
-    Failures += Expect(LE::StringHash{}(Embedded) == LE::StringHash{}(EqualEmbedded.View())
-        && LE::StringEqual{}(Embedded, EqualEmbedded.View()),
-        "String and StringView content hash/equality agree for embedded NUL");
+    Failures += Expect(LE::StringHash{}(Embedded) == LE::StringHash{}(EqualEmbedded.View()) && LE::StringEqual{}(Embedded, EqualEmbedded.View()), "String and StringView content hash/equality agree for embedded NUL");
 
     const char LowerEmbeddedBytes[] = {'a', '\0', 'a'};
     const LE::String LowerEmbedded(LowerEmbeddedBytes, sizeof(LowerEmbeddedBytes));
-    Failures += Expect(LowerEmbedded < Embedded
-        && LE::StringView("a") < LowerEmbedded.View()
-        && Embedded.View().Compare(EqualEmbedded.View()) == 0,
-        "String byte ordering is embedded-NUL safe and shorter-prefix first");
+    Failures += Expect(LowerEmbedded < Embedded && LE::StringView("a") < LowerEmbedded.View() && Embedded.View().Compare(EqualEmbedded.View()) == 0, "String byte ordering is embedded-NUL safe and shorter-prefix first");
 
     LE::HashMap<LE::String, int> Names;
     Names.Insert(LE::String("alpha"), 7);
-    Failures += Expect(Names.Contains(LE::StringView("alpha")) && Names.Contains("alpha")
-        && *Names.Find(LE::StringView("alpha")) == 7,
-        "String default hash/equality support allocation-free heterogeneous lookup");
+    Failures += Expect(Names.Contains(LE::StringView("alpha")) && Names.Contains("alpha") && *Names.Find(LE::StringView("alpha")) == 7, "String default hash/equality support allocation-free heterogeneous lookup");
 
     FailingAllocator Allocator(false);
     {
         LE::String Preserved(Allocator);
         Preserved.Assign("stable");
         Allocator.bFailAllocations = true;
-        Failures += Expect(!Preserved.TryAppend(LE::StringView("-a-suffix-that-forces-growth"))
-            && Preserved == LE::StringView("stable"),
-            "String TryAppend allocation failure preserves the original value");
+        Failures += Expect(!Preserved.TryAppend(LE::StringView("-a-suffix-that-forces-growth")) && Preserved == LE::StringView("stable"), "String TryAppend allocation failure preserves the original value");
         const std::size_t AttemptsBeforeOverflow = Allocator.AllocationAttempts;
         const LE::StringView Impossible("x", (std::numeric_limits<std::size_t>::max)());
-        Failures += Expect(!Preserved.TryAssign(Impossible)
-            && Preserved == LE::StringView("stable")
-            && Allocator.AllocationAttempts == AttemptsBeforeOverflow,
-            "String rejects SIZE_MAX assignment before allocation or source access");
+        Failures += Expect(!Preserved.TryAssign(Impossible) && Preserved == LE::StringView("stable") && Allocator.AllocationAttempts == AttemptsBeforeOverflow, "String rejects SIZE_MAX assignment before allocation or source access");
     }
-    Failures += Expect(Allocator.LiveAllocations == 0,
-        "String frees storage through its original allocator identity");
+    Failures += Expect(Allocator.LiveAllocations == 0, "String frees storage through its original allocator identity");
 
     return Failures;
 }
@@ -1600,33 +1480,21 @@ int RunUuidTests()
     static_assert(sizeof(LE::FUuid) == LE::FUuid::ByteCount, "UUID storage must be exactly 16 bytes");
     static_assert(std::is_standard_layout<LE::FUuid>::value, "UUID must have standard layout");
     static_assert(std::is_trivially_copyable<LE::FUuid>::value, "UUID must be trivially copyable");
-    static_assert(!std::is_constructible<FOtherStableId, FStableId>::value,
-        "stable ID domains must not implicitly cross");
+    static_assert(!std::is_constructible<FOtherStableId, FStableId>::value, "stable ID domains must not implicitly cross");
 
     const LE::StringView Canonical("00112233-4455-4677-8899-aabbccddeeff");
     LE::FUuid Parsed;
-    Failures += Expect(LE::FUuid::TryParse(Canonical, Parsed)
-        && Parsed.IsValid()
-        && Parsed.GetVersion() == 4
-        && Parsed.HasRfcVariant()
-        && Parsed.ToString() == Canonical,
-        "FUuid parses and formats the strict canonical RFC byte order");
+    Failures += Expect(LE::FUuid::TryParse(Canonical, Parsed) && Parsed.IsValid() && Parsed.GetVersion() == 4 && Parsed.HasRfcVariant() && Parsed.ToString() == Canonical, "FUuid parses and formats the strict canonical RFC byte order");
 
     LE::FUuid Copied = Parsed;
-    Failures += Expect(Copied == Parsed && !(Copied < Parsed) && !(Parsed < Copied)
-        && LE::FUuidHash{}(Copied) == LE::DefaultHash<LE::FUuid>{}(Parsed),
-        "FUuid copy comparison ordering and hashing are value-based");
+    Failures += Expect(Copied == Parsed && !(Copied < Parsed) && !(Parsed < Copied) && LE::FUuidHash{}(Copied) == LE::DefaultHash<LE::FUuid>{}(Parsed), "FUuid copy comparison ordering and hashing are value-based");
 
     LE::HashMap<LE::FUuid, int> UuidValues;
     UuidValues.Insert(Parsed, 42);
-    Failures += Expect(UuidValues.Contains(Copied) && *UuidValues.Find(Copied) == 42,
-        "FUuid is a default-hash key across the public Core API");
+    Failures += Expect(UuidValues.Contains(Copied) && *UuidValues.Find(Copied) == 42, "FUuid is a default-hash key across the public Core API");
 
     LE::FUuid Nil;
-    Failures += Expect(LE::FUuid::TryParse("00000000-0000-0000-0000-000000000000", Nil)
-        && !Nil.IsValid()
-        && Nil.ToString() == LE::StringView("00000000-0000-0000-0000-000000000000"),
-        "FUuid accepts nil syntax while preserving nil as the invalid sentinel");
+    Failures += Expect(LE::FUuid::TryParse("00000000-0000-0000-0000-000000000000", Nil) && !Nil.IsValid() && Nil.ToString() == LE::StringView("00000000-0000-0000-0000-000000000000"), "FUuid accepts nil syntax while preserving nil as the invalid sentinel");
 
     const LE::StringView InvalidSpellings[] = {
         "00112233-4455-4677-8899-aabbccddeef",
@@ -1638,8 +1506,7 @@ int RunUuidTests()
     for (const LE::StringView Invalid : InvalidSpellings)
     {
         LE::FUuid Preserved = Parsed;
-        Failures += Expect(!LE::FUuid::TryParse(Invalid, Preserved) && Preserved == Parsed,
-            "FUuid rejects non-canonical input without changing the output value");
+        Failures += Expect(!LE::FUuid::TryParse(Invalid, Preserved) && Preserved == Parsed, "FUuid rejects non-canonical input without changing the output value");
     }
 
     LE::HashSet<LE::FUuid> GeneratedValues;
@@ -1647,11 +1514,7 @@ int RunUuidTests()
     for (int Index = 0; Index < 64; ++Index)
     {
         LE::FUuid Generated = Parsed;
-        if (!LE::FUuid::TryGenerate(Generated)
-            || !Generated.IsValid()
-            || Generated.GetVersion() != 4
-            || !Generated.HasRfcVariant()
-            || !GeneratedValues.Insert(Generated))
+        if (!LE::FUuid::TryGenerate(Generated) || !Generated.IsValid() || Generated.GetVersion() != 4 || !Generated.HasRfcVariant() || !GeneratedValues.Insert(Generated))
         {
             bGeneratedContractHolds = false;
             break;
@@ -1663,26 +1526,17 @@ int RunUuidTests()
             break;
         }
     }
-    Failures += Expect(bGeneratedContractHolds && GeneratedValues.Size() == 64,
-        "OS-generated UUIDs are unique in the sample and satisfy RFC v4 and variant bits");
+    Failures += Expect(bGeneratedContractHolds && GeneratedValues.Size() == 64, "OS-generated UUIDs are unique in the sample and satisfy RFC v4 and variant bits");
 
     FStableId Stable;
-    Failures += Expect(FStableId::TryParse(Canonical, Stable)
-        && Stable.IsValid()
-        && Stable.ToString() == Canonical,
-        "TStableId preserves UUID value semantics for one compile-time domain");
+    Failures += Expect(FStableId::TryParse(Canonical, Stable) && Stable.IsValid() && Stable.ToString() == Canonical, "TStableId preserves UUID value semantics for one compile-time domain");
     FStableId PreservedStable = Stable;
-    Failures += Expect(!FStableId::TryParse("00000000-0000-0000-0000-000000000000", PreservedStable)
-        && PreservedStable == Stable,
-        "TStableId rejects nil without changing the output ID");
+    Failures += Expect(!FStableId::TryParse("00000000-0000-0000-0000-000000000000", PreservedStable) && PreservedStable == Stable, "TStableId rejects nil without changing the output ID");
     FStableId GeneratedStable;
-    Failures += Expect(FStableId::TryGenerate(GeneratedStable) && GeneratedStable.IsValid(),
-        "TStableId generates a valid UUID-backed domain value");
+    Failures += Expect(FStableId::TryGenerate(GeneratedStable) && GeneratedStable.IsValid(), "TStableId generates a valid UUID-backed domain value");
     LE::HashMap<FStableId, int> StableValues;
     StableValues.Insert(Stable, 7);
-    Failures += Expect(StableValues.Contains(FStableId::FromUuid(Parsed))
-        && *StableValues.Find(FStableId::FromUuid(Parsed)) == 7,
-        "TStableId supplies domain-specific default hashing");
+    Failures += Expect(StableValues.Contains(FStableId::FromUuid(Parsed)) && *StableValues.Find(FStableId::FromUuid(Parsed)) == 7, "TStableId supplies domain-specific default hashing");
 
     return Failures;
 }
@@ -1694,14 +1548,10 @@ int RunRuntimeHandleTests()
     using FOtherHandle = LE::TRuntimeHandle<FOtherRuntimeHandleTestDomain>;
     using FPool = LE::TRuntimeHandlePool<FRuntimeHandleTestDomain>;
 
-    static_assert(sizeof(FHandle) == sizeof(LE::uint32) * 2,
-        "default runtime handles must be a fixed 64-bit pair");
-    static_assert(std::is_trivially_copyable<FHandle>::value,
-        "runtime handles must be trivially copyable values");
-    static_assert(!std::is_constructible<FOtherHandle, FHandle>::value,
-        "runtime handle domains must not implicitly cross");
-    static_assert(!std::is_copy_constructible<FPool>::value && !std::is_move_constructible<FPool>::value,
-        "runtime handle pools must preserve one issuance domain");
+    static_assert(sizeof(FHandle) == sizeof(LE::uint32) * 2, "default runtime handles must be a fixed 64-bit pair");
+    static_assert(std::is_trivially_copyable<FHandle>::value, "runtime handles must be trivially copyable values");
+    static_assert(!std::is_constructible<FOtherHandle, FHandle>::value, "runtime handle domains must not implicitly cross");
+    static_assert(!std::is_copy_constructible<FPool>::value && !std::is_move_constructible<FPool>::value, "runtime handle pools must preserve one issuance domain");
 
     FHandle Invalid;
     Failures += Expect(!Invalid.IsValid(), "default runtime handle is invalid");
@@ -1709,61 +1559,32 @@ int RunRuntimeHandleTests()
     FPool Pool;
     FHandle First;
     FHandle Second;
-    Failures += Expect(Pool.TryAllocate(First) && Pool.TryAllocate(Second)
-        && First.IsValid() && Second.IsValid()
-        && First.Index == 0 && First.Generation == 1
-        && Second.Index == 1 && Second.Generation == 1
-        && Pool.IsAlive(First) && Pool.IsAlive(Second)
-        && Pool.GetSlotCount() == 2 && Pool.GetAliveCount() == 2,
-        "runtime handle pool issues live index-generation pairs");
+    Failures += Expect(Pool.TryAllocate(First) && Pool.TryAllocate(Second) && First.IsValid() && Second.IsValid() && First.Index == 0 && First.Generation == 1 && Second.Index == 1 && Second.Generation == 1 && Pool.IsAlive(First) && Pool.IsAlive(Second) && Pool.GetSlotCount() == 2 && Pool.GetAliveCount() == 2, "runtime handle pool issues live index-generation pairs");
 
-    const FHandle ForgedGeneration{ First.Index, static_cast<LE::uint32>(First.Generation + 1) };
-    const FHandle OutOfRange{ 99, 1 };
-    Failures += Expect(!Pool.IsAlive(ForgedGeneration)
-        && !Pool.IsAlive(OutOfRange)
-        && !Pool.Release(Invalid)
-        && !Pool.Release(ForgedGeneration),
-        "runtime handle validation rejects invalid forged and out-of-range values");
+    const FHandle ForgedGeneration{First.Index, static_cast<LE::uint32>(First.Generation + 1)};
+    const FHandle OutOfRange{99, 1};
+    Failures += Expect(!Pool.IsAlive(ForgedGeneration) && !Pool.IsAlive(OutOfRange) && !Pool.Release(Invalid) && !Pool.Release(ForgedGeneration), "runtime handle validation rejects invalid forged and out-of-range values");
 
-    Failures += Expect(Pool.Release(First) && !Pool.IsAlive(First) && !Pool.Release(First),
-        "runtime handle release invalidates stale and double-release values");
+    Failures += Expect(Pool.Release(First) && !Pool.IsAlive(First) && !Pool.Release(First), "runtime handle release invalidates stale and double-release values");
     FHandle Reused;
-    Failures += Expect(Pool.TryAllocate(Reused)
-        && Reused.Index == First.Index
-        && Reused.Generation == First.Generation + 1
-        && Pool.IsAlive(Reused)
-        && !Pool.IsAlive(First),
-        "runtime handle slot reuse increments generation and keeps the prior handle stale");
+    Failures += Expect(Pool.TryAllocate(Reused) && Reused.Index == First.Index && Reused.Generation == First.Generation + 1 && Pool.IsAlive(Reused) && !Pool.IsAlive(First), "runtime handle slot reuse increments generation and keeps the prior handle stale");
 
     LE::HashMap<FHandle, int> HandleValues;
     HandleValues.Insert(Reused, 23);
-    Failures += Expect(HandleValues.Contains(Reused) && *HandleValues.Find(Reused) == 23
-        && LE::DefaultHash<FHandle>{}(Reused) != LE::DefaultHash<FHandle>{}(First),
-        "runtime handle hashing includes both index and generation");
+    Failures += Expect(HandleValues.Contains(Reused) && *HandleValues.Find(Reused) == 23 && LE::DefaultHash<FHandle>{}(Reused) != LE::DefaultHash<FHandle>{}(First), "runtime handle hashing includes both index and generation");
 
     using FSmallGenerationHandle = LE::TRuntimeHandle<FRuntimeHandleTestDomain, LE::uint32, LE::uint8>;
     LE::TRuntimeHandlePool<FRuntimeHandleTestDomain, LE::uint32, LE::uint8> ExhaustionPool;
     FSmallGenerationHandle Earliest;
-    bool bGenerationSequenceValid = ExhaustionPool.TryAllocate(Earliest)
-        && Earliest.Index == 0 && Earliest.Generation == 1
-        && ExhaustionPool.Release(Earliest);
+    bool bGenerationSequenceValid = ExhaustionPool.TryAllocate(Earliest) && Earliest.Index == 0 && Earliest.Generation == 1 && ExhaustionPool.Release(Earliest);
     for (unsigned int Expected = 2; Expected <= 255 && bGenerationSequenceValid; ++Expected)
     {
         FSmallGenerationHandle Current;
-        bGenerationSequenceValid = ExhaustionPool.TryAllocate(Current)
-            && Current.Index == 0
-            && Current.Generation == static_cast<LE::uint8>(Expected)
-            && ExhaustionPool.Release(Current);
+        bGenerationSequenceValid = ExhaustionPool.TryAllocate(Current) && Current.Index == 0 && Current.Generation == static_cast<LE::uint8>(Expected) && ExhaustionPool.Release(Current);
     }
     FSmallGenerationHandle AfterRetirement;
-    bGenerationSequenceValid = bGenerationSequenceValid
-        && ExhaustionPool.TryAllocate(AfterRetirement)
-        && AfterRetirement.Index == 1
-        && AfterRetirement.Generation == 1
-        && !ExhaustionPool.IsAlive(Earliest)
-        && ExhaustionPool.GetSlotCount() == 2;
-    Failures += Expect(bGenerationSequenceValid,
-        "generation exhaustion permanently retires the slot instead of wrapping into ABA");
+    bGenerationSequenceValid = bGenerationSequenceValid && ExhaustionPool.TryAllocate(AfterRetirement) && AfterRetirement.Index == 1 && AfterRetirement.Generation == 1 && !ExhaustionPool.IsAlive(Earliest) && ExhaustionPool.GetSlotCount() == 2;
+    Failures += Expect(bGenerationSequenceValid, "generation exhaustion permanently retires the slot instead of wrapping into ABA");
 
     using FSmallIndexHandle = LE::TRuntimeHandle<FRuntimeHandleTestDomain, LE::uint8, LE::uint8>;
     LE::TRuntimeHandlePool<FRuntimeHandleTestDomain, LE::uint8, LE::uint8> IndexPool;
@@ -1772,23 +1593,16 @@ int RunRuntimeHandleTests()
     for (unsigned int Index = 0; Index < 255; ++Index)
     {
         FSmallIndexHandle Handle;
-        if (!IndexPool.TryAllocate(Handle)
-            || Handle.Index != static_cast<LE::uint8>(Index)
-            || Handle.Generation != 1)
+        if (!IndexPool.TryAllocate(Handle) || Handle.Index != static_cast<LE::uint8>(Index) || Handle.Generation != 1)
         {
             bIndexSequenceValid = false;
             break;
         }
         Issued.PushBack(Handle);
     }
-    FSmallIndexHandle Preserved{ 7, 9 };
-    bIndexSequenceValid = bIndexSequenceValid
-        && !IndexPool.TryAllocate(Preserved)
-        && Preserved == FSmallIndexHandle{ 7, 9 }
-        && IndexPool.GetSlotCount() == 255
-        && IndexPool.GetAliveCount() == 255;
-    Failures += Expect(bIndexSequenceValid,
-        "runtime handle index sentinel is never issued and exhaustion preserves the output value");
+    FSmallIndexHandle Preserved{7, 9};
+    bIndexSequenceValid = bIndexSequenceValid && !IndexPool.TryAllocate(Preserved) && Preserved == FSmallIndexHandle{7, 9} && IndexPool.GetSlotCount() == 255 && IndexPool.GetAliveCount() == 255;
+    Failures += Expect(bIndexSequenceValid, "runtime handle index sentinel is never issued and exhaustion preserves the output value");
 
     return Failures;
 }
@@ -1802,22 +1616,16 @@ int RunOwnershipTests()
     {
         LE::UniquePtr<OwnedValue> Owner = LE::MakeUniqueWithAllocator<OwnedValue>(Allocator, 17);
         LE::UniquePtr<OwnedValue> Moved(std::move(Owner));
-        Failures += Expect(!Owner && Moved && Moved->Value == 17 && OwnedValue::LiveCount == 1,
-            "UniquePtr move transfers its creator-side destruction route");
+        Failures += Expect(!Owner && Moved && Moved->Value == 17 && OwnedValue::LiveCount == 1, "UniquePtr move transfers its creator-side destruction route");
     }
-    Failures += Expect(OwnedValue::LiveCount == 0 && OwnedValue::DestroyedCount == 1
-        && Allocator.LiveAllocations == 0,
-        "UniquePtr destroys once and deallocates through the creator allocator");
+    Failures += Expect(OwnedValue::LiveCount == 0 && OwnedValue::DestroyedCount == 1 && Allocator.LiveAllocations == 0, "UniquePtr destroys once and deallocates through the creator allocator");
 
     int UniqueAdoptCalls = 0;
     {
-        LE::UniquePtr<OwnedValue> Adopted = LE::UniquePtr<OwnedValue>::Adopt(
-            new OwnedValue(23), &UniqueAdoptCalls, &DestroyAdoptedOwned);
-        Failures += Expect(Adopted && Adopted->Value == 23,
-            "UniquePtr adopts an explicit creator-side custom destroy route");
+        LE::UniquePtr<OwnedValue> Adopted = LE::UniquePtr<OwnedValue>::Adopt(new OwnedValue(23), &UniqueAdoptCalls, &DestroyAdoptedOwned);
+        Failures += Expect(Adopted && Adopted->Value == 23, "UniquePtr adopts an explicit creator-side custom destroy route");
     }
-    Failures += Expect(UniqueAdoptCalls == 1,
-        "UniquePtr invokes its adopted destroy route exactly once");
+    Failures += Expect(UniqueAdoptCalls == 1, "UniquePtr invokes its adopted destroy route exactly once");
 
     SharedDerived::LiveCount = 0;
     SharedDerived::DestroyedCount = 0;
@@ -1828,42 +1636,30 @@ int RunOwnershipTests()
         LE::SharedPtr<ObservedBase> Base = Derived;
         Observer = LE::WeakPtr<ObservedBase>(Base);
         LE::SharedPtr<ObservedBase> Locked = Observer.Lock();
-        Failures += Expect(Derived.UseCount() == 4 && Locked && Locked->Value == 41
-            && static_cast<const void*>(Base.Get()) != static_cast<const void*>(Derived.Get()),
-            "SharedPtr conversion keeps an adjusted base pointer and shared control block");
+        Failures += Expect(Derived.UseCount() == 4 && Locked && Locked->Value == 41 && static_cast<const void*>(Base.Get()) != static_cast<const void*>(Derived.Get()), "SharedPtr conversion keeps an adjusted base pointer and shared control block");
     }
-    Failures += Expect(Observer.IsExpired() && !Observer.Lock()
-        && SharedDerived::LiveCount == 0 && SharedDerived::DestroyedCount == 1,
-        "WeakPtr fails to lock after the last strong owner and object destruction occurs once");
+    Failures += Expect(Observer.IsExpired() && !Observer.Lock() && SharedDerived::LiveCount == 0 && SharedDerived::DestroyedCount == 1, "WeakPtr fails to lock after the last strong owner and object destruction occurs once");
     Observer.Reset();
-    Failures += Expect(Allocator.LiveAllocations == 0,
-        "SharedPtr control block remains until weak release then returns through creator allocator");
+    Failures += Expect(Allocator.LiveAllocations == 0, "SharedPtr control block remains until weak release then returns through creator allocator");
 
     int DeleteCalls = 0;
     OwnedValue::DestroyedCount = 0;
     {
         StatefulOwnedDeleter Deleter{&DeleteCalls};
-        LE::SharedPtr<OwnedValue> Adopted = LE::AdoptShared(
-            new OwnedValue(9), Allocator, Deleter);
-        Failures += Expect(Adopted && Adopted->Value == 9,
-            "SharedPtr accepts a stateful lvalue custom deleter");
+        LE::SharedPtr<OwnedValue> Adopted = LE::AdoptShared(new OwnedValue(9), Allocator, Deleter);
+        Failures += Expect(Adopted && Adopted->Value == 9, "SharedPtr accepts a stateful lvalue custom deleter");
     }
-    Failures += Expect(DeleteCalls == 1 && OwnedValue::DestroyedCount == 1
-        && Allocator.LiveAllocations == 0,
-        "SharedPtr invokes its creator-side custom deleter exactly once");
+    Failures += Expect(DeleteCalls == 1 && OwnedValue::DestroyedCount == 1 && Allocator.LiveAllocations == 0, "SharedPtr invokes its creator-side custom deleter exactly once");
 
     FailingAllocator FailureAllocator;
     LE::UniquePtr<OwnedValue> FailedUnique = LE::TryMakeUniqueWithAllocator<OwnedValue>(FailureAllocator, 1);
     LE::SharedPtr<OwnedValue> FailedShared = LE::TryMakeSharedWithAllocator<OwnedValue>(FailureAllocator, 1);
-    Failures += Expect(!FailedUnique && !FailedShared && FailureAllocator.LiveAllocations == 0,
-        "TryMake ownership factories report allocation failure without a partial owner");
+    Failures += Expect(!FailedUnique && !FailedShared && FailureAllocator.LiveAllocations == 0, "TryMake ownership factories report allocation failure without a partial owner");
 
     OwnedValue* const StillOwnedByCaller = new OwnedValue(5);
     StatefulOwnedDeleter FailureDeleter{&DeleteCalls};
-    LE::SharedPtr<OwnedValue> FailedAdoption = LE::TryAdoptShared(
-        StillOwnedByCaller, FailureAllocator, FailureDeleter);
-    Failures += Expect(!FailedAdoption && OwnedValue::LiveCount == 1,
-        "TryAdoptShared failure leaves the raw object owned by the caller");
+    LE::SharedPtr<OwnedValue> FailedAdoption = LE::TryAdoptShared(StillOwnedByCaller, FailureAllocator, FailureDeleter);
+    Failures += Expect(!FailedAdoption && OwnedValue::LiveCount == 1, "TryAdoptShared failure leaves the raw object owned by the caller");
     delete StillOwnedByCaller;
 
     return Failures;
@@ -1877,15 +1673,12 @@ int RunFunctionTests()
         LE::Function<int(int)> Add(Allocator, AddCallable{5});
         LE::Function<int(int)> Copy(Add);
         LE::Function<int(int)> Moved(std::move(Copy));
-        Failures += Expect(Add(2) == 7 && Moved(3) == 8 && !Copy,
-            "Function copies and moves allocator-backed callable state");
+        Failures += Expect(Add(2) == 7 && Moved(3) == 8 && !Copy, "Function copies and moves allocator-backed callable state");
 
         Allocator.bFailAllocations = true;
-        Failures += Expect(!Add.TryAssign(AddCallable{100}) && Add(1) == 6,
-            "Function TryAssign allocation failure preserves the original callable");
+        Failures += Expect(!Add.TryAssign(AddCallable{100}) && Add(1) == 6, "Function TryAssign allocation failure preserves the original callable");
     }
-    Failures += Expect(Allocator.LiveAllocations == 0,
-        "Function destroys callable storage through its original allocator route");
+    Failures += Expect(Allocator.LiveAllocations == 0, "Function destroys callable storage through its original allocator route");
     return Failures;
 }
 
@@ -1897,39 +1690,25 @@ int RunMathVectorTests()
     using LE::Math::Vector3f;
 
     Vector3f Value(1.0f, 2.0f, 3.0f);
-    Failures += Expect(Value[0] == 1.0f && Value[1] == 2.0f && Value[2] == 3.0f
-        && Value.Data()[0] == 1.0f,
-        "Vector construction indexing and first component are valid");
+    Failures += Expect(Value[0] == 1.0f && Value[1] == 2.0f && Value[2] == 3.0f && Value.Data()[0] == 1.0f, "Vector construction indexing and first component are valid");
 
     const Vector3f Other(4.0f, -2.0f, 0.5f);
     const Vector3f Sum = Value + Other;
     const Vector3f Difference = Value - Other;
     const Vector3f Product = Value * Other;
-    Failures += Expect(Sum == Vector3f(5.0f, 0.0f, 3.5f)
-        && Difference == Vector3f(-3.0f, 4.0f, 2.5f)
-        && Product == Vector3f(4.0f, -4.0f, 1.5f)
-        && (Value * 2.0f) == Vector3f(2.0f, 4.0f, 6.0f),
-        "Vector arithmetic scalar and component-wise products are explicit");
+    Failures += Expect(Sum == Vector3f(5.0f, 0.0f, 3.5f) && Difference == Vector3f(-3.0f, 4.0f, 2.5f) && Product == Vector3f(4.0f, -4.0f, 1.5f) && (Value * 2.0f) == Vector3f(2.0f, 4.0f, 6.0f), "Vector arithmetic scalar and component-wise products are explicit");
 
     const Vector3f BasisX(1.0f, 0.0f, 0.0f);
     const Vector3f BasisY(0.0f, 1.0f, 0.0f);
     const Vector3f BasisZ = Vector3f::Cross(BasisX, BasisY);
-    Failures += Expect(BasisZ == Vector3f(0.0f, 0.0f, 1.0f)
-        && Vector3f::Dot(BasisX, BasisY) == 0.0f,
-        "Vector cross and dot lock the right-handed basis convention");
+    Failures += Expect(BasisZ == Vector3f(0.0f, 0.0f, 1.0f) && Vector3f::Dot(BasisX, BasisY) == 0.0f, "Vector cross and dot lock the right-handed basis convention");
 
     const Vector3d Normalized = Vector3d(3.0, 4.0, 0.0).Normalized();
     Vector3d Zero;
-    Failures += Expect(NearlyEqual(Normalized[0], 0.6, 1.0e-12)
-        && NearlyEqual(Normalized[1], 0.8, 1.0e-12)
-        && NearlyEqual(Normalized.Length(), 1.0, 1.0e-12)
-        && !Zero.Normalize() && Zero == Vector3d(),
-        "Vector normalization is precise and maps zero to zero");
+    Failures += Expect(NearlyEqual(Normalized[0], 0.6, 1.0e-12) && NearlyEqual(Normalized[1], 0.8, 1.0e-12) && NearlyEqual(Normalized.Length(), 1.0, 1.0e-12) && !Zero.Normalize() && Zero == Vector3d(), "Vector normalization is precise and maps zero to zero");
 
     const Vector2f Direction(2.0f, 3.0f);
-    Failures += Expect(Direction.Perp() == Vector2f(3.0f, -2.0f)
-        && Direction.PerpCCW() == Vector2f(-3.0f, 2.0f),
-        "Vector clockwise and counter-clockwise perpendiculars differ correctly");
+    Failures += Expect(Direction.Perp() == Vector2f(3.0f, -2.0f) && Direction.PerpCCW() == Vector2f(-3.0f, 2.0f), "Vector clockwise and counter-clockwise perpendiculars differ correctly");
     return Failures;
 }
 
@@ -1945,20 +1724,13 @@ int RunMathMatrixTests()
     const Matrix23f Left(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f);
     const Matrix32f Right(7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f);
     const Matrix22f RectangularProduct = Left * Right;
-    Failures += Expect(RectangularProduct(0, 0) == 58.0f
-        && RectangularProduct(0, 1) == 64.0f
-        && RectangularProduct(1, 0) == 139.0f
-        && RectangularProduct(1, 1) == 154.0f,
-        "Rectangular matrix multiplication uses row by column products");
+    Failures += Expect(RectangularProduct(0, 0) == 58.0f && RectangularProduct(0, 1) == 64.0f && RectangularProduct(1, 0) == 139.0f && RectangularProduct(1, 1) == 154.0f, "Rectangular matrix multiplication uses row by column products");
 
     const auto Transposed = Left.Transposed();
-    Failures += Expect(Transposed(0, 0) == 1.0f && Transposed(0, 1) == 4.0f
-        && Transposed(2, 0) == 3.0f && Transposed(2, 1) == 6.0f,
-        "Rectangular matrix transpose exchanges rows and columns");
+    Failures += Expect(Transposed(0, 0) == 1.0f && Transposed(0, 1) == 4.0f && Transposed(2, 0) == 3.0f && Transposed(2, 1) == 6.0f, "Rectangular matrix transpose exchanges rows and columns");
 
     const LE::Math::Vector2f Transformed = Left * Vector3f(1.0f, 2.0f, 3.0f);
-    Failures += Expect(Transformed[0] == 14.0f && Transformed[1] == 32.0f,
-        "Matrix multiplies a column vector on its right");
+    Failures += Expect(Transformed[0] == 14.0f && Transformed[1] == 32.0f, "Matrix multiplies a column vector on its right");
 
     Matrix3f Scale = Matrix3f::Identity();
     Scale(0, 0) = 2.0f;
@@ -1968,13 +1740,9 @@ int RunMathMatrixTests()
     Translation(1, 2) = 7.0f;
     const Vector3f Point(1.0f, 1.0f, 1.0f);
     const Vector3f Composed = (Translation * Scale) * Point;
-    Failures += Expect(Composed == Vector3f(7.0f, 10.0f, 1.0f)
-        && Matrix3f::Identity() * Point == Point,
-        "Matrix A times B applies B first then A and identity is neutral");
+    Failures += Expect(Composed == Vector3f(7.0f, 10.0f, 1.0f) && Matrix3f::Identity() * Point == Point, "Matrix A times B applies B first then A and identity is neutral");
 
-    Failures += Expect(Left.Data()[0] == 1.0f && Left.Data()[1] == 2.0f
-        && Left.Data()[3] == 4.0f,
-        "Matrix storage is contiguous row-major");
+    Failures += Expect(Left.Data()[0] == 1.0f && Left.Data()[1] == 2.0f && Left.Data()[3] == 4.0f, "Matrix storage is contiguous row-major");
     return Failures;
 }
 
@@ -1987,82 +1755,50 @@ int RunMathQuaternionTests()
     constexpr double Tolerance = 1.0e-12;
 
     const Quaterniond Identity;
-    Failures += Expect(Identity[0] == 0.0 && Identity[1] == 0.0
-        && Identity[2] == 0.0 && Identity[3] == 1.0,
-        "Quaternion default and indexed order are x y z w identity");
+    Failures += Expect(Identity[0] == 0.0 && Identity[1] == 0.0 && Identity[2] == 0.0 && Identity[3] == 1.0, "Quaternion default and indexed order are x y z w identity");
 
     const Quaterniond RotateZ = Quaterniond::FromAxisAngle(Vector3d(0.0, 0.0, 2.0), HalfPi);
     const Vector3d RotatedX = RotateZ.RotateVector(Vector3d(1.0, 0.0, 0.0));
-    Failures += Expect(NearlyEqual(RotatedX[0], 0.0, Tolerance)
-        && NearlyEqual(RotatedX[1], 1.0, Tolerance)
-        && NearlyEqual(RotatedX[2], 0.0, Tolerance),
-        "Quaternion radians and positive right-handed rotation map X to Y around positive Z");
+    Failures += Expect(NearlyEqual(RotatedX[0], 0.0, Tolerance) && NearlyEqual(RotatedX[1], 1.0, Tolerance) && NearlyEqual(RotatedX[2], 0.0, Tolerance), "Quaternion radians and positive right-handed rotation map X to Y around positive Z");
 
     const Quaterniond RotateX = Quaterniond::FromAxisAngle(Vector3d(1.0, 0.0, 0.0), HalfPi);
     const Quaterniond Composed = RotateZ * RotateX;
     const Vector3d Source(0.0, 1.0, 0.0);
     const Vector3d Sequential = RotateZ.RotateVector(RotateX.RotateVector(Source));
     const Vector3d Combined = Composed.RotateVector(Source);
-    Failures += Expect(NearlyEqual(Combined[0], Sequential[0], Tolerance)
-        && NearlyEqual(Combined[1], Sequential[1], Tolerance)
-        && NearlyEqual(Combined[2], Sequential[2], Tolerance),
-        "Hamilton quaternion product applies the right operand first");
+    Failures += Expect(NearlyEqual(Combined[0], Sequential[0], Tolerance) && NearlyEqual(Combined[1], Sequential[1], Tolerance) && NearlyEqual(Combined[2], Sequential[2], Tolerance), "Hamilton quaternion product applies the right operand first");
 
-    const Quaterniond NonUnit(
-        RotateZ.x * 2.0, RotateZ.y * 2.0, RotateZ.z * 2.0, RotateZ.w * 2.0);
+    const Quaterniond NonUnit(RotateZ.x * 2.0, RotateZ.y * 2.0, RotateZ.z * 2.0, RotateZ.w * 2.0);
     const Quaterniond InverseProduct = NonUnit * NonUnit.Inverse();
-    Failures += Expect(NearlyEqual(InverseProduct.x, 0.0, Tolerance)
-        && NearlyEqual(InverseProduct.y, 0.0, Tolerance)
-        && NearlyEqual(InverseProduct.z, 0.0, Tolerance)
-        && NearlyEqual(InverseProduct.w, 1.0, Tolerance),
-        "Quaternion inverse divides conjugate by norm squared");
+    Failures += Expect(NearlyEqual(InverseProduct.x, 0.0, Tolerance) && NearlyEqual(InverseProduct.y, 0.0, Tolerance) && NearlyEqual(InverseProduct.z, 0.0, Tolerance) && NearlyEqual(InverseProduct.w, 1.0, Tolerance), "Quaternion inverse divides conjugate by norm squared");
 
     Quaterniond Zero(0.0, 0.0, 0.0, 0.0);
-    Failures += Expect(!Zero.Normalize() && Zero == Quaterniond::Identity()
-        && Quaterniond::FromAxisAngle(Vector3d(), HalfPi) == Quaterniond::Identity(),
-        "Quaternion normalization and zero axis-angle use identity fallback");
+    Failures += Expect(!Zero.Normalize() && Zero == Quaterniond::Identity() && Quaterniond::FromAxisAngle(Vector3d(), HalfPi) == Quaterniond::Identity(), "Quaternion normalization and zero axis-angle use identity fallback");
     return Failures;
 }
 
 int RunMathLayoutTests()
 {
-    static_assert(std::is_standard_layout<LE::Math::Vector3f>::value,
-        "Vector must be standard-layout");
-    static_assert(std::is_trivially_copyable<LE::Math::Vector3f>::value,
-        "Vector must be trivially copyable");
-    static_assert(std::is_standard_layout<LE::Math::Matrix4f>::value,
-        "Matrix must be standard-layout");
-    static_assert(std::is_trivially_copyable<LE::Math::Matrix4f>::value,
-        "Matrix must be trivially copyable");
-    static_assert(std::is_standard_layout<LE::Math::Quaternionf>::value,
-        "Quaternion must be standard-layout");
-    static_assert(std::is_trivially_copyable<LE::Math::Quaternionf>::value,
-        "Quaternion must be trivially copyable");
-    static_assert(sizeof(LE::Math::Vector3f) == sizeof(float) * 3,
-        "Vector has no implicit SIMD padding");
-    static_assert(sizeof(LE::Math::Matrix4f) == sizeof(float) * 16,
-        "Matrix has no implicit SIMD padding");
-    static_assert(sizeof(LE::Math::Quaternionf) == sizeof(float) * 4,
-        "Quaternion has no implicit SIMD padding");
-    static_assert(alignof(LE::Math::Vector3f) == alignof(float),
-        "Vector uses natural scalar alignment");
-    static_assert(alignof(LE::Math::Matrix4d) == alignof(double),
-        "Matrix uses natural scalar alignment");
-    static_assert(alignof(LE::Math::Quaterniond) == alignof(double),
-        "Quaternion uses natural scalar alignment");
+    static_assert(std::is_standard_layout<LE::Math::Vector3f>::value, "Vector must be standard-layout");
+    static_assert(std::is_trivially_copyable<LE::Math::Vector3f>::value, "Vector must be trivially copyable");
+    static_assert(std::is_standard_layout<LE::Math::Matrix4f>::value, "Matrix must be standard-layout");
+    static_assert(std::is_trivially_copyable<LE::Math::Matrix4f>::value, "Matrix must be trivially copyable");
+    static_assert(std::is_standard_layout<LE::Math::Quaternionf>::value, "Quaternion must be standard-layout");
+    static_assert(std::is_trivially_copyable<LE::Math::Quaternionf>::value, "Quaternion must be trivially copyable");
+    static_assert(sizeof(LE::Math::Vector3f) == sizeof(float) * 3, "Vector has no implicit SIMD padding");
+    static_assert(sizeof(LE::Math::Matrix4f) == sizeof(float) * 16, "Matrix has no implicit SIMD padding");
+    static_assert(sizeof(LE::Math::Quaternionf) == sizeof(float) * 4, "Quaternion has no implicit SIMD padding");
+    static_assert(alignof(LE::Math::Vector3f) == alignof(float), "Vector uses natural scalar alignment");
+    static_assert(alignof(LE::Math::Matrix4d) == alignof(double), "Matrix uses natural scalar alignment");
+    static_assert(alignof(LE::Math::Quaterniond) == alignof(double), "Quaternion uses natural scalar alignment");
 
     const LE::Math::Vector<float, 3> CanonicalVector(1.0f, 2.0f, 3.0f);
     const LE::Math::Matrix3f CanonicalMatrix = LE::Math::Matrix3f::Identity();
     const LE::Math::Quaternionf CanonicalQuaternion = LE::Math::Quaternionf::Identity();
-    return Expect(CanonicalVector[0] == 1.0f && CanonicalMatrix[1][1] == 1.0f
-        && CanonicalQuaternion.w == 1.0f,
-        "Canonical LE::Math types are directly consumable");
+    return Expect(CanonicalVector[0] == 1.0f && CanonicalMatrix[1][1] == 1.0f && CanonicalQuaternion.w == 1.0f, "Canonical LE::Math types are directly consumable");
 }
 
-bool ExplicitFrameEventsEqual(
-    const LE::Array<int>& Events,
-    const int* const Expected,
-    const std::size_t Count)
+bool ExplicitFrameEventsEqual(const LE::Array<int>& Events, const int* const Expected, const std::size_t Count)
 {
     if (Events.Size() != Count)
     {
@@ -2085,13 +1821,7 @@ int RunExplicitFrameLifecycleTests()
     {
         FFakeRHITexture Texture;
         FFakeRHITextureView View(&Texture);
-        Failures += Expect(
-            LE::FRHIAcquireResult{ LE::ERHISwapchainStatus::Success, &View }.HasImage() &&
-                LE::FRHIAcquireResult{ LE::ERHISwapchainStatus::Suboptimal, &View }.HasImage() &&
-                !LE::FRHIAcquireResult{ LE::ERHISwapchainStatus::OutOfDate, nullptr }.HasImage() &&
-                !LE::FRHIAcquireResult{ LE::ERHISwapchainStatus::Error, nullptr }.HasImage() &&
-                !LE::FRHIAcquireResult{ LE::ERHISwapchainStatus::Success, nullptr }.HasImage(),
-            "Acquire result exposes images only for successful and suboptimal acquisitions");
+        Failures += Expect(LE::FRHIAcquireResult{LE::ERHISwapchainStatus::Success, &View}.HasImage() && LE::FRHIAcquireResult{LE::ERHISwapchainStatus::Suboptimal, &View}.HasImage() && !LE::FRHIAcquireResult{LE::ERHISwapchainStatus::OutOfDate, nullptr}.HasImage() && !LE::FRHIAcquireResult{LE::ERHISwapchainStatus::Error, nullptr}.HasImage() && !LE::FRHIAcquireResult{LE::ERHISwapchainStatus::Success, nullptr}.HasImage(), "Acquire result exposes images only for successful and suboptimal acquisitions");
     }
 
     {
@@ -2107,40 +1837,16 @@ int RunExplicitFrameLifecycleTests()
         ValidSubmitInfo.WaitSemaphores.PushBack(&Semaphore);
         ValidSubmitInfo.SignalSemaphores.PushBack(&Semaphore);
         ValidSubmitInfo.FenceToSignal = &Fence;
-        Failures += Expect(
-            !EmptySubmitInfo.IsStructurallyValid() &&
-                !NullWaitSubmitInfo.IsStructurallyValid() &&
-                ValidSubmitInfo.IsStructurallyValid(),
-            "Submit info rejects empty and null synchronization entries without silently filtering");
+        Failures += Expect(!EmptySubmitInfo.IsStructurallyValid() && !NullWaitSubmitInfo.IsStructurallyValid() && ValidSubmitInfo.IsStructurallyValid(), "Submit info rejects empty and null synchronization entries without silently filtering");
     }
 
     {
         FRenderFrameSchedulerFixture Fixture;
         const bool bInitialized = Fixture.Initialize();
         const LE::FRenderFrameResult Result = Fixture.Execute();
-        const int ExpectedEvents[] = { 1, 2, 3, 4, 5, 6, 7 };
-        Failures += Expect(
-            bInitialized && Result.Action == LE::ERenderFrameAction::Continue &&
-                Result.RecordResult == LE::ERenderFrameRecordResult::Success &&
-                Result.AcquireStatus == LE::ERHISwapchainStatus::Success &&
-                Result.SubmitResult == LE::ERHIQueueSubmitResult::Success &&
-                Result.PresentStatus == LE::ERHISwapchainStatus::Success &&
-                Result.FrameIndex == 0 && Result.SlotIndex == 0 &&
-                ExplicitFrameEventsEqual(Fixture.Events, ExpectedEvents, 7) &&
-                Fixture.Device.Fences[0]->WaitCount == 1 && Fixture.Device.Fences[0]->ResetCount == 1 &&
-                Fixture.Device.Allocators[0]->ResetCount == 1 && Fixture.RecordCount == 1 &&
-                Fixture.Device.Queue.SubmitCount == 1 && Fixture.Device.Queue.WaitIdleCount == 0 &&
-                Fixture.Swapchain.PresentCount == 1 &&
-                Fixture.CapturedBackBufferView == &Fixture.View &&
-                Fixture.Device.Queue.CapturedSubmitInfo.CmdList == Fixture.CapturedCommandList &&
-                Fixture.Device.Queue.CapturedSubmitInfo.WaitSemaphores.Size() == 1 &&
-                Fixture.Device.Queue.CapturedSubmitInfo.WaitSemaphores[0] == Fixture.Device.Semaphores[0] &&
-                Fixture.Device.Queue.CapturedSubmitInfo.SignalSemaphores.Size() == 1 &&
-                Fixture.Device.Queue.CapturedSubmitInfo.SignalSemaphores[0] == Fixture.Device.Semaphores[1] &&
-                Fixture.Device.Queue.CapturedSubmitInfo.FenceToSignal == Fixture.Device.Fences[0] &&
-                Fixture.Swapchain.CapturedAcquireSemaphore == Fixture.Device.Semaphores[0] &&
-                Fixture.Swapchain.CapturedPresentSemaphore == Fixture.Device.Semaphores[1] &&
-                Fixture.Swapchain.GetCurrentBackBufferView() == nullptr,
+        const int ExpectedEvents[] = {1, 2, 3, 4, 5, 6, 7};
+        Failures += Expect(bInitialized && Result.Action == LE::ERenderFrameAction::Continue && Result.RecordResult == LE::ERenderFrameRecordResult::Success && Result.AcquireStatus == LE::ERHISwapchainStatus::Success && Result.SubmitResult == LE::ERHIQueueSubmitResult::Success && Result.PresentStatus == LE::ERHISwapchainStatus::Success && Result.FrameIndex == 0 && Result.SlotIndex == 0 && ExplicitFrameEventsEqual(Fixture.Events, ExpectedEvents, 7) && Fixture.Device.Fences[0]->WaitCount == 1 && Fixture.Device.Fences[0]->ResetCount == 1 && Fixture.Device.Allocators[0]->ResetCount == 1 && Fixture.RecordCount == 1 && Fixture.Device.Queue.SubmitCount == 1 && Fixture.Device.Queue.WaitIdleCount == 0 && Fixture.Swapchain.PresentCount == 1 && Fixture.CapturedBackBufferView == &Fixture.View && Fixture.Device.Queue.CapturedSubmitInfo.CmdList == Fixture.CapturedCommandList && Fixture.Device.Queue.CapturedSubmitInfo.WaitSemaphores.Size() == 1 &&
+                               Fixture.Device.Queue.CapturedSubmitInfo.WaitSemaphores[0] == Fixture.Device.Semaphores[0] && Fixture.Device.Queue.CapturedSubmitInfo.SignalSemaphores.Size() == 1 && Fixture.Device.Queue.CapturedSubmitInfo.SignalSemaphores[0] == Fixture.Device.Semaphores[1] && Fixture.Device.Queue.CapturedSubmitInfo.FenceToSignal == Fixture.Device.Fences[0] && Fixture.Swapchain.CapturedAcquireSemaphore == Fixture.Device.Semaphores[0] && Fixture.Swapchain.CapturedPresentSemaphore == Fixture.Device.Semaphores[1] && Fixture.Swapchain.GetCurrentBackBufferView() == nullptr,
             "Scheduler owns exact wait reset acquire record submit present synchronization");
     }
 
@@ -2149,11 +1855,7 @@ int RunExplicitFrameLifecycleTests()
         Fixture.Initialize();
         Fixture.Swapchain.AcquireStatus = LE::ERHISwapchainStatus::Suboptimal;
         const LE::FRenderFrameResult Result = Fixture.Execute();
-        Failures += Expect(
-            Result.Action == LE::ERenderFrameAction::RecreateSwapchain &&
-                Fixture.RecordCount == 1 && Fixture.Device.Queue.SubmitCount == 1 &&
-                Fixture.Swapchain.PresentCount == 1,
-            "Suboptimal acquire renders and presents the valid image before requesting recreation");
+        Failures += Expect(Result.Action == LE::ERenderFrameAction::RecreateSwapchain && Fixture.RecordCount == 1 && Fixture.Device.Queue.SubmitCount == 1 && Fixture.Swapchain.PresentCount == 1, "Suboptimal acquire renders and presents the valid image before requesting recreation");
     }
 
     {
@@ -2163,21 +1865,12 @@ int RunExplicitFrameLifecycleTests()
         const auto Second = Fixture.Execute();
         Fixture.Device.Fences[0]->WaitResult = LE::ERHIFenceWaitResult::Error;
         const auto Failed = Fixture.Execute();
-        Failures += Expect(
-            First.Action == LE::ERenderFrameAction::Continue &&
-                Second.Action == LE::ERenderFrameAction::Continue &&
-                Failed.Action == LE::ERenderFrameAction::Exit &&
-                Fixture.Device.Allocators[0]->ResetCount == 1 &&
-                Fixture.Device.Queue.SubmitCount == 2 && Fixture.Device.Queue.WaitIdleCount == 0,
-            "An unconfirmed in-flight slot is neither reused nor marked ready");
+        Failures += Expect(First.Action == LE::ERenderFrameAction::Continue && Second.Action == LE::ERenderFrameAction::Continue && Failed.Action == LE::ERenderFrameAction::Exit && Fixture.Device.Allocators[0]->ResetCount == 1 && Fixture.Device.Queue.SubmitCount == 2 && Fixture.Device.Queue.WaitIdleCount == 0, "An unconfirmed in-flight slot is neither reused nor marked ready");
         Fixture.Scheduler.Shutdown();
-        Failures += Expect(Fixture.Device.Queue.WaitIdleCount == 1,
-            "Shutdown confirms queue completion when a submitted frame fence cannot be confirmed");
+        Failures += Expect(Fixture.Device.Queue.WaitIdleCount == 1, "Shutdown confirms queue completion when a submitted frame fence cannot be confirmed");
     }
 
-    for (const LE::ERHISwapchainStatus AcquireStatus : {
-        LE::ERHISwapchainStatus::OutOfDate,
-        LE::ERHISwapchainStatus::Error })
+    for (const LE::ERHISwapchainStatus AcquireStatus : {LE::ERHISwapchainStatus::OutOfDate, LE::ERHISwapchainStatus::Error})
     {
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
@@ -2185,18 +1878,7 @@ int RunExplicitFrameLifecycleTests()
         const LE::FRenderFrameResult Result = Fixture.Execute();
         const int AcquireCountBeforeIgnoredRetry = Fixture.Swapchain.AcquireCount;
         const LE::FRenderFrameResult IgnoredRetry = Fixture.Execute();
-        Failures += Expect(
-            Result.Action == (AcquireStatus == LE::ERHISwapchainStatus::OutOfDate
-                ? LE::ERenderFrameAction::RecreateSwapchain
-                : LE::ERenderFrameAction::Exit) &&
-                Fixture.Device.Fences[0]->ResetCount == 0 &&
-                Fixture.RecordCount == 0 && Fixture.Device.Queue.SubmitCount == 0 &&
-                Fixture.Swapchain.PresentCount == 0 &&
-                Fixture.Swapchain.GetCurrentBackBufferView() == nullptr &&
-                (AcquireStatus == LE::ERHISwapchainStatus::OutOfDate ||
-                    (IgnoredRetry.Action == LE::ERenderFrameAction::Exit &&
-                     Fixture.Swapchain.AcquireCount == AcquireCountBeforeIgnoredRetry)),
-            "Acquire without an image skips record submit and present");
+        Failures += Expect(Result.Action == (AcquireStatus == LE::ERHISwapchainStatus::OutOfDate ? LE::ERenderFrameAction::RecreateSwapchain : LE::ERenderFrameAction::Exit) && Fixture.Device.Fences[0]->ResetCount == 0 && Fixture.RecordCount == 0 && Fixture.Device.Queue.SubmitCount == 0 && Fixture.Swapchain.PresentCount == 0 && Fixture.Swapchain.GetCurrentBackBufferView() == nullptr && (AcquireStatus == LE::ERHISwapchainStatus::OutOfDate || (IgnoredRetry.Action == LE::ERenderFrameAction::Exit && Fixture.Swapchain.AcquireCount == AcquireCountBeforeIgnoredRetry)), "Acquire without an image skips record submit and present");
     }
 
     {
@@ -2207,17 +1889,10 @@ int RunExplicitFrameLifecycleTests()
         const LE::FRenderFrameResult Result = Fixture.Execute();
         const int AcquireCount = Fixture.Swapchain.AcquireCount;
         const LE::FRenderFrameResult IgnoredRetry = Fixture.Execute();
-        Failures += Expect(
-            Result.Action == LE::ERenderFrameAction::Exit &&
-                IgnoredRetry.Action == LE::ERenderFrameAction::Exit &&
-                Fixture.Swapchain.AcquireCount == AcquireCount &&
-                Fixture.RecordCount == 0 && Fixture.Device.Queue.SubmitCount == 0,
-            "Successful status without an image is terminal and ignored retries perform no work");
+        Failures += Expect(Result.Action == LE::ERenderFrameAction::Exit && IgnoredRetry.Action == LE::ERenderFrameAction::Exit && Fixture.Swapchain.AcquireCount == AcquireCount && Fixture.RecordCount == 0 && Fixture.Device.Queue.SubmitCount == 0, "Successful status without an image is terminal and ignored retries perform no work");
     }
 
-    for (const LE::ERHIQueueSubmitResult SubmitResult : {
-        LE::ERHIQueueSubmitResult::InvalidArguments,
-        LE::ERHIQueueSubmitResult::Error })
+    for (const LE::ERHIQueueSubmitResult SubmitResult : {LE::ERHIQueueSubmitResult::InvalidArguments, LE::ERHIQueueSubmitResult::Error})
     {
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
@@ -2226,21 +1901,12 @@ int RunExplicitFrameLifecycleTests()
         const int WaitCount = Fixture.Device.Fences[0]->WaitCount;
         const int AcquireCount = Fixture.Swapchain.AcquireCount;
         const LE::FRenderFrameResult IgnoredRetry = Fixture.Execute();
-        Failures += Expect(
-            Result.Action == LE::ERenderFrameAction::Exit && IgnoredRetry.Action == LE::ERenderFrameAction::Exit &&
-                Fixture.RecordCount == 1 && Fixture.Device.Fences[0]->ResetCount == 1 &&
-                Fixture.Device.Fences[0]->WaitCount == WaitCount &&
-                Fixture.Device.Queue.SubmitCount == 1 && Fixture.Swapchain.PresentCount == 0 &&
-                Fixture.Swapchain.AcquireCount == AcquireCount,
-            "Submit failure is terminal without present, reacquire, or another unsignaled fence wait");
+        Failures += Expect(Result.Action == LE::ERenderFrameAction::Exit && IgnoredRetry.Action == LE::ERenderFrameAction::Exit && Fixture.RecordCount == 1 && Fixture.Device.Fences[0]->ResetCount == 1 && Fixture.Device.Fences[0]->WaitCount == WaitCount && Fixture.Device.Queue.SubmitCount == 1 && Fixture.Swapchain.PresentCount == 0 && Fixture.Swapchain.AcquireCount == AcquireCount, "Submit failure is terminal without present, reacquire, or another unsignaled fence wait");
         Fixture.Scheduler.Shutdown();
-        Failures += Expect(Fixture.Device.Queue.WaitIdleCount == 1,
-            "Terminal submit failure uses exceptional queue idle instead of waiting its reset fence");
+        Failures += Expect(Fixture.Device.Queue.WaitIdleCount == 1, "Terminal submit failure uses exceptional queue idle instead of waiting its reset fence");
     }
 
-    for (const LE::ERenderFrameRecordResult RecordResult : {
-        LE::ERenderFrameRecordResult::InvalidArguments,
-        LE::ERenderFrameRecordResult::Error })
+    for (const LE::ERenderFrameRecordResult RecordResult : {LE::ERenderFrameRecordResult::InvalidArguments, LE::ERenderFrameRecordResult::Error})
     {
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
@@ -2248,31 +1914,16 @@ int RunExplicitFrameLifecycleTests()
         const LE::FRenderFrameResult Result = Fixture.Execute();
         const int AcquireCount = Fixture.Swapchain.AcquireCount;
         const LE::FRenderFrameResult IgnoredRetry = Fixture.Execute();
-        Failures += Expect(
-            Result.Action == LE::ERenderFrameAction::Exit && IgnoredRetry.Action == LE::ERenderFrameAction::Exit &&
-                Fixture.RecordCount == 1 && Fixture.Device.Fences[0]->ResetCount == 0 &&
-                Fixture.Device.Queue.SubmitCount == 0 && Fixture.Swapchain.PresentCount == 0 &&
-                Fixture.Swapchain.AcquireCount == AcquireCount,
-            "Record failure is terminal before fence reset and submission");
+        Failures += Expect(Result.Action == LE::ERenderFrameAction::Exit && IgnoredRetry.Action == LE::ERenderFrameAction::Exit && Fixture.RecordCount == 1 && Fixture.Device.Fences[0]->ResetCount == 0 && Fixture.Device.Queue.SubmitCount == 0 && Fixture.Swapchain.PresentCount == 0 && Fixture.Swapchain.AcquireCount == AcquireCount, "Record failure is terminal before fence reset and submission");
     }
 
-    for (const LE::ERHISwapchainStatus PresentStatus : {
-        LE::ERHISwapchainStatus::Suboptimal,
-        LE::ERHISwapchainStatus::OutOfDate,
-        LE::ERHISwapchainStatus::Error })
+    for (const LE::ERHISwapchainStatus PresentStatus : {LE::ERHISwapchainStatus::Suboptimal, LE::ERHISwapchainStatus::OutOfDate, LE::ERHISwapchainStatus::Error})
     {
         FRenderFrameSchedulerFixture Fixture;
         Fixture.Initialize();
         Fixture.Swapchain.PresentStatus = PresentStatus;
         const LE::FRenderFrameResult Result = Fixture.Execute();
-        Failures += Expect(
-            Result.Action == (PresentStatus == LE::ERHISwapchainStatus::Error
-                ? LE::ERenderFrameAction::Exit
-                : LE::ERenderFrameAction::RecreateSwapchain) &&
-                Fixture.RecordCount == 1 && Fixture.Device.Queue.SubmitCount == 1 &&
-                Fixture.Swapchain.PresentCount == 1 &&
-                Fixture.Swapchain.GetCurrentBackBufferView() == nullptr,
-            "Present status is observable and every present attempt consumes the acquired image");
+        Failures += Expect(Result.Action == (PresentStatus == LE::ERHISwapchainStatus::Error ? LE::ERenderFrameAction::Exit : LE::ERenderFrameAction::RecreateSwapchain) && Fixture.RecordCount == 1 && Fixture.Device.Queue.SubmitCount == 1 && Fixture.Swapchain.PresentCount == 1 && Fixture.Swapchain.GetCurrentBackBufferView() == nullptr, "Present status is observable and every present attempt consumes the acquired image");
     }
 
     {
@@ -2283,13 +1934,7 @@ int RunExplicitFrameLifecycleTests()
         const bool bResized = Fixture.Swapchain.Resize(1280, 720);
         Fixture.Swapchain.AcquireStatus = LE::ERHISwapchainStatus::Success;
         const LE::FRenderFrameResult RetryResult = Fixture.Execute();
-        Failures += Expect(
-            FirstResult.Action == LE::ERenderFrameAction::RecreateSwapchain &&
-                bResized && Fixture.Swapchain.ResizeCount == 1 &&
-                RetryResult.Action == LE::ERenderFrameAction::Continue && RetryResult.SlotIndex == 0 &&
-                Fixture.RecordCount == 1 && Fixture.Device.Queue.SubmitCount == 1 &&
-                Fixture.Swapchain.PresentCount == 1,
-            "Out-of-date acquisition supports explicit resize then retry without using a stale image");
+        Failures += Expect(FirstResult.Action == LE::ERenderFrameAction::RecreateSwapchain && bResized && Fixture.Swapchain.ResizeCount == 1 && RetryResult.Action == LE::ERenderFrameAction::Continue && RetryResult.SlotIndex == 0 && Fixture.RecordCount == 1 && Fixture.Device.Queue.SubmitCount == 1 && Fixture.Swapchain.PresentCount == 1, "Out-of-date acquisition supports explicit resize then retry without using a stale image");
     }
 
     {
@@ -2298,16 +1943,7 @@ int RunExplicitFrameLifecycleTests()
         const LE::FRenderFrameResult First = Fixture.Execute();
         const LE::FRenderFrameResult Second = Fixture.Execute();
         const LE::FRenderFrameResult Third = Fixture.Execute();
-        Failures += Expect(
-            First.SlotIndex == 0 && First.FrameIndex == 0 &&
-                Second.SlotIndex == 1 && Second.FrameIndex == 1 &&
-                Third.SlotIndex == 0 && Third.FrameIndex == 2 &&
-                Fixture.Device.Fences[0]->WaitCount == 2 &&
-                Fixture.Device.Fences[1]->WaitCount == 1 &&
-                Fixture.Device.Allocators[0]->ResetCount == 2 &&
-                Fixture.Device.Allocators[1]->ResetCount == 1 &&
-                Fixture.Device.Queue.SubmitCount == 3 && Fixture.Device.Queue.WaitIdleCount == 0,
-            "Two frame slots rotate 0 1 0 and reset only after their completion fence wait");
+        Failures += Expect(First.SlotIndex == 0 && First.FrameIndex == 0 && Second.SlotIndex == 1 && Second.FrameIndex == 1 && Third.SlotIndex == 0 && Third.FrameIndex == 2 && Fixture.Device.Fences[0]->WaitCount == 2 && Fixture.Device.Fences[1]->WaitCount == 1 && Fixture.Device.Allocators[0]->ResetCount == 2 && Fixture.Device.Allocators[1]->ResetCount == 1 && Fixture.Device.Queue.SubmitCount == 3 && Fixture.Device.Queue.WaitIdleCount == 0, "Two frame slots rotate 0 1 0 and reset only after their completion fence wait");
     }
 
     {
@@ -2320,12 +1956,7 @@ int RunExplicitFrameLifecycleTests()
         const LE::FRenderFrameResult Second = Fixture.Execute();
         const bool bStillAliveBeforeReuse = DeferredDestroyCount == 0;
         const LE::FRenderFrameResult Third = Fixture.Execute();
-        Failures += Expect(
-            First.Action == LE::ERenderFrameAction::Continue &&
-                Second.Action == LE::ERenderFrameAction::Continue &&
-                Third.Action == LE::ERenderFrameAction::Continue && bAccepted &&
-                bStillAliveBeforeReuse && DeferredDestroyCount == 1,
-            "Deferred ownership is reclaimed exactly when its frame slot fence completes");
+        Failures += Expect(First.Action == LE::ERenderFrameAction::Continue && Second.Action == LE::ERenderFrameAction::Continue && Third.Action == LE::ERenderFrameAction::Continue && bAccepted && bStillAliveBeforeReuse && DeferredDestroyCount == 1, "Deferred ownership is reclaimed exactly when its frame slot fence completes");
     }
 
     {
@@ -2340,14 +1971,7 @@ int RunExplicitFrameLifecycleTests()
         {
             bListBeforeAllocator |= DestructionEvents[Index - 1] == 91 && DestructionEvents[Index] == 92;
         }
-        Failures += Expect(
-            !bInitialized && !Scheduler.IsInitialized() &&
-                Device.DestroyedCommandLists == Device.CreatedCommandLists &&
-                Device.DestroyedAllocators == static_cast<int>(Device.Allocators.Size()) &&
-                Device.DestroyedSemaphores == static_cast<int>(Device.Semaphores.Size()) &&
-                Device.DestroyedFences == static_cast<int>(Device.Fences.Size()) &&
-                bListBeforeAllocator,
-            "Partial scheduler initialization rolls back every resource list before allocator");
+        Failures += Expect(!bInitialized && !Scheduler.IsInitialized() && Device.DestroyedCommandLists == Device.CreatedCommandLists && Device.DestroyedAllocators == static_cast<int>(Device.Allocators.Size()) && Device.DestroyedSemaphores == static_cast<int>(Device.Semaphores.Size()) && Device.DestroyedFences == static_cast<int>(Device.Fences.Size()) && bListBeforeAllocator, "Partial scheduler initialization rolls back every resource list before allocator");
     }
 
     return Failures;
@@ -2357,13 +1981,7 @@ int RunRFGTransientSlotLifetimeTests()
 {
     int Failures = 0;
 
-    auto ExecuteGraph = [](
-        const bool bImported,
-        FFakeRHIDevice& Device,
-        FFakeRHICommandList& CommandList,
-        int& RecordCount,
-        LE::IRFGDeferredReleaseSink* const DeferredReleaseSink)
-    {
+    auto ExecuteGraph = [](const bool bImported, FFakeRHIDevice& Device, FFakeRHICommandList& CommandList, int& RecordCount, LE::IRFGDeferredReleaseSink* const DeferredReleaseSink) {
         LE::FRFGBuilder Builder;
         LE::FRFGTextureDesc TextureDesc;
         TextureDesc.Width = 16;
@@ -2375,9 +1993,7 @@ int RunRFGTransientSlotLifetimeTests()
         ImportedTexture.Desc.Width = 16;
         ImportedTexture.Desc.Height = 16;
         ImportedTexture.Desc.Format = LE::EPixelFormat::B8G8R8A8_SRGB;
-        const LE::FRFGResourceHandle Texture = bImported
-            ? Builder.ImportTexture("Imported", &ImportedTexture, LE::ERHIResourceState::Undefined)
-            : Builder.CreateTexture("Transient", TextureDesc);
+        const LE::FRFGResourceHandle Texture = bImported ? Builder.ImportTexture("Imported", &ImportedTexture, LE::ERHIResourceState::Undefined) : Builder.CreateTexture("Transient", TextureDesc);
 
         LE::FRFGBufferDesc BufferDesc;
         BufferDesc.Size = 256;
@@ -2385,12 +2001,9 @@ int RunRFGTransientSlotLifetimeTests()
         BufferDesc.UsageMask = 1u;
         FFakeRHIBuffer ImportedBuffer;
         ImportedBuffer.Desc.Size = BufferDesc.Size;
-        const LE::FRFGResourceHandle Buffer = bImported
-            ? Builder.ImportBuffer("ImportedBuffer", &ImportedBuffer, LE::ERHIResourceState::Undefined)
-            : Builder.CreateBuffer("TransientBuffer", BufferDesc);
+        const LE::FRFGResourceHandle Buffer = bImported ? Builder.ImportBuffer("ImportedBuffer", &ImportedBuffer, LE::ERHIResourceState::Undefined) : Builder.CreateBuffer("TransientBuffer", BufferDesc);
 
-        const LE::FRFGPassHandle Pass = Builder.AddPass(
-            "TransientLifetime", "TransientLifetime", {}, LE::ERFGPassFlags::NeverCull);
+        const LE::FRFGPassHandle Pass = Builder.AddPass("TransientLifetime", "TransientLifetime", {}, LE::ERFGPassFlags::NeverCull);
         LE::FRFGAccessDesc TextureWrite;
         TextureWrite.Access = LE::ERFGAccessType::Write;
         TextureWrite.State = LE::ERHIResourceState::RenderTarget;
@@ -2404,8 +2017,7 @@ int RunRFGTransientSlotLifetimeTests()
         Builder.SetPassCallback(Pass, [&RecordCount](LE::FRFGPassContext&) noexcept { ++RecordCount; });
 
         LE::FRFGCompiler Compiler;
-        const LE::FRFGCompileResult CompileResult = Compiler.Compile(
-            Builder.GetRecordedGraph(), Builder.BuildSignature());
+        const LE::FRFGCompileResult CompileResult = Compiler.Compile(Builder.GetRecordedGraph(), Builder.BuildSignature());
         if (!CompileResult.Plan)
         {
             return LE::ERHIQueueSubmitResult::Error;
@@ -2420,12 +2032,8 @@ int RunRFGTransientSlotLifetimeTests()
         Options.bWaitForCompletion = false;
         Options.DeferredReleaseSink = DeferredReleaseSink;
         LE::FRFGExecutor Executor;
-        const LE::ERHIQueueSubmitResult Result =
-            Executor.Execute(*CompileResult.Plan, Builder.GetRecordedGraph(), Context, Options);
-        return Context.TextureResources.IsEmpty() && Context.BufferResources.IsEmpty() &&
-            Context.OwnedTextures.IsEmpty() && Context.OwnedBuffers.IsEmpty()
-            ? Result
-            : LE::ERHIQueueSubmitResult::Error;
+        const LE::ERHIQueueSubmitResult Result = Executor.Execute(*CompileResult.Plan, Builder.GetRecordedGraph(), Context, Options);
+        return Context.TextureResources.IsEmpty() && Context.BufferResources.IsEmpty() && Context.OwnedTextures.IsEmpty() && Context.OwnedBuffers.IsEmpty() ? Result : LE::ERHIQueueSubmitResult::Error;
     };
 
     {
@@ -2435,13 +2043,7 @@ int RunRFGTransientSlotLifetimeTests()
         FFakeRHICommandList CommandList;
         int RecordCount = 0;
         const LE::ERHIQueueSubmitResult Result = ExecuteGraph(false, Device, CommandList, RecordCount, nullptr);
-        Failures += Expect(
-            Result == LE::ERHIQueueSubmitResult::InvalidArguments &&
-                Device.CreatedTextures == 1 && Device.DestroyedTextures == 1 &&
-                Device.CreatedBuffers == 1 && Device.DestroyedBuffers == 1 &&
-                CommandList.BeginCount == 0 && CommandList.EndCount == 0 &&
-                RecordCount == 0 && Device.Queue.SubmitCount == 0 && Device.Queue.WaitIdleCount == 0,
-            "Owned asynchronous RFG without a sink rejects before recording and releases every transient");
+        Failures += Expect(Result == LE::ERHIQueueSubmitResult::InvalidArguments && Device.CreatedTextures == 1 && Device.DestroyedTextures == 1 && Device.CreatedBuffers == 1 && Device.DestroyedBuffers == 1 && CommandList.BeginCount == 0 && CommandList.EndCount == 0 && RecordCount == 0 && Device.Queue.SubmitCount == 0 && Device.Queue.WaitIdleCount == 0, "Owned asynchronous RFG without a sink rejects before recording and releases every transient");
     }
 
     {
@@ -2449,13 +2051,7 @@ int RunRFGTransientSlotLifetimeTests()
         FFakeRHICommandList CommandList;
         int RecordCount = 0;
         const LE::ERHIQueueSubmitResult Result = ExecuteGraph(true, Device, CommandList, RecordCount, nullptr);
-        Failures += Expect(
-            Result == LE::ERHIQueueSubmitResult::Success &&
-                Device.CreatedTextures == 0 && Device.DestroyedTextures == 0 &&
-                Device.CreatedBuffers == 0 && Device.DestroyedBuffers == 0 &&
-                CommandList.BeginCount == 1 && CommandList.EndCount == 1 &&
-                RecordCount == 1 && Device.Queue.SubmitCount == 0 && Device.Queue.WaitIdleCount == 0,
-            "Imported asynchronous RFG records without ownership transfer submit or WaitIdle");
+        Failures += Expect(Result == LE::ERHIQueueSubmitResult::Success && Device.CreatedTextures == 0 && Device.DestroyedTextures == 0 && Device.CreatedBuffers == 0 && Device.DestroyedBuffers == 0 && CommandList.BeginCount == 1 && CommandList.EndCount == 1 && RecordCount == 1 && Device.Queue.SubmitCount == 0 && Device.Queue.WaitIdleCount == 0, "Imported asynchronous RFG records without ownership transfer submit or WaitIdle");
     }
 
     {
@@ -2466,14 +2062,9 @@ int RunRFGTransientSlotLifetimeTests()
         FFakeRFGDeferredReleaseSink Sink;
         int RecordCount = 0;
         const LE::ERHIQueueSubmitResult Result = ExecuteGraph(false, Device, CommandList, RecordCount, &Sink);
-        const bool bTransferredWithoutDestroy =
-            Result == LE::ERHIQueueSubmitResult::Success && Sink.Resources.Size() == 2 &&
-            Device.DestroyedTextures == 0 && Device.DestroyedBuffers == 0;
+        const bool bTransferredWithoutDestroy = Result == LE::ERHIQueueSubmitResult::Success && Sink.Resources.Size() == 2 && Device.DestroyedTextures == 0 && Device.DestroyedBuffers == 0;
         Sink.DestroyAccepted();
-        Failures += Expect(
-            bTransferredWithoutDestroy && Device.DestroyedTextures == 1 && Device.DestroyedBuffers == 1 &&
-                RecordCount == 1 && Device.Queue.SubmitCount == 0 && Device.Queue.WaitIdleCount == 0,
-            "Accepting sink receives exact texture and buffer ownership without early destruction");
+        Failures += Expect(bTransferredWithoutDestroy && Device.DestroyedTextures == 1 && Device.DestroyedBuffers == 1 && RecordCount == 1 && Device.Queue.SubmitCount == 0 && Device.Queue.WaitIdleCount == 0, "Accepting sink receives exact texture and buffer ownership without early destruction");
     }
 
     {
@@ -2485,24 +2076,13 @@ int RunRFGTransientSlotLifetimeTests()
         Sink.RejectCall = 2;
         int RecordCount = 0;
         const LE::ERHIQueueSubmitResult Result = ExecuteGraph(false, Device, CommandList, RecordCount, &Sink);
-        const bool bRejectedRemainderDestroyed =
-            Result == LE::ERHIQueueSubmitResult::InvalidArguments && Sink.Resources.Size() == 1 &&
-            Device.DestroyedTextures == 0 && Device.DestroyedBuffers == 1;
+        const bool bRejectedRemainderDestroyed = Result == LE::ERHIQueueSubmitResult::InvalidArguments && Sink.Resources.Size() == 1 && Device.DestroyedTextures == 0 && Device.DestroyedBuffers == 1;
         Sink.DestroyAccepted();
-        Failures += Expect(
-            bRejectedRemainderDestroyed && Device.DestroyedTextures == 1 && Device.DestroyedBuffers == 1 &&
-                CommandList.BeginCount == 1 && CommandList.EndCount == 1 &&
-                RecordCount == 1 && Device.Queue.SubmitCount == 0,
-            "Partial sink rejection transfers accepted ownership and destroys only the refused remainder");
+        Failures += Expect(bRejectedRemainderDestroyed && Device.DestroyedTextures == 1 && Device.DestroyedBuffers == 1 && CommandList.BeginCount == 1 && CommandList.EndCount == 1 && RecordCount == 1 && Device.Queue.SubmitCount == 0, "Partial sink rejection transfers accepted ownership and destroys only the refused remainder");
     }
 
-    auto ExecuteScheduledGraph = [&ExecuteGraph](
-        FRenderFrameSchedulerFixture& Fixture,
-        const bool bRejectSecondTransfer)
-    {
-        LE::FRenderFrameCallback Callback = [&ExecuteGraph, &Fixture, bRejectSecondTransfer](
-            LE::FRenderFrameScope& Frame) noexcept
-        {
+    auto ExecuteScheduledGraph = [&ExecuteGraph](FRenderFrameSchedulerFixture& Fixture, const bool bRejectSecondTransfer) {
+        LE::FRenderFrameCallback Callback = [&ExecuteGraph, &Fixture, bRejectSecondTransfer](LE::FRenderFrameScope& Frame) noexcept {
             int RecordCount = 0;
             if (bRejectSecondTransfer)
             {
@@ -2518,21 +2098,13 @@ int RunRFGTransientSlotLifetimeTests()
                     LE::FRenderFrameScope& Frame;
                     int CallCount = 0;
                 } Sink(Frame);
-                const LE::ERHIQueueSubmitResult Result = ExecuteGraph(
-                    false, Fixture.Device, *static_cast<FFakeRHICommandList*>(Frame.GetCommandList()),
-                    RecordCount, &Sink);
-                return Result == LE::ERHIQueueSubmitResult::Success
-                    ? LE::ERenderFrameRecordResult::Success
-                    : LE::ERenderFrameRecordResult::InvalidArguments;
+                const LE::ERHIQueueSubmitResult Result = ExecuteGraph(false, Fixture.Device, *static_cast<FFakeRHICommandList*>(Frame.GetCommandList()), RecordCount, &Sink);
+                return Result == LE::ERHIQueueSubmitResult::Success ? LE::ERenderFrameRecordResult::Success : LE::ERenderFrameRecordResult::InvalidArguments;
             }
 
             FFrameScopeRFGDeferredReleaseSink Sink(Frame);
-            const LE::ERHIQueueSubmitResult Result = ExecuteGraph(
-                false, Fixture.Device, *static_cast<FFakeRHICommandList*>(Frame.GetCommandList()),
-                RecordCount, &Sink);
-            return Result == LE::ERHIQueueSubmitResult::Success
-                ? LE::ERenderFrameRecordResult::Success
-                : LE::ERenderFrameRecordResult::InvalidArguments;
+            const LE::ERHIQueueSubmitResult Result = ExecuteGraph(false, Fixture.Device, *static_cast<FFakeRHICommandList*>(Frame.GetCommandList()), RecordCount, &Sink);
+            return Result == LE::ERHIQueueSubmitResult::Success ? LE::ERenderFrameRecordResult::Success : LE::ERenderFrameRecordResult::InvalidArguments;
         };
         return Fixture.Scheduler.ExecuteFrame(&Fixture.Swapchain, Callback);
     };
@@ -2548,27 +2120,16 @@ int RunRFGTransientSlotLifetimeTests()
         const bool bAliveAfterSlot1 = Fixture.Device.DestroyedTextures == 0 && Fixture.Device.DestroyedBuffers == 0;
         Fixture.Events.Clear();
         const LE::FRenderFrameResult Third = ExecuteScheduledGraph(Fixture, false);
-        const int ExpectedReusePrefix[] = { 1, 8, 9, 2 };
+        const int ExpectedReusePrefix[] = {1, 8, 9, 2};
         bool bReuseOrder = Fixture.Events.Size() >= 4;
         for (std::size_t Index = 0; bReuseOrder && Index < 4; ++Index)
         {
             bReuseOrder = Fixture.Events[Index] == ExpectedReusePrefix[Index];
         }
-        const bool bReclaimedSlot0ExactlyOnce =
-            Fixture.Device.CreatedTextures == 3 && Fixture.Device.DestroyedTextures == 1 &&
-            Fixture.Device.CreatedBuffers == 3 && Fixture.Device.DestroyedBuffers == 1;
-        Failures += Expect(
-            First.Action == LE::ERenderFrameAction::Continue &&
-                Second.Action == LE::ERenderFrameAction::Continue &&
-                Third.Action == LE::ERenderFrameAction::Continue &&
-                bAliveAfterSlot0 && bAliveAfterSlot1 && bReuseOrder && bReclaimedSlot0ExactlyOnce &&
-                Fixture.Device.Queue.WaitIdleCount == 0,
-            "RFG transients survive slots 0 and 1 then reclaim exactly after slot 0 fence wait before allocator reset");
+        const bool bReclaimedSlot0ExactlyOnce = Fixture.Device.CreatedTextures == 3 && Fixture.Device.DestroyedTextures == 1 && Fixture.Device.CreatedBuffers == 3 && Fixture.Device.DestroyedBuffers == 1;
+        Failures += Expect(First.Action == LE::ERenderFrameAction::Continue && Second.Action == LE::ERenderFrameAction::Continue && Third.Action == LE::ERenderFrameAction::Continue && bAliveAfterSlot0 && bAliveAfterSlot1 && bReuseOrder && bReclaimedSlot0ExactlyOnce && Fixture.Device.Queue.WaitIdleCount == 0, "RFG transients survive slots 0 and 1 then reclaim exactly after slot 0 fence wait before allocator reset");
         Fixture.Scheduler.Shutdown();
-        Failures += Expect(
-            Fixture.Device.DestroyedTextures == 3 && Fixture.Device.DestroyedBuffers == 3 &&
-                Fixture.Device.Queue.WaitIdleCount == 0,
-            "Successful frame-slot transients are reclaimed exactly once at reuse or shutdown without WaitIdle");
+        Failures += Expect(Fixture.Device.DestroyedTextures == 3 && Fixture.Device.DestroyedBuffers == 3 && Fixture.Device.Queue.WaitIdleCount == 0, "Successful frame-slot transients are reclaimed exactly once at reuse or shutdown without WaitIdle");
     }
 
     {
@@ -2578,15 +2139,9 @@ int RunRFGTransientSlotLifetimeTests()
         Fixture.Device.Queue.Result = LE::ERHIQueueSubmitResult::Error;
         Fixture.Initialize();
         const LE::FRenderFrameResult Result = ExecuteScheduledGraph(Fixture, false);
-        const bool bHeldAfterSubmitFailure =
-            Result.SubmitResult == LE::ERHIQueueSubmitResult::Error &&
-            Fixture.Device.DestroyedTextures == 0 && Fixture.Device.DestroyedBuffers == 0 &&
-            Fixture.Swapchain.PresentCount == 0;
+        const bool bHeldAfterSubmitFailure = Result.SubmitResult == LE::ERHIQueueSubmitResult::Error && Fixture.Device.DestroyedTextures == 0 && Fixture.Device.DestroyedBuffers == 0 && Fixture.Swapchain.PresentCount == 0;
         Fixture.Scheduler.Shutdown();
-        Failures += Expect(
-            bHeldAfterSubmitFailure && Fixture.Device.Queue.WaitIdleCount == 1 &&
-                Fixture.Device.DestroyedTextures == 1 && Fixture.Device.DestroyedBuffers == 1,
-            "Submit failure holds RFG transients until exceptional queue idle then reclaims exactly once");
+        Failures += Expect(bHeldAfterSubmitFailure && Fixture.Device.Queue.WaitIdleCount == 1 && Fixture.Device.DestroyedTextures == 1 && Fixture.Device.DestroyedBuffers == 1, "Submit failure holds RFG transients until exceptional queue idle then reclaims exactly once");
     }
 
     {
@@ -2595,15 +2150,9 @@ int RunRFGTransientSlotLifetimeTests()
         Fixture.Device.bCreateOwnedBuffers = true;
         Fixture.Initialize();
         const LE::FRenderFrameResult Result = ExecuteScheduledGraph(Fixture, true);
-        const bool bNoSubmission =
-            Result.RecordResult == LE::ERenderFrameRecordResult::InvalidArguments &&
-            Fixture.Device.Queue.SubmitCount == 0 && Fixture.Swapchain.PresentCount == 0 &&
-            Fixture.Device.DestroyedTextures == 0 && Fixture.Device.DestroyedBuffers == 1;
+        const bool bNoSubmission = Result.RecordResult == LE::ERenderFrameRecordResult::InvalidArguments && Fixture.Device.Queue.SubmitCount == 0 && Fixture.Swapchain.PresentCount == 0 && Fixture.Device.DestroyedTextures == 0 && Fixture.Device.DestroyedBuffers == 1;
         Fixture.Scheduler.Shutdown();
-        Failures += Expect(
-            bNoSubmission && Fixture.Device.Queue.WaitIdleCount == 0 &&
-                Fixture.Device.DestroyedTextures == 1 && Fixture.Device.DestroyedBuffers == 1,
-            "Record rejection reclaims refused and partially transferred RFG resources without submit or leak");
+        Failures += Expect(bNoSubmission && Fixture.Device.Queue.WaitIdleCount == 0 && Fixture.Device.DestroyedTextures == 1 && Fixture.Device.DestroyedBuffers == 1, "Record rejection reclaims refused and partially transferred RFG resources without submit or leak");
     }
 
     return Failures;
@@ -2629,16 +2178,8 @@ int RunPlatformContractsTests()
     Failures += Expect(Events.Size() == 2, "Platform event queue records count");
 
     LE::FPlatformEvent Polled;
-    Failures += Expect(
-        Events.Poll(Polled) &&
-            Polled.Type == LE::EPlatformEventType::Resized &&
-            Polled.WindowId == 17 &&
-            Polled.Width == 1280 &&
-            Polled.Height == 720,
-        "Platform event queue preserves FIFO payload");
-    Failures += Expect(
-        Events.Poll(Polled) && Polled.Type == LE::EPlatformEventType::Minimized,
-        "Platform event queue preserves FIFO order");
+    Failures += Expect(Events.Poll(Polled) && Polled.Type == LE::EPlatformEventType::Resized && Polled.WindowId == 17 && Polled.Width == 1280 && Polled.Height == 720, "Platform event queue preserves FIFO payload");
+    Failures += Expect(Events.Poll(Polled) && Polled.Type == LE::EPlatformEventType::Minimized, "Platform event queue preserves FIFO order");
     Failures += Expect(!Events.Poll(Polled), "Platform event queue reports drain");
 
     Events.Push(First);
@@ -2659,9 +2200,7 @@ int RunPlatformContractsTests()
     LE::FPlatformTime::SleepForMilliseconds(2);
     const double AfterSleep = LE::FPlatformTime::Seconds();
     Failures += Expect(AfterSleep > BeforeSleep, "Platform monotonic time advances across sleep");
-    Failures += Expect(
-        LE::FPlatformTime::Seconds() >= AfterSleep,
-        "Platform monotonic time never moves backwards");
+    Failures += Expect(LE::FPlatformTime::Seconds() >= AfterSleep, "Platform monotonic time never moves backwards");
 
     return Failures;
 }
@@ -2699,14 +2238,9 @@ bool StartStatelessRuntimeModule(void*) noexcept
     return true;
 }
 
-void StopStatelessRuntimeModule(void*) noexcept
-{
-}
+void StopStatelessRuntimeModule(void*) noexcept {}
 
-LE::FRuntimeModuleDescriptor MakeRuntimeModuleDescriptor(
-    const LE::StringView Name,
-    FRuntimeModuleTestContext& Context,
-    const LE::Span<const LE::StringView> Dependencies = {})
+LE::FRuntimeModuleDescriptor MakeRuntimeModuleDescriptor(const LE::StringView Name, FRuntimeModuleTestContext& Context, const LE::Span<const LE::StringView> Dependencies = {})
 {
     LE::FRuntimeModuleDescriptor Descriptor;
     Descriptor.Name = Name;
@@ -2739,46 +2273,31 @@ int RunRuntimeModuleTests()
 
     {
         LE::Array<int> Events;
-        FRuntimeModuleTestContext A{ &Events, 1, -1 };
-        FRuntimeModuleTestContext B{ &Events, 2, -2 };
-        FRuntimeModuleTestContext C{ &Events, 3, -3 };
-        FRuntimeModuleTestContext D{ &Events, 4, -4 };
-        FRuntimeModuleTestContext E{ &Events, 5, -5 };
-        const LE::StringView CDependencies[] = { "A" };
-        const LE::StringView DDependencies[] = { "A" };
-        const LE::StringView EDependencies[] = { "D", "B", "C" };
+        FRuntimeModuleTestContext A{&Events, 1, -1};
+        FRuntimeModuleTestContext B{&Events, 2, -2};
+        FRuntimeModuleTestContext C{&Events, 3, -3};
+        FRuntimeModuleTestContext D{&Events, 4, -4};
+        FRuntimeModuleTestContext E{&Events, 5, -5};
+        const LE::StringView CDependencies[] = {"A"};
+        const LE::StringView DDependencies[] = {"A"};
+        const LE::StringView EDependencies[] = {"D", "B", "C"};
 
         LE::FRuntimeModuleRegistry Registry;
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            "E", E, LE::Span<const LE::StringView>(EDependencies))));
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            "D", D, LE::Span<const LE::StringView>(DDependencies))));
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            "C", C, LE::Span<const LE::StringView>(CDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("E", E, LE::Span<const LE::StringView>(EDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("D", D, LE::Span<const LE::StringView>(DDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("C", C, LE::Span<const LE::StringView>(CDependencies))));
         static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("B", B)));
         static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A)));
 
-        const int StartupOrder[] = { 1, 2, 3, 4, 5 };
-        Failures += Expect(
-            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::Success &&
-                Registry.GetState() == LE::ERuntimeModuleRegistryState::Running &&
-                EventsEqual(Events, StartupOrder, 5),
-            "Runtime modules use registration-independent lexical topological order");
-        Failures += Expect(
-            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::InvalidState,
-            "Runtime module registry rejects repeated startup");
-        Failures += Expect(
-            Registry.RegisterModule(MakeRuntimeModuleDescriptor("Later", A)) ==
-                LE::ERuntimeModuleRegisterResult::InvalidState,
-            "Runtime module registry rejects registration after startup");
+        const int StartupOrder[] = {1, 2, 3, 4, 5};
+        Failures += Expect(Registry.StartupAll() == LE::ERuntimeModuleStartupResult::Success && Registry.GetState() == LE::ERuntimeModuleRegistryState::Running && EventsEqual(Events, StartupOrder, 5), "Runtime modules use registration-independent lexical topological order");
+        Failures += Expect(Registry.StartupAll() == LE::ERuntimeModuleStartupResult::InvalidState, "Runtime module registry rejects repeated startup");
+        Failures += Expect(Registry.RegisterModule(MakeRuntimeModuleDescriptor("Later", A)) == LE::ERuntimeModuleRegisterResult::InvalidState, "Runtime module registry rejects registration after startup");
 
         Registry.ShutdownAll();
         Registry.ShutdownAll();
-        const int FullOrder[] = { 1, 2, 3, 4, 5, -5, -4, -3, -2, -1 };
-        Failures += Expect(
-            EventsEqual(Events, FullOrder, 10) &&
-                Registry.GetState() == LE::ERuntimeModuleRegistryState::Shutdown,
-            "Runtime modules shut down in strict reverse order exactly once");
+        const int FullOrder[] = {1, 2, 3, 4, 5, -5, -4, -3, -2, -1};
+        Failures += Expect(EventsEqual(Events, FullOrder, 10) && Registry.GetState() == LE::ERuntimeModuleRegistryState::Shutdown, "Runtime modules shut down in strict reverse order exactly once");
     }
 
     {
@@ -2787,57 +2306,51 @@ int RunRuntimeModuleTests()
         Descriptor.Name = "7.Stateless_module-1";
         Descriptor.Startup = &StartStatelessRuntimeModule;
         Descriptor.Shutdown = &StopStatelessRuntimeModule;
-        Failures += Expect(
-            Registry.RegisterModule(Descriptor) == LE::ERuntimeModuleRegisterResult::Success &&
-                Registry.StartupAll() == LE::ERuntimeModuleStartupResult::Success,
-            "Runtime module identifier grammar accepts readable ASCII and null context");
+        Failures += Expect(Registry.RegisterModule(Descriptor) == LE::ERuntimeModuleRegisterResult::Success && Registry.StartupAll() == LE::ERuntimeModuleStartupResult::Success, "Runtime module identifier grammar accepts readable ASCII and null context");
     }
 
     {
         LE::Array<int> Events;
-        FRuntimeModuleTestContext A{ &Events, 1, -1 };
+        FRuntimeModuleTestContext A{&Events, 1, -1};
         {
             LE::FRuntimeModuleRegistry Registry;
             static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A)));
             static_cast<void>(Registry.StartupAll());
         }
-        const int DestructorOrder[] = { 1, -1 };
-        Failures += Expect(
-            EventsEqual(Events, DestructorOrder, 2) && A.ShutdownCount == 1,
-            "Runtime module registry destructor safely shuts down active modules");
+        const int DestructorOrder[] = {1, -1};
+        Failures += Expect(EventsEqual(Events, DestructorOrder, 2) && A.ShutdownCount == 1, "Runtime module registry destructor safely shuts down active modules");
     }
 
     {
         LE::Array<int> Events;
-        FRuntimeModuleTestContext A{ &Events, 1, -1 };
-        FRuntimeModuleTestContext B{ &Events, 2, -2 };
+        FRuntimeModuleTestContext A{&Events, 1, -1};
+        FRuntimeModuleTestContext B{&Events, 2, -2};
         LE::String ModuleAName("Owned.A");
         LE::String ModuleBName("Owned.B");
         LE::String DependencyName("Owned.A");
-        LE::StringView Dependencies[] = { DependencyName.View() };
+        LE::StringView Dependencies[] = {DependencyName.View()};
 
         LE::FRuntimeModuleRegistry Registry;
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            ModuleAName.View(), A)));
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            ModuleBName.View(), B, LE::Span<const LE::StringView>(Dependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(ModuleAName.View(), A)));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(ModuleBName.View(), B, LE::Span<const LE::StringView>(Dependencies))));
 
         ModuleAName.Clear();
         ModuleBName.Clear();
         DependencyName.Clear();
         Dependencies[0] = LE::StringView();
 
-        const int StartupOrder[] = { 1, 2 };
-        Failures += Expect(
-            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::Success &&
-                EventsEqual(Events, StartupOrder, 2),
-            "Runtime module registry owns copied names beyond borrowed descriptor lifetime");
+        const int StartupOrder[] = {1, 2};
+        Failures += Expect(Registry.StartupAll() == LE::ERuntimeModuleStartupResult::Success && EventsEqual(Events, StartupOrder, 2), "Runtime module registry owns copied names beyond borrowed descriptor lifetime");
         Registry.ShutdownAll();
     }
 
     {
         const LE::StringView InvalidNames[] = {
-            LE::StringView(), ".Leading", "_Leading", "-Leading", "Has space",
+            LE::StringView(),
+            ".Leading",
+            "_Leading",
+            "-Leading",
+            "Has space",
             LE::StringView("A\0B", 3),
         };
         for (const LE::StringView InvalidName : InvalidNames)
@@ -2847,124 +2360,76 @@ int RunRuntimeModuleTests()
             Descriptor.Name = InvalidName;
             Descriptor.Startup = &StartStatelessRuntimeModule;
             Descriptor.Shutdown = &StopStatelessRuntimeModule;
-            Failures += Expect(
-                Registry.RegisterModule(Descriptor) ==
-                    LE::ERuntimeModuleRegisterResult::InvalidDescriptor &&
-                    Registry.StartupAll() ==
-                    LE::ERuntimeModuleStartupResult::InvalidRegistration,
-                "Runtime module identifier grammar rejects empty, separator-leading, and unsafe names");
+            Failures += Expect(Registry.RegisterModule(Descriptor) == LE::ERuntimeModuleRegisterResult::InvalidDescriptor && Registry.StartupAll() == LE::ERuntimeModuleStartupResult::InvalidRegistration, "Runtime module identifier grammar rejects empty, separator-leading, and unsafe names");
         }
     }
 
     {
         LE::Array<int> Events;
-        FRuntimeModuleTestContext A{ &Events, 1, -1 };
-        const LE::StringView EmptyDependency[] = { LE::StringView() };
-        const LE::StringView DuplicateDependencies[] = { "A", "A" };
+        FRuntimeModuleTestContext A{&Events, 1, -1};
+        const LE::StringView EmptyDependency[] = {LE::StringView()};
+        const LE::StringView DuplicateDependencies[] = {"A", "A"};
 
         LE::FRuntimeModuleRegistry EmptyDependencyRegistry;
-        Failures += Expect(
-            EmptyDependencyRegistry.RegisterModule(MakeRuntimeModuleDescriptor(
-                "A", A, LE::Span<const LE::StringView>(EmptyDependency))) ==
-                LE::ERuntimeModuleRegisterResult::InvalidDescriptor &&
-                EmptyDependencyRegistry.StartupAll() ==
-                LE::ERuntimeModuleStartupResult::InvalidRegistration && Events.IsEmpty(),
-            "Runtime module registry rejects empty dependency names before startup");
+        Failures += Expect(EmptyDependencyRegistry.RegisterModule(MakeRuntimeModuleDescriptor("A", A, LE::Span<const LE::StringView>(EmptyDependency))) == LE::ERuntimeModuleRegisterResult::InvalidDescriptor && EmptyDependencyRegistry.StartupAll() == LE::ERuntimeModuleStartupResult::InvalidRegistration && Events.IsEmpty(), "Runtime module registry rejects empty dependency names before startup");
 
         LE::FRuntimeModuleRegistry DuplicateDependencyRegistry;
-        Failures += Expect(
-            DuplicateDependencyRegistry.RegisterModule(MakeRuntimeModuleDescriptor(
-                "B", A, LE::Span<const LE::StringView>(DuplicateDependencies))) ==
-                LE::ERuntimeModuleRegisterResult::InvalidDescriptor &&
-                DuplicateDependencyRegistry.StartupAll() ==
-                LE::ERuntimeModuleStartupResult::InvalidRegistration && Events.IsEmpty(),
-            "Runtime module registry rejects duplicate dependency names before startup");
+        Failures += Expect(DuplicateDependencyRegistry.RegisterModule(MakeRuntimeModuleDescriptor("B", A, LE::Span<const LE::StringView>(DuplicateDependencies))) == LE::ERuntimeModuleRegisterResult::InvalidDescriptor && DuplicateDependencyRegistry.StartupAll() == LE::ERuntimeModuleStartupResult::InvalidRegistration && Events.IsEmpty(), "Runtime module registry rejects duplicate dependency names before startup");
 
         LE::FRuntimeModuleRegistry NullCallbackRegistry;
         LE::FRuntimeModuleDescriptor NullCallbackDescriptor;
         NullCallbackDescriptor.Name = "Null.Callback";
         NullCallbackDescriptor.Shutdown = &StopStatelessRuntimeModule;
-        Failures += Expect(
-            NullCallbackRegistry.RegisterModule(NullCallbackDescriptor) ==
-                LE::ERuntimeModuleRegisterResult::InvalidDescriptor &&
-                NullCallbackRegistry.StartupAll() ==
-                LE::ERuntimeModuleStartupResult::InvalidRegistration,
-            "Runtime module registry rejects null callbacks before startup");
+        Failures += Expect(NullCallbackRegistry.RegisterModule(NullCallbackDescriptor) == LE::ERuntimeModuleRegisterResult::InvalidDescriptor && NullCallbackRegistry.StartupAll() == LE::ERuntimeModuleStartupResult::InvalidRegistration, "Runtime module registry rejects null callbacks before startup");
     }
 
     {
         LE::Array<int> Events;
-        FRuntimeModuleTestContext A{ &Events, 1, -1 };
-        const LE::StringView MissingDependencies[] = { "Missing" };
+        FRuntimeModuleTestContext A{&Events, 1, -1};
+        const LE::StringView MissingDependencies[] = {"Missing"};
         LE::FRuntimeModuleRegistry Registry;
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            "A", A, LE::Span<const LE::StringView>(MissingDependencies))));
-        Failures += Expect(
-            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::MissingDependency &&
-                Events.IsEmpty() && Registry.GetDiagnosticModuleName() == LE::StringView("A") &&
-                Registry.GetDiagnosticDependencyName() == LE::StringView("Missing"),
-            "Runtime module missing dependency fails before startup with owned diagnostics");
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A, LE::Span<const LE::StringView>(MissingDependencies))));
+        Failures += Expect(Registry.StartupAll() == LE::ERuntimeModuleStartupResult::MissingDependency && Events.IsEmpty() && Registry.GetDiagnosticModuleName() == LE::StringView("A") && Registry.GetDiagnosticDependencyName() == LE::StringView("Missing"), "Runtime module missing dependency fails before startup with owned diagnostics");
     }
 
     {
         LE::Array<int> Events;
-        FRuntimeModuleTestContext A{ &Events, 1, -1 };
-        FRuntimeModuleTestContext B{ &Events, 2, -2 };
-        const LE::StringView ADependencies[] = { "B" };
-        const LE::StringView BDependencies[] = { "A" };
+        FRuntimeModuleTestContext A{&Events, 1, -1};
+        FRuntimeModuleTestContext B{&Events, 2, -2};
+        const LE::StringView ADependencies[] = {"B"};
+        const LE::StringView BDependencies[] = {"A"};
         LE::FRuntimeModuleRegistry Registry;
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            "B", B, LE::Span<const LE::StringView>(BDependencies))));
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            "A", A, LE::Span<const LE::StringView>(ADependencies))));
-        Failures += Expect(
-            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::DependencyCycle &&
-                Events.IsEmpty() && Registry.GetDiagnosticModuleName() == LE::StringView("A"),
-            "Runtime module cycles fail before startup with deterministic diagnostics");
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("B", B, LE::Span<const LE::StringView>(BDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A, LE::Span<const LE::StringView>(ADependencies))));
+        Failures += Expect(Registry.StartupAll() == LE::ERuntimeModuleStartupResult::DependencyCycle && Events.IsEmpty() && Registry.GetDiagnosticModuleName() == LE::StringView("A"), "Runtime module cycles fail before startup with deterministic diagnostics");
     }
 
     {
         LE::Array<int> Events;
-        FRuntimeModuleTestContext A{ &Events, 1, -1 };
-        FRuntimeModuleTestContext B{ &Events, 2, -2 };
-        FRuntimeModuleTestContext Failing{ &Events, 3, -3, true };
-        const LE::StringView BDependencies[] = { "A" };
-        const LE::StringView FailingDependencies[] = { "B" };
+        FRuntimeModuleTestContext A{&Events, 1, -1};
+        FRuntimeModuleTestContext B{&Events, 2, -2};
+        FRuntimeModuleTestContext Failing{&Events, 3, -3, true};
+        const LE::StringView BDependencies[] = {"A"};
+        const LE::StringView FailingDependencies[] = {"B"};
         LE::FRuntimeModuleRegistry Registry;
         static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A)));
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            "B", B, LE::Span<const LE::StringView>(BDependencies))));
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            "Failing", Failing, LE::Span<const LE::StringView>(FailingDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("B", B, LE::Span<const LE::StringView>(BDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("Failing", Failing, LE::Span<const LE::StringView>(FailingDependencies))));
 
-        const int Expected[] = { 1, 2, 3, -3, -2, -1 };
-        Failures += Expect(
-            Registry.StartupAll() == LE::ERuntimeModuleStartupResult::ModuleStartupFailed &&
-                EventsEqual(Events, Expected, 6) && !A.bActive && !B.bActive &&
-                !Failing.bActive && Failing.ShutdownCount == 1 &&
-                Registry.GetDiagnosticModuleName() == LE::StringView("Failing"),
-            "Runtime module startup failure cleans partial state then rolls back exactly");
+        const int Expected[] = {1, 2, 3, -3, -2, -1};
+        Failures += Expect(Registry.StartupAll() == LE::ERuntimeModuleStartupResult::ModuleStartupFailed && EventsEqual(Events, Expected, 6) && !A.bActive && !B.bActive && !Failing.bActive && Failing.ShutdownCount == 1 && Registry.GetDiagnosticModuleName() == LE::StringView("Failing"), "Runtime module startup failure cleans partial state then rolls back exactly");
         Registry.ShutdownAll();
-        Failures += Expect(
-            EventsEqual(Events, Expected, 6),
-            "Runtime module shutdown after rollback is idempotent");
+        Failures += Expect(EventsEqual(Events, Expected, 6), "Runtime module shutdown after rollback is idempotent");
     }
 
     {
         LE::Array<int> Events;
-        FRuntimeModuleTestContext A{ &Events, 1, -1 };
+        FRuntimeModuleTestContext A{&Events, 1, -1};
         LE::FRuntimeModuleRegistry Registry;
         static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A)));
-        const LE::ERuntimeModuleRegisterResult DuplicateResult =
-            Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A));
+        const LE::ERuntimeModuleRegisterResult DuplicateResult = Registry.RegisterModule(MakeRuntimeModuleDescriptor("A", A));
         static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("B", A)));
-        Failures += Expect(
-            DuplicateResult == LE::ERuntimeModuleRegisterResult::DuplicateName &&
-                Registry.GetLastRegisterResult() == LE::ERuntimeModuleRegisterResult::Success &&
-                Registry.GetRegistrationFailure() == LE::ERuntimeModuleRegisterResult::DuplicateName &&
-                Registry.StartupAll() == LE::ERuntimeModuleStartupResult::InvalidRegistration &&
-                Events.IsEmpty(),
-            "Runtime module first registration failure remains latched before callbacks");
+        Failures += Expect(DuplicateResult == LE::ERuntimeModuleRegisterResult::DuplicateName && Registry.GetLastRegisterResult() == LE::ERuntimeModuleRegisterResult::Success && Registry.GetRegistrationFailure() == LE::ERuntimeModuleRegisterResult::DuplicateName && Registry.StartupAll() == LE::ERuntimeModuleStartupResult::InvalidRegistration && Events.IsEmpty(), "Runtime module first registration failure remains latched before callbacks");
     }
 
     return Failures;
@@ -2990,9 +2455,7 @@ double ReadEngineLoopClock()
     {
         return 0.0;
     }
-    const std::size_t Index = EngineLoopClockReadCount < EngineLoopClockSampleCount
-        ? EngineLoopClockReadCount
-        : EngineLoopClockSampleCount - 1;
+    const std::size_t Index = EngineLoopClockReadCount < EngineLoopClockSampleCount ? EngineLoopClockReadCount : EngineLoopClockSampleCount - 1;
     ++EngineLoopClockReadCount;
     return EngineLoopClockSamples[Index];
 }
@@ -3008,11 +2471,7 @@ public:
         StartupFailure,
     };
 
-    FFakeApplication()
-        : ModuleA{ &LifecycleEvents, 10, -10 }
-        , ModuleB{ &LifecycleEvents, 20, -20 }
-    {
-    }
+    FFakeApplication() : ModuleA{&LifecycleEvents, 10, -10}, ModuleB{&LifecycleEvents, 20, -20} {}
 
     void RegisterModules(LE::FRuntimeModuleRegistry& Registry) override
     {
@@ -3028,17 +2487,15 @@ public:
 
         if (ModuleMode == EModuleMode::MissingDependency)
         {
-            const LE::StringView MissingDependencies[] = { "Missing" };
-            static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-                "Test.A", ModuleA, LE::Span<const LE::StringView>(MissingDependencies))));
+            const LE::StringView MissingDependencies[] = {"Missing"};
+            static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("Test.A", ModuleA, LE::Span<const LE::StringView>(MissingDependencies))));
             return;
         }
 
         static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("Test.A", ModuleA)));
-        const LE::StringView ModuleBDependencies[] = { "Test.A" };
+        const LE::StringView ModuleBDependencies[] = {"Test.A"};
         ModuleB.bFailStartup = ModuleMode == EModuleMode::StartupFailure;
-        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor(
-            "Test.B", ModuleB, LE::Span<const LE::StringView>(ModuleBDependencies))));
+        static_cast<void>(Registry.RegisterModule(MakeRuntimeModuleDescriptor("Test.B", ModuleB, LE::Span<const LE::StringView>(ModuleBDependencies))));
     }
 
     bool Initialize() override
@@ -3084,59 +2541,26 @@ int RunEngineLoopTests()
     Failures += Expect(true, "RHI creator-side destruction accepts null resources");
 
     {
-        const double Clock[] = { 10.0, 10.25 };
+        const double Clock[] = {10.0, 10.25};
         SetEngineLoopClockSamples(Clock, 2);
         FFakeApplication Application;
         LE::FEngineLoop EngineLoop;
         LE::FEngineLoopConfig Config;
         Config.TimeSource = &ReadEngineLoopClock;
 
-        Failures += Expect(
-            EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::Success &&
-                EngineLoop.GetState() == LE::EEngineLoopState::Running &&
-                Application.InitializeCount == 1 && EngineLoopClockReadCount == 0,
-            "EngineLoop initializes without sampling the frame clock");
-        Failures += Expect(
-            EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::InvalidState &&
-                Application.InitializeCount == 1,
-            "EngineLoop rejects reinitialization while running");
-        Failures += Expect(
-            EngineLoop.Tick() == LE::EEngineLoopTickResult::Continue &&
-                Application.Contexts.Size() == 3 && EngineLoopClockReadCount == 1,
-            "EngineLoop accepts one tick and samples the clock once");
-        Failures += Expect(
-            Application.Contexts[0].Phase == LE::EApplicationFramePhase::ProcessPlatformEvents &&
-                Application.Contexts[1].Phase == LE::EApplicationFramePhase::Update &&
-                Application.Contexts[2].Phase == LE::EApplicationFramePhase::Render,
-            "EngineLoop executes explicit phases in canonical order");
-        Failures += Expect(
-            Application.Contexts[0].FrameIndex == 0 &&
-                Application.Contexts[1].FrameIndex == 0 &&
-                Application.Contexts[2].FrameIndex == 0 &&
-                Application.Contexts[0].DeltaSeconds == 0.0 &&
-                Application.Contexts[2].ElapsedSeconds == 0.0,
-            "EngineLoop first frame shares index zero and zero time across phases");
+        Failures += Expect(EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::Success && EngineLoop.GetState() == LE::EEngineLoopState::Running && Application.InitializeCount == 1 && EngineLoopClockReadCount == 0, "EngineLoop initializes without sampling the frame clock");
+        Failures += Expect(EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::InvalidState && Application.InitializeCount == 1, "EngineLoop rejects reinitialization while running");
+        Failures += Expect(EngineLoop.Tick() == LE::EEngineLoopTickResult::Continue && Application.Contexts.Size() == 3 && EngineLoopClockReadCount == 1, "EngineLoop accepts one tick and samples the clock once");
+        Failures += Expect(Application.Contexts[0].Phase == LE::EApplicationFramePhase::ProcessPlatformEvents && Application.Contexts[1].Phase == LE::EApplicationFramePhase::Update && Application.Contexts[2].Phase == LE::EApplicationFramePhase::Render, "EngineLoop executes explicit phases in canonical order");
+        Failures += Expect(Application.Contexts[0].FrameIndex == 0 && Application.Contexts[1].FrameIndex == 0 && Application.Contexts[2].FrameIndex == 0 && Application.Contexts[0].DeltaSeconds == 0.0 && Application.Contexts[2].ElapsedSeconds == 0.0, "EngineLoop first frame shares index zero and zero time across phases");
 
-        Failures += Expect(
-            EngineLoop.Tick() == LE::EEngineLoopTickResult::Continue &&
-                Application.Contexts.Size() == 6 && EngineLoop.GetNextFrameIndex() == 2 &&
-                EngineLoopClockReadCount == 2,
-            "EngineLoop advances one frame index per accepted top-level tick");
-        Failures += Expect(
-            Application.Contexts[3].FrameIndex == 1 &&
-                Application.Contexts[3].DeltaSeconds == 0.25 &&
-                Application.Contexts[3].ElapsedSeconds == 0.25 &&
-                Application.Contexts[5].DeltaSeconds == Application.Contexts[3].DeltaSeconds &&
-                Application.Contexts[5].ElapsedSeconds == Application.Contexts[3].ElapsedSeconds,
-            "EngineLoop shares one elapsed-time context across every phase");
+        Failures += Expect(EngineLoop.Tick() == LE::EEngineLoopTickResult::Continue && Application.Contexts.Size() == 6 && EngineLoop.GetNextFrameIndex() == 2 && EngineLoopClockReadCount == 2, "EngineLoop advances one frame index per accepted top-level tick");
+        Failures += Expect(Application.Contexts[3].FrameIndex == 1 && Application.Contexts[3].DeltaSeconds == 0.25 && Application.Contexts[3].ElapsedSeconds == 0.25 && Application.Contexts[5].DeltaSeconds == Application.Contexts[3].DeltaSeconds && Application.Contexts[5].ElapsedSeconds == Application.Contexts[3].ElapsedSeconds, "EngineLoop shares one elapsed-time context across every phase");
 
         EngineLoop.Shutdown();
         EngineLoop.Shutdown();
-        const int LifecycleOrder[] = { 10, 20, 30, -30, -20, -10 };
-        Failures += Expect(
-            Application.ShutdownCount == 1 && EngineLoop.GetState() == LE::EEngineLoopState::Shutdown &&
-                EventsEqual(Application.LifecycleEvents, LifecycleOrder, 6),
-            "EngineLoop starts modules before app and shuts app before reverse modules exactly once");
+        const int LifecycleOrder[] = {10, 20, 30, -30, -20, -10};
+        Failures += Expect(Application.ShutdownCount == 1 && EngineLoop.GetState() == LE::EEngineLoopState::Shutdown && EventsEqual(Application.LifecycleEvents, LifecycleOrder, 6), "EngineLoop starts modules before app and shuts app before reverse modules exactly once");
     }
 
     {
@@ -3146,14 +2570,14 @@ int RunEngineLoopTests()
             std::size_t ExpectedCallbacks;
         };
         const FExitCase ExitCases[] = {
-            { LE::EApplicationFramePhase::ProcessPlatformEvents, 1 },
-            { LE::EApplicationFramePhase::Update, 2 },
-            { LE::EApplicationFramePhase::Render, 3 },
+            {LE::EApplicationFramePhase::ProcessPlatformEvents, 1},
+            {LE::EApplicationFramePhase::Update, 2},
+            {LE::EApplicationFramePhase::Render, 3},
         };
 
         for (const FExitCase& ExitCase : ExitCases)
         {
-            const double Clock[] = { 5.0 };
+            const double Clock[] = {5.0};
             SetEngineLoopClockSamples(Clock, 1);
             FFakeApplication Application;
             Application.bExitEnabled = true;
@@ -3163,26 +2587,14 @@ int RunEngineLoopTests()
             Config.TimeSource = &ReadEngineLoopClock;
             static_cast<void>(EngineLoop.Initialize(Application, Config));
 
-            Failures += Expect(
-                EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit &&
-                    Application.Contexts.Size() == ExitCase.ExpectedCallbacks &&
-                    Application.Contexts.Back().Phase == ExitCase.Phase &&
-                    EngineLoop.GetNextFrameIndex() == 1,
-                "EngineLoop every exit phase short-circuits later phases and consumes the tick index");
+            Failures += Expect(EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit && Application.Contexts.Size() == ExitCase.ExpectedCallbacks && Application.Contexts.Back().Phase == ExitCase.Phase && EngineLoop.GetNextFrameIndex() == 1, "EngineLoop every exit phase short-circuits later phases and consumes the tick index");
             const std::size_t ContextCount = Application.Contexts.Size();
             const std::size_t ClockReads = EngineLoopClockReadCount;
-            Failures += Expect(
-                EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit &&
-                    Application.Contexts.Size() == ContextCount &&
-                    EngineLoopClockReadCount == ClockReads,
-                "EngineLoop performs zero callbacks and zero clock reads after exit");
+            Failures += Expect(EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit && Application.Contexts.Size() == ContextCount && EngineLoopClockReadCount == ClockReads, "EngineLoop performs zero callbacks and zero clock reads after exit");
             EngineLoop.Shutdown();
             EngineLoop.Shutdown();
-            const int ExitLifecycleOrder[] = { 10, 20, 30, -30, -20, -10 };
-            Failures += Expect(
-                Application.ShutdownCount == 1 &&
-                    EventsEqual(Application.LifecycleEvents, ExitLifecycleOrder, 6),
-                "EngineLoop phase exit shuts app before modules exactly once");
+            const int ExitLifecycleOrder[] = {10, 20, 30, -30, -20, -10};
+            Failures += Expect(Application.ShutdownCount == 1 && EventsEqual(Application.LifecycleEvents, ExitLifecycleOrder, 6), "EngineLoop phase exit shuts app before modules exactly once");
         }
     }
 
@@ -3193,32 +2605,18 @@ int RunEngineLoopTests()
         LE::FEngineLoop EngineLoop;
         LE::FEngineLoopConfig Config;
         Config.TimeSource = &ReadEngineLoopClock;
-        Failures += Expect(
-            EngineLoop.Initialize(Application, Config) ==
-                LE::EEngineLoopInitializeResult::ApplicationInitializeFailed &&
-                Application.InitializeCount == 1 && Application.ShutdownCount == 1 &&
-                EngineLoop.GetState() == LE::EEngineLoopState::ExitRequested,
-            "EngineLoop reports initialize failure and immediately unwinds once");
-        const int FailureLifecycleOrder[] = { 10, 20, 30, -30, -20, -10 };
-        Failures += Expect(
-            EventsEqual(Application.LifecycleEvents, FailureLifecycleOrder, 6),
-            "EngineLoop application init failure shuts app before reverse module cleanup");
-        Failures += Expect(
-            EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::InvalidState &&
-                Application.InitializeCount == 1 && Application.ShutdownCount == 1,
-            "EngineLoop rejects reinitialization after failed initialization");
-        Failures += Expect(
-            EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit &&
-                Application.Contexts.IsEmpty() && EngineLoopClockReadCount == 0,
-            "EngineLoop failed initialization cannot tick or sample time");
+        Failures += Expect(EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::ApplicationInitializeFailed && Application.InitializeCount == 1 && Application.ShutdownCount == 1 && EngineLoop.GetState() == LE::EEngineLoopState::ExitRequested, "EngineLoop reports initialize failure and immediately unwinds once");
+        const int FailureLifecycleOrder[] = {10, 20, 30, -30, -20, -10};
+        Failures += Expect(EventsEqual(Application.LifecycleEvents, FailureLifecycleOrder, 6), "EngineLoop application init failure shuts app before reverse module cleanup");
+        Failures += Expect(EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::InvalidState && Application.InitializeCount == 1 && Application.ShutdownCount == 1, "EngineLoop rejects reinitialization after failed initialization");
+        Failures += Expect(EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit && Application.Contexts.IsEmpty() && EngineLoopClockReadCount == 0, "EngineLoop failed initialization cannot tick or sample time");
         EngineLoop.Shutdown();
         EngineLoop.Shutdown();
-        Failures += Expect(Application.ShutdownCount == 1,
-            "EngineLoop explicit Shutdown does not repeat failed-init unwind");
+        Failures += Expect(Application.ShutdownCount == 1, "EngineLoop explicit Shutdown does not repeat failed-init unwind");
     }
 
     {
-        const double Clock[] = { 5.0, 4.0, 6.0 };
+        const double Clock[] = {5.0, 4.0, 6.0};
         SetEngineLoopClockSamples(Clock, 3);
         FFakeApplication Application;
         LE::FEngineLoop EngineLoop;
@@ -3228,12 +2626,7 @@ int RunEngineLoopTests()
         static_cast<void>(EngineLoop.Tick());
         static_cast<void>(EngineLoop.Tick());
         static_cast<void>(EngineLoop.Tick());
-        Failures += Expect(
-            Application.Contexts[3].DeltaSeconds == 0.0 &&
-                Application.Contexts[3].ElapsedSeconds == 0.0 &&
-                Application.Contexts[6].DeltaSeconds == 1.0 &&
-                Application.Contexts[6].ElapsedSeconds == 1.0,
-            "EngineLoop clamps backwards clock movement without double-counting elapsed time");
+        Failures += Expect(Application.Contexts[3].DeltaSeconds == 0.0 && Application.Contexts[3].ElapsedSeconds == 0.0 && Application.Contexts[6].DeltaSeconds == 1.0 && Application.Contexts[6].ElapsedSeconds == 1.0, "EngineLoop clamps backwards clock movement without double-counting elapsed time");
         EngineLoop.Shutdown();
     }
 
@@ -3244,16 +2637,9 @@ int RunEngineLoopTests()
         LE::FEngineLoop EngineLoop;
         LE::FEngineLoopConfig Config;
         Config.TimeSource = &ReadEngineLoopClock;
-        Failures += Expect(
-            EngineLoop.Initialize(Application, Config) ==
-                LE::EEngineLoopInitializeResult::ModuleRegistrationFailed &&
-                Application.InitializeCount == 0 && Application.ShutdownCount == 0 &&
-                Application.LifecycleEvents.IsEmpty() &&
-                EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit,
-            "EngineLoop registration failure never enters application lifecycle or tick");
+        Failures += Expect(EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::ModuleRegistrationFailed && Application.InitializeCount == 0 && Application.ShutdownCount == 0 && Application.LifecycleEvents.IsEmpty() && EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit, "EngineLoop registration failure never enters application lifecycle or tick");
         EngineLoop.Shutdown();
-        Failures += Expect(Application.ShutdownCount == 0,
-            "EngineLoop does not shut down an application whose lifecycle never started");
+        Failures += Expect(Application.ShutdownCount == 0, "EngineLoop does not shut down an application whose lifecycle never started");
     }
 
     {
@@ -3263,14 +2649,7 @@ int RunEngineLoopTests()
         LE::FEngineLoop EngineLoop;
         LE::FEngineLoopConfig Config;
         Config.TimeSource = &ReadEngineLoopClock;
-        Failures += Expect(
-            EngineLoop.Initialize(Application, Config) ==
-                LE::EEngineLoopInitializeResult::ModuleDependencyValidationFailed &&
-                Application.InitializeCount == 0 && Application.ShutdownCount == 0 &&
-                Application.LifecycleEvents.IsEmpty() &&
-                EngineLoop.GetModuleRegistry().GetDiagnosticModuleName() == LE::StringView("Test.A") &&
-                EngineLoop.GetModuleRegistry().GetDiagnosticDependencyName() == LE::StringView("Missing"),
-            "EngineLoop exposes detailed dependency failure without module or app startup");
+        Failures += Expect(EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::ModuleDependencyValidationFailed && Application.InitializeCount == 0 && Application.ShutdownCount == 0 && Application.LifecycleEvents.IsEmpty() && EngineLoop.GetModuleRegistry().GetDiagnosticModuleName() == LE::StringView("Test.A") && EngineLoop.GetModuleRegistry().GetDiagnosticDependencyName() == LE::StringView("Missing"), "EngineLoop exposes detailed dependency failure without module or app startup");
         EngineLoop.Shutdown();
     }
 
@@ -3281,20 +2660,10 @@ int RunEngineLoopTests()
         LE::FEngineLoop EngineLoop;
         LE::FEngineLoopConfig Config;
         Config.TimeSource = &ReadEngineLoopClock;
-        const int RollbackOrder[] = { 10, 20, -20, -10 };
-        Failures += Expect(
-            EngineLoop.Initialize(Application, Config) ==
-                LE::EEngineLoopInitializeResult::ModuleStartupFailed &&
-                Application.InitializeCount == 0 && Application.ShutdownCount == 0 &&
-                EventsEqual(Application.LifecycleEvents, RollbackOrder, 4) &&
-                EngineLoop.GetModuleRegistry().GetDiagnosticModuleName() == LE::StringView("Test.B") &&
-                EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit,
-            "EngineLoop module failure rolls back modules and never enters app lifecycle");
+        const int RollbackOrder[] = {10, 20, -20, -10};
+        Failures += Expect(EngineLoop.Initialize(Application, Config) == LE::EEngineLoopInitializeResult::ModuleStartupFailed && Application.InitializeCount == 0 && Application.ShutdownCount == 0 && EventsEqual(Application.LifecycleEvents, RollbackOrder, 4) && EngineLoop.GetModuleRegistry().GetDiagnosticModuleName() == LE::StringView("Test.B") && EngineLoop.Tick() == LE::EEngineLoopTickResult::Exit, "EngineLoop module failure rolls back modules and never enters app lifecycle");
         EngineLoop.Shutdown();
-        Failures += Expect(
-            EventsEqual(Application.LifecycleEvents, RollbackOrder, 4) &&
-                Application.ShutdownCount == 0,
-            "EngineLoop shutdown after module rollback is exactly once");
+        Failures += Expect(EventsEqual(Application.LifecycleEvents, RollbackOrder, 4) && Application.ShutdownCount == 0, "EngineLoop shutdown after module rollback is exactly once");
     }
 
     return Failures;

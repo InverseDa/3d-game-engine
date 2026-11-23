@@ -53,8 +53,7 @@ public:
     FPlatformEventQueue() = default;
     FPlatformEventQueue(const FPlatformEventQueue&) = default;
     FPlatformEventQueue& operator=(const FPlatformEventQueue&) = default;
-    FPlatformEventQueue(FPlatformEventQueue&& Other) noexcept
-        : Events(std::move(Other.Events)), ReadIndex(std::exchange(Other.ReadIndex, 0)) {}
+    FPlatformEventQueue(FPlatformEventQueue&& Other) noexcept : Events(std::move(Other.Events)), ReadIndex(std::exchange(Other.ReadIndex, 0)) {}
     FPlatformEventQueue& operator=(FPlatformEventQueue&& Other) noexcept
     {
         if (this != &Other)
@@ -116,11 +115,16 @@ private:
     {
         switch (Key)
         {
-        case EPlatformKey::W: return 1 << 0;
-        case EPlatformKey::A: return 1 << 1;
-        case EPlatformKey::S: return 1 << 2;
-        case EPlatformKey::D: return 1 << 3;
-        default: return 0;
+        case EPlatformKey::W:
+            return 1 << 0;
+        case EPlatformKey::A:
+            return 1 << 1;
+        case EPlatformKey::S:
+            return 1 << 2;
+        case EPlatformKey::D:
+            return 1 << 3;
+        default:
+            return 0;
         }
     }
 

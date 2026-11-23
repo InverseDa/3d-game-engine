@@ -24,20 +24,15 @@ constexpr const char* BuiltinTypeIds[] = {
     "68d345ab-1bad-41ab-acc3-add49d1280e9", // Bytes
 };
 
-constexpr std::size_t BuiltinTypeCount =
-    sizeof(BuiltinTypeIds) / sizeof(BuiltinTypeIds[0]);
+constexpr std::size_t BuiltinTypeCount = sizeof(BuiltinTypeIds) / sizeof(BuiltinTypeIds[0]);
 
-template <typename T, typename... Args>
-T* TryNew(IAllocator& Allocator, Args&&... Arguments) noexcept
+template <typename T, typename... Args> T* TryNew(IAllocator& Allocator, Args&&... Arguments) noexcept
 {
     void* const Storage = TryAllocateBytes(Allocator, sizeof(T), alignof(T));
-    return Storage == nullptr
-        ? nullptr
-        : new (Storage) T(std::forward<Args>(Arguments)...);
+    return Storage == nullptr ? nullptr : new (Storage) T(std::forward<Args>(Arguments)...);
 }
 
-template <typename T>
-void Delete(IAllocator& Allocator, T*& Value) noexcept
+template <typename T> void Delete(IAllocator& Allocator, T*& Value) noexcept
 {
     if (Value == nullptr)
     {
@@ -98,8 +93,7 @@ bool IsValidUtf8(const StringView Text) noexcept
             }
             CodePoint = (CodePoint << 6) | (Next & 0x3fu);
         }
-        if (CodePoint < Minimum || CodePoint > 0x10ffffu ||
-            (CodePoint >= 0xd800u && CodePoint <= 0xdfffu))
+        if (CodePoint < Minimum || CodePoint > 0x10ffffu || (CodePoint >= 0xd800u && CodePoint <= 0xdfffu))
         {
             return false;
         }
@@ -111,12 +105,7 @@ bool IsValidUtf8(const StringView Text) noexcept
 
 struct FPropertyValue::FImpl
 {
-    explicit FImpl(IAllocator& Allocator) noexcept
-        : Text(Allocator)
-        , Bytes(Allocator)
-        , Object(Allocator)
-    {
-    }
+    explicit FImpl(IAllocator& Allocator) noexcept : Text(Allocator), Bytes(Allocator), Object(Allocator) {}
 
     EPropertyValueKind Kind = EPropertyValueKind::Invalid;
     FTypeId TypeId;
@@ -147,9 +136,7 @@ FTypeId GetBuiltinPropertyTypeId(const EPropertyBuiltinType Type) noexcept
     return Result;
 }
 
-bool TryGetBuiltinPropertyType(
-    const FTypeId TypeId,
-    EPropertyBuiltinType& OutType) noexcept
+bool TryGetBuiltinPropertyType(const FTypeId TypeId, EPropertyBuiltinType& OutType) noexcept
 {
     for (std::size_t Index = 0; Index < BuiltinTypeCount; ++Index)
     {
@@ -162,24 +149,16 @@ bool TryGetBuiltinPropertyType(
     return false;
 }
 
-FPropertyValue::FPropertyValue() noexcept
-    : Allocator(&GetDefaultAllocator())
-{
-}
+FPropertyValue::FPropertyValue() noexcept : Allocator(&GetDefaultAllocator()) {}
 
-FPropertyValue::FPropertyValue(IAllocator& InAllocator) noexcept
-    : Allocator(&InAllocator)
-{
-}
+FPropertyValue::FPropertyValue(IAllocator& InAllocator) noexcept : Allocator(&InAllocator) {}
 
 FPropertyValue::~FPropertyValue() noexcept
 {
     Delete(*Allocator, Impl);
 }
 
-FPropertyValue::FPropertyValue(FPropertyValue&& Other) noexcept
-    : Impl(Other.Impl)
-    , Allocator(Other.Allocator)
+FPropertyValue::FPropertyValue(FPropertyValue&& Other) noexcept : Impl(Other.Impl), Allocator(Other.Allocator)
 {
     Other.Impl = nullptr;
 }
@@ -225,7 +204,8 @@ void FPropertyValue::Reset() noexcept
     bool FPropertyValue::TrySet##Name(const CppType Value) noexcept \
     { \
         FImpl* Candidate = TryNew<FImpl>(*Allocator, *Allocator); \
-        if (Candidate == nullptr) return false; \
+        if (Candidate == nullptr) \
+            return false; \
         Candidate->Kind = EPropertyValueKind::KindName; \
         Candidate->TypeId = GetBuiltinPropertyTypeId(EPropertyBuiltinType::BuiltinName); \
         Candidate->Field = Value; \
@@ -235,7 +215,8 @@ void FPropertyValue::Reset() noexcept
     } \
     bool FPropertyValue::TryGet##Name(CppType& OutValue) const noexcept \
     { \
-        if (Impl == nullptr || Impl->Kind != EPropertyValueKind::KindName) return false; \
+        if (Impl == nullptr || Impl->Kind != EPropertyValueKind::KindName) \
+            return false; \
         OutValue = Impl->Field; \
         return true; \
     }
@@ -360,19 +341,14 @@ bool FPropertyValue::TrySetObject(FPropertyBag&& Value) noexcept
     return true;
 }
 
-bool FPropertyValue::TrySetOpaque(
-    const FTypeId TypeId,
-    const uint8 WireTag,
-    const uint8 WireFlags,
-    const Span<const uint8> Payload) noexcept
+bool FPropertyValue::TrySetOpaque(const FTypeId TypeId, const uint8 WireTag, const uint8 WireFlags, const Span<const uint8> Payload) noexcept
 {
     // Tags 1-13 with flags zero have a defined v1 interpretation and must be
     // represented by their typed setter. Opaque values are reserved for a
     // future tag or a known tag carrying future non-zero flags.
     const uint8 FirstKnownTag = static_cast<uint8>(EPropertyWireTag::Bool);
     const uint8 LastKnownTag = static_cast<uint8>(EPropertyWireTag::Object);
-    if (!TypeId.IsValid() || WireTag == static_cast<uint8>(EPropertyWireTag::Invalid) ||
-        (WireTag >= FirstKnownTag && WireTag <= LastKnownTag && WireFlags == 0))
+    if (!TypeId.IsValid() || WireTag == static_cast<uint8>(EPropertyWireTag::Invalid) || (WireTag >= FirstKnownTag && WireTag <= LastKnownTag && WireFlags == 0))
     {
         return false;
     }
@@ -431,15 +407,10 @@ bool FPropertyValue::TryGetEnum(uint64& OutValueBits) const noexcept
 
 const FPropertyBag* FPropertyValue::TryGetObject() const noexcept
 {
-    return Impl != nullptr && Impl->Kind == EPropertyValueKind::Object
-        ? &Impl->Object
-        : nullptr;
+    return Impl != nullptr && Impl->Kind == EPropertyValueKind::Object ? &Impl->Object : nullptr;
 }
 
-bool FPropertyValue::TryGetOpaque(
-    uint8& OutWireTag,
-    uint8& OutWireFlags,
-    Span<const uint8>& OutPayload) const noexcept
+bool FPropertyValue::TryGetOpaque(uint8& OutWireTag, uint8& OutWireFlags, Span<const uint8>& OutPayload) const noexcept
 {
     if (Impl == nullptr || Impl->Kind != EPropertyValueKind::Opaque)
     {
@@ -461,27 +432,50 @@ bool FPropertyValue::TryClone(FPropertyValue& OutValue) const noexcept
     bool bSuccess = false;
     switch (Impl->Kind)
     {
-    case EPropertyValueKind::Bool: bSuccess = Candidate.TrySetBool(Impl->BoolValue); break;
-    case EPropertyValueKind::Int8: bSuccess = Candidate.TrySetInt8(Impl->Int8Value); break;
-    case EPropertyValueKind::UInt8: bSuccess = Candidate.TrySetUInt8(Impl->UInt8Value); break;
-    case EPropertyValueKind::Int32: bSuccess = Candidate.TrySetInt32(Impl->Int32Value); break;
-    case EPropertyValueKind::UInt32: bSuccess = Candidate.TrySetUInt32(Impl->UInt32Value); break;
-    case EPropertyValueKind::Int64: bSuccess = Candidate.TrySetInt64(Impl->Int64Value); break;
-    case EPropertyValueKind::UInt64: bSuccess = Candidate.TrySetUInt64(Impl->UInt64Value); break;
-    case EPropertyValueKind::Float32: bSuccess = Candidate.TrySetFloat32(Impl->Float32Value); break;
-    case EPropertyValueKind::Float64: bSuccess = Candidate.TrySetFloat64(Impl->Float64Value); break;
-    case EPropertyValueKind::String: bSuccess = Candidate.TrySetString(Impl->Text); break;
+    case EPropertyValueKind::Bool:
+        bSuccess = Candidate.TrySetBool(Impl->BoolValue);
+        break;
+    case EPropertyValueKind::Int8:
+        bSuccess = Candidate.TrySetInt8(Impl->Int8Value);
+        break;
+    case EPropertyValueKind::UInt8:
+        bSuccess = Candidate.TrySetUInt8(Impl->UInt8Value);
+        break;
+    case EPropertyValueKind::Int32:
+        bSuccess = Candidate.TrySetInt32(Impl->Int32Value);
+        break;
+    case EPropertyValueKind::UInt32:
+        bSuccess = Candidate.TrySetUInt32(Impl->UInt32Value);
+        break;
+    case EPropertyValueKind::Int64:
+        bSuccess = Candidate.TrySetInt64(Impl->Int64Value);
+        break;
+    case EPropertyValueKind::UInt64:
+        bSuccess = Candidate.TrySetUInt64(Impl->UInt64Value);
+        break;
+    case EPropertyValueKind::Float32:
+        bSuccess = Candidate.TrySetFloat32(Impl->Float32Value);
+        break;
+    case EPropertyValueKind::Float64:
+        bSuccess = Candidate.TrySetFloat64(Impl->Float64Value);
+        break;
+    case EPropertyValueKind::String:
+        bSuccess = Candidate.TrySetString(Impl->Text);
+        break;
     case EPropertyValueKind::Bytes:
         bSuccess = Candidate.TrySetBytes(Span<const uint8>(Impl->Bytes.Data(), Impl->Bytes.Size()));
         break;
-    case EPropertyValueKind::Enum: bSuccess = Candidate.TrySetEnum(Impl->TypeId, Impl->UInt64Value); break;
-    case EPropertyValueKind::Object: bSuccess = Candidate.TrySetObject(Impl->Object); break;
-    case EPropertyValueKind::Opaque:
-        bSuccess = Candidate.TrySetOpaque(
-            Impl->TypeId, Impl->WireTag, Impl->WireFlags,
-            Span<const uint8>(Impl->Bytes.Data(), Impl->Bytes.Size()));
+    case EPropertyValueKind::Enum:
+        bSuccess = Candidate.TrySetEnum(Impl->TypeId, Impl->UInt64Value);
         break;
-    case EPropertyValueKind::Invalid: break;
+    case EPropertyValueKind::Object:
+        bSuccess = Candidate.TrySetObject(Impl->Object);
+        break;
+    case EPropertyValueKind::Opaque:
+        bSuccess = Candidate.TrySetOpaque(Impl->TypeId, Impl->WireTag, Impl->WireFlags, Span<const uint8>(Impl->Bytes.Data(), Impl->Bytes.Size()));
+        break;
+    case EPropertyValueKind::Invalid:
+        break;
     }
     if (bSuccess)
     {

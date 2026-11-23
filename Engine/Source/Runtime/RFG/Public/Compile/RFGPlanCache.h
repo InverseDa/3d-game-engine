@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "Core/RFGTypes.h"
 
-
 namespace LE
 {
 

@@ -22,11 +22,7 @@ struct FDemoSettings
     String WindowTitle = "Limitless Engine - Content Demo";
 };
 
-EReflectionRegisterResult RegisterDemoApplicationReflection(
-    FReflectionRegistry& Registry,
-    FReflectionModuleHandle& OutHandle) noexcept;
-EReflectionUnregisterResult UnregisterDemoApplicationReflection(
-    FReflectionRegistry& Registry,
-    FReflectionModuleHandle Handle) noexcept;
+EReflectionRegisterResult RegisterDemoApplicationReflection(FReflectionRegistry& Registry, FReflectionModuleHandle& OutHandle) noexcept;
+EReflectionUnregisterResult UnregisterDemoApplicationReflection(FReflectionRegistry& Registry, FReflectionModuleHandle Handle) noexcept;
 
 } // namespace LE

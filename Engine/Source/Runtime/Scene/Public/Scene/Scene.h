@@ -47,8 +47,7 @@ struct FSceneAssetResolver
 class SCENE_API FScene final
 {
 public:
-    static bool Create(UniquePtr<FScene>& OutScene,
-        IAllocator& Allocator = GetDefaultAllocator()) noexcept;
+    static bool Create(UniquePtr<FScene>& OutScene, IAllocator& Allocator = GetDefaultAllocator()) noexcept;
 
     FWorld& GetWorld() noexcept { return World; }
     const FWorld& GetWorld() const noexcept { return World; }
@@ -58,10 +57,8 @@ public:
     bool TryGetEntityId(FEntity Entity, FSceneEntityId& OutId) const noexcept;
 
 private:
-    friend SCENE_API ESceneOperationResult RestoreScene(const FSceneDocument&, const FSceneAssetResolver&,
-        UniquePtr<FScene>&, FSceneOperationDiagnostic*, IAllocator&) noexcept;
-    friend SCENE_API ESceneOperationResult CaptureScene(const FScene&, const FAssetRegistry&,
-        FSceneDocument&, FSceneOperationDiagnostic*) noexcept;
+    friend SCENE_API ESceneOperationResult RestoreScene(const FSceneDocument&, const FSceneAssetResolver&, UniquePtr<FScene>&, FSceneOperationDiagnostic*, IAllocator&) noexcept;
+    friend SCENE_API ESceneOperationResult CaptureScene(const FScene&, const FAssetRegistry&, FSceneDocument&, FSceneOperationDiagnostic*) noexcept;
 
     explicit FScene(IAllocator& Allocator) noexcept;
     ~FScene() = default;
@@ -77,18 +74,10 @@ private:
 
 // A successful restore/load replaces OutScene. To keep a currently rendered
 // scene alive, pass an empty candidate owner and publish it at a frame boundary.
-SCENE_API ESceneOperationResult RestoreScene(const FSceneDocument& Document,
-    const FSceneAssetResolver& Assets, UniquePtr<FScene>& OutScene,
-    FSceneOperationDiagnostic* Diagnostic = nullptr,
-    IAllocator& Allocator = GetDefaultAllocator()) noexcept;
-SCENE_API ESceneOperationResult LoadScene(StringView Path,
-    const FSceneAssetResolver& Assets, UniquePtr<FScene>& OutScene,
-    FSceneOperationDiagnostic* Diagnostic = nullptr,
-    IAllocator& Allocator = GetDefaultAllocator()) noexcept;
-SCENE_API ESceneOperationResult CaptureScene(const FScene& Scene, const FAssetRegistry& Registry,
-    FSceneDocument& OutDocument, FSceneOperationDiagnostic* Diagnostic = nullptr) noexcept;
-SCENE_API ESceneOperationResult SaveScene(StringView Path, const FScene& Scene,
-    const FAssetRegistry& Registry, FSceneOperationDiagnostic* Diagnostic = nullptr) noexcept;
+SCENE_API ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneAssetResolver& Assets, UniquePtr<FScene>& OutScene, FSceneOperationDiagnostic* Diagnostic = nullptr, IAllocator& Allocator = GetDefaultAllocator()) noexcept;
+SCENE_API ESceneOperationResult LoadScene(StringView Path, const FSceneAssetResolver& Assets, UniquePtr<FScene>& OutScene, FSceneOperationDiagnostic* Diagnostic = nullptr, IAllocator& Allocator = GetDefaultAllocator()) noexcept;
+SCENE_API ESceneOperationResult CaptureScene(const FScene& Scene, const FAssetRegistry& Registry, FSceneDocument& OutDocument, FSceneOperationDiagnostic* Diagnostic = nullptr) noexcept;
+SCENE_API ESceneOperationResult SaveScene(StringView Path, const FScene& Scene, const FAssetRegistry& Registry, FSceneOperationDiagnostic* Diagnostic = nullptr) noexcept;
 SCENE_API const char* DescribeSceneOperationResult(ESceneOperationResult Result) noexcept;
 
 } // namespace LE

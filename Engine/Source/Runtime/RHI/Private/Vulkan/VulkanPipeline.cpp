@@ -8,27 +8,48 @@ static VkFormat ToVkFormat(EPixelFormat Format)
 {
     switch (Format)
     {
-    case EPixelFormat::R8_UNORM:         return VK_FORMAT_R8_UNORM;
-    case EPixelFormat::R8_SNORM:         return VK_FORMAT_R8_SNORM;
-    case EPixelFormat::R8_UINT:          return VK_FORMAT_R8_UINT;
-    case EPixelFormat::R8_SINT:          return VK_FORMAT_R8_SINT;
-    case EPixelFormat::R16_UINT:         return VK_FORMAT_R16_UINT;
-    case EPixelFormat::R32_UINT:         return VK_FORMAT_R32_UINT;
-    case EPixelFormat::R8G8B8A8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
-    case EPixelFormat::R8G8B8A8_SNORM: return VK_FORMAT_R8G8B8A8_SNORM;
-    case EPixelFormat::R8G8B8A8_UINT:  return VK_FORMAT_R8G8B8A8_UINT;
-    case EPixelFormat::R8G8B8A8_SINT:  return VK_FORMAT_R8G8B8A8_SINT;
-    case EPixelFormat::R8G8B8A8_SRGB:  return VK_FORMAT_R8G8B8A8_SRGB;
-    case EPixelFormat::B8G8R8A8_SRGB:  return VK_FORMAT_B8G8R8A8_SRGB;
-    case EPixelFormat::R16G16_FLOAT:      return VK_FORMAT_R16G16_SFLOAT;
-    case EPixelFormat::R16G16B16A16_FLOAT:return VK_FORMAT_R16G16B16A16_SFLOAT;
-    case EPixelFormat::R32_FLOAT:         return VK_FORMAT_R32_SFLOAT;
-    case EPixelFormat::R32G32_FLOAT:      return VK_FORMAT_R32G32_SFLOAT;
-    case EPixelFormat::R32G32B32_FLOAT:   return VK_FORMAT_R32G32B32_SFLOAT;
-    case EPixelFormat::R32G32B32A32_FLOAT:return VK_FORMAT_R32G32B32A32_SFLOAT;
-    case EPixelFormat::D32_FLOAT:      return VK_FORMAT_D32_SFLOAT;
-    case EPixelFormat::D24_UNORM_S8_UINT: return VK_FORMAT_D24_UNORM_S8_UINT;
-    default: return VK_FORMAT_UNDEFINED;
+    case EPixelFormat::R8_UNORM:
+        return VK_FORMAT_R8_UNORM;
+    case EPixelFormat::R8_SNORM:
+        return VK_FORMAT_R8_SNORM;
+    case EPixelFormat::R8_UINT:
+        return VK_FORMAT_R8_UINT;
+    case EPixelFormat::R8_SINT:
+        return VK_FORMAT_R8_SINT;
+    case EPixelFormat::R16_UINT:
+        return VK_FORMAT_R16_UINT;
+    case EPixelFormat::R32_UINT:
+        return VK_FORMAT_R32_UINT;
+    case EPixelFormat::R8G8B8A8_UNORM:
+        return VK_FORMAT_R8G8B8A8_UNORM;
+    case EPixelFormat::R8G8B8A8_SNORM:
+        return VK_FORMAT_R8G8B8A8_SNORM;
+    case EPixelFormat::R8G8B8A8_UINT:
+        return VK_FORMAT_R8G8B8A8_UINT;
+    case EPixelFormat::R8G8B8A8_SINT:
+        return VK_FORMAT_R8G8B8A8_SINT;
+    case EPixelFormat::R8G8B8A8_SRGB:
+        return VK_FORMAT_R8G8B8A8_SRGB;
+    case EPixelFormat::B8G8R8A8_SRGB:
+        return VK_FORMAT_B8G8R8A8_SRGB;
+    case EPixelFormat::R16G16_FLOAT:
+        return VK_FORMAT_R16G16_SFLOAT;
+    case EPixelFormat::R16G16B16A16_FLOAT:
+        return VK_FORMAT_R16G16B16A16_SFLOAT;
+    case EPixelFormat::R32_FLOAT:
+        return VK_FORMAT_R32_SFLOAT;
+    case EPixelFormat::R32G32_FLOAT:
+        return VK_FORMAT_R32G32_SFLOAT;
+    case EPixelFormat::R32G32B32_FLOAT:
+        return VK_FORMAT_R32G32B32_SFLOAT;
+    case EPixelFormat::R32G32B32A32_FLOAT:
+        return VK_FORMAT_R32G32B32A32_SFLOAT;
+    case EPixelFormat::D32_FLOAT:
+        return VK_FORMAT_D32_SFLOAT;
+    case EPixelFormat::D24_UNORM_S8_UINT:
+        return VK_FORMAT_D24_UNORM_S8_UINT;
+    default:
+        return VK_FORMAT_UNDEFINED;
     }
 }
 
@@ -36,27 +57,54 @@ static VkCompareOp ToVkCompareOp(ECompareFunction Func)
 {
     switch (Func)
     {
-    case ECompareFunction::Never:        return VK_COMPARE_OP_NEVER;
-    case ECompareFunction::Less:         return VK_COMPARE_OP_LESS;
-    case ECompareFunction::Equal:        return VK_COMPARE_OP_EQUAL;
-    case ECompareFunction::LessEqual:    return VK_COMPARE_OP_LESS_OR_EQUAL;
-    case ECompareFunction::Greater:      return VK_COMPARE_OP_GREATER;
-    case ECompareFunction::NotEqual:     return VK_COMPARE_OP_NOT_EQUAL;
-    case ECompareFunction::GreaterEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
-    case ECompareFunction::Always:       return VK_COMPARE_OP_ALWAYS;
-    default: return VK_COMPARE_OP_LESS_OR_EQUAL;
+    case ECompareFunction::Never:
+        return VK_COMPARE_OP_NEVER;
+    case ECompareFunction::Less:
+        return VK_COMPARE_OP_LESS;
+    case ECompareFunction::Equal:
+        return VK_COMPARE_OP_EQUAL;
+    case ECompareFunction::LessEqual:
+        return VK_COMPARE_OP_LESS_OR_EQUAL;
+    case ECompareFunction::Greater:
+        return VK_COMPARE_OP_GREATER;
+    case ECompareFunction::NotEqual:
+        return VK_COMPARE_OP_NOT_EQUAL;
+    case ECompareFunction::GreaterEqual:
+        return VK_COMPARE_OP_GREATER_OR_EQUAL;
+    case ECompareFunction::Always:
+        return VK_COMPARE_OP_ALWAYS;
+    default:
+        return VK_COMPARE_OP_LESS_OR_EQUAL;
     }
 }
 
 static VkShaderStageFlags ToVkShaderStageFlags(const EShaderStage Stage)
 {
     VkShaderStageFlags Result = 0;
-    if (EnumHasAnyFlags(Stage, EShaderStage::Vertex)) Result |= VK_SHADER_STAGE_VERTEX_BIT;
-    if (EnumHasAnyFlags(Stage, EShaderStage::Pixel)) Result |= VK_SHADER_STAGE_FRAGMENT_BIT;
-    if (EnumHasAnyFlags(Stage, EShaderStage::Compute)) Result |= VK_SHADER_STAGE_COMPUTE_BIT;
-    if (EnumHasAnyFlags(Stage, EShaderStage::Geometry)) Result |= VK_SHADER_STAGE_GEOMETRY_BIT;
-    if (EnumHasAnyFlags(Stage, EShaderStage::Hull)) Result |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
-    if (EnumHasAnyFlags(Stage, EShaderStage::Domain)) Result |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    if (EnumHasAnyFlags(Stage, EShaderStage::Vertex))
+    {
+        Result |= VK_SHADER_STAGE_VERTEX_BIT;
+    }
+    if (EnumHasAnyFlags(Stage, EShaderStage::Pixel))
+    {
+        Result |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+    if (EnumHasAnyFlags(Stage, EShaderStage::Compute))
+    {
+        Result |= VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+    if (EnumHasAnyFlags(Stage, EShaderStage::Geometry))
+    {
+        Result |= VK_SHADER_STAGE_GEOMETRY_BIT;
+    }
+    if (EnumHasAnyFlags(Stage, EShaderStage::Hull))
+    {
+        Result |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    }
+    if (EnumHasAnyFlags(Stage, EShaderStage::Domain))
+    {
+        Result |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    }
     return Result;
 }
 
@@ -64,10 +112,14 @@ static VkCullModeFlags ToVkCullMode(ECullMode Mode)
 {
     switch (Mode)
     {
-    case ECullMode::None:  return VK_CULL_MODE_NONE;
-    case ECullMode::Front: return VK_CULL_MODE_FRONT_BIT;
-    case ECullMode::Back:  return VK_CULL_MODE_BACK_BIT;
-    default: return VK_CULL_MODE_BACK_BIT;
+    case ECullMode::None:
+        return VK_CULL_MODE_NONE;
+    case ECullMode::Front:
+        return VK_CULL_MODE_FRONT_BIT;
+    case ECullMode::Back:
+        return VK_CULL_MODE_BACK_BIT;
+    default:
+        return VK_CULL_MODE_BACK_BIT;
     }
 }
 
@@ -76,8 +128,7 @@ static VkPolygonMode ToVkPolygonMode(EFillMode Mode)
     return Mode == EFillMode::Wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
 }
 
-FVulkanRHIPipeline_Graphics::FVulkanRHIPipeline_Graphics(FVulkanRHIDevice* InDevice, const FRHIPipelineDesc_Graphics& InDesc)
-    : TVulkanResourceBase<FRHIPipelineDesc_Graphics>(InDevice, InDesc)
+FVulkanRHIPipeline_Graphics::FVulkanRHIPipeline_Graphics(FVulkanRHIDevice* InDevice, const FRHIPipelineDesc_Graphics& InDesc) : TVulkanResourceBase<FRHIPipelineDesc_Graphics>(InDevice, InDesc)
 {
     if (this->Device == nullptr || this->Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
@@ -90,10 +141,7 @@ FVulkanRHIPipeline_Graphics::FVulkanRHIPipeline_Graphics(FVulkanRHIDevice* InDev
     const bool bHasPushConstants = !Desc.PushConstants.IsDisabled();
     if (bHasPushConstants && !Desc.PushConstants.IsValid())
     {
-        LE_LOG(LogRHI, Error,
-            "Pipeline creation failed: push constants require non-empty stages and an aligned size in [4, 128]. Stages={}, Size={}.",
-            static_cast<uint32>(Desc.PushConstants.StageFlags),
-            Desc.PushConstants.Size);
+        LE_LOG(LogRHI, Error, "Pipeline creation failed: push constants require non-empty stages and an aligned size in [4, 128]. Stages={}, Size={}.", static_cast<uint32>(Desc.PushConstants.StageFlags), Desc.PushConstants.Size);
         this->Pipeline = VK_NULL_HANDLE;
         this->PipelineLayout = VK_NULL_HANDLE;
         return;
@@ -196,8 +244,7 @@ FVulkanRHIPipeline_Graphics::FVulkanRHIPipeline_Graphics(FVulkanRHIDevice* InDev
         VkVertexInputBindingDescription VkBinding{};
         VkBinding.binding = Binding.Binding;
         VkBinding.stride = Binding.Stride;
-        VkBinding.inputRate = Binding.bPerInstance ?
-            VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
+        VkBinding.inputRate = Binding.bPerInstance ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
         VkBindings.PushBack(VkBinding);
     }
 
@@ -290,7 +337,7 @@ FVulkanRHIPipeline_Graphics::FVulkanRHIPipeline_Graphics(FVulkanRHIDevice* InDev
         ColorBlendInfo.pAttachments = ColorBlendAttachments.Data();
     }
 
-    VkDynamicState Dynamics[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    VkDynamicState Dynamics[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo DynamicState{};
     {
         DynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -312,9 +359,7 @@ FVulkanRHIPipeline_Graphics::FVulkanRHIPipeline_Graphics(FVulkanRHIDevice* InDev
     }
 
     const VkFormat DepthStencilFormat = ToVkFormat(this->Desc.DepthStencilFormat);
-    if (this->Desc.DepthStencilFormat != EPixelFormat::Unknown &&
-        this->Desc.DepthStencilFormat != EPixelFormat::D32_FLOAT &&
-        this->Desc.DepthStencilFormat != EPixelFormat::D24_UNORM_S8_UINT)
+    if (this->Desc.DepthStencilFormat != EPixelFormat::Unknown && this->Desc.DepthStencilFormat != EPixelFormat::D32_FLOAT && this->Desc.DepthStencilFormat != EPixelFormat::D24_UNORM_S8_UINT)
     {
         LE_LOG(LogRHI, Error, "Pipeline creation failed: invalid depth/stencil format={}.", static_cast<uint32>(this->Desc.DepthStencilFormat));
         return;
@@ -326,9 +371,7 @@ FVulkanRHIPipeline_Graphics::FVulkanRHIPipeline_Graphics(FVulkanRHIDevice* InDev
         RenderingInfo.colorAttachmentCount = static_cast<uint32>(ColorAttachmentFormats.Size());
         RenderingInfo.pColorAttachmentFormats = ColorAttachmentFormats.Data();
         RenderingInfo.depthAttachmentFormat = DepthStencilFormat;
-        RenderingInfo.stencilAttachmentFormat = this->Desc.DepthStencilFormat == EPixelFormat::D24_UNORM_S8_UINT
-            ? DepthStencilFormat
-            : VK_FORMAT_UNDEFINED;
+        RenderingInfo.stencilAttachmentFormat = this->Desc.DepthStencilFormat == EPixelFormat::D24_UNORM_S8_UINT ? DepthStencilFormat : VK_FORMAT_UNDEFINED;
     }
 
     VkGraphicsPipelineCreateInfo PipelineInfo{};
@@ -359,8 +402,7 @@ FVulkanRHIPipeline_Graphics::FVulkanRHIPipeline_Graphics(FVulkanRHIDevice* InDev
         return;
     }
 
-    LE_LOG(LogRHI, Info, "Vulkan graphics pipeline created. RenderTargets={}, HasDepth={}",
-        this->Desc.RenderTargetCount, this->Desc.DepthStencilFormat != EPixelFormat::Unknown);
+    LE_LOG(LogRHI, Info, "Vulkan graphics pipeline created. RenderTargets={}, HasDepth={}", this->Desc.RenderTargetCount, this->Desc.DepthStencilFormat != EPixelFormat::Unknown);
 }
 
 FVulkanRHIPipeline_Graphics::~FVulkanRHIPipeline_Graphics()

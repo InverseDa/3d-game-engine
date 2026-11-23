@@ -17,15 +17,9 @@ public:
 
     constexpr StringView() noexcept = default;
 
-    StringView(const char* const NullTerminated) noexcept
-        : DataValue(NullTerminated)
-        , SizeValue(NullTerminated == nullptr ? 0 : std::strlen(NullTerminated))
-    {
-    }
+    StringView(const char* const NullTerminated) noexcept : DataValue(NullTerminated), SizeValue(NullTerminated == nullptr ? 0 : std::strlen(NullTerminated)) {}
 
-    constexpr StringView(const char* const Data, const SizeType Size) noexcept
-        : DataValue(Data)
-        , SizeValue(Size)
+    constexpr StringView(const char* const Data, const SizeType Size) noexcept : DataValue(Data), SizeValue(Size)
     {
         if (Data == nullptr && Size != 0)
         {
@@ -64,10 +58,19 @@ public:
         if (CommonSize != 0)
         {
             const int Result = std::memcmp(DataValue, Other.DataValue, CommonSize);
-            if (Result != 0) { return Result; }
+            if (Result != 0)
+            {
+                return Result;
+            }
         }
-        if (SizeValue < Other.SizeValue) { return -1; }
-        if (SizeValue > Other.SizeValue) { return 1; }
+        if (SizeValue < Other.SizeValue)
+        {
+            return -1;
+        }
+        if (SizeValue > Other.SizeValue)
+        {
+            return 1;
+        }
         return 0;
     }
 
@@ -97,12 +100,8 @@ inline bool operator<(const StringView Left, const StringView Right) noexcept
 
 inline std::size_t HashStringBytes(const StringView Value) noexcept
 {
-    std::size_t Hash = sizeof(std::size_t) > 4
-        ? static_cast<std::size_t>(14695981039346656037ULL)
-        : static_cast<std::size_t>(2166136261U);
-    const std::size_t Prime = sizeof(std::size_t) > 4
-        ? static_cast<std::size_t>(1099511628211ULL)
-        : static_cast<std::size_t>(16777619U);
+    std::size_t Hash = sizeof(std::size_t) > 4 ? static_cast<std::size_t>(14695981039346656037ULL) : static_cast<std::size_t>(2166136261U);
+    const std::size_t Prime = sizeof(std::size_t) > 4 ? static_cast<std::size_t>(1099511628211ULL) : static_cast<std::size_t>(16777619U);
     for (std::size_t Index = 0; Index < Value.Size(); ++Index)
     {
         Hash ^= static_cast<unsigned char>(Value.Data()[Index]);
@@ -122,23 +121,15 @@ struct StringViewEqual
 {
     using is_transparent = void;
     bool operator()(const StringView Left, const StringView Right) const noexcept { return Left == Right; }
-    bool operator()(const StringView Left, const char* const Right) const noexcept
-    {
-        return Left == StringView(Right);
-    }
-    bool operator()(const char* const Left, const StringView Right) const noexcept
-    {
-        return StringView(Left) == Right;
-    }
+    bool operator()(const StringView Left, const char* const Right) const noexcept { return Left == StringView(Right); }
+    bool operator()(const char* const Left, const StringView Right) const noexcept { return StringView(Left) == Right; }
 };
 
-template <>
-struct DefaultHash<StringView> : StringViewHash
+template <> struct DefaultHash<StringView> : StringViewHash
 {
 };
 
-template <>
-struct DefaultEqual<StringView> : StringViewEqual
+template <> struct DefaultEqual<StringView> : StringViewEqual
 {
 };
 

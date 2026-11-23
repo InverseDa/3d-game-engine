@@ -6,7 +6,7 @@
 #include <cstdlib>
 
 #if defined(_MSC_VER)
-    #include <malloc.h>
+#include <malloc.h>
 #endif
 
 namespace LE
@@ -37,10 +37,7 @@ public:
 #endif
     }
 
-    void Deallocate(
-        void* const Address,
-        const std::size_t,
-        const std::size_t) noexcept override
+    void Deallocate(void* const Address, const std::size_t, const std::size_t) noexcept override
     {
 #if defined(_MSC_VER)
         _aligned_free(Address);
@@ -89,10 +86,7 @@ ContractViolationHandler SetContractViolationHandler(const ContractViolationHand
     std::abort();
 }
 
-[[noreturn]] void HandleContractViolation(
-    const char* const Message,
-    const char* const File,
-    const int Line) noexcept
+[[noreturn]] void HandleContractViolation(const char* const Message, const char* const File, const int Line) noexcept
 {
     GContractViolationHandler.load()(Message, File, Line);
     std::abort();

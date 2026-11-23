@@ -17,11 +17,16 @@ EPlatformKey GetPlatformKey(const WPARAM VirtualKey) noexcept
 {
     switch (VirtualKey)
     {
-    case 'W': return EPlatformKey::W;
-    case 'A': return EPlatformKey::A;
-    case 'S': return EPlatformKey::S;
-    case 'D': return EPlatformKey::D;
-    default: return EPlatformKey::Unknown;
+    case 'W':
+        return EPlatformKey::W;
+    case 'A':
+        return EPlatformKey::A;
+    case 'S':
+        return EPlatformKey::S;
+    case 'D':
+        return EPlatformKey::D;
+    default:
+        return EPlatformKey::Unknown;
     }
 }
 
@@ -31,10 +36,7 @@ void DestroyPlatformWindow(void*, FPlatformWindow* const Window) noexcept
 }
 }
 
-FWindowsPlatformWindow::FWindowsPlatformWindow(const FPlatformWindowDesc& Description)
-    : Width(Description.Width)
-    , Height(Description.Height)
-    , bInputEnabled(Description.bEnableInput)
+FWindowsPlatformWindow::FWindowsPlatformWindow(const FPlatformWindowDesc& Description) : Width(Description.Width), Height(Description.Height), bInputEnabled(Description.bEnableInput)
 {
     WNDCLASSEXA WindowClass = {};
     WindowClass.cbSize = sizeof(WNDCLASSEXA);
@@ -48,26 +50,14 @@ FWindowsPlatformWindow::FWindowsPlatformWindow(const FPlatformWindowDesc& Descri
         return;
     }
 
-    RECT WindowRect = { 0, 0, static_cast<LONG>(Width), static_cast<LONG>(Height) };
+    RECT WindowRect = {0, 0, static_cast<LONG>(Width), static_cast<LONG>(Height)};
     if (!AdjustWindowRect(&WindowRect, WS_OVERLAPPEDWINDOW, FALSE))
     {
         return;
     }
 
     const LE::String Title(Description.Title);
-    Hwnd = CreateWindowExA(
-        0,
-        WindowClass.lpszClassName,
-        Title.IsEmpty() ? "Limitless Engine" : Title.Data(),
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        WindowRect.right - WindowRect.left,
-        WindowRect.bottom - WindowRect.top,
-        nullptr,
-        nullptr,
-        WindowClass.hInstance,
-        this);
+    Hwnd = CreateWindowExA(0, WindowClass.lpszClassName, Title.IsEmpty() ? "Limitless Engine" : Title.Data(), WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, WindowRect.right - WindowRect.left, WindowRect.bottom - WindowRect.top, nullptr, nullptr, WindowClass.hInstance, this);
     if (Hwnd == nullptr)
     {
         return;
@@ -137,8 +127,7 @@ bool FWindowsPlatformWindow::CanReceiveInput() const noexcept
     return bInputEnabled && bHasFocus && !bCloseRequested && !bMinimized && Width != 0 && Height != 0;
 }
 
-void FWindowsPlatformWindow::HandleKey(const EPlatformEventType Type, const WPARAM VirtualKey,
-    const LPARAM KeyFlags)
+void FWindowsPlatformWindow::HandleKey(const EPlatformEventType Type, const WPARAM VirtualKey, const LPARAM KeyFlags)
 {
     const EPlatformKey Key = GetPlatformKey(VirtualKey);
     if (CanReceiveInput() && Key != EPlatformKey::Unknown)
@@ -159,8 +148,7 @@ void FWindowsPlatformWindow::RegisterRawMouse()
     {
         const DWORD Error = GetLastError();
         auto* const Logger = Log::GetLoggerOrCreate("Platform");
-        LE_LOG(Logger, Warn,
-            "Could not register raw mouse input for window {} (Win32 error {}).", GetId(), Error);
+        LE_LOG(Logger, Warn, "Could not register raw mouse input for window {} (Win32 error {}).", GetId(), Error);
     }
 }
 
@@ -176,8 +164,7 @@ void FWindowsPlatformWindow::UnregisterRawMouse()
     {
         const DWORD Error = GetLastError();
         auto* const Logger = Log::GetLoggerOrCreate("Platform");
-        LE_LOG(Logger, Warn,
-            "Could not unregister raw mouse input for window {} (Win32 error {}).", GetId(), Error);
+        LE_LOG(Logger, Warn, "Could not unregister raw mouse input for window {} (Win32 error {}).", GetId(), Error);
     }
 }
 
@@ -191,9 +178,7 @@ void FWindowsPlatformWindow::HandleRawMouse(const HRAWINPUT Input)
     RAWINPUT Raw{};
     UINT Size = sizeof(Raw);
     const UINT Bytes = GetRawInputData(Input, RID_INPUT, &Raw, &Size, sizeof(RAWINPUTHEADER));
-    if (Bytes == static_cast<UINT>(-1) || Bytes < offsetof(RAWINPUT, data) + sizeof(RAWMOUSE) ||
-        Raw.header.dwType != RIM_TYPEMOUSE || (Raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) != 0 ||
-        (Raw.data.mouse.lLastX == 0 && Raw.data.mouse.lLastY == 0))
+    if (Bytes == static_cast<UINT>(-1) || Bytes < offsetof(RAWINPUT, data) + sizeof(RAWMOUSE) || Raw.header.dwType != RIM_TYPEMOUSE || (Raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) != 0 || (Raw.data.mouse.lLastX == 0 && Raw.data.mouse.lLastY == 0))
     {
         return;
     }
@@ -215,8 +200,7 @@ void FWindowsPlatformWindow::BeginMouseCapture()
     if (GetCapture() != Hwnd)
     {
         auto* const Logger = Log::GetLoggerOrCreate("Platform");
-        LE_LOG(Logger, Warn,
-            "Window {} could not acquire right-button mouse capture.", GetId());
+        LE_LOG(Logger, Warn, "Window {} could not acquire right-button mouse capture.", GetId());
         return;
     }
     bMouseCaptured = true;
@@ -263,14 +247,9 @@ void FWindowsPlatformWindow::RequestClose()
     }
 }
 
-LRESULT CALLBACK FWindowsPlatformWindow::WndProc(
-    const HWND WindowHandle,
-    const UINT Message,
-    const WPARAM WParam,
-    const LPARAM LParam)
+LRESULT CALLBACK FWindowsPlatformWindow::WndProc(const HWND WindowHandle, const UINT Message, const WPARAM WParam, const LPARAM LParam)
 {
-    FWindowsPlatformWindow* Window = reinterpret_cast<FWindowsPlatformWindow*>(
-        GetWindowLongPtrA(WindowHandle, GWLP_USERDATA));
+    FWindowsPlatformWindow* Window = reinterpret_cast<FWindowsPlatformWindow*>(GetWindowLongPtrA(WindowHandle, GWLP_USERDATA));
     if (Message == WM_NCCREATE)
     {
         CREATESTRUCTA* const Create = reinterpret_cast<CREATESTRUCTA*>(LParam);
@@ -284,128 +263,128 @@ LRESULT CALLBACK FWindowsPlatformWindow::WndProc(
 
     switch (Message)
     {
-        case WM_CLOSE:
-            if (Window != nullptr)
-            {
-                Window->RequestClose();
-            }
-            return 0;
+    case WM_CLOSE:
+        if (Window != nullptr)
+        {
+            Window->RequestClose();
+        }
+        return 0;
 
-        case WM_DESTROY:
-            if (Window != nullptr)
-            {
-                Window->RequestClose();
-                Window->UnregisterRawMouse();
-            }
-            return 0;
+    case WM_DESTROY:
+        if (Window != nullptr)
+        {
+            Window->RequestClose();
+            Window->UnregisterRawMouse();
+        }
+        return 0;
 
-        case WM_NCDESTROY:
-            SetWindowLongPtrA(WindowHandle, GWLP_USERDATA, 0);
-            if (Window != nullptr && Window->Hwnd == WindowHandle)
-            {
-                Window->Hwnd = nullptr;
-            }
-            return DefWindowProcA(WindowHandle, Message, WParam, LParam);
+    case WM_NCDESTROY:
+        SetWindowLongPtrA(WindowHandle, GWLP_USERDATA, 0);
+        if (Window != nullptr && Window->Hwnd == WindowHandle)
+        {
+            Window->Hwnd = nullptr;
+        }
+        return DefWindowProcA(WindowHandle, Message, WParam, LParam);
 
-        case WM_SIZE:
-            if (Window != nullptr)
-            {
-                const bool bWasMinimized = Window->bMinimized;
-                Window->Width = static_cast<uint32>(LOWORD(LParam));
-                Window->Height = static_cast<uint32>(HIWORD(LParam));
-                Window->bMinimized = WParam == SIZE_MINIMIZED;
+    case WM_SIZE:
+        if (Window != nullptr)
+        {
+            const bool bWasMinimized = Window->bMinimized;
+            Window->Width = static_cast<uint32>(LOWORD(LParam));
+            Window->Height = static_cast<uint32>(HIWORD(LParam));
+            Window->bMinimized = WParam == SIZE_MINIMIZED;
 
-                if (Window->bMinimized || Window->Width == 0 || Window->Height == 0)
-                {
-                    Window->CancelInput();
-                }
-                if (Window->bMinimized && !bWasMinimized)
-                {
-                    Window->PushEvent(EPlatformEventType::Minimized);
-                }
-                else if (!Window->bMinimized && bWasMinimized)
-                {
-                    Window->PushEvent(EPlatformEventType::Restored);
-                }
-                if (!Window->bMinimized)
-                {
-                    Window->PushEvent(EPlatformEventType::Resized);
-                }
-            }
-            return 0;
-
-        case WM_SETFOCUS:
-            if (Window != nullptr)
-            {
-                Window->bHasFocus = true;
-            }
-            break;
-
-        case WM_KILLFOCUS:
-            if (Window != nullptr)
-            {
-                Window->bHasFocus = false;
-                Window->CancelInput();
-            }
-            break;
-
-        case WM_CANCELMODE:
-            if (Window != nullptr)
+            if (Window->bMinimized || Window->Width == 0 || Window->Height == 0)
             {
                 Window->CancelInput();
             }
-            break;
+            if (Window->bMinimized && !bWasMinimized)
+            {
+                Window->PushEvent(EPlatformEventType::Minimized);
+            }
+            else if (!Window->bMinimized && bWasMinimized)
+            {
+                Window->PushEvent(EPlatformEventType::Restored);
+            }
+            if (!Window->bMinimized)
+            {
+                Window->PushEvent(EPlatformEventType::Resized);
+            }
+        }
+        return 0;
 
-        case WM_KEYDOWN:
+    case WM_SETFOCUS:
+        if (Window != nullptr)
+        {
+            Window->bHasFocus = true;
+        }
+        break;
+
+    case WM_KILLFOCUS:
+        if (Window != nullptr)
+        {
+            Window->bHasFocus = false;
+            Window->CancelInput();
+        }
+        break;
+
+    case WM_CANCELMODE:
+        if (Window != nullptr)
+        {
+            Window->CancelInput();
+        }
+        break;
+
+    case WM_KEYDOWN:
+        if (Window != nullptr)
+        {
+            Window->HandleKey(EPlatformEventType::KeyPressed, WParam, LParam);
+        }
+        break;
+
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+        if (Window != nullptr)
+        {
+            Window->HandleKey(EPlatformEventType::KeyReleased, WParam, LParam);
+        }
+        break;
+
+    case WM_RBUTTONDOWN:
+        if (Window != nullptr)
+        {
+            Window->BeginMouseCapture();
+        }
+        break;
+
+    case WM_RBUTTONUP:
+        if (Window != nullptr)
+        {
+            Window->EndMouseCapture();
+        }
+        break;
+
+    case WM_CAPTURECHANGED:
+        if (Window != nullptr && Window->bMouseCaptured)
+        {
+            Window->CancelInput();
+        }
+        break;
+
+    case WM_INPUT:
+        if (GET_RAWINPUT_CODE_WPARAM(WParam) == RIM_INPUT)
+        {
             if (Window != nullptr)
             {
-                Window->HandleKey(EPlatformEventType::KeyPressed, WParam, LParam);
+                Window->HandleRawMouse(reinterpret_cast<HRAWINPUT>(LParam));
             }
+            // DefWindowProc performs foreground raw-input cleanup.
             break;
+        }
+        return 0;
 
-        case WM_KEYUP:
-        case WM_SYSKEYUP:
-            if (Window != nullptr)
-            {
-                Window->HandleKey(EPlatformEventType::KeyReleased, WParam, LParam);
-            }
-            break;
-
-        case WM_RBUTTONDOWN:
-            if (Window != nullptr)
-            {
-                Window->BeginMouseCapture();
-            }
-            break;
-
-        case WM_RBUTTONUP:
-            if (Window != nullptr)
-            {
-                Window->EndMouseCapture();
-            }
-            break;
-
-        case WM_CAPTURECHANGED:
-            if (Window != nullptr && Window->bMouseCaptured)
-            {
-                Window->CancelInput();
-            }
-            break;
-
-        case WM_INPUT:
-            if (GET_RAWINPUT_CODE_WPARAM(WParam) == RIM_INPUT)
-            {
-                if (Window != nullptr)
-                {
-                    Window->HandleRawMouse(reinterpret_cast<HRAWINPUT>(LParam));
-                }
-                // DefWindowProc performs foreground raw-input cleanup.
-                break;
-            }
-            return 0;
-
-        default:
-            break;
+    default:
+        break;
     }
     return DefWindowProcA(WindowHandle, Message, WParam, LParam);
 }

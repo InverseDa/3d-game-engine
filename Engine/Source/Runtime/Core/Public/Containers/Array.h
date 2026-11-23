@@ -18,19 +18,16 @@ namespace LE
 
 // Allocator is a small value policy with Get() -> IAllocator&. The default
 // AllocatorRef retains the exact allocator identity used by the storage.
-template <typename T, typename Allocator = AllocatorRef>
-class Array
+template <typename T, typename Allocator = AllocatorRef> class Array
 {
 public:
     using ValueType = T;
     using SizeType = std::size_t;
 
-    template <bool IsConst>
-    class BasicIterator
+    template <bool IsConst> class BasicIterator
     {
         friend class Array;
-        template <bool>
-        friend class BasicIterator;
+        template <bool> friend class BasicIterator;
 
         using OwnerType = typename std::conditional<IsConst, const Array, Array>::type;
         using PointerType = typename std::conditional<IsConst, const T*, T*>::type;
@@ -46,20 +43,16 @@ public:
 
         template <bool OtherConst, typename std::enable_if<IsConst && !OtherConst, int>::type = 0>
         BasicIterator(const BasicIterator<OtherConst>& Other) noexcept
-            : Owner(Other.Owner)
-            , Index(Other.Index)
-            , StorageGeneration(Other.StorageGeneration)
+            : Owner(Other.Owner), Index(Other.Index), StorageGeneration(Other.StorageGeneration)
 #if !defined(NDEBUG)
-            , PositionToken(Other.PositionToken)
+              ,
+              PositionToken(Other.PositionToken)
 #endif
         {
         }
 
 #if !defined(NDEBUG)
-        bool IsValid() const noexcept
-        {
-            return Owner != nullptr && Owner->IsIteratorValid(*this, true);
-        }
+        bool IsValid() const noexcept { return Owner != nullptr && Owner->IsIteratorValid(*this, true); }
 #endif
 
         reference operator*() const
@@ -81,7 +74,12 @@ public:
             BindCurrentPosition();
             return *this;
         }
-        BasicIterator operator++(int) { BasicIterator Copy(*this); ++(*this); return Copy; }
+        BasicIterator operator++(int)
+        {
+            BasicIterator Copy(*this);
+            ++(*this);
+            return Copy;
+        }
         BasicIterator& operator--()
         {
             ValidatePosition(true);
@@ -93,31 +91,30 @@ public:
             BindCurrentPosition();
             return *this;
         }
-        BasicIterator operator--(int) { BasicIterator Copy(*this); --(*this); return Copy; }
-
-        template <bool OtherConst>
-        bool operator==(const BasicIterator<OtherConst>& Other) const noexcept
+        BasicIterator operator--(int)
         {
-            return Owner == Other.Owner && Index == Other.Index
-                && StorageGeneration == Other.StorageGeneration
+            BasicIterator Copy(*this);
+            --(*this);
+            return Copy;
+        }
+
+        template <bool OtherConst> bool operator==(const BasicIterator<OtherConst>& Other) const noexcept
+        {
+            return Owner == Other.Owner && Index == Other.Index && StorageGeneration == Other.StorageGeneration
 #if !defined(NDEBUG)
-                && PositionToken == Other.PositionToken;
+                   && PositionToken == Other.PositionToken;
 #else
                 ;
 #endif
         }
-        template <bool OtherConst>
-        bool operator!=(const BasicIterator<OtherConst>& Other) const noexcept { return !(*this == Other); }
+        template <bool OtherConst> bool operator!=(const BasicIterator<OtherConst>& Other) const noexcept { return !(*this == Other); }
 
     private:
         BasicIterator(OwnerType* const InOwner, const SizeType InIndex) noexcept
-            : Owner(InOwner)
-            , Index(InIndex)
-            , StorageGeneration(InOwner->StorageGeneration)
+            : Owner(InOwner), Index(InIndex), StorageGeneration(InOwner->StorageGeneration)
 #if !defined(NDEBUG)
-            , PositionToken(InIndex < InOwner->SizeValue
-                ? InOwner->IteratorTokens[InIndex]
-                : InOwner->EndToken)
+              ,
+              PositionToken(InIndex < InOwner->SizeValue ? InOwner->IteratorTokens[InIndex] : InOwner->EndToken)
 #endif
         {
         }
@@ -152,18 +149,11 @@ public:
 
     Array() noexcept = default;
 
-    explicit Array(const Allocator& InAllocator) noexcept
-        : AllocatorValue(InAllocator)
-    {
-    }
+    explicit Array(const Allocator& InAllocator) noexcept : AllocatorValue(InAllocator) {}
 
-    explicit Array(IAllocator& InAllocator) noexcept
-        : AllocatorValue(InAllocator)
-    {
-    }
+    explicit Array(IAllocator& InAllocator) noexcept : AllocatorValue(InAllocator) {}
 
-    Array(std::initializer_list<T> Items, const Allocator& InAllocator = Allocator())
-        : AllocatorValue(InAllocator)
+    Array(std::initializer_list<T> Items, const Allocator& InAllocator = Allocator()) : AllocatorValue(InAllocator)
     {
         Reserve(Items.size());
         for (const T& Item : Items)
@@ -179,11 +169,9 @@ public:
 #endif
     }
 
-    Array(const Array& Other)
-        : AllocatorValue(Other.AllocatorValue)
+    Array(const Array& Other) : AllocatorValue(Other.AllocatorValue)
     {
-        static_assert(std::is_copy_constructible<T>::value,
-            "copying LE::Array requires a copy-constructible element type");
+        static_assert(std::is_copy_constructible<T>::value, "copying LE::Array requires a copy-constructible element type");
         Reserve(Other.SizeValue);
         for (; SizeValue < Other.SizeValue; ++SizeValue)
         {
@@ -200,14 +188,14 @@ public:
     Array(Array&& Other) noexcept
         : DataValue(Other.DataValue)
 #if !defined(NDEBUG)
-        , IteratorTokens(Other.IteratorTokens)
+          ,
+          IteratorTokens(Other.IteratorTokens)
 #endif
-        , SizeValue(Other.SizeValue)
-        , CapacityValue(Other.CapacityValue)
-        , AllocatorValue(std::move(Other.AllocatorValue))
+          ,
+          SizeValue(Other.SizeValue), CapacityValue(Other.CapacityValue), AllocatorValue(std::move(Other.AllocatorValue))
 #if !defined(NDEBUG)
-        , NextTokenValue(Other.NextTokenValue)
-        , EndToken(Other.EndToken)
+          ,
+          NextTokenValue(Other.NextTokenValue), EndToken(Other.EndToken)
 #endif
     {
         Other.DataValue = nullptr;
@@ -219,15 +207,11 @@ public:
         Other.InvalidateStorage();
     }
 
-    ~Array()
-    {
-        DestroyAndDeallocate();
-    }
+    ~Array() { DestroyAndDeallocate(); }
 
     Array& operator=(const Array& Other)
     {
-        static_assert(std::is_copy_constructible<T>::value,
-            "copying LE::Array requires a copy-constructible element type");
+        static_assert(std::is_copy_constructible<T>::value, "copying LE::Array requires a copy-constructible element type");
         if (this != &Other)
         {
             Array Copy(Other);
@@ -302,10 +286,26 @@ public:
     T* TryGet(const SizeType Index) noexcept { return Index < SizeValue ? DataValue + Index : nullptr; }
     const T* TryGet(const SizeType Index) const noexcept { return Index < SizeValue ? DataValue + Index : nullptr; }
 
-    T& Front() { CheckNotEmpty(); return DataValue[0]; }
-    const T& Front() const { CheckNotEmpty(); return DataValue[0]; }
-    T& Back() { CheckNotEmpty(); return DataValue[SizeValue - 1]; }
-    const T& Back() const { CheckNotEmpty(); return DataValue[SizeValue - 1]; }
+    T& Front()
+    {
+        CheckNotEmpty();
+        return DataValue[0];
+    }
+    const T& Front() const
+    {
+        CheckNotEmpty();
+        return DataValue[0];
+    }
+    T& Back()
+    {
+        CheckNotEmpty();
+        return DataValue[SizeValue - 1];
+    }
+    const T& Back() const
+    {
+        CheckNotEmpty();
+        return DataValue[SizeValue - 1];
+    }
 
     Iterator begin() noexcept { return Iterator(this, 0); }
     Iterator end() noexcept { return Iterator(this, SizeValue); }
@@ -315,9 +315,9 @@ public:
     ConstIterator cend() const noexcept { return ConstIterator(this, SizeValue); }
 
     Span<T> AsSpan() & noexcept { return Span<T>(DataValue, SizeValue); }
-    Span<const T> AsSpan() const & noexcept { return Span<const T>(DataValue, SizeValue); }
+    Span<const T> AsSpan() const& noexcept { return Span<const T>(DataValue, SizeValue); }
     Span<T> AsSpan() && = delete;
-    Span<const T> AsSpan() const && = delete;
+    Span<const T> AsSpan() const&& = delete;
 
     bool TryReserve(const SizeType RequestedCapacity)
     {
@@ -337,8 +337,7 @@ public:
         }
 
 #if !defined(NDEBUG)
-        std::uint64_t* const NewIteratorTokens =
-            TryAllocateArray<std::uint64_t>(AllocatorValue.Get(), RequestedCapacity);
+        std::uint64_t* const NewIteratorTokens = TryAllocateArray<std::uint64_t>(AllocatorValue.Get(), RequestedCapacity);
         if (NewIteratorTokens == nullptr)
         {
             DeallocateArray(AllocatorValue.Get(), NewData, RequestedCapacity);
@@ -401,8 +400,7 @@ public:
             return false;
         }
 #if !defined(NDEBUG)
-        std::uint64_t* const NewIteratorTokens =
-            TryAllocateArray<std::uint64_t>(AllocatorValue.Get(), SizeValue);
+        std::uint64_t* const NewIteratorTokens = TryAllocateArray<std::uint64_t>(AllocatorValue.Get(), SizeValue);
         if (NewIteratorTokens == nullptr)
         {
             DeallocateArray(AllocatorValue.Get(), NewData, SizeValue);
@@ -437,8 +435,7 @@ public:
         }
     }
 
-    template <typename... Args>
-    bool TryEmplaceBack(Args&&... Arguments)
+    template <typename... Args> bool TryEmplaceBack(Args&&... Arguments)
     {
         // Stage constructor arguments before storage can move. Direct T
         // lvalue/rvalue overloads below preserve self-aliasing more precisely.
@@ -462,8 +459,7 @@ public:
     bool TryEmplaceBack(const T& Value) { return TryPushBack(Value); }
     bool TryEmplaceBack(T&& Value) { return TryPushBack(std::move(Value)); }
 
-    template <typename... Args>
-    T& EmplaceBack(Args&&... Arguments)
+    template <typename... Args> T& EmplaceBack(Args&&... Arguments)
     {
         if (!TryEmplaceBack(std::forward<Args>(Arguments)...))
         {
@@ -511,11 +507,17 @@ public:
 
     void Insert(const SizeType Index, const T& Value)
     {
-        if (!TryInsert(Index, Value)) { FailAllocationForOne(); }
+        if (!TryInsert(Index, Value))
+        {
+            FailAllocationForOne();
+        }
     }
     void Insert(const SizeType Index, T&& Value)
     {
-        if (!TryInsert(Index, std::move(Value))) { FailAllocationForOne(); }
+        if (!TryInsert(Index, std::move(Value)))
+        {
+            FailAllocationForOne();
+        }
     }
 
     void Erase(const SizeType Index, const SizeType Count = 1)
@@ -563,8 +565,7 @@ public:
 
     bool TryResize(const SizeType NewSize)
     {
-        static_assert(std::is_nothrow_default_constructible<T>::value,
-            "Array::Resize requires non-throwing default construction");
+        static_assert(std::is_nothrow_default_constructible<T>::value, "Array::Resize requires non-throwing default construction");
         if (NewSize < SizeValue)
         {
             Erase(NewSize, SizeValue - NewSize);
@@ -599,8 +600,7 @@ public:
 
     bool TryResize(const SizeType NewSize, const T& Value)
     {
-        static_assert(std::is_nothrow_copy_constructible<T>::value,
-            "Array::Resize fill requires non-throwing copy construction");
+        static_assert(std::is_nothrow_copy_constructible<T>::value, "Array::Resize fill requires non-throwing copy construction");
         if (NewSize <= SizeValue)
         {
             return TryResize(NewSize);
@@ -701,8 +701,7 @@ private:
 #endif
     }
 
-    template <bool IsConst>
-    bool IsIteratorValid(const BasicIterator<IsConst>& Candidate, const bool AllowEnd) const noexcept
+    template <bool IsConst> bool IsIteratorValid(const BasicIterator<IsConst>& Candidate, const bool AllowEnd) const noexcept
     {
         if (Candidate.Owner != this || Candidate.StorageGeneration != StorageGeneration)
         {
@@ -755,10 +754,7 @@ private:
         return TryReserve(NextCapacity(SizeValue + 1));
     }
 
-    [[noreturn]] void FailAllocationForOne() const
-    {
-        FailAllocation(SizeValue >= MaxSize() ? MaxSize() : NextCapacity(SizeValue + 1));
-    }
+    [[noreturn]] void FailAllocationForOne() const { FailAllocation(SizeValue >= MaxSize() ? MaxSize() : NextCapacity(SizeValue + 1)); }
 
     [[noreturn]] static void FailAllocation(const SizeType Capacity)
     {

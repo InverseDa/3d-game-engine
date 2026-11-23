@@ -5,11 +5,9 @@
 namespace LE
 {
 
-EDirectionalLightParameterError ValidateDirectionalLightParameters(const Math::Vector3f& Direction,
-    const Math::Vector3f& Color, const float Intensity) noexcept
+EDirectionalLightParameterError ValidateDirectionalLightParameters(const Math::Vector3f& Direction, const Math::Vector3f& Color, const float Intensity) noexcept
 {
-    if (!std::isfinite(Direction[0]) || !std::isfinite(Direction[1]) || !std::isfinite(Direction[2]) ||
-        (Direction[0] == 0.0f && Direction[1] == 0.0f && Direction[2] == 0.0f))
+    if (!std::isfinite(Direction[0]) || !std::isfinite(Direction[1]) || !std::isfinite(Direction[2]) || (Direction[0] == 0.0f && Direction[1] == 0.0f && Direction[2] == 0.0f))
     {
         return EDirectionalLightParameterError::Direction;
     }

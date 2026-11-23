@@ -88,11 +88,7 @@ void PrepareResources(const FRFGRecordedGraph& RecordedGraph, FRFGExecutionConte
     }
 }
 
-void ApplyBarriers(
-    const LE::Array<FRFGBarrierTransition>& Transitions,
-    const FRFGRecordedGraph& RecordedGraph,
-    FRFGExecutionContext& ExecutionContext,
-    LE::FRHICommandList* CommandList)
+void ApplyBarriers(const LE::Array<FRFGBarrierTransition>& Transitions, const FRFGRecordedGraph& RecordedGraph, FRFGExecutionContext& ExecutionContext, LE::FRHICommandList* CommandList)
 {
     if (Transitions.IsEmpty() || CommandList == nullptr)
     {
@@ -105,26 +101,15 @@ void ApplyBarriers(
 
     for (const FRFGBarrierTransition& Transition : Transitions)
     {
-        if (Transition.SrcQueue != ERFGQueueType::Graphics ||
-            Transition.DstQueue != ERFGQueueType::Graphics ||
-            Transition.SrcQueue != Transition.DstQueue)
+        if (Transition.SrcQueue != ERFGQueueType::Graphics || Transition.DstQueue != ERFGQueueType::Graphics || Transition.SrcQueue != Transition.DstQueue)
         {
-            LE_LOG(LogRFGExecute, Error,
-                "RFG barrier skipped: cross-queue transitions are not supported yet. ResourceId={}, SrcQueue={}, DstQueue={}.",
-                Transition.Resource.Id,
-                static_cast<uint32>(Transition.SrcQueue),
-                static_cast<uint32>(Transition.DstQueue));
+            LE_LOG(LogRFGExecute, Error, "RFG barrier skipped: cross-queue transitions are not supported yet. ResourceId={}, SrcQueue={}, DstQueue={}.", Transition.Resource.Id, static_cast<uint32>(Transition.SrcQueue), static_cast<uint32>(Transition.DstQueue));
             continue;
         }
 
-        if (Transition.BeforeState == LE::ERHIResourceState::Unknown ||
-            Transition.AfterState == LE::ERHIResourceState::Unknown)
+        if (Transition.BeforeState == LE::ERHIResourceState::Unknown || Transition.AfterState == LE::ERHIResourceState::Unknown)
         {
-            LE_LOG(LogRFGExecute, Error,
-                "RFG barrier skipped: resource state is Unknown. ResourceId={}, BeforeState={}, AfterState={}.",
-                Transition.Resource.Id,
-                static_cast<uint32>(Transition.BeforeState),
-                static_cast<uint32>(Transition.AfterState));
+            LE_LOG(LogRFGExecute, Error, "RFG barrier skipped: resource state is Unknown. ResourceId={}, BeforeState={}, AfterState={}.", Transition.Resource.Id, static_cast<uint32>(Transition.BeforeState), static_cast<uint32>(Transition.AfterState));
             continue;
         }
 
@@ -134,9 +119,7 @@ void ApplyBarriers(
             LE::FRHITexture* const* const Texture = ExecutionContext.TextureResources.Find(Transition.Resource.Id);
             if (Texture == nullptr || *Texture == nullptr)
             {
-                LE_LOG(LogRFGExecute, Error,
-                    "RFG texture barrier skipped: resource could not be resolved. ResourceId={}.",
-                    Transition.Resource.Id);
+                LE_LOG(LogRFGExecute, Error, "RFG texture barrier skipped: resource could not be resolved. ResourceId={}.", Transition.Resource.Id);
                 continue;
             }
 
@@ -157,9 +140,7 @@ void ApplyBarriers(
             LE::FRHIBuffer* const* const Buffer = ExecutionContext.BufferResources.Find(Transition.Resource.Id);
             if (Buffer == nullptr || *Buffer == nullptr)
             {
-                LE_LOG(LogRFGExecute, Error,
-                    "RFG buffer barrier skipped: resource could not be resolved. ResourceId={}.",
-                    Transition.Resource.Id);
+                LE_LOG(LogRFGExecute, Error, "RFG buffer barrier skipped: resource could not be resolved. ResourceId={}.", Transition.Resource.Id);
                 continue;
             }
 
@@ -180,24 +161,16 @@ void ApplyBarriers(
 }
 }
 
-ERHIQueueSubmitResult FRFGExecutor::Execute(
-    const FRFGCompiledPlan& CompiledPlan,
-    const FRFGRecordedGraph& RecordedGraph,
-    FRFGExecutionContext& ExecutionContext,
-    const FRFGExecuteOptions& ExecuteOptions) const
+ERHIQueueSubmitResult FRFGExecutor::Execute(const FRFGCompiledPlan& CompiledPlan, const FRFGRecordedGraph& RecordedGraph, FRFGExecutionContext& ExecutionContext, const FRFGExecuteOptions& ExecuteOptions) const
 {
     ERHIQueueSubmitResult SubmitResult = ERHIQueueSubmitResult::Success;
     PrepareResources(RecordedGraph, ExecutionContext);
 
-    const bool bHasOwnedTransientResources =
-        !ExecutionContext.OwnedTextures.IsEmpty() || !ExecutionContext.OwnedBuffers.IsEmpty();
-    const bool bCompletesSynchronously =
-        ExecuteOptions.bSubmitImmediately && ExecuteOptions.bWaitForCompletion;
-    if (bHasOwnedTransientResources && !bCompletesSynchronously &&
-        ExecuteOptions.DeferredReleaseSink == nullptr)
+    const bool bHasOwnedTransientResources = !ExecutionContext.OwnedTextures.IsEmpty() || !ExecutionContext.OwnedBuffers.IsEmpty();
+    const bool bCompletesSynchronously = ExecuteOptions.bSubmitImmediately && ExecuteOptions.bWaitForCompletion;
+    if (bHasOwnedTransientResources && !bCompletesSynchronously && ExecuteOptions.DeferredReleaseSink == nullptr)
     {
-        LE_LOG(LogRFGExecute, Error,
-            "Asynchronous RFG execution rejected: owned transients require a deferred-release sink.");
+        LE_LOG(LogRFGExecute, Error, "Asynchronous RFG execution rejected: owned transients require a deferred-release sink.");
         ExecutionContext.ResetTransientResources();
         return ERHIQueueSubmitResult::InvalidArguments;
     }
@@ -220,17 +193,14 @@ ERHIQueueSubmitResult FRFGExecutor::Execute(
             ExecutionContext.ResetTransientResources();
             return ERHIQueueSubmitResult::InvalidArguments;
         }
-        SubmitInfo = ExecuteOptions.SubmitInfo != nullptr
-            ? *ExecuteOptions.SubmitInfo
-            : LE::FRHISubmitInfo{};
+        SubmitInfo = ExecuteOptions.SubmitInfo != nullptr ? *ExecuteOptions.SubmitInfo : LE::FRHISubmitInfo{};
         if (ExecuteOptions.SubmitInfo == nullptr)
         {
             SubmitInfo.CmdList = CommandList;
         }
         if (SubmitInfo.CmdList != CommandList || !SubmitInfo.IsStructurallyValid())
         {
-            LE_LOG(LogRFGExecute, Error,
-                "RFG submit info must be structurally valid and reference the execution command list.");
+            LE_LOG(LogRFGExecute, Error, "RFG submit info must be structurally valid and reference the execution command list.");
             ExecutionContext.ResetTransientResources();
             return ERHIQueueSubmitResult::InvalidArguments;
         }
@@ -265,11 +235,9 @@ ERHIQueueSubmitResult FRFGExecutor::Execute(
 
     CommandList->End();
 
-    if (bHasOwnedTransientResources && !bCompletesSynchronously &&
-        !ExecutionContext.TransferTransientResources(*ExecuteOptions.DeferredReleaseSink))
+    if (bHasOwnedTransientResources && !bCompletesSynchronously && !ExecutionContext.TransferTransientResources(*ExecuteOptions.DeferredReleaseSink))
     {
-        LE_LOG(LogRFGExecute, Error,
-            "Asynchronous RFG execution rejected: deferred-release sink refused an owned transient.");
+        LE_LOG(LogRFGExecute, Error, "Asynchronous RFG execution rejected: deferred-release sink refused an owned transient.");
         return ERHIQueueSubmitResult::InvalidArguments;
     }
 
@@ -284,8 +252,7 @@ ERHIQueueSubmitResult FRFGExecutor::Execute(
         SubmitResult = SubmitQueue->Submit(SubmitInfo);
     }
 
-    if (ExecuteOptions.bSubmitImmediately && ExecuteOptions.bWaitForCompletion &&
-        SubmitResult == ERHIQueueSubmitResult::Success)
+    if (ExecuteOptions.bSubmitImmediately && ExecuteOptions.bWaitForCompletion && SubmitResult == ERHIQueueSubmitResult::Success)
     {
         SubmitQueue->WaitIdle();
     }

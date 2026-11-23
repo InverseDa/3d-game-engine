@@ -24,42 +24,22 @@ public:
     explicit String(IAllocator& Allocator) noexcept : AllocatorValue(Allocator) {}
     explicit String(const AllocatorRef Allocator) noexcept : AllocatorValue(Allocator) {}
 
-    String(const char* const NullTerminated) noexcept
-    {
-        Assign(StringView(NullTerminated));
-    }
+    String(const char* const NullTerminated) noexcept { Assign(StringView(NullTerminated)); }
 
-    String(const char* const Data, const SizeType Size) noexcept
-    {
-        Assign(StringView(Data, Size));
-    }
+    String(const char* const Data, const SizeType Size) noexcept { Assign(StringView(Data, Size)); }
 
-    String(const StringView View) noexcept
-    {
-        Assign(View);
-    }
+    String(const StringView View) noexcept { Assign(View); }
 
-    String(const String& Other) noexcept
-        : AllocatorValue(Other.AllocatorValue)
-    {
-        Assign(Other.View());
-    }
+    String(const String& Other) noexcept : AllocatorValue(Other.AllocatorValue) { Assign(Other.View()); }
 
-    String(String&& Other) noexcept
-        : DataValue(Other.DataValue)
-        , SizeValue(Other.SizeValue)
-        , CapacityValue(Other.CapacityValue)
-        , AllocatorValue(Other.AllocatorValue)
+    String(String&& Other) noexcept : DataValue(Other.DataValue), SizeValue(Other.SizeValue), CapacityValue(Other.CapacityValue), AllocatorValue(Other.AllocatorValue)
     {
         Other.DataValue = nullptr;
         Other.SizeValue = 0;
         Other.CapacityValue = 0;
     }
 
-    ~String()
-    {
-        Release();
-    }
+    ~String() { Release(); }
 
     String& operator=(const String& Other) noexcept
     {
@@ -144,9 +124,7 @@ public:
     {
         if (!TryReserve(RequestedCapacity))
         {
-            const SizeType Bytes = RequestedCapacity == (std::numeric_limits<SizeType>::max)()
-                ? RequestedCapacity
-                : RequestedCapacity + 1;
+            const SizeType Bytes = RequestedCapacity == (std::numeric_limits<SizeType>::max)() ? RequestedCapacity : RequestedCapacity + 1;
             HandleOutOfMemory(Bytes, alignof(char));
         }
     }
@@ -189,9 +167,7 @@ public:
     {
         if (!TryAssign(Source))
         {
-            const SizeType Bytes = Source.Size() == (std::numeric_limits<SizeType>::max)()
-                ? Source.Size()
-                : Source.Size() + 1;
+            const SizeType Bytes = Source.Size() == (std::numeric_limits<SizeType>::max)() ? Source.Size() : Source.Size() + 1;
             HandleOutOfMemory(Bytes, alignof(char));
         }
     }
@@ -254,14 +230,16 @@ public:
         if (!TryAppend(Suffix))
         {
             const SizeType Maximum = (std::numeric_limits<SizeType>::max)();
-            const SizeType Requested = Suffix.Size() >= Maximum - SizeValue
-                ? Maximum
-                : SizeValue + Suffix.Size() + 1;
+            const SizeType Requested = Suffix.Size() >= Maximum - SizeValue ? Maximum : SizeValue + Suffix.Size() + 1;
             HandleOutOfMemory(Requested, alignof(char));
         }
     }
 
-    String& operator+=(const StringView Suffix) noexcept { Append(Suffix); return *this; }
+    String& operator+=(const StringView Suffix) noexcept
+    {
+        Append(Suffix);
+        return *this;
+    }
     String& operator+=(const String& Suffix) noexcept { return *this += Suffix.View(); }
     String& operator+=(const char* const Suffix) noexcept { return *this += StringView(Suffix); }
 
@@ -304,15 +282,42 @@ private:
     AllocatorRef AllocatorValue;
 };
 
-inline bool operator==(const String& Left, const String& Right) noexcept { return Left.View() == Right.View(); }
-inline bool operator!=(const String& Left, const String& Right) noexcept { return !(Left == Right); }
-inline bool operator==(const String& Left, const StringView Right) noexcept { return Left.View() == Right; }
-inline bool operator==(const StringView Left, const String& Right) noexcept { return Left == Right.View(); }
-inline bool operator!=(const String& Left, const StringView Right) noexcept { return !(Left == Right); }
-inline bool operator!=(const StringView Left, const String& Right) noexcept { return !(Left == Right); }
-inline bool operator<(const String& Left, const String& Right) noexcept { return Left.View() < Right.View(); }
-inline bool operator<(const String& Left, const StringView Right) noexcept { return Left.View() < Right; }
-inline bool operator<(const StringView Left, const String& Right) noexcept { return Left < Right.View(); }
+inline bool operator==(const String& Left, const String& Right) noexcept
+{
+    return Left.View() == Right.View();
+}
+inline bool operator!=(const String& Left, const String& Right) noexcept
+{
+    return !(Left == Right);
+}
+inline bool operator==(const String& Left, const StringView Right) noexcept
+{
+    return Left.View() == Right;
+}
+inline bool operator==(const StringView Left, const String& Right) noexcept
+{
+    return Left == Right.View();
+}
+inline bool operator!=(const String& Left, const StringView Right) noexcept
+{
+    return !(Left == Right);
+}
+inline bool operator!=(const StringView Left, const String& Right) noexcept
+{
+    return !(Left == Right);
+}
+inline bool operator<(const String& Left, const String& Right) noexcept
+{
+    return Left.View() < Right.View();
+}
+inline bool operator<(const String& Left, const StringView Right) noexcept
+{
+    return Left.View() < Right;
+}
+inline bool operator<(const StringView Left, const String& Right) noexcept
+{
+    return Left < Right.View();
+}
 
 inline String operator+(const String& Left, const StringView Right) noexcept
 {
@@ -321,16 +326,16 @@ inline String operator+(const String& Left, const StringView Right) noexcept
     return Result;
 }
 
-inline String operator+(const String& Left, const String& Right) noexcept { return Left + Right.View(); }
+inline String operator+(const String& Left, const String& Right) noexcept
+{
+    return Left + Right.View();
+}
 
 struct StringHash
 {
     using is_transparent = void;
 
-    std::size_t operator()(const StringView Value) const noexcept
-    {
-        return HashStringBytes(Value);
-    }
+    std::size_t operator()(const StringView Value) const noexcept { return HashStringBytes(Value); }
 
     std::size_t operator()(const String& Value) const noexcept { return (*this)(Value.View()); }
     std::size_t operator()(const char* const Value) const noexcept { return (*this)(StringView(Value)); }
@@ -347,13 +352,11 @@ struct StringEqual
     bool operator()(const char* const Left, const String& Right) const noexcept { return StringView(Left) == Right; }
 };
 
-template <>
-struct DefaultHash<String> : StringHash
+template <> struct DefaultHash<String> : StringHash
 {
 };
 
-template <>
-struct DefaultEqual<String> : StringEqual
+template <> struct DefaultEqual<String> : StringEqual
 {
 };
 

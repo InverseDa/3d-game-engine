@@ -13,7 +13,8 @@
 #include <spdlog/details/windows_include.h>
 #endif
 
-namespace LE {
+namespace LE
+{
 
 spdlog::logger* s_CoreLogger = nullptr;
 std::vector<spdlog::sink_ptr> s_Sinks;
@@ -26,14 +27,30 @@ public:
         const char* tag = "INFO";
         switch (msg.level)
         {
-        case spdlog::level::trace:    tag = "Trace";   break;
-        case spdlog::level::debug:    tag = "Debug";   break;
-        case spdlog::level::info:     tag = "Info";    break;
-        case spdlog::level::warn:     tag = "WARNING"; break;
-        case spdlog::level::err:      tag = "ERROR";   break;
-        case spdlog::level::critical: tag = "FATAL";   break;
-        case spdlog::level::off:      tag = "OFF";     break;
-        default:                      tag = "Info";    break;
+        case spdlog::level::trace:
+            tag = "Trace";
+            break;
+        case spdlog::level::debug:
+            tag = "Debug";
+            break;
+        case spdlog::level::info:
+            tag = "Info";
+            break;
+        case spdlog::level::warn:
+            tag = "WARNING";
+            break;
+        case spdlog::level::err:
+            tag = "ERROR";
+            break;
+        case spdlog::level::critical:
+            tag = "FATAL";
+            break;
+        case spdlog::level::off:
+            tag = "OFF";
+            break;
+        default:
+            tag = "Info";
+            break;
         }
 
         const size_t len = std::char_traits<char>::length(tag);
@@ -42,10 +59,7 @@ public:
         dest.push_back(']');
     }
 
-    std::unique_ptr<spdlog::custom_flag_formatter> clone() const override
-    {
-        return std::make_unique<LevelTagFormatter>();
-    }
+    std::unique_ptr<spdlog::custom_flag_formatter> clone() const override { return std::make_unique<LevelTagFormatter>(); }
 };
 
 class LevelAnsiBeginFormatter final : public spdlog::custom_flag_formatter
@@ -56,10 +70,15 @@ public:
         const char* code = "";
         switch (msg.level)
         {
-        case spdlog::level::warn: code = "\x1b[33;1m"; break; // yellow
+        case spdlog::level::warn:
+            code = "\x1b[33;1m";
+            break; // yellow
         case spdlog::level::err:
-        case spdlog::level::critical: code = "\x1b[31;1m"; break; // red
-        default: break;
+        case spdlog::level::critical:
+            code = "\x1b[31;1m";
+            break; // red
+        default:
+            break;
         }
 
         if (code[0] != '\0')
@@ -68,10 +87,7 @@ public:
         }
     }
 
-    std::unique_ptr<spdlog::custom_flag_formatter> clone() const override
-    {
-        return std::make_unique<LevelAnsiBeginFormatter>();
-    }
+    std::unique_ptr<spdlog::custom_flag_formatter> clone() const override { return std::make_unique<LevelAnsiBeginFormatter>(); }
 };
 
 class LevelAnsiEndFormatter final : public spdlog::custom_flag_formatter
@@ -86,10 +102,7 @@ public:
         }
     }
 
-    std::unique_ptr<spdlog::custom_flag_formatter> clone() const override
-    {
-        return std::make_unique<LevelAnsiEndFormatter>();
-    }
+    std::unique_ptr<spdlog::custom_flag_formatter> clone() const override { return std::make_unique<LevelAnsiEndFormatter>(); }
 };
 
 void Log::Init()
@@ -108,8 +121,7 @@ void Log::Init()
 
     auto consoleSink = std::make_shared<spdlog::sinks::stdout_sink_mt>();
 
-    auto makeFormatter = [](const std::string& pattern)
-    {
+    auto makeFormatter = [](const std::string& pattern) {
         auto formatter = std::make_unique<spdlog::pattern_formatter>();
         formatter->add_flag<LevelAnsiBeginFormatter>('K');
         formatter->add_flag<LevelAnsiEndFormatter>('k');
@@ -123,7 +135,7 @@ void Log::Init()
     auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("Firefly.log", true);
     fileSink->set_formatter(makeFormatter("[%T] [%n] %q: %v"));
 
-    s_Sinks = { consoleSink, fileSink };
+    s_Sinks = {consoleSink, fileSink};
 
     std::shared_ptr<spdlog::logger> CoreLogger = std::make_shared<spdlog::logger>("CORE", begin(s_Sinks), end(s_Sinks));
     spdlog::register_logger(CoreLogger);
@@ -151,7 +163,8 @@ spdlog::logger* Log::GetLoggerOrCreate(const StringView Name)
     // keep that ownership at this exact third-party boundary.
     const std::string name(Name.Data() == nullptr ? "" : Name.Data(), Name.Size());
     auto logger = spdlog::get(name);
-    if (logger) {
+    if (logger)
+    {
         return logger.get();
     }
 

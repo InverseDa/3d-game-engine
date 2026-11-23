@@ -4,8 +4,7 @@
 namespace LE
 {
 
-FVulkanRHIQueue::FVulkanRHIQueue(FVulkanRHIDevice* InDevice, uint32 FamilyIndex, uint32 QueueIndex)
-	: Device(InDevice)
+FVulkanRHIQueue::FVulkanRHIQueue(FVulkanRHIDevice* InDevice, uint32 FamilyIndex, uint32 QueueIndex) : Device(InDevice)
 {
     if (Device == nullptr || Device->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
@@ -14,7 +13,7 @@ FVulkanRHIQueue::FVulkanRHIQueue(FVulkanRHIDevice* InDevice, uint32 FamilyIndex,
         return;
     }
 
-	vkGetDeviceQueue(Device->VkContext.LogicalDevice, FamilyIndex, QueueIndex, &this->Handle);
+    vkGetDeviceQueue(Device->VkContext.LogicalDevice, FamilyIndex, QueueIndex, &this->Handle);
     if (this->Handle == VK_NULL_HANDLE)
     {
         LE_LOG(LogRHI, Error, "vkGetDeviceQueue failed. FamilyIndex={}, QueueIndex={}", FamilyIndex, QueueIndex);
@@ -61,8 +60,7 @@ ERHIQueueSubmitResult FVulkanRHIQueue::Submit(const FRHISubmitInfo& SubmitInfo)
     auto* const CommandList = dynamic_cast<FVulkanRHICommandList*>(SubmitInfo.CmdList);
     if (SubmitInfo.CmdList != nullptr)
     {
-        if (CommandList == nullptr || CommandList->Device != Device ||
-            CommandList->Handle == VK_NULL_HANDLE || !CommandList->bExecutable)
+        if (CommandList == nullptr || CommandList->Device != Device || CommandList->Handle == VK_NULL_HANDLE || !CommandList->bExecutable)
         {
             LE_LOG(LogRHI, Error, "Submit rejected an invalid or non-executable command list.");
             return ERHIQueueSubmitResult::InvalidArguments;
@@ -75,14 +73,12 @@ ERHIQueueSubmitResult FVulkanRHIQueue::Submit(const FRHISubmitInfo& SubmitInfo)
     for (auto* Semaphore : SubmitInfo.WaitSemaphores)
     {
         const auto* VulkanSemaphore = dynamic_cast<FVulkanRHISemaphore*>(Semaphore);
-        if (VulkanSemaphore == nullptr || VulkanSemaphore->Device != Device ||
-            VulkanSemaphore->Handle == VK_NULL_HANDLE)
+        if (VulkanSemaphore == nullptr || VulkanSemaphore->Device != Device || VulkanSemaphore->Handle == VK_NULL_HANDLE)
         {
             LE_LOG(LogRHI, Error, "Submit rejected an invalid wait semaphore.");
             return ERHIQueueSubmitResult::InvalidArguments;
         }
-        if (!WaitSemaphores.TryPushBack(VulkanSemaphore->Handle) ||
-            !WaitStages.TryPushBack(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT))
+        if (!WaitSemaphores.TryPushBack(VulkanSemaphore->Handle) || !WaitStages.TryPushBack(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT))
         {
             return ERHIQueueSubmitResult::Error;
         }
@@ -91,8 +87,7 @@ ERHIQueueSubmitResult FVulkanRHIQueue::Submit(const FRHISubmitInfo& SubmitInfo)
     for (auto* Semaphore : SubmitInfo.SignalSemaphores)
     {
         const auto* VulkanSemaphore = dynamic_cast<FVulkanRHISemaphore*>(Semaphore);
-        if (VulkanSemaphore == nullptr || VulkanSemaphore->Device != Device ||
-            VulkanSemaphore->Handle == VK_NULL_HANDLE)
+        if (VulkanSemaphore == nullptr || VulkanSemaphore->Device != Device || VulkanSemaphore->Handle == VK_NULL_HANDLE)
         {
             LE_LOG(LogRHI, Error, "Submit rejected an invalid signal semaphore.");
             return ERHIQueueSubmitResult::InvalidArguments;

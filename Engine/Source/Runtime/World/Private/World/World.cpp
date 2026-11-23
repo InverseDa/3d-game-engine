@@ -36,11 +36,7 @@ FTransform CanonicalizeTransform(const FTransform& Transform) noexcept
 
 struct FRegisteredNativeGameplaySystem
 {
-    explicit FRegisteredNativeGameplaySystem(IAllocator& Allocator) noexcept
-        : Name(Allocator)
-        , Dependencies(Allocator)
-    {
-    }
+    explicit FRegisteredNativeGameplaySystem(IAllocator& Allocator) noexcept : Name(Allocator), Dependencies(Allocator) {}
 
     String Name;
     Array<String> Dependencies;
@@ -52,8 +48,7 @@ struct FRegisteredNativeGameplaySystem
 
 bool IsAsciiLetter(const char Character) noexcept
 {
-    return (Character >= 'A' && Character <= 'Z') ||
-        (Character >= 'a' && Character <= 'z');
+    return (Character >= 'A' && Character <= 'Z') || (Character >= 'a' && Character <= 'z');
 }
 
 bool IsAsciiDigit(const char Character) noexcept
@@ -70,8 +65,7 @@ bool IsValidNativeGameplaySystemName(const StringView Name) noexcept
     for (std::size_t Index = 0; Index < Name.Size(); ++Index)
     {
         const char Character = Name[Index];
-        if (!IsAsciiLetter(Character) && !IsAsciiDigit(Character) &&
-            Character != '.' && Character != '_' && Character != '-')
+        if (!IsAsciiLetter(Character) && !IsAsciiDigit(Character) && Character != '.' && Character != '_' && Character != '-')
         {
             return false;
         }
@@ -79,9 +73,7 @@ bool IsValidNativeGameplaySystemName(const StringView Name) noexcept
     return true;
 }
 
-std::size_t FindNativeGameplaySystemIndex(
-    const Array<FRegisteredNativeGameplaySystem>& Systems,
-    const StringView Name) noexcept
+std::size_t FindNativeGameplaySystemIndex(const Array<FRegisteredNativeGameplaySystem>& Systems, const StringView Name) noexcept
 {
     for (std::size_t Index = 0; Index < Systems.Size(); ++Index)
     {
@@ -99,13 +91,10 @@ double SaturatingAddFinite(const double Left, const double Right) noexcept
     return Left > Maximum - Right ? Maximum : Left + Right;
 }
 
-double NormalizeFixedAccumulator(
-    const double Value,
-    const double FixedDeltaSeconds) noexcept
+double NormalizeFixedAccumulator(const double Value, const double FixedDeltaSeconds) noexcept
 {
     const double Scale = std::fmax(1.0, std::fabs(Value / FixedDeltaSeconds));
-    const double Tolerance =
-        64.0 * std::numeric_limits<double>::epsilon() * Scale * FixedDeltaSeconds;
+    const double Tolerance = 64.0 * std::numeric_limits<double>::epsilon() * Scale * FixedDeltaSeconds;
     if (std::fabs(Value) <= Tolerance)
     {
         return 0.0;
@@ -118,14 +107,8 @@ uint64 AcquireWorldDomain() noexcept
     uint64 Candidate = GNextWorldDomain.load(std::memory_order_relaxed);
     while (Candidate != 0)
     {
-        const uint64 Next = Candidate == (std::numeric_limits<uint64>::max)()
-            ? uint64{0}
-            : Candidate + 1;
-        if (GNextWorldDomain.compare_exchange_weak(
-                Candidate,
-                Next,
-                std::memory_order_relaxed,
-                std::memory_order_relaxed))
+        const uint64 Next = Candidate == (std::numeric_limits<uint64>::max)() ? uint64{0} : Candidate + 1;
+        if (GNextWorldDomain.compare_exchange_weak(Candidate, Next, std::memory_order_relaxed, std::memory_order_relaxed))
         {
             return Candidate;
         }
@@ -137,20 +120,7 @@ uint64 AcquireWorldDomain() noexcept
 
 struct FWorld::FImpl
 {
-    explicit FImpl(IAllocator& InAllocator, const uint64 InWorldDomain) noexcept
-        : Allocator(&InAllocator)
-        , WorldDomain(InWorldDomain)
-        , EntitySlots(InAllocator)
-        , AliveEntities(InAllocator)
-        , TransformComponents(InAllocator)
-        , MeshComponents(InAllocator)
-        , CameraComponents(InAllocator)
-        , DirectionalLightComponents(InAllocator)
-        , NativeGameplaySystems(InAllocator)
-        , FixedSystemOrder(InAllocator)
-        , VariableSystemOrder(InAllocator)
-    {
-    }
+    explicit FImpl(IAllocator& InAllocator, const uint64 InWorldDomain) noexcept : Allocator(&InAllocator), WorldDomain(InWorldDomain), EntitySlots(InAllocator), AliveEntities(InAllocator), TransformComponents(InAllocator), MeshComponents(InAllocator), CameraComponents(InAllocator), DirectionalLightComponents(InAllocator), NativeGameplaySystems(InAllocator), FixedSystemOrder(InAllocator), VariableSystemOrder(InAllocator) {}
 
     IAllocator* Allocator = nullptr;
     uint64 WorldDomain = 0;
@@ -203,10 +173,7 @@ void DetachComponentStorage(FComponentStorageNode& Storage) noexcept
 
 } // namespace Detail
 
-FWorld::FWorld() noexcept
-    : FWorld(GetDefaultAllocator())
-{
-}
+FWorld::FWorld() noexcept : FWorld(GetDefaultAllocator()) {}
 
 FWorld::FWorld(IAllocator& Allocator) noexcept
 {
@@ -244,8 +211,7 @@ FWorld::FWorld(IAllocator& Allocator) noexcept
         return;
     }
 
-    FWorldCommandBuffer* const CommandStorage =
-        TryAllocateArray<FWorldCommandBuffer>(Allocator, 1);
+    FWorldCommandBuffer* const CommandStorage = TryAllocateArray<FWorldCommandBuffer>(Allocator, 1);
     if (CommandStorage == nullptr)
     {
         Impl->~FImpl();
@@ -253,8 +219,7 @@ FWorld::FWorld(IAllocator& Allocator) noexcept
         Impl = nullptr;
         return;
     }
-    FWorldCommandBuffer* const Commands =
-        new (CommandStorage) FWorldCommandBuffer(*this, Allocator);
+    FWorldCommandBuffer* const Commands = new (CommandStorage) FWorldCommandBuffer(*this, Allocator);
     if (!Commands->IsValid())
     {
         Commands->~FWorldCommandBuffer();
@@ -284,9 +249,7 @@ FWorld::~FWorld() noexcept
     }
 
     Impl->bStructurallyMutating = true;
-    for (FComponentStorageNode* Storage = Impl->FirstStorage;
-         Storage != nullptr;
-         Storage = Storage->Next)
+    for (FComponentStorageNode* Storage = Impl->FirstStorage; Storage != nullptr; Storage = Storage->Next)
     {
         Storage->ClearThunk(*Storage);
     }
@@ -335,13 +298,8 @@ bool FWorld::TryCreateEntity(FEntity& OutEntity) noexcept
             EndStructuralMutation();
             return false;
         }
-        const std::size_t RequestedCapacity = CurrentCapacity == 0
-            ? (MaximumCapacity < 4 ? MaximumCapacity : 4)
-            : (CurrentCapacity > MaximumCapacity / 2
-                ? MaximumCapacity
-                : CurrentCapacity * 2);
-        if (RequestedCapacity <= CurrentCapacity ||
-            !Impl->AliveEntities.TryReserve(RequestedCapacity))
+        const std::size_t RequestedCapacity = CurrentCapacity == 0 ? (MaximumCapacity < 4 ? MaximumCapacity : 4) : (CurrentCapacity > MaximumCapacity / 2 ? MaximumCapacity : CurrentCapacity * 2);
+        if (RequestedCapacity <= CurrentCapacity || !Impl->AliveEntities.TryReserve(RequestedCapacity))
         {
             EndStructuralMutation();
             return false;
@@ -358,8 +316,7 @@ bool FWorld::TryCreateEntity(FEntity& OutEntity) noexcept
     const FEntity Candidate{Slot, Impl->WorldDomain};
     if (!Impl->AliveEntities.TryPushBack(Candidate))
     {
-        HandleContractViolation(
-            "reserved World live-Entity append unexpectedly failed", __FILE__, __LINE__);
+        HandleContractViolation("reserved World live-Entity append unexpectedly failed", __FILE__, __LINE__);
     }
     OutEntity = Candidate;
     EndStructuralMutation();
@@ -375,9 +332,7 @@ bool FWorld::DestroyEntity(const FEntity Entity) noexcept
 
     static_cast<void>(RemoveTransformDuringStructuralMutation(Entity));
 
-    for (FComponentStorageNode* Storage = Impl->FirstStorage;
-         Storage != nullptr;
-         Storage = Storage->Next)
+    for (FComponentStorageNode* Storage = Impl->FirstStorage; Storage != nullptr; Storage = Storage->Next)
     {
         static_cast<void>(Storage->RemoveThunk(*Storage, Entity));
     }
@@ -408,8 +363,7 @@ bool FWorld::DestroyEntity(const FEntity Entity) noexcept
 
 bool FWorld::IsAlive(const FEntity Entity) const noexcept
 {
-    return IsValid() && Entity.WorldDomain == Impl->WorldDomain &&
-        Impl->EntitySlots.IsAlive(Entity.Slot);
+    return IsValid() && Entity.WorldDomain == Impl->WorldDomain && Impl->EntitySlots.IsAlive(Entity.Slot);
 }
 
 bool FWorld::Reset() noexcept
@@ -424,9 +378,7 @@ bool FWorld::Reset() noexcept
         return false;
     }
 
-    for (FComponentStorageNode* Storage = Impl->FirstStorage;
-         Storage != nullptr;
-         Storage = Storage->Next)
+    for (FComponentStorageNode* Storage = Impl->FirstStorage; Storage != nullptr; Storage = Storage->Next)
     {
         Storage->ClearThunk(*Storage);
     }
@@ -450,18 +402,18 @@ bool FWorld::Reset() noexcept
     return true;
 }
 
-EWorldTickResult FWorld::BeginTick(
-    const FWorldTickContext& Context,
-    FWorldCommandFlushResult* const OutFlushResult) noexcept
+EWorldTickResult FWorld::BeginTick(const FWorldTickContext& Context, FWorldCommandFlushResult* const OutFlushResult) noexcept
 {
-    if (!IsValid()) return EWorldTickResult::InvalidWorld;
+    if (!IsValid())
+    {
+        return EWorldTickResult::InvalidWorld;
+    }
     if (Impl->TickState != EWorldTickState::Idle || Impl->bStructurallyMutating)
+    {
         return EWorldTickResult::InvalidState;
-    if (!std::isfinite(Context.DeltaSeconds) || !std::isfinite(Context.ElapsedSeconds) ||
-        Context.DeltaSeconds < 0.0 || Context.ElapsedSeconds < 0.0 ||
-        (Impl->bHasTickContext &&
-            (Context.FrameIndex <= Impl->TickContext.FrameIndex ||
-             Context.ElapsedSeconds < Impl->TickContext.ElapsedSeconds)))
+    }
+    const bool bInvalidTime = !std::isfinite(Context.DeltaSeconds) || !std::isfinite(Context.ElapsedSeconds) || Context.DeltaSeconds < 0.0 || Context.ElapsedSeconds < 0.0;
+    if (bInvalidTime || (Impl->bHasTickContext && (Context.FrameIndex <= Impl->TickContext.FrameIndex || Context.ElapsedSeconds < Impl->TickContext.ElapsedSeconds)))
     {
         return EWorldTickResult::InvalidContext;
     }
@@ -470,7 +422,10 @@ EWorldTickResult FWorld::BeginTick(
     const FWorldCommandFlushResult FlushResult = Impl->CommandBuffer->Flush();
     if (!UpdateTransforms())
     {
-        if (OutFlushResult != nullptr) *OutFlushResult = FlushResult;
+        if (OutFlushResult != nullptr)
+        {
+            *OutFlushResult = FlushResult;
+        }
         Impl->TickState = EWorldTickState::Idle;
         return EWorldTickResult::TransformUpdateFailed;
     }
@@ -478,28 +433,37 @@ EWorldTickResult FWorld::BeginTick(
     Impl->bHasTickContext = true;
     Impl->bGameplaySystemsUpdatedThisTick = false;
     Impl->TickState = EWorldTickState::Updating;
-    if (OutFlushResult != nullptr) *OutFlushResult = FlushResult;
-    return FlushResult.Succeeded()
-        ? EWorldTickResult::Success
-        : EWorldTickResult::CompletedWithCommandFailures;
+    if (OutFlushResult != nullptr)
+    {
+        *OutFlushResult = FlushResult;
+    }
+    return FlushResult.Succeeded() ? EWorldTickResult::Success : EWorldTickResult::CompletedWithCommandFailures;
 }
 
-EWorldTickResult FWorld::EndTick(
-    FWorldCommandFlushResult* const OutFlushResult) noexcept
+EWorldTickResult FWorld::EndTick(FWorldCommandFlushResult* const OutFlushResult) noexcept
 {
-    if (!IsValid()) return EWorldTickResult::InvalidWorld;
+    if (!IsValid())
+    {
+        return EWorldTickResult::InvalidWorld;
+    }
     if (Impl->TickState != EWorldTickState::Updating || Impl->bStructurallyMutating)
+    {
         return EWorldTickResult::InvalidState;
+    }
 
     Impl->TickState = EWorldTickState::Flushing;
     const FWorldCommandFlushResult FlushResult = Impl->CommandBuffer->Flush();
     const bool bTransformsUpdated = UpdateTransforms();
     Impl->TickState = EWorldTickState::Idle;
-    if (OutFlushResult != nullptr) *OutFlushResult = FlushResult;
-    if (!bTransformsUpdated) return EWorldTickResult::TransformUpdateFailed;
-    return FlushResult.Succeeded()
-        ? EWorldTickResult::Success
-        : EWorldTickResult::CompletedWithCommandFailures;
+    if (OutFlushResult != nullptr)
+    {
+        *OutFlushResult = FlushResult;
+    }
+    if (!bTransformsUpdated)
+    {
+        return EWorldTickResult::TransformUpdateFailed;
+    }
+    return FlushResult.Succeeded() ? EWorldTickResult::Success : EWorldTickResult::CompletedWithCommandFailures;
 }
 
 EWorldTickState FWorld::GetTickState() const noexcept
@@ -509,7 +473,11 @@ EWorldTickState FWorld::GetTickState() const noexcept
 
 bool FWorld::TryGetTickContext(FWorldTickContext& OutContext) const noexcept
 {
-    if (!IsValid() || !Impl->bHasTickContext) return false;
+    if (!IsValid() || !Impl->bHasTickContext)
+    {
+        return false;
+    }
+
     OutContext = Impl->TickContext;
     return true;
 }
@@ -524,21 +492,21 @@ const FWorldCommandBuffer* FWorld::GetCommandBuffer() const noexcept
     return IsValid() ? Impl->CommandBuffer : nullptr;
 }
 
-ENativeGameplaySystemRegisterResult FWorld::RegisterNativeGameplaySystem(
-    const FNativeGameplaySystemDescriptor& Descriptor) noexcept
+ENativeGameplaySystemRegisterResult FWorld::RegisterNativeGameplaySystem(const FNativeGameplaySystemDescriptor& Descriptor) noexcept
 {
-    if (!IsValid()) return ENativeGameplaySystemRegisterResult::InvalidWorld;
+    if (!IsValid())
+    {
+        return ENativeGameplaySystemRegisterResult::InvalidWorld;
+    }
     if (Impl->TickState != EWorldTickState::Idle || Impl->bExecutingGameplaySystems)
+    {
         return ENativeGameplaySystemRegisterResult::InvalidState;
-    if (!IsValidNativeGameplaySystemName(Descriptor.Name) || Descriptor.Update == nullptr ||
-        (Descriptor.Phase != ENativeGameplaySystemPhase::Fixed &&
-         Descriptor.Phase != ENativeGameplaySystemPhase::Variable))
+    }
+    if (!IsValidNativeGameplaySystemName(Descriptor.Name) || Descriptor.Update == nullptr || (Descriptor.Phase != ENativeGameplaySystemPhase::Fixed && Descriptor.Phase != ENativeGameplaySystemPhase::Variable))
     {
         return ENativeGameplaySystemRegisterResult::InvalidDescriptor;
     }
-    for (std::size_t DependencyIndex = 0;
-         DependencyIndex < Descriptor.Dependencies.Size();
-         ++DependencyIndex)
+    for (std::size_t DependencyIndex = 0; DependencyIndex < Descriptor.Dependencies.Size(); ++DependencyIndex)
     {
         const StringView Dependency = Descriptor.Dependencies[DependencyIndex];
         if (!IsValidNativeGameplaySystemName(Dependency))
@@ -553,8 +521,7 @@ ENativeGameplaySystemRegisterResult FWorld::RegisterNativeGameplaySystem(
             }
         }
     }
-    if (FindNativeGameplaySystemIndex(Impl->NativeGameplaySystems, Descriptor.Name) !=
-        Impl->NativeGameplaySystems.Size())
+    if (FindNativeGameplaySystemIndex(Impl->NativeGameplaySystems, Descriptor.Name) != Impl->NativeGameplaySystems.Size())
     {
         return ENativeGameplaySystemRegisterResult::DuplicateName;
     }
@@ -564,16 +531,14 @@ ENativeGameplaySystemRegisterResult FWorld::RegisterNativeGameplaySystem(
     Candidate.Update = Descriptor.Update;
     Candidate.Phase = Descriptor.Phase;
     Candidate.bEnabled = Descriptor.bEnabled;
-    if (!Candidate.Name.TryAssign(Descriptor.Name) ||
-        !Candidate.Dependencies.TryReserve(Descriptor.Dependencies.Size()))
+    if (!Candidate.Name.TryAssign(Descriptor.Name) || !Candidate.Dependencies.TryReserve(Descriptor.Dependencies.Size()))
     {
         return ENativeGameplaySystemRegisterResult::OutOfMemory;
     }
     for (const StringView DependencyView : Descriptor.Dependencies)
     {
         String Dependency(*Impl->Allocator);
-        if (!Dependency.TryAssign(DependencyView) ||
-            !Candidate.Dependencies.TryPushBack(std::move(Dependency)))
+        if (!Dependency.TryAssign(DependencyView) || !Candidate.Dependencies.TryPushBack(std::move(Dependency)))
         {
             return ENativeGameplaySystemRegisterResult::OutOfMemory;
         }
@@ -589,15 +554,21 @@ ENativeGameplaySystemRegisterResult FWorld::RegisterNativeGameplaySystem(
     return ENativeGameplaySystemRegisterResult::Success;
 }
 
-ENativeGameplaySystemUnregisterResult FWorld::UnregisterNativeGameplaySystem(
-    const StringView Name) noexcept
+ENativeGameplaySystemUnregisterResult FWorld::UnregisterNativeGameplaySystem(const StringView Name) noexcept
 {
-    if (!IsValid()) return ENativeGameplaySystemUnregisterResult::InvalidWorld;
+    if (!IsValid())
+    {
+        return ENativeGameplaySystemUnregisterResult::InvalidWorld;
+    }
     if (Impl->TickState != EWorldTickState::Idle || Impl->bExecutingGameplaySystems)
+    {
         return ENativeGameplaySystemUnregisterResult::InvalidState;
+    }
     const std::size_t Index = FindNativeGameplaySystemIndex(Impl->NativeGameplaySystems, Name);
     if (Index == Impl->NativeGameplaySystems.Size())
+    {
         return ENativeGameplaySystemUnregisterResult::NotFound;
+    }
     Impl->NativeGameplaySystems.Erase(Index);
     Impl->bGameplayScheduleDirty = true;
     Impl->GameplayDiagnosticSystemIndex = (std::numeric_limits<std::size_t>::max)();
@@ -605,31 +576,37 @@ ENativeGameplaySystemUnregisterResult FWorld::UnregisterNativeGameplaySystem(
     return ENativeGameplaySystemUnregisterResult::Success;
 }
 
-ENativeGameplaySystemEnableResult FWorld::SetNativeGameplaySystemEnabled(
-    const StringView Name,
-    const bool bEnabled) noexcept
+ENativeGameplaySystemEnableResult FWorld::SetNativeGameplaySystemEnabled(const StringView Name, const bool bEnabled) noexcept
 {
-    if (!IsValid()) return ENativeGameplaySystemEnableResult::InvalidWorld;
+    if (!IsValid())
+    {
+        return ENativeGameplaySystemEnableResult::InvalidWorld;
+    }
     if (Impl->TickState != EWorldTickState::Idle || Impl->bExecutingGameplaySystems)
+    {
         return ENativeGameplaySystemEnableResult::InvalidState;
+    }
     const std::size_t Index = FindNativeGameplaySystemIndex(Impl->NativeGameplaySystems, Name);
     if (Index == Impl->NativeGameplaySystems.Size())
+    {
         return ENativeGameplaySystemEnableResult::NotFound;
+    }
     Impl->NativeGameplaySystems[Index].bEnabled = bEnabled;
     return ENativeGameplaySystemEnableResult::Success;
 }
 
-ENativeGameplayFixedStepConfigResult FWorld::ConfigureNativeGameplayFixedStep(
-    const FNativeGameplayFixedStepConfig& Config) noexcept
+ENativeGameplayFixedStepConfigResult FWorld::ConfigureNativeGameplayFixedStep(const FNativeGameplayFixedStepConfig& Config) noexcept
 {
-    if (!IsValid()) return ENativeGameplayFixedStepConfigResult::InvalidWorld;
+    if (!IsValid())
+    {
+        return ENativeGameplayFixedStepConfigResult::InvalidWorld;
+    }
     if (Impl->TickState != EWorldTickState::Idle || Impl->bExecutingGameplaySystems)
+    {
         return ENativeGameplayFixedStepConfigResult::InvalidState;
-    const double MaximumAccumulatedSeconds =
-        Config.FixedDeltaSeconds * static_cast<double>(Config.MaxSubsteps);
-    if (!std::isfinite(Config.FixedDeltaSeconds) || Config.FixedDeltaSeconds <= 0.0 ||
-        Config.MaxSubsteps == 0 || Config.MaxSubsteps > MaxNativeGameplayFixedSubsteps ||
-        !std::isfinite(MaximumAccumulatedSeconds))
+    }
+    const double MaximumAccumulatedSeconds = Config.FixedDeltaSeconds * static_cast<double>(Config.MaxSubsteps);
+    if (!std::isfinite(Config.FixedDeltaSeconds) || Config.FixedDeltaSeconds <= 0.0 || Config.MaxSubsteps == 0 || Config.MaxSubsteps > MaxNativeGameplayFixedSubsteps || !std::isfinite(MaximumAccumulatedSeconds))
     {
         return ENativeGameplayFixedStepConfigResult::InvalidConfig;
     }
@@ -643,24 +620,23 @@ ENativeGameplayFixedStepConfigResult FWorld::ConfigureNativeGameplayFixedStep(
 
 ENativeGameplayScheduleResult FWorld::CompileNativeGameplaySystemSchedule() noexcept
 {
-    if (!IsValid()) return ENativeGameplayScheduleResult::InvalidWorld;
+    if (!IsValid())
+    {
+        return ENativeGameplayScheduleResult::InvalidWorld;
+    }
     if (Impl->TickState != EWorldTickState::Idle || Impl->bExecutingGameplaySystems)
+    {
         return ENativeGameplayScheduleResult::InvalidState;
+    }
 
     Impl->GameplayDiagnosticSystemIndex = (std::numeric_limits<std::size_t>::max)();
     Impl->GameplayDiagnosticDependencyIndex = (std::numeric_limits<std::size_t>::max)();
-    for (std::size_t SystemIndex = 0;
-         SystemIndex < Impl->NativeGameplaySystems.Size();
-         ++SystemIndex)
+    for (std::size_t SystemIndex = 0; SystemIndex < Impl->NativeGameplaySystems.Size(); ++SystemIndex)
     {
-        const FRegisteredNativeGameplaySystem& System =
-            Impl->NativeGameplaySystems[SystemIndex];
-        for (std::size_t DependencyIndex = 0;
-             DependencyIndex < System.Dependencies.Size();
-             ++DependencyIndex)
+        const FRegisteredNativeGameplaySystem& System = Impl->NativeGameplaySystems[SystemIndex];
+        for (std::size_t DependencyIndex = 0; DependencyIndex < System.Dependencies.Size(); ++DependencyIndex)
         {
-            const std::size_t FoundIndex = FindNativeGameplaySystemIndex(
-                Impl->NativeGameplaySystems, System.Dependencies[DependencyIndex]);
+            const std::size_t FoundIndex = FindNativeGameplaySystemIndex(Impl->NativeGameplaySystems, System.Dependencies[DependencyIndex]);
             if (FoundIndex == Impl->NativeGameplaySystems.Size())
             {
                 Impl->GameplayDiagnosticSystemIndex = SystemIndex;
@@ -679,33 +655,29 @@ ENativeGameplayScheduleResult FWorld::CompileNativeGameplaySystemSchedule() noex
     Array<std::size_t> CandidateFixedOrder(*Impl->Allocator);
     Array<std::size_t> CandidateVariableOrder(*Impl->Allocator);
     Array<uint8> Planned(*Impl->Allocator);
-    if (!CandidateFixedOrder.TryReserve(Impl->NativeGameplaySystems.Size()) ||
-        !CandidateVariableOrder.TryReserve(Impl->NativeGameplaySystems.Size()) ||
-        !Planned.TryResize(Impl->NativeGameplaySystems.Size()))
+    if (!CandidateFixedOrder.TryReserve(Impl->NativeGameplaySystems.Size()) || !CandidateVariableOrder.TryReserve(Impl->NativeGameplaySystems.Size()) || !Planned.TryResize(Impl->NativeGameplaySystems.Size()))
     {
         return ENativeGameplayScheduleResult::OutOfMemory;
     }
 
-    for (const ENativeGameplaySystemPhase Phase :
-         {ENativeGameplaySystemPhase::Fixed, ENativeGameplaySystemPhase::Variable})
+    for (const ENativeGameplaySystemPhase Phase : {ENativeGameplaySystemPhase::Fixed, ENativeGameplaySystemPhase::Variable})
     {
         std::size_t PhaseSystemCount = 0;
         std::size_t PlannedPhaseSystemCount = 0;
         for (const FRegisteredNativeGameplaySystem& System : Impl->NativeGameplaySystems)
         {
-            if (System.Phase == Phase) ++PhaseSystemCount;
+            if (System.Phase == Phase)
+            {
+                ++PhaseSystemCount;
+            }
         }
-        Array<std::size_t>& CandidateOrder = Phase == ENativeGameplaySystemPhase::Fixed
-            ? CandidateFixedOrder : CandidateVariableOrder;
+        Array<std::size_t>& CandidateOrder = Phase == ENativeGameplaySystemPhase::Fixed ? CandidateFixedOrder : CandidateVariableOrder;
         while (PlannedPhaseSystemCount < PhaseSystemCount)
         {
             std::size_t SelectedIndex = Impl->NativeGameplaySystems.Size();
-            for (std::size_t SystemIndex = 0;
-                 SystemIndex < Impl->NativeGameplaySystems.Size();
-                 ++SystemIndex)
+            for (std::size_t SystemIndex = 0; SystemIndex < Impl->NativeGameplaySystems.Size(); ++SystemIndex)
             {
-                const FRegisteredNativeGameplaySystem& Candidate =
-                    Impl->NativeGameplaySystems[SystemIndex];
+                const FRegisteredNativeGameplaySystem& Candidate = Impl->NativeGameplaySystems[SystemIndex];
                 if (Candidate.Phase != Phase || Planned[SystemIndex] != 0)
                 {
                     continue;
@@ -713,33 +685,24 @@ ENativeGameplayScheduleResult FWorld::CompileNativeGameplaySystemSchedule() noex
                 bool bReady = true;
                 for (const String& Dependency : Candidate.Dependencies)
                 {
-                    const std::size_t DependencySystemIndex = FindNativeGameplaySystemIndex(
-                        Impl->NativeGameplaySystems, Dependency);
+                    const std::size_t DependencySystemIndex = FindNativeGameplaySystemIndex(Impl->NativeGameplaySystems, Dependency);
                     if (Planned[DependencySystemIndex] == 0)
                     {
                         bReady = false;
                         break;
                     }
                 }
-                if (bReady && (SelectedIndex == Impl->NativeGameplaySystems.Size() ||
-                    Candidate.Name < Impl->NativeGameplaySystems[SelectedIndex].Name))
+                if (bReady && (SelectedIndex == Impl->NativeGameplaySystems.Size() || Candidate.Name < Impl->NativeGameplaySystems[SelectedIndex].Name))
                 {
                     SelectedIndex = SystemIndex;
                 }
             }
             if (SelectedIndex == Impl->NativeGameplaySystems.Size())
             {
-                for (std::size_t SystemIndex = 0;
-                     SystemIndex < Impl->NativeGameplaySystems.Size();
-                     ++SystemIndex)
+                for (std::size_t SystemIndex = 0; SystemIndex < Impl->NativeGameplaySystems.Size(); ++SystemIndex)
                 {
-                    const FRegisteredNativeGameplaySystem& Candidate =
-                        Impl->NativeGameplaySystems[SystemIndex];
-                    if (Candidate.Phase == Phase && Planned[SystemIndex] == 0 &&
-                        (Impl->GameplayDiagnosticSystemIndex ==
-                            (std::numeric_limits<std::size_t>::max)() ||
-                         Candidate.Name < Impl->NativeGameplaySystems[
-                            Impl->GameplayDiagnosticSystemIndex].Name))
+                    const FRegisteredNativeGameplaySystem& Candidate = Impl->NativeGameplaySystems[SystemIndex];
+                    if (Candidate.Phase == Phase && Planned[SystemIndex] == 0 && (Impl->GameplayDiagnosticSystemIndex == (std::numeric_limits<std::size_t>::max)() || Candidate.Name < Impl->NativeGameplaySystems[Impl->GameplayDiagnosticSystemIndex].Name))
                     {
                         Impl->GameplayDiagnosticSystemIndex = SystemIndex;
                     }
@@ -762,12 +725,13 @@ ENativeGameplayScheduleResult FWorld::CompileNativeGameplaySystemSchedule() noex
     return ENativeGameplayScheduleResult::Success;
 }
 
-ENativeGameplayUpdateResult FWorld::UpdateNativeGameplaySystems(
-    FNativeGameplayUpdateReport* const OutReport) noexcept
+ENativeGameplayUpdateResult FWorld::UpdateNativeGameplaySystems(FNativeGameplayUpdateReport* const OutReport) noexcept
 {
-    if (!IsValid()) return ENativeGameplayUpdateResult::InvalidWorld;
-    if (Impl->TickState != EWorldTickState::Updating || Impl->bExecutingGameplaySystems ||
-        Impl->bGameplaySystemsUpdatedThisTick)
+    if (!IsValid())
+    {
+        return ENativeGameplayUpdateResult::InvalidWorld;
+    }
+    if (Impl->TickState != EWorldTickState::Updating || Impl->bExecutingGameplaySystems || Impl->bGameplaySystemsUpdatedThisTick)
     {
         return ENativeGameplayUpdateResult::InvalidState;
     }
@@ -779,10 +743,8 @@ ENativeGameplayUpdateResult FWorld::UpdateNativeGameplaySystems(
     Impl->bGameplaySystemsUpdatedThisTick = true;
     Impl->bExecutingGameplaySystems = true;
     FNativeGameplayUpdateReport Report;
-    const double MaximumAccumulatedSeconds = Impl->FixedStepConfig.FixedDeltaSeconds *
-        static_cast<double>(Impl->FixedStepConfig.MaxSubsteps);
-    const double TotalSeconds = SaturatingAddFinite(
-        Impl->FixedAccumulatorSeconds, Impl->TickContext.DeltaSeconds);
+    const double MaximumAccumulatedSeconds = Impl->FixedStepConfig.FixedDeltaSeconds * static_cast<double>(Impl->FixedStepConfig.MaxSubsteps);
+    const double TotalSeconds = SaturatingAddFinite(Impl->FixedAccumulatorSeconds, Impl->TickContext.DeltaSeconds);
     if (TotalSeconds > MaximumAccumulatedSeconds)
     {
         Report.DroppedSeconds = TotalSeconds - MaximumAccumulatedSeconds;
@@ -793,14 +755,17 @@ ENativeGameplayUpdateResult FWorld::UpdateNativeGameplaySystems(
         Impl->FixedAccumulatorSeconds = TotalSeconds;
     }
 
-    const double Ratio = Impl->FixedAccumulatorSeconds /
-        Impl->FixedStepConfig.FixedDeltaSeconds;
-    const double RatioTolerance = 64.0 * std::numeric_limits<double>::epsilon() *
-        std::fmax(1.0, std::fabs(Ratio));
+    const double Ratio = Impl->FixedAccumulatorSeconds / Impl->FixedStepConfig.FixedDeltaSeconds;
+    const double RatioTolerance = 64.0 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::fabs(Ratio));
     double DueStepValue = std::floor(Ratio + RatioTolerance);
-    if (DueStepValue < 0.0) DueStepValue = 0.0;
+    if (DueStepValue < 0.0)
+    {
+        DueStepValue = 0.0;
+    }
     if (DueStepValue > static_cast<double>(Impl->FixedStepConfig.MaxSubsteps))
+    {
         DueStepValue = static_cast<double>(Impl->FixedStepConfig.MaxSubsteps);
+    }
     const uint32 DueSteps = static_cast<uint32>(DueStepValue);
 
     ENativeGameplayUpdateResult Result = ENativeGameplayUpdateResult::Success;
@@ -812,16 +777,17 @@ ENativeGameplayUpdateResult FWorld::UpdateNativeGameplaySystems(
             break;
         }
         ++Report.FixedStepsAttempted;
-        Impl->FixedAccumulatorSeconds = NormalizeFixedAccumulator(
-            Impl->FixedAccumulatorSeconds - Impl->FixedStepConfig.FixedDeltaSeconds,
-            Impl->FixedStepConfig.FixedDeltaSeconds);
+        Impl->FixedAccumulatorSeconds = NormalizeFixedAccumulator(Impl->FixedAccumulatorSeconds - Impl->FixedStepConfig.FixedDeltaSeconds, Impl->FixedStepConfig.FixedDeltaSeconds);
         const uint64 FixedTickIndex = Impl->NextFixedTickIndex;
         if (FixedTickIndex == Impl->FixedStepConfig.LastFixedTickIndex)
+        {
             Impl->bFixedTimelineExhausted = true;
+        }
         else
+        {
             ++Impl->NextFixedTickIndex;
-        Impl->FixedSimulationSeconds = SaturatingAddFinite(
-            Impl->FixedSimulationSeconds, Impl->FixedStepConfig.FixedDeltaSeconds);
+        }
+        Impl->FixedSimulationSeconds = SaturatingAddFinite(Impl->FixedSimulationSeconds, Impl->FixedStepConfig.FixedDeltaSeconds);
 
         FNativeGameplaySystemUpdateContext Context;
         Context.World = this;
@@ -837,12 +803,13 @@ ENativeGameplayUpdateResult FWorld::UpdateNativeGameplaySystems(
         bool bStepSucceeded = true;
         for (const std::size_t SystemIndex : Impl->FixedSystemOrder)
         {
-            FRegisteredNativeGameplaySystem& System =
-                Impl->NativeGameplaySystems[SystemIndex];
-            if (!System.bEnabled) continue;
+            FRegisteredNativeGameplaySystem& System = Impl->NativeGameplaySystems[SystemIndex];
+            if (!System.bEnabled)
+            {
+                continue;
+            }
             ++Report.FixedCallbacksAttempted;
-            if (System.Update(System.ProviderContext, Context) !=
-                ENativeGameplaySystemResult::Success)
+            if (System.Update(System.ProviderContext, Context) != ENativeGameplaySystemResult::Success)
             {
                 Report.FailedSystemName = System.Name;
                 Report.FailedSubstepIndex = SubstepIndex;
@@ -852,7 +819,10 @@ ENativeGameplayUpdateResult FWorld::UpdateNativeGameplaySystems(
                 break;
             }
         }
-        if (!bStepSucceeded) break;
+        if (!bStepSucceeded)
+        {
+            break;
+        }
         ++Report.FixedStepsCompleted;
     }
 
@@ -869,12 +839,13 @@ ENativeGameplayUpdateResult FWorld::UpdateNativeGameplaySystems(
         Context.Phase = ENativeGameplaySystemPhase::Variable;
         for (const std::size_t SystemIndex : Impl->VariableSystemOrder)
         {
-            FRegisteredNativeGameplaySystem& System =
-                Impl->NativeGameplaySystems[SystemIndex];
-            if (!System.bEnabled) continue;
+            FRegisteredNativeGameplaySystem& System = Impl->NativeGameplaySystems[SystemIndex];
+            if (!System.bEnabled)
+            {
+                continue;
+            }
             ++Report.VariableCallbacksAttempted;
-            if (System.Update(System.ProviderContext, Context) !=
-                ENativeGameplaySystemResult::Success)
+            if (System.Update(System.ProviderContext, Context) != ENativeGameplaySystemResult::Success)
             {
                 Report.FailedSystemName = System.Name;
                 Report.FailedPhase = ENativeGameplaySystemPhase::Variable;
@@ -889,14 +860,16 @@ ENativeGameplayUpdateResult FWorld::UpdateNativeGameplaySystems(
     Report.FixedAccumulatorSeconds = Impl->FixedAccumulatorSeconds;
     Report.FixedSimulationSeconds = Impl->FixedSimulationSeconds;
     Report.bFixedTimelineExhausted = Impl->bFixedTimelineExhausted;
-    if (OutReport != nullptr) *OutReport = Report;
+    if (OutReport != nullptr)
+    {
+        *OutReport = Report;
+    }
     return Result;
 }
 
 StringView FWorld::GetNativeGameplayDiagnosticSystemName() const noexcept
 {
-    if (!IsValid() || Impl->GameplayDiagnosticSystemIndex >=
-        Impl->NativeGameplaySystems.Size())
+    if (!IsValid() || Impl->GameplayDiagnosticSystemIndex >= Impl->NativeGameplaySystems.Size())
     {
         return {};
     }
@@ -905,13 +878,11 @@ StringView FWorld::GetNativeGameplayDiagnosticSystemName() const noexcept
 
 StringView FWorld::GetNativeGameplayDiagnosticDependencyName() const noexcept
 {
-    if (!IsValid() || Impl->GameplayDiagnosticSystemIndex >=
-        Impl->NativeGameplaySystems.Size())
+    if (!IsValid() || Impl->GameplayDiagnosticSystemIndex >= Impl->NativeGameplaySystems.Size())
     {
         return {};
     }
-    const FRegisteredNativeGameplaySystem& System =
-        Impl->NativeGameplaySystems[Impl->GameplayDiagnosticSystemIndex];
+    const FRegisteredNativeGameplaySystem& System = Impl->NativeGameplaySystems[Impl->GameplayDiagnosticSystemIndex];
     if (Impl->GameplayDiagnosticDependencyIndex >= System.Dependencies.Size())
     {
         return {};
@@ -924,9 +895,7 @@ std::size_t FWorld::GetEntityCount() const noexcept
     return Impl == nullptr ? 0 : Impl->AliveEntities.Size();
 }
 
-EComponentMutationResult FWorld::TryAddTransform(
-    const FEntity Entity,
-    const FTransform& LocalTransform) noexcept
+EComponentMutationResult FWorld::TryAddTransform(const FEntity Entity, const FTransform& LocalTransform) noexcept
 {
     if (!IsAlive(Entity))
     {
@@ -939,8 +908,7 @@ EComponentMutationResult FWorld::TryAddTransform(
 
     FTransformComponent Component;
     Component.Local = CanonicalizeTransform(LocalTransform);
-    const EComponentMutationResult Result =
-        Impl->TransformComponents.TryAdd(Entity, std::move(Component));
+    const EComponentMutationResult Result = Impl->TransformComponents.TryAdd(Entity, std::move(Component));
     if (Result == EComponentMutationResult::Added)
     {
         Impl->bTransformsDirty = true;
@@ -949,9 +917,7 @@ EComponentMutationResult FWorld::TryAddTransform(
     return Result;
 }
 
-ETransformUpdateResult FWorld::SetLocalTransform(
-    const FEntity Entity,
-    const FTransform& LocalTransform) noexcept
+ETransformUpdateResult FWorld::SetLocalTransform(const FEntity Entity, const FTransform& LocalTransform) noexcept
 {
     if (!IsAlive(Entity))
     {
@@ -983,9 +949,7 @@ ETransformUpdateResult FWorld::SetLocalTransform(
     return ETransformUpdateResult::Updated;
 }
 
-ETransformParentResult FWorld::SetTransformParent(
-    const FEntity Child,
-    const FEntity Parent) noexcept
+ETransformParentResult FWorld::SetTransformParent(const FEntity Child, const FEntity Parent) noexcept
 {
     if (!IsAlive(Child) || !IsAlive(Parent))
     {
@@ -1020,16 +984,14 @@ ETransformParentResult FWorld::SetTransformParent(
 
     if (ChildComponent->Parent.IsValid())
     {
-        FTransformComponent* const OldParent =
-            Impl->TransformComponents.Find(ChildComponent->Parent);
+        FTransformComponent* const OldParent = Impl->TransformComponents.Find(ChildComponent->Parent);
         if (OldParent == nullptr)
         {
             HandleContractViolation("Transform parent link is stale", __FILE__, __LINE__);
         }
         if (ChildComponent->PreviousSibling.IsValid())
         {
-            FTransformComponent* const Previous =
-                Impl->TransformComponents.Find(ChildComponent->PreviousSibling);
+            FTransformComponent* const Previous = Impl->TransformComponents.Find(ChildComponent->PreviousSibling);
             if (Previous == nullptr)
             {
                 HandleContractViolation("Transform previous-sibling link is stale", __FILE__, __LINE__);
@@ -1042,8 +1004,7 @@ ETransformParentResult FWorld::SetTransformParent(
         }
         if (ChildComponent->NextSibling.IsValid())
         {
-            FTransformComponent* const Next =
-                Impl->TransformComponents.Find(ChildComponent->NextSibling);
+            FTransformComponent* const Next = Impl->TransformComponents.Find(ChildComponent->NextSibling);
             if (Next == nullptr)
             {
                 HandleContractViolation("Transform next-sibling link is stale", __FILE__, __LINE__);
@@ -1057,8 +1018,7 @@ ETransformParentResult FWorld::SetTransformParent(
     ChildComponent->NextSibling = ParentComponent->FirstChild;
     if (ParentComponent->FirstChild.IsValid())
     {
-        FTransformComponent* const First =
-            Impl->TransformComponents.Find(ParentComponent->FirstChild);
+        FTransformComponent* const First = Impl->TransformComponents.Find(ParentComponent->FirstChild);
         if (First == nullptr)
         {
             HandleContractViolation("Transform first-child link is stale", __FILE__, __LINE__);
@@ -1096,16 +1056,14 @@ ETransformParentResult FWorld::ClearTransformParent(const FEntity Child) noexcep
         return ETransformParentResult::InvalidEntity;
     }
 
-    FTransformComponent* const Parent =
-        Impl->TransformComponents.Find(ChildComponent->Parent);
+    FTransformComponent* const Parent = Impl->TransformComponents.Find(ChildComponent->Parent);
     if (Parent == nullptr)
     {
         HandleContractViolation("Transform parent link is stale", __FILE__, __LINE__);
     }
     if (ChildComponent->PreviousSibling.IsValid())
     {
-        FTransformComponent* const Previous =
-            Impl->TransformComponents.Find(ChildComponent->PreviousSibling);
+        FTransformComponent* const Previous = Impl->TransformComponents.Find(ChildComponent->PreviousSibling);
         if (Previous == nullptr)
         {
             HandleContractViolation("Transform previous-sibling link is stale", __FILE__, __LINE__);
@@ -1118,8 +1076,7 @@ ETransformParentResult FWorld::ClearTransformParent(const FEntity Child) noexcep
     }
     if (ChildComponent->NextSibling.IsValid())
     {
-        FTransformComponent* const Next =
-            Impl->TransformComponents.Find(ChildComponent->NextSibling);
+        FTransformComponent* const Next = Impl->TransformComponents.Find(ChildComponent->NextSibling);
         if (Next == nullptr)
         {
             HandleContractViolation("Transform next-sibling link is stale", __FILE__, __LINE__);
@@ -1158,9 +1115,7 @@ EComponentRemoveResult FWorld::RemoveTransform(const FEntity Entity) noexcept
     return bRemoved ? EComponentRemoveResult::Removed : EComponentRemoveResult::NotPresent;
 }
 
-bool FWorld::TryGetLocalTransform(
-    const FEntity Entity,
-    FTransform& OutTransform) const noexcept
+bool FWorld::TryGetLocalTransform(const FEntity Entity, FTransform& OutTransform) const noexcept
 {
     if (!IsAlive(Entity) || Impl->bStructurallyMutating)
     {
@@ -1175,9 +1130,7 @@ bool FWorld::TryGetLocalTransform(
     return true;
 }
 
-bool FWorld::TryGetTransformParent(
-    const FEntity Entity,
-    FEntity& OutParent) const noexcept
+bool FWorld::TryGetTransformParent(const FEntity Entity, FEntity& OutParent) const noexcept
 {
     if (!IsAlive(Entity) || Impl->bStructurallyMutating)
     {
@@ -1194,13 +1147,10 @@ bool FWorld::TryGetTransformParent(
 
 bool FWorld::HasTransform(const FEntity Entity) const noexcept
 {
-    return IsAlive(Entity) && !Impl->bStructurallyMutating &&
-        Impl->TransformComponents.Find(Entity) != nullptr;
+    return IsAlive(Entity) && !Impl->bStructurallyMutating && Impl->TransformComponents.Find(Entity) != nullptr;
 }
 
-bool FWorld::TryGetWorldMatrix(
-    const FEntity Entity,
-    Math::Matrix4f& OutMatrix) const noexcept
+bool FWorld::TryGetWorldMatrix(const FEntity Entity, Math::Matrix4f& OutMatrix) const noexcept
 {
     if (!IsAlive(Entity) || !UpdateTransforms())
     {
@@ -1253,12 +1203,10 @@ bool FWorld::UpdateTransforms() const noexcept
                 const Math::Matrix4f LocalMatrix = Component->Local.ToMatrix();
                 if (Component->Parent.IsValid())
                 {
-                    const FTransformComponent* const Parent =
-                        Impl->TransformComponents.Find(Component->Parent);
+                    const FTransformComponent* const Parent = Impl->TransformComponents.Find(Component->Parent);
                     if (Parent == nullptr || Parent->bWorldDirty)
                     {
-                        HandleContractViolation(
-                            "Transform update order is not parent-first", __FILE__, __LINE__);
+                        HandleContractViolation("Transform update order is not parent-first", __FILE__, __LINE__);
                     }
                     Component->LocalToWorld = Parent->LocalToWorld * LocalMatrix;
                 }
@@ -1300,16 +1248,14 @@ bool FWorld::RemoveTransformDuringStructuralMutation(const FEntity Entity) noexc
 
     if (Component->Parent.IsValid())
     {
-        FTransformComponent* const Parent =
-            Impl->TransformComponents.Find(Component->Parent);
+        FTransformComponent* const Parent = Impl->TransformComponents.Find(Component->Parent);
         if (Parent == nullptr)
         {
             HandleContractViolation("Transform parent link is stale", __FILE__, __LINE__);
         }
         if (Component->PreviousSibling.IsValid())
         {
-            FTransformComponent* const Previous =
-                Impl->TransformComponents.Find(Component->PreviousSibling);
+            FTransformComponent* const Previous = Impl->TransformComponents.Find(Component->PreviousSibling);
             if (Previous == nullptr)
             {
                 HandleContractViolation("Transform previous-sibling link is stale", __FILE__, __LINE__);
@@ -1322,8 +1268,7 @@ bool FWorld::RemoveTransformDuringStructuralMutation(const FEntity Entity) noexc
         }
         if (Component->NextSibling.IsValid())
         {
-            FTransformComponent* const Next =
-                Impl->TransformComponents.Find(Component->NextSibling);
+            FTransformComponent* const Next = Impl->TransformComponents.Find(Component->NextSibling);
             if (Next == nullptr)
             {
                 HandleContractViolation("Transform next-sibling link is stale", __FILE__, __LINE__);
@@ -1372,9 +1317,7 @@ void FWorld::MarkTransformSubtreeDirty(const FEntity Root) noexcept
     }
 }
 
-FEntity FWorld::NextTransformInSubtree(
-    const FEntity Current,
-    const FEntity Root) const noexcept
+FEntity FWorld::NextTransformInSubtree(const FEntity Current, const FEntity Root) const noexcept
 {
     const FTransformComponent* Component = Impl->TransformComponents.Find(Current);
     if (Component == nullptr)
@@ -1403,9 +1346,7 @@ FEntity FWorld::NextTransformInSubtree(
     return FEntity{};
 }
 
-bool FWorld::WouldCreateTransformCycle(
-    const FEntity Child,
-    FEntity Parent) const noexcept
+bool FWorld::WouldCreateTransformCycle(const FEntity Child, FEntity Parent) const noexcept
 {
     std::size_t VisitedCount = 0;
     while (Parent.IsValid())
@@ -1414,8 +1355,7 @@ bool FWorld::WouldCreateTransformCycle(
         {
             return true;
         }
-        const FTransformComponent* const Component =
-            Impl->TransformComponents.Find(Parent);
+        const FTransformComponent* const Component = Impl->TransformComponents.Find(Parent);
         if (Component == nullptr)
         {
             HandleContractViolation("Transform parent chain is stale", __FILE__, __LINE__);
@@ -1462,9 +1402,7 @@ const TComponentStorage<FWorldDirectionalLightComponent>* FWorld::GetDirectional
 
 bool FWorld::AttachStorage(FComponentStorageNode& Storage) noexcept
 {
-    if (!IsValid() || Impl->TickState != EWorldTickState::Idle ||
-        Impl->bStructurallyMutating || Storage.Owner != nullptr ||
-        Storage.RemoveThunk == nullptr || Storage.ClearThunk == nullptr)
+    if (!IsValid() || Impl->TickState != EWorldTickState::Idle || Impl->bStructurallyMutating || Storage.Owner != nullptr || Storage.RemoveThunk == nullptr || Storage.ClearThunk == nullptr)
     {
         return false;
     }
@@ -1486,13 +1424,9 @@ void FWorld::DetachStorage(FComponentStorageNode& Storage) noexcept
     {
         return;
     }
-    if (Impl->bStructurallyMutating || Impl->bCommandPayloadLifecycle ||
-        Impl->TickState != EWorldTickState::Idle ||
-        (Impl->CommandBuffer != nullptr &&
-            Impl->CommandBuffer->GetPendingCommandCount() != 0))
+    if (Impl->bStructurallyMutating || Impl->bCommandPayloadLifecycle || Impl->TickState != EWorldTickState::Idle || (Impl->CommandBuffer != nullptr && Impl->CommandBuffer->GetPendingCommandCount() != 0))
     {
-        HandleContractViolation(
-            "component storage detached during World structural mutation", __FILE__, __LINE__);
+        HandleContractViolation("component storage detached during World structural mutation", __FILE__, __LINE__);
     }
     if (Storage.Previous != nullptr)
     {
@@ -1514,15 +1448,12 @@ void FWorld::DetachStorage(FComponentStorageNode& Storage) noexcept
 
 bool FWorld::IsStorageUsable(const FComponentStorageNode& Storage) const noexcept
 {
-    return IsValid() && Storage.Owner == this &&
-        Storage.WorldDomain == Impl->WorldDomain;
+    return IsValid() && Storage.Owner == this && Storage.WorldDomain == Impl->WorldDomain;
 }
 
 bool FWorld::BeginStructuralMutation() noexcept
 {
-    if (!IsValid() || Impl->bStructurallyMutating || Impl->bCommandPayloadLifecycle ||
-        (Impl->TickState != EWorldTickState::Idle &&
-            !(Impl->TickState == EWorldTickState::Flushing && Impl->bApplyingCommand)))
+    if (!IsValid() || Impl->bStructurallyMutating || Impl->bCommandPayloadLifecycle || (Impl->TickState != EWorldTickState::Idle && !(Impl->TickState == EWorldTickState::Flushing && Impl->bApplyingCommand)))
     {
         return false;
     }
@@ -1532,8 +1463,7 @@ bool FWorld::BeginStructuralMutation() noexcept
 
 void FWorld::BeginCommandExecution() noexcept
 {
-    if (!IsValid() || Impl->TickState != EWorldTickState::Flushing ||
-        Impl->bApplyingCommand || Impl->bStructurallyMutating)
+    if (!IsValid() || Impl->TickState != EWorldTickState::Flushing || Impl->bApplyingCommand || Impl->bStructurallyMutating)
     {
         HandleContractViolation("invalid deferred World command execution begin", __FILE__, __LINE__);
     }
@@ -1542,8 +1472,7 @@ void FWorld::BeginCommandExecution() noexcept
 
 void FWorld::EndCommandExecution() noexcept
 {
-    if (!IsValid() || Impl->TickState != EWorldTickState::Flushing ||
-        !Impl->bApplyingCommand || Impl->bStructurallyMutating)
+    if (!IsValid() || Impl->TickState != EWorldTickState::Flushing || !Impl->bApplyingCommand || Impl->bStructurallyMutating)
     {
         HandleContractViolation("invalid deferred World command execution end", __FILE__, __LINE__);
     }
@@ -1557,8 +1486,7 @@ uint64 FWorld::GetRuntimeDomain() const noexcept
 
 void FWorld::BeginCommandPayloadLifecycle() noexcept
 {
-    if (!IsValid() || Impl->bCommandPayloadLifecycle || Impl->bStructurallyMutating ||
-        Impl->bApplyingCommand)
+    if (!IsValid() || Impl->bCommandPayloadLifecycle || Impl->bStructurallyMutating || Impl->bApplyingCommand)
     {
         HandleContractViolation("invalid deferred command payload lifecycle begin", __FILE__, __LINE__);
     }
@@ -1567,8 +1495,7 @@ void FWorld::BeginCommandPayloadLifecycle() noexcept
 
 void FWorld::EndCommandPayloadLifecycle() noexcept
 {
-    if (!IsValid() || !Impl->bCommandPayloadLifecycle || Impl->bStructurallyMutating ||
-        Impl->bApplyingCommand)
+    if (!IsValid() || !Impl->bCommandPayloadLifecycle || Impl->bStructurallyMutating || Impl->bApplyingCommand)
     {
         HandleContractViolation("invalid deferred command payload lifecycle end", __FILE__, __LINE__);
     }

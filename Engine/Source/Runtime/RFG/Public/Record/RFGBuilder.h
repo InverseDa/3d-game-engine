@@ -34,13 +34,7 @@ public:
     FRFGResourceHandle ImportBuffer(const LE::String& ResourceName, LE::FRHIBuffer* ExternalBuffer, LE::ERHIResourceState InitialState);
 
 public:
-    FRFGPassHandle AddPass(
-        const LE::String& PassName,
-        const LE::String& PassTypeName,
-        const FRFGPassParameterBlock& ParameterBlock = {},
-        ERFGPassFlags Flags = ERFGPassFlags::None,
-        ERFGQueueType QueueType = ERFGQueueType::Graphics,
-        const FRFGSourceLocation& SourceLocation = {});
+    FRFGPassHandle AddPass(const LE::String& PassName, const LE::String& PassTypeName, const FRFGPassParameterBlock& ParameterBlock = {}, ERFGPassFlags Flags = ERFGPassFlags::None, ERFGQueueType QueueType = ERFGQueueType::Graphics, const FRFGSourceLocation& SourceLocation = {});
 
     void SetPassCallback(FRFGPassHandle PassHandle, const FRFGPassCallback& PassCallback);
 

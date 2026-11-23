@@ -11,10 +11,7 @@ namespace
 
 using EResult = ESceneOperationResult;
 
-EResult Report(FSceneOperationDiagnostic* const Diagnostic, const EResult Result,
-    const FSceneEntityId Entity = {}, const FAssetId Asset = {},
-    const EContentIOResult File = EContentIOResult::Success,
-    const FSceneDocumentDiagnostic& Document = {}) noexcept
+EResult Report(FSceneOperationDiagnostic* const Diagnostic, const EResult Result, const FSceneEntityId Entity = {}, const FAssetId Asset = {}, const EContentIOResult File = EContentIOResult::Success, const FSceneDocumentDiagnostic& Document = {}) noexcept
 {
     if (Diagnostic != nullptr)
     {
@@ -23,39 +20,30 @@ EResult Report(FSceneOperationDiagnostic* const Diagnostic, const EResult Result
     return Result;
 }
 
-EResult ReportDocument(FSceneOperationDiagnostic* const Diagnostic,
-    const FSceneDocumentDiagnostic& Document) noexcept
+EResult ReportDocument(FSceneOperationDiagnostic* const Diagnostic, const FSceneDocumentDiagnostic& Document) noexcept
 {
-    const EResult Result = Document.Result == ESceneDocumentResult::AllocationFailed
-        ? EResult::AllocationFailed : EResult::InvalidDocument;
+    const EResult Result = Document.Result == ESceneDocumentResult::AllocationFailed ? EResult::AllocationFailed : EResult::InvalidDocument;
     return Report(Diagnostic, Result, Document.Entity, {}, EContentIOResult::Success, Document);
 }
 
-EResult ReportComponent(FSceneOperationDiagnostic* const Diagnostic,
-    const EComponentMutationResult Mutation, const FSceneEntityId Entity) noexcept
+EResult ReportComponent(FSceneOperationDiagnostic* const Diagnostic, const EComponentMutationResult Mutation, const FSceneEntityId Entity) noexcept
 {
-    return Report(Diagnostic, Mutation == EComponentMutationResult::AllocationFailed
-        ? EResult::AllocationFailed : EResult::WorldMutationFailed, Entity);
+    return Report(Diagnostic, Mutation == EComponentMutationResult::AllocationFailed ? EResult::AllocationFailed : EResult::WorldMutationFailed, Entity);
 }
 
-template <typename Asset>
-EResult ResolveAsset(const FSceneAssetResolver& Resolver, const FAssetId Id,
-    bool (*Resolve)(void*, FAssetId, TAssetHandle<Asset>&) noexcept,
-    TAssetHandle<Asset>& OutHandle) noexcept
+template <typename Asset> EResult ResolveAsset(const FSceneAssetResolver& Resolver, const FAssetId Id, bool (*Resolve)(void*, FAssetId, TAssetHandle<Asset>&) noexcept, TAssetHandle<Asset>& OutHandle) noexcept
 {
     TAssetHandle<Asset> Handle;
     const EAssetFindResult Cached = Resolver.Registry->TryFindById(Id, Handle);
     if (Cached != EAssetFindResult::Success)
     {
-        if (Cached != EAssetFindResult::NotFound ||
-            Resolve == nullptr || !Resolve(Resolver.Context, Id, Handle))
+        if (Cached != EAssetFindResult::NotFound || Resolve == nullptr || !Resolve(Resolver.Context, Id, Handle))
         {
             return EResult::AssetResolutionFailed;
         }
     }
     FAssetId ResolvedId;
-    if (Resolver.Registry->TryGetAssetId(Handle, ResolvedId) != EAssetResolveResult::Success ||
-        ResolvedId != Id)
+    if (Resolver.Registry->TryGetAssetId(Handle, ResolvedId) != EAssetResolveResult::Success || ResolvedId != Id)
     {
         return EResult::InvalidAssetHandle;
     }
@@ -63,9 +51,7 @@ EResult ResolveAsset(const FSceneAssetResolver& Resolver, const FAssetId Id,
     return EResult::Success;
 }
 
-EResult AddMesh(FWorld& World, const FEntity Entity, const FSceneEntityRecord& Record,
-    const FSceneAssetResolver& Resolver, IAllocator& Allocator,
-    FSceneOperationDiagnostic* const Diagnostic) noexcept
+EResult AddMesh(FWorld& World, const FEntity Entity, const FSceneEntityRecord& Record, const FSceneAssetResolver& Resolver, IAllocator& Allocator, FSceneOperationDiagnostic* const Diagnostic) noexcept
 {
     FWorldMeshComponent Component;
     Component.DebugName = String(Allocator);
@@ -74,24 +60,19 @@ EResult AddMesh(FWorld& World, const FEntity Entity, const FSceneEntityRecord& R
         return Report(Diagnostic, EResult::AllocationFailed, Record.Id);
     }
     Component.SortKey = Record.Mesh.SortKey;
-    if (const EResult Result = ResolveAsset(Resolver, Record.Mesh.Mesh, Resolver.ResolveMesh, Component.Mesh);
-        Result != EResult::Success)
+    if (const EResult Result = ResolveAsset(Resolver, Record.Mesh.Mesh, Resolver.ResolveMesh, Component.Mesh); Result != EResult::Success)
     {
         return Report(Diagnostic, Result, Record.Id, Record.Mesh.Mesh);
     }
-    if (const EResult Result = ResolveAsset(Resolver, Record.Mesh.Material, Resolver.ResolveMaterial,
-            Component.Material); Result != EResult::Success)
+    if (const EResult Result = ResolveAsset(Resolver, Record.Mesh.Material, Resolver.ResolveMaterial, Component.Material); Result != EResult::Success)
     {
         return Report(Diagnostic, Result, Record.Id, Record.Mesh.Material);
     }
-    const EComponentMutationResult Mutation =
-        World.TryAddComponent(*World.GetMeshComponents(), Entity, std::move(Component));
-    return Mutation == EComponentMutationResult::Added
-        ? EResult::Success : ReportComponent(Diagnostic, Mutation, Record.Id);
+    const EComponentMutationResult Mutation = World.TryAddComponent(*World.GetMeshComponents(), Entity, std::move(Component));
+    return Mutation == EComponentMutationResult::Added ? EResult::Success : ReportComponent(Diagnostic, Mutation, Record.Id);
 }
 
-EResult AddCamera(FWorld& World, const FEntity Entity, const FSceneEntityRecord& Record,
-    IAllocator& Allocator, FSceneOperationDiagnostic* const Diagnostic) noexcept
+EResult AddCamera(FWorld& World, const FEntity Entity, const FSceneEntityRecord& Record, IAllocator& Allocator, FSceneOperationDiagnostic* const Diagnostic) noexcept
 {
     FWorldCameraComponent Component;
     Component.DebugName = String(Allocator);
@@ -104,10 +85,8 @@ EResult AddCamera(FWorld& World, const FEntity Entity, const FSceneEntityRecord&
     Component.FarPlane = Record.Camera.FarPlane;
     Component.Priority = Record.Camera.Priority;
     Component.bActive = Record.Camera.bActive;
-    const EComponentMutationResult Mutation =
-        World.TryAddComponent(*World.GetCameraComponents(), Entity, std::move(Component));
-    return Mutation == EComponentMutationResult::Added
-        ? EResult::Success : ReportComponent(Diagnostic, Mutation, Record.Id);
+    const EComponentMutationResult Mutation = World.TryAddComponent(*World.GetCameraComponents(), Entity, std::move(Component));
+    return Mutation == EComponentMutationResult::Added ? EResult::Success : ReportComponent(Diagnostic, Mutation, Record.Id);
 }
 
 struct FRestoreEntity
@@ -118,9 +97,7 @@ struct FRestoreEntity
 
 } // namespace
 
-FScene::FScene(IAllocator& Allocator) noexcept
-    : Identities(Allocator)
-    , World(Allocator)
+FScene::FScene(IAllocator& Allocator) noexcept : Identities(Allocator), World(Allocator)
 {
     if (World.IsValid())
     {
@@ -136,11 +113,10 @@ bool FScene::Create(UniquePtr<FScene>& OutScene, IAllocator& Allocator) noexcept
         return false;
     }
     FScene* const Object = new (Storage) FScene(Allocator);
-    auto Candidate = UniquePtr<FScene>::Adopt(Object, &Allocator,
-        [](void* const Context, FScene* const Scene) noexcept {
-            Scene->~FScene();
-            DeallocateArray(*static_cast<IAllocator*>(Context), Scene, 1);
-        });
+    auto Candidate = UniquePtr<FScene>::Adopt(Object, &Allocator, [](void* const Context, FScene* const Scene) noexcept {
+        Scene->~FScene();
+        DeallocateArray(*static_cast<IAllocator*>(Context), Scene, 1);
+    });
     if (!Object->Identities.IsBound())
     {
         return false;
@@ -152,8 +128,7 @@ bool FScene::Create(UniquePtr<FScene>& OutScene, IAllocator& Allocator) noexcept
 bool FScene::TryCreateEntity(const FSceneEntityId Id, FEntity& OutEntity) noexcept
 {
     FEntity Duplicate;
-    return Id.IsValid() && !TryFindEntity(Id, Duplicate) &&
-        TryCreateEntityWithUniqueId(Id, OutEntity);
+    return Id.IsValid() && !TryFindEntity(Id, Duplicate) && TryCreateEntityWithUniqueId(Id, OutEntity);
 }
 
 bool FScene::TryCreateEntityWithUniqueId(const FSceneEntityId Id, FEntity& OutEntity) noexcept
@@ -198,17 +173,14 @@ bool FScene::TryGetEntityId(const FEntity Entity, FSceneEntityId& OutId) const n
     return true;
 }
 
-ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneAssetResolver& Assets,
-    UniquePtr<FScene>& OutScene, FSceneOperationDiagnostic* const Diagnostic,
-    IAllocator& Allocator) noexcept
+ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneAssetResolver& Assets, UniquePtr<FScene>& OutScene, FSceneOperationDiagnostic* const Diagnostic, IAllocator& Allocator) noexcept
 {
     FSceneDocumentDiagnostic Format;
     if (ValidateSceneDocument(Document, &Format) != ESceneDocumentResult::Success)
     {
         return ReportDocument(Diagnostic, Format);
     }
-    if (Assets.Registry == nullptr || !Assets.Registry->IsValid() ||
-        (OutScene && OutScene->GetWorld().GetTickState() != EWorldTickState::Idle))
+    if (Assets.Registry == nullptr || !Assets.Registry->IsValid() || (OutScene && OutScene->GetWorld().GetTickState() != EWorldTickState::Idle))
     {
         return Report(Diagnostic, EResult::InvalidState);
     }
@@ -231,10 +203,7 @@ ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneA
     }
     if (Entities.Size() > 1)
     {
-        std::sort(Entities.Data(), Entities.Data() + Entities.Size(),
-            [](const FRestoreEntity& Left, const FRestoreEntity& Right) {
-                return Left.Record->Id < Right.Record->Id;
-            });
+        std::sort(Entities.Data(), Entities.Data() + Entities.Size(), [](const FRestoreEntity& Left, const FRestoreEntity& Right) { return Left.Record->Id < Right.Record->Id; });
     }
     FWorld& World = Candidate->GetWorld();
     for (FRestoreEntity& Item : Entities)
@@ -271,8 +240,7 @@ ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneA
         if (Record.bHasDirectionalLight)
         {
             const FSceneDirectionalLightRecord& Light = Record.DirectionalLight;
-            const auto Mutation = World.TryAddComponent(*World.GetDirectionalLightComponents(), Item.Entity,
-                FWorldDirectionalLightComponent{Light.Direction, Light.Color, Light.Intensity, Light.bActive});
+            const auto Mutation = World.TryAddComponent(*World.GetDirectionalLightComponents(), Item.Entity, FWorldDirectionalLightComponent{Light.Direction, Light.Color, Light.Intensity, Light.bActive});
             if (Mutation != EComponentMutationResult::Added)
             {
                 return ReportComponent(Diagnostic, Mutation, Record.Id);
@@ -287,13 +255,8 @@ ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneA
             continue;
         }
         const auto* const End = Entities.Data() + Entities.Size();
-        const auto* const Parent = std::lower_bound(
-            static_cast<const FRestoreEntity*>(Entities.Data()), End, Record.Parent,
-            [](const FRestoreEntity& Entry, const FSceneEntityId Id) {
-                return Entry.Record->Id < Id;
-            });
-        if (Parent == End || Parent->Record->Id != Record.Parent ||
-            World.SetTransformParent(Item.Entity, Parent->Entity) != ETransformParentResult::Reparented)
+        const auto* const Parent = std::lower_bound(static_cast<const FRestoreEntity*>(Entities.Data()), End, Record.Parent, [](const FRestoreEntity& Entry, const FSceneEntityId Id) { return Entry.Record->Id < Id; });
+        if (Parent == End || Parent->Record->Id != Record.Parent || World.SetTransformParent(Item.Entity, Parent->Entity) != ETransformParentResult::Reparented)
         {
             return Report(Diagnostic, EResult::WorldMutationFailed, Record.Id);
         }
@@ -306,16 +269,13 @@ ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneA
     return Report(Diagnostic, EResult::Success);
 }
 
-ESceneOperationResult LoadScene(const StringView Path, const FSceneAssetResolver& Assets,
-    UniquePtr<FScene>& OutScene, FSceneOperationDiagnostic* const Diagnostic,
-    IAllocator& Allocator) noexcept
+ESceneOperationResult LoadScene(const StringView Path, const FSceneAssetResolver& Assets, UniquePtr<FScene>& OutScene, FSceneOperationDiagnostic* const Diagnostic, IAllocator& Allocator) noexcept
 {
     Array<uint8> Bytes(Allocator);
     const EContentIOResult ReadResult = ReadContentFile(Path, MaxSceneDocumentBytes, Bytes);
     if (ReadResult != EContentIOResult::Success)
     {
-        return Report(Diagnostic, ReadResult == EContentIOResult::OutOfMemory
-            ? EResult::AllocationFailed : EResult::FileReadFailed, {}, {}, ReadResult);
+        return Report(Diagnostic, ReadResult == EContentIOResult::OutOfMemory ? EResult::AllocationFailed : EResult::FileReadFailed, {}, {}, ReadResult);
     }
     FSceneDocument Document(Allocator);
     FSceneDocumentDiagnostic Format;
@@ -327,8 +287,7 @@ ESceneOperationResult LoadScene(const StringView Path, const FSceneAssetResolver
     return RestoreScene(Document, Assets, OutScene, Diagnostic, Allocator);
 }
 
-ESceneOperationResult CaptureScene(const FScene& Scene, const FAssetRegistry& Registry,
-    FSceneDocument& OutDocument, FSceneOperationDiagnostic* const Diagnostic) noexcept
+ESceneOperationResult CaptureScene(const FScene& Scene, const FAssetRegistry& Registry, FSceneDocument& OutDocument, FSceneOperationDiagnostic* const Diagnostic) noexcept
 {
     const FWorld& World = Scene.GetWorld();
     if (World.GetTickState() != EWorldTickState::Idle || !Registry.IsValid())
@@ -376,8 +335,7 @@ ESceneOperationResult CaptureScene(const FScene& Scene, const FAssetRegistry& Re
         if (Mesh != nullptr)
         {
             Record.bHasMesh = true;
-            if (Registry.TryGetAssetId(Mesh->Mesh, Record.Mesh.Mesh) != EAssetResolveResult::Success ||
-                Registry.TryGetAssetId(Mesh->Material, Record.Mesh.Material) != EAssetResolveResult::Success)
+            if (Registry.TryGetAssetId(Mesh->Mesh, Record.Mesh.Mesh) != EAssetResolveResult::Success || Registry.TryGetAssetId(Mesh->Material, Record.Mesh.Material) != EAssetResolveResult::Success)
             {
                 return Report(Diagnostic, EResult::InvalidAssetHandle, Record.Id);
             }
@@ -421,12 +379,10 @@ ESceneOperationResult CaptureScene(const FScene& Scene, const FAssetRegistry& Re
     return Report(Diagnostic, EResult::Success);
 }
 
-ESceneOperationResult SaveScene(const StringView Path, const FScene& Scene,
-    const FAssetRegistry& Registry, FSceneOperationDiagnostic* const Diagnostic) noexcept
+ESceneOperationResult SaveScene(const StringView Path, const FScene& Scene, const FAssetRegistry& Registry, FSceneOperationDiagnostic* const Diagnostic) noexcept
 {
     FSceneDocument Document;
-    if (const auto Result = CaptureScene(Scene, Registry, Document, Diagnostic);
-        Result != EResult::Success)
+    if (const auto Result = CaptureScene(Scene, Registry, Document, Diagnostic); Result != EResult::Success)
     {
         return Result;
     }
@@ -440,8 +396,7 @@ ESceneOperationResult SaveScene(const StringView Path, const FScene& Scene,
     const EContentIOResult File = WriteContentFileAtomically(Path, Bytes);
     if (File != EContentIOResult::Success)
     {
-        return Report(Diagnostic, File == EContentIOResult::OutOfMemory
-            ? EResult::AllocationFailed : EResult::FileWriteFailed, {}, {}, File);
+        return Report(Diagnostic, File == EContentIOResult::OutOfMemory ? EResult::AllocationFailed : EResult::FileWriteFailed, {}, {}, File);
     }
     return Report(Diagnostic, EResult::Success);
 }
@@ -450,16 +405,26 @@ const char* DescribeSceneOperationResult(const ESceneOperationResult Result) noe
 {
     switch (Result)
     {
-    case ESceneOperationResult::Success: return "success";
-    case ESceneOperationResult::InvalidState: return "scene or registry is unavailable or busy";
-    case ESceneOperationResult::AllocationFailed: return "could not allocate scene data";
-    case ESceneOperationResult::InvalidDocument: return "invalid scene document";
-    case ESceneOperationResult::MissingEntityIdentity: return "live entity has no persistent scene ID";
-    case ESceneOperationResult::AssetResolutionFailed: return "could not load the requested asset and type";
-    case ESceneOperationResult::InvalidAssetHandle: return "asset handle does not resolve in the scene registry";
-    case ESceneOperationResult::WorldMutationFailed: return "could not apply scene data to the World";
-    case ESceneOperationResult::FileReadFailed: return "could not read the scene file";
-    case ESceneOperationResult::FileWriteFailed: return "could not publish the scene file";
+    case ESceneOperationResult::Success:
+        return "success";
+    case ESceneOperationResult::InvalidState:
+        return "scene or registry is unavailable or busy";
+    case ESceneOperationResult::AllocationFailed:
+        return "could not allocate scene data";
+    case ESceneOperationResult::InvalidDocument:
+        return "invalid scene document";
+    case ESceneOperationResult::MissingEntityIdentity:
+        return "live entity has no persistent scene ID";
+    case ESceneOperationResult::AssetResolutionFailed:
+        return "could not load the requested asset and type";
+    case ESceneOperationResult::InvalidAssetHandle:
+        return "asset handle does not resolve in the scene registry";
+    case ESceneOperationResult::WorldMutationFailed:
+        return "could not apply scene data to the World";
+    case ESceneOperationResult::FileReadFailed:
+        return "could not read the scene file";
+    case ESceneOperationResult::FileWriteFailed:
+        return "could not publish the scene file";
     }
     return "unknown scene failure";
 }

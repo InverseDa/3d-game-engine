@@ -8,8 +8,7 @@
 namespace LE::Math
 {
 
-template <typename T, std::size_t R, std::size_t C>
-struct Matrix
+template <typename T, std::size_t R, std::size_t C> struct Matrix
 {
     static_assert(std::is_floating_point<T>::value, "Matrix scalar must be float or double");
     static_assert(R > 0 && C > 0, "Matrix dimensions must be non-zero");
@@ -45,12 +44,7 @@ struct Matrix
         }
     }
 
-    template <typename... Args,
-        typename std::enable_if<(sizeof...(Args) == R * C) && (R * C != 1), int>::type = 0>
-    explicit constexpr Matrix(Args... Components) noexcept
-        : Values{static_cast<T>(Components)...}
-    {
-    }
+    template <typename... Args, typename std::enable_if<(sizeof...(Args) == R * C) && (R * C != 1), int>::type = 0> explicit constexpr Matrix(Args... Components) noexcept : Values{static_cast<T>(Components)...} {}
 
     static constexpr Matrix Zero() noexcept { return Matrix{}; }
 
@@ -106,8 +100,7 @@ struct Matrix
         return Result;
     }
 
-    template <std::size_t OtherColumns>
-    Matrix<T, R, OtherColumns> operator*(const Matrix<T, C, OtherColumns>& Other) const noexcept
+    template <std::size_t OtherColumns> Matrix<T, R, OtherColumns> operator*(const Matrix<T, C, OtherColumns>& Other) const noexcept
     {
         Matrix<T, R, OtherColumns> Result;
         for (std::size_t Row = 0; Row < R; ++Row)
@@ -117,8 +110,7 @@ struct Matrix
                 T Sum = static_cast<T>(0);
                 for (std::size_t Inner = 0; Inner < C; ++Inner)
                 {
-                    Sum += Values[Row * C + Inner]
-                        * Other.Values[Inner * OtherColumns + Column];
+                    Sum += Values[Row * C + Inner] * Other.Values[Inner * OtherColumns + Column];
                 }
                 Result.Values[Row * OtherColumns + Column] = Sum;
             }
@@ -174,14 +166,12 @@ private:
     }
 };
 
-template <typename T, std::size_t R, std::size_t C>
-Matrix<T, R, C> operator*(const T ScalarValue, Matrix<T, R, C> Value) noexcept
+template <typename T, std::size_t R, std::size_t C> Matrix<T, R, C> operator*(const T ScalarValue, Matrix<T, R, C> Value) noexcept
 {
     return Value *= ScalarValue;
 }
 
-template <typename T, std::size_t R, std::size_t C>
-bool operator==(const Matrix<T, R, C>& Left, const Matrix<T, R, C>& Right) noexcept
+template <typename T, std::size_t R, std::size_t C> bool operator==(const Matrix<T, R, C>& Left, const Matrix<T, R, C>& Right) noexcept
 {
     for (std::size_t Index = 0; Index < R * C; ++Index)
     {
@@ -193,8 +183,7 @@ bool operator==(const Matrix<T, R, C>& Left, const Matrix<T, R, C>& Right) noexc
     return true;
 }
 
-template <typename T, std::size_t R, std::size_t C>
-bool operator!=(const Matrix<T, R, C>& Left, const Matrix<T, R, C>& Right) noexcept
+template <typename T, std::size_t R, std::size_t C> bool operator!=(const Matrix<T, R, C>& Left, const Matrix<T, R, C>& Right) noexcept
 {
     return !(Left == Right);
 }

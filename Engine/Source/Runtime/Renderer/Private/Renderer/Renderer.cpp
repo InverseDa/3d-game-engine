@@ -15,15 +15,9 @@ namespace
 class FRFGFrameSlotReleaseSink final : public IRFGDeferredReleaseSink
 {
 public:
-    explicit FRFGFrameSlotReleaseSink(FRenderFrameScope& InFrameScope) noexcept
-        : FrameScope(InFrameScope)
-    {
-    }
+    explicit FRFGFrameSlotReleaseSink(FRenderFrameScope& InFrameScope) noexcept : FrameScope(InFrameScope) {}
 
-    bool DeferRelease(FRHIResource* const Resource) noexcept override
-    {
-        return FrameScope.DeferRelease(Resource);
-    }
+    bool DeferRelease(FRHIResource* const Resource) noexcept override { return FrameScope.DeferRelease(Resource); }
 
 private:
     FRenderFrameScope& FrameScope;
@@ -73,9 +67,7 @@ bool FRenderer::IsInitialized() const
     return bInitialized;
 }
 
-ERenderFrameRecordResult FRenderer::RenderFrame(
-    const FRendererFrameContext& FrameContext,
-    const FRenderScene* RenderScene)
+ERenderFrameRecordResult FRenderer::RenderFrame(const FRendererFrameContext& FrameContext, const FRenderScene* RenderScene)
 {
     static const FRenderScene EmptyRenderScene;
 
@@ -84,8 +76,7 @@ ERenderFrameRecordResult FRenderer::RenderFrame(
         return ERenderFrameRecordResult::InvalidArguments;
     }
 
-    if (FrameContext.Device == nullptr || FrameContext.CommandList == nullptr ||
-        FrameContext.FrameScope == nullptr || FrameContext.Pipeline == nullptr)
+    if (FrameContext.Device == nullptr || FrameContext.CommandList == nullptr || FrameContext.FrameScope == nullptr || FrameContext.Pipeline == nullptr)
     {
         return ERenderFrameRecordResult::InvalidArguments;
     }
@@ -111,12 +102,7 @@ ERenderFrameRecordResult FRenderer::RenderFrame(
             continue;
         }
 
-        const LE::FRFGPassHandle PassHandle = Builder.AddPass(
-            Pass->GetPassName(),
-            Pass->GetPassName(),
-            {},
-            LE::ERFGPassFlags::None,
-            Pass->GetQueueType());
+        const LE::FRFGPassHandle PassHandle = Builder.AddPass(Pass->GetPassName(), Pass->GetPassName(), {}, LE::ERFGPassFlags::None, Pass->GetQueueType());
 
         FRenderPassSetupContext SetupContext;
         SetupContext.GraphBridge = &GraphBridge;
@@ -126,17 +112,14 @@ ERenderFrameRecordResult FRenderer::RenderFrame(
         SetupContext.RenderView = &EffectiveView;
         Pass->Setup(SetupContext);
 
-        Builder.SetPassCallback(
-            PassHandle,
-            [Pass, &FrameContext, &EffectiveRenderScene, &EffectiveView](LE::FRFGPassContext& Context)
-            {
-                FRenderPassRecordContext RecordContext;
-                RecordContext.PassContext = &Context;
-                RecordContext.FrameContext = &FrameContext;
-                RecordContext.RenderScene = &EffectiveRenderScene;
-                RecordContext.RenderView = &EffectiveView;
-                Pass->Record(RecordContext);
-            });
+        Builder.SetPassCallback(PassHandle, [Pass, &FrameContext, &EffectiveRenderScene, &EffectiveView](LE::FRFGPassContext& Context) {
+            FRenderPassRecordContext RecordContext;
+            RecordContext.PassContext = &Context;
+            RecordContext.FrameContext = &FrameContext;
+            RecordContext.RenderScene = &EffectiveRenderScene;
+            RecordContext.RenderView = &EffectiveView;
+            Pass->Record(RecordContext);
+        });
     }
 
     const LE::FRFGGraphSignature Signature = Builder.BuildSignature();
@@ -152,15 +135,12 @@ ERenderFrameRecordResult FRenderer::RenderFrame(
     ExecuteOptions.bWaitForCompletion = false;
     FRFGFrameSlotReleaseSink DeferredReleaseSink(*FrameContext.FrameScope);
     ExecuteOptions.DeferredReleaseSink = &DeferredReleaseSink;
-    const ERHIQueueSubmitResult RecordResult = GraphInstance.Execute(
-        CompileResult, Builder.GetRecordedGraph(), ExecutionContext, ExecuteOptions);
+    const ERHIQueueSubmitResult RecordResult = GraphInstance.Execute(CompileResult, Builder.GetRecordedGraph(), ExecutionContext, ExecuteOptions);
     if (RecordResult == ERHIQueueSubmitResult::Success)
     {
         return ERenderFrameRecordResult::Success;
     }
-    return RecordResult == ERHIQueueSubmitResult::InvalidArguments
-        ? ERenderFrameRecordResult::InvalidArguments
-        : ERenderFrameRecordResult::Error;
+    return RecordResult == ERHIQueueSubmitResult::InvalidArguments ? ERenderFrameRecordResult::InvalidArguments : ERenderFrameRecordResult::Error;
 }
 
 LE::FRFGInstance& FRenderer::GetGraphInstance()

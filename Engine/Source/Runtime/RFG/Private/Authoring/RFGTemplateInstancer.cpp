@@ -20,8 +20,7 @@ void HashBytes(uint64& Hash, const void* Data, size_t Size)
     }
 }
 
-template<typename T>
-void HashValue(uint64& Hash, const T& Value)
+template <typename T> void HashValue(uint64& Hash, const T& Value)
 {
     HashBytes(Hash, &Value, sizeof(T));
 }
@@ -32,11 +31,7 @@ void HashString(uint64& Hash, const LE::String& Value)
 }
 }
 
-FRFGTemplateInstantiateResult FRFGTemplateInstancer::Instantiate(
-    const FRFGTemplate& Template,
-    const FRFGParameterStore& /*ParameterStore*/,
-    FRFGInstance& /*Instance*/,
-    const FRFGTemplateInstantiateOptions& /*Options*/) const
+FRFGTemplateInstantiateResult FRFGTemplateInstancer::Instantiate(const FRFGTemplate& Template, const FRFGParameterStore& /*ParameterStore*/, FRFGInstance& /*Instance*/, const FRFGTemplateInstantiateOptions& /*Options*/) const
 {
     FRFGTemplateInstantiateResult Result;
 

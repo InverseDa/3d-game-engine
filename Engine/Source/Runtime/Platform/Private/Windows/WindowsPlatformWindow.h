@@ -3,10 +3,10 @@
 #include "Platform/PlatformWindow.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #endif
 #ifndef NOMINMAX
-    #define NOMINMAX
+#define NOMINMAX
 #endif
 #include <Windows.h>
 
@@ -22,7 +22,7 @@ public:
     bool IsValid() const noexcept override { return Hwnd != nullptr; }
     FPlatformSurface GetSurface() const noexcept override;
     void PumpEvents(FPlatformEventQueue& OutEvents) override;
-    FPlatformWindowSize GetSize() const noexcept override { return { Width, Height }; }
+    FPlatformWindowSize GetSize() const noexcept override { return {Width, Height}; }
     bool IsMinimized() const noexcept override { return bMinimized; }
     bool IsCloseRequested() const noexcept override { return bCloseRequested; }
 

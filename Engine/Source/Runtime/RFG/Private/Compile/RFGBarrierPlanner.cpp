@@ -51,9 +51,7 @@ void FRFGBarrierPlanner::BuildResourceLifetimes(const FRFGRecordedGraph& Recorde
                 ResourceLife.LastPassIndex = PassIndex;
 
                 const FRFGResourceNode& ResourceNode = RecordedGraph.GetResourceNode(ResourceAccess.Resource);
-                ResourceLife.bTransient = !EnumHasAnyFlags(
-                    ResourceNode.Flags,
-                    ERFGResourceFlags::Imported | ERFGResourceFlags::External | ERFGResourceFlags::Persistent);
+                ResourceLife.bTransient = !EnumHasAnyFlags(ResourceNode.Flags, ERFGResourceFlags::Imported | ERFGResourceFlags::External | ERFGResourceFlags::Persistent);
 
                 LifetimeIndexByResourceId.Insert(ResourceAccess.Resource.Id, static_cast<uint32>(ResourceLifetimes.Size()));
                 ResourceLifetimes.PushBack(ResourceLife);
@@ -96,13 +94,7 @@ void FRFGBarrierPlanner::BuildBarriers(const FRFGRecordedGraph& RecordedGraph, F
             FLastResourceState& LastState = *LastStatePointer;
             const FRFGResourceNode& ResourceNode = RecordedGraph.GetResourceNode(ResourceAccess.Resource);
             const LE::ERHIResourceState BeforeState = LastState.bInitialized ? LastState.ResourceState : ResourceNode.InitialState;
-            const bool bNeedsBarrier =
-                (!LastState.bInitialized && ResourceAccess.Access.State != LE::ERHIResourceState::Undefined) ||
-                (LastState.bInitialized &&
-                 (LastState.Queue != CompiledPass.Queue ||
-                 BeforeState != ResourceAccess.Access.State ||
-                 AccessHasWrite(LastState.Access) ||
-                 AccessHasWrite(ResourceAccess.Access.Access)));
+            const bool bNeedsBarrier = (!LastState.bInitialized && ResourceAccess.Access.State != LE::ERHIResourceState::Undefined) || (LastState.bInitialized && (LastState.Queue != CompiledPass.Queue || BeforeState != ResourceAccess.Access.State || AccessHasWrite(LastState.Access) || AccessHasWrite(ResourceAccess.Access.Access)));
 
             if (bNeedsBarrier)
             {

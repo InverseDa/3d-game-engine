@@ -4,17 +4,11 @@
 namespace LE
 {
 
-FVulkanRHIShader::FVulkanRHIShader(FVulkanRHIDevice* InDevice, const FRHIShaderDesc& InDesc)
-    : TVulkanResourceBase<FRHIShaderDesc>(InDevice, InDesc)
+FVulkanRHIShader::FVulkanRHIShader(FVulkanRHIDevice* InDevice, const FRHIShaderDesc& InDesc) : TVulkanResourceBase<FRHIShaderDesc>(InDevice, InDesc)
 {
-    if (Device == nullptr ||
-        Device->VkContext.LogicalDevice == VK_NULL_HANDLE ||
-        Desc.ByteCode == nullptr ||
-        Desc.ByteCodeSize == 0 ||
-        (Desc.ByteCodeSize % 4) != 0)
+    if (Device == nullptr || Device->VkContext.LogicalDevice == VK_NULL_HANDLE || Desc.ByteCode == nullptr || Desc.ByteCodeSize == 0 || (Desc.ByteCodeSize % 4) != 0)
     {
-        LE_LOG(LogRHI, Error, "Shader creation failed: invalid input. LogicalDeviceValid={}, ByteCodeValid={}, ByteCodeSize={}",
-            Device != nullptr && Device->VkContext.LogicalDevice != VK_NULL_HANDLE, Desc.ByteCode != nullptr, Desc.ByteCodeSize);
+        LE_LOG(LogRHI, Error, "Shader creation failed: invalid input. LogicalDeviceValid={}, ByteCodeValid={}, ByteCodeSize={}", Device != nullptr && Device->VkContext.LogicalDevice != VK_NULL_HANDLE, Desc.ByteCode != nullptr, Desc.ByteCodeSize);
         this->Module = VK_NULL_HANDLE;
         return;
     }

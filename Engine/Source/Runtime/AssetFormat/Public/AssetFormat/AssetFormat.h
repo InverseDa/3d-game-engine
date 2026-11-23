@@ -33,8 +33,7 @@ struct FAssetFileHeaderView
 
 struct FMeshAssetData
 {
-    explicit FMeshAssetData(IAllocator& Allocator = GetDefaultAllocator()) noexcept
-        : Positions(Allocator), Indices(Allocator), UVs(Allocator), Normals(Allocator) {}
+    explicit FMeshAssetData(IAllocator& Allocator = GetDefaultAllocator()) noexcept : Positions(Allocator), Indices(Allocator), UVs(Allocator), Normals(Allocator) {}
 
     Array<Math::Vector3f> Positions;
     Array<uint32> Indices;
@@ -62,8 +61,7 @@ struct FMaterialAssetData
 
 struct FCpuTextureAsset
 {
-    explicit FCpuTextureAsset(IAllocator& Allocator = GetDefaultAllocator()) noexcept
-        : Pixels(Allocator) {}
+    explicit FCpuTextureAsset(IAllocator& Allocator = GetDefaultAllocator()) noexcept : Pixels(Allocator) {}
 
     uint32 Width = 0;
     uint32 Height = 0;
@@ -86,29 +84,19 @@ enum class EAssetFormatResult : uint8
 // Header-only callers provide up to MaxAssetFileHeaderBytes from the start of
 // the file and its full byte length. Path borrows that prefix on success.
 // All codec operations preserve their outputs on failure.
-ASSETFORMAT_API EAssetFormatResult ReadAssetFileHeader(
-    Span<const uint8> Prefix, std::size_t FileSize, FAssetFileHeaderView& Out,
-    IAllocator& Allocator = GetDefaultAllocator()) noexcept;
+ASSETFORMAT_API EAssetFormatResult ReadAssetFileHeader(Span<const uint8> Prefix, std::size_t FileSize, FAssetFileHeaderView& Out, IAllocator& Allocator = GetDefaultAllocator()) noexcept;
 
-inline EAssetFormatResult ReadAssetFileHeader(
-    const Span<const uint8> Bytes, FAssetFileHeaderView& Out,
-    IAllocator& Allocator = GetDefaultAllocator()) noexcept
+inline EAssetFormatResult ReadAssetFileHeader(const Span<const uint8> Bytes, FAssetFileHeaderView& Out, IAllocator& Allocator = GetDefaultAllocator()) noexcept
 {
     return ReadAssetFileHeader(Bytes, Bytes.Size(), Out, Allocator);
 }
 
-ASSETFORMAT_API EAssetFormatResult EncodeAssetFile(
-    FAssetId Id, StringView Path, const FMeshAssetData& Mesh, Array<uint8>& Out) noexcept;
-ASSETFORMAT_API EAssetFormatResult EncodeAssetFile(
-    FAssetId Id, StringView Path, const FMaterialAssetData& Material, Array<uint8>& Out) noexcept;
-ASSETFORMAT_API EAssetFormatResult EncodeAssetFile(
-    FAssetId Id, StringView Path, const FCpuTextureAsset& Texture, Array<uint8>& Out) noexcept;
+ASSETFORMAT_API EAssetFormatResult EncodeAssetFile(FAssetId Id, StringView Path, const FMeshAssetData& Mesh, Array<uint8>& Out) noexcept;
+ASSETFORMAT_API EAssetFormatResult EncodeAssetFile(FAssetId Id, StringView Path, const FMaterialAssetData& Material, Array<uint8>& Out) noexcept;
+ASSETFORMAT_API EAssetFormatResult EncodeAssetFile(FAssetId Id, StringView Path, const FCpuTextureAsset& Texture, Array<uint8>& Out) noexcept;
 
-ASSETFORMAT_API EAssetFormatResult DecodeAssetFile(
-    Span<const uint8> Bytes, FMeshAssetData& Out) noexcept;
-ASSETFORMAT_API EAssetFormatResult DecodeAssetFile(
-    Span<const uint8> Bytes, FMaterialAssetData& Out) noexcept;
-ASSETFORMAT_API EAssetFormatResult DecodeAssetFile(
-    Span<const uint8> Bytes, FCpuTextureAsset& Out) noexcept;
+ASSETFORMAT_API EAssetFormatResult DecodeAssetFile(Span<const uint8> Bytes, FMeshAssetData& Out) noexcept;
+ASSETFORMAT_API EAssetFormatResult DecodeAssetFile(Span<const uint8> Bytes, FMaterialAssetData& Out) noexcept;
+ASSETFORMAT_API EAssetFormatResult DecodeAssetFile(Span<const uint8> Bytes, FCpuTextureAsset& Out) noexcept;
 
 } // namespace LE

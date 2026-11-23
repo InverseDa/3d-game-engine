@@ -36,39 +36,21 @@ public:
     IAllocator& GetAllocator() const noexcept { return Value.GetAllocator(); }
 
     ESoftAssetPathResult TryAssign(StringView Source) noexcept;
-    static ESoftAssetPathResult TryParse(
-        StringView Source,
-        FSoftAssetPath& OutPath) noexcept
-    {
-        return OutPath.TryAssign(Source);
-    }
+    static ESoftAssetPathResult TryParse(StringView Source, FSoftAssetPath& OutPath) noexcept { return OutPath.TryAssign(Source); }
 
     void Reset() noexcept { Value.Clear(); }
 
-    friend bool operator==(const FSoftAssetPath& Left, const FSoftAssetPath& Right) noexcept
-    {
-        return Left.Value == Right.Value;
-    }
-    friend bool operator!=(const FSoftAssetPath& Left, const FSoftAssetPath& Right) noexcept
-    {
-        return !(Left == Right);
-    }
-    friend bool operator<(const FSoftAssetPath& Left, const FSoftAssetPath& Right) noexcept
-    {
-        return Left.Value < Right.Value;
-    }
+    friend bool operator==(const FSoftAssetPath& Left, const FSoftAssetPath& Right) noexcept { return Left.Value == Right.Value; }
+    friend bool operator!=(const FSoftAssetPath& Left, const FSoftAssetPath& Right) noexcept { return !(Left == Right); }
+    friend bool operator<(const FSoftAssetPath& Left, const FSoftAssetPath& Right) noexcept { return Left.Value < Right.Value; }
 
 private:
     String Value;
 };
 
-template <>
-struct DefaultHash<FSoftAssetPath>
+template <> struct DefaultHash<FSoftAssetPath>
 {
-    std::size_t operator()(const FSoftAssetPath& Path) const noexcept
-    {
-        return StringViewHash{}(Path.View());
-    }
+    std::size_t operator()(const FSoftAssetPath& Path) const noexcept { return StringViewHash{}(Path.View()); }
 };
 
 } // namespace LE

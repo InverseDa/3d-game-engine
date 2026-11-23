@@ -42,9 +42,7 @@ public:
     FReflectionRegistry(FReflectionRegistry&&) = delete;
     FReflectionRegistry& operator=(FReflectionRegistry&&) = delete;
 
-    EReflectionRegisterResult RegisterModule(
-        const FReflectionModuleDescriptor& Descriptor,
-        FReflectionModuleHandle& OutHandle) noexcept;
+    EReflectionRegisterResult RegisterModule(const FReflectionModuleDescriptor& Descriptor, FReflectionModuleHandle& OutHandle) noexcept;
     EReflectionUnregisterResult UnregisterModule(FReflectionModuleHandle Handle) noexcept;
 
     const FTypeInfo* FindType(FTypeId Id) const noexcept;

@@ -12,63 +12,33 @@
 namespace LE
 {
 
-inline bool IsSceneColorCompositeConfigurationValid(
-    const FBasePassCompositePipelineDesc& Desc) noexcept
+inline bool IsSceneColorCompositeConfigurationValid(const FBasePassCompositePipelineDesc& Desc) noexcept
 {
-    if (Desc.BackBufferView == nullptr || Desc.BackBufferView->GetTexture() == nullptr ||
-        Desc.CompositePipeline == nullptr || Desc.CompositeBindGroup == nullptr ||
-        Desc.BasePassResources.SceneColorTexture == nullptr ||
-        Desc.BasePassResources.SceneColorView == nullptr ||
-        Desc.BasePassResources.SceneColorView->GetTexture() !=
-            Desc.BasePassResources.SceneColorTexture)
+    if (Desc.BackBufferView == nullptr || Desc.BackBufferView->GetTexture() == nullptr || Desc.CompositePipeline == nullptr || Desc.CompositeBindGroup == nullptr || Desc.BasePassResources.SceneColorTexture == nullptr || Desc.BasePassResources.SceneColorView == nullptr || Desc.BasePassResources.SceneColorView->GetTexture() != Desc.BasePassResources.SceneColorTexture)
     {
         return false;
     }
     const FRHITextureDesc& BackBuffer = Desc.BackBufferView->GetTexture()->GetDesc();
-    const FRHITextureDesc& SceneColor =
-        Desc.BasePassResources.SceneColorTexture->GetDesc();
+    const FRHITextureDesc& SceneColor = Desc.BasePassResources.SceneColorTexture->GetDesc();
     const FRHITextureViewDesc& BackBufferView = Desc.BackBufferView->GetDesc();
     const FRHIPipelineDesc_Graphics& Pipeline = Desc.CompositePipeline->GetDesc();
     const FRHIBindGroupDesc& BindGroup = Desc.CompositeBindGroup->GetDesc();
-    const EPixelFormat BackBufferViewFormat = BackBufferView.Format == EPixelFormat::Unknown
-        ? BackBuffer.Format
-        : BackBufferView.Format;
-    return BackBuffer.Width > 0 && BackBuffer.Height > 0 &&
-        BackBuffer.bIsRenderTarget &&
-        SceneColor.Width > 0 && SceneColor.Height > 0 &&
-        SceneColor.Format == EPixelFormat::B8G8R8A8_SRGB &&
-        SceneColor.bIsShaderResource && Pipeline.RenderTargetCount == 1 &&
-        Pipeline.RenderTargetFormats[0] == BackBufferViewFormat &&
-        Pipeline.DepthStencilFormat == EPixelFormat::Unknown &&
-        Pipeline.BindGroupLayouts.Size() == 1 &&
-        Pipeline.BindGroupLayouts[0] != nullptr &&
-        BindGroup.Layout == Pipeline.BindGroupLayouts[0] &&
-        Pipeline.BindGroupLayouts[0]->GetDesc().SetIndex == 0;
+    const EPixelFormat BackBufferViewFormat = BackBufferView.Format == EPixelFormat::Unknown ? BackBuffer.Format : BackBufferView.Format;
+    return BackBuffer.Width > 0 && BackBuffer.Height > 0 && BackBuffer.bIsRenderTarget && SceneColor.Width > 0 && SceneColor.Height > 0 && SceneColor.Format == EPixelFormat::B8G8R8A8_SRGB && SceneColor.bIsShaderResource && Pipeline.RenderTargetCount == 1 && Pipeline.RenderTargetFormats[0] == BackBufferViewFormat && Pipeline.DepthStencilFormat == EPixelFormat::Unknown && Pipeline.BindGroupLayouts.Size() == 1 && Pipeline.BindGroupLayouts[0] != nullptr && BindGroup.Layout == Pipeline.BindGroupLayouts[0] && Pipeline.BindGroupLayouts[0]->GetDesc().SetIndex == 0;
 }
 
 class FSceneColorCompositePass final : public IRenderPass
 {
 public:
-    explicit FSceneColorCompositePass(
-        const FBasePassCompositePipelineDesc& InDesc) noexcept
-        : Desc(InDesc)
-    {
-    }
+    explicit FSceneColorCompositePass(const FBasePassCompositePipelineDesc& InDesc) noexcept : Desc(InDesc) {}
 
-    const char* GetPassName() const override
-    {
-        return "CompositeToBackBufferPass";
-    }
+    const char* GetPassName() const override { return "CompositeToBackBufferPass"; }
 
-    ERFGQueueType GetQueueType() const override
-    {
-        return ERFGQueueType::Graphics;
-    }
+    ERFGQueueType GetQueueType() const override { return ERFGQueueType::Graphics; }
 
     void Setup(FRenderPassSetupContext& Context) override
     {
-        if (Context.GraphBridge == nullptr ||
-            !IsSceneColorCompositeConfigurationValid(Desc))
+        if (Context.GraphBridge == nullptr || !IsSceneColorCompositeConfigurationValid(Desc))
         {
             return;
         }
@@ -82,14 +52,8 @@ public:
         GraphicsWrite.State = ERHIResourceState::RenderTarget;
         GraphicsWrite.PipelineStage = ERFGPipelineStage::Graphics;
 
-        const FRFGResourceHandle SceneColor = Context.GraphBridge->ImportTexture(
-            "SceneColor",
-            Desc.BasePassResources.SceneColorTexture,
-            ERHIResourceState::Undefined);
-        const FRFGResourceHandle BackBuffer = Context.GraphBridge->ImportTexture(
-            "BackBuffer",
-            Desc.BackBufferView->GetTexture(),
-            ERHIResourceState::Undefined);
+        const FRFGResourceHandle SceneColor = Context.GraphBridge->ImportTexture("SceneColor", Desc.BasePassResources.SceneColorTexture, ERHIResourceState::Undefined);
+        const FRFGResourceHandle BackBuffer = Context.GraphBridge->ImportTexture("BackBuffer", Desc.BackBufferView->GetTexture(), ERHIResourceState::Undefined);
         Context.GraphBridge->Read(Context.PassHandle, SceneColor, GraphicsRead);
         Context.GraphBridge->Write(Context.PassHandle, BackBuffer, GraphicsWrite);
         Context.GraphBridge->MarkOutput(BackBuffer);
@@ -97,8 +61,7 @@ public:
 
     void Record(FRenderPassRecordContext& Context) override
     {
-        if (Context.PassContext == nullptr ||
-            !IsSceneColorCompositeConfigurationValid(Desc))
+        if (Context.PassContext == nullptr || !IsSceneColorCompositeConfigurationValid(Desc))
         {
             return;
         }
@@ -110,8 +73,7 @@ public:
         CommandList->SetGraphicsPipeline(Desc.CompositePipeline);
         CommandList->SetBindGroup(0, Desc.CompositeBindGroup);
 
-        const FRHITextureDesc& BackBuffer =
-            Desc.BackBufferView->GetTexture()->GetDesc();
+        const FRHITextureDesc& BackBuffer = Desc.BackBufferView->GetTexture()->GetDesc();
         FRHIRenderPassDesc RenderPass;
         RenderPass.RenderArea.Width = BackBuffer.Width;
         RenderPass.RenderArea.Height = BackBuffer.Height;

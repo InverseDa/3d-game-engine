@@ -16,11 +16,7 @@ constexpr std::size_t MaxCatalogEntries = 16384;
 constexpr std::size_t MaxMounts = 64;
 constexpr StringView AssetSuffix(".leasset", 8);
 
-EAssetLoadResult Report(FAssetLoadDiagnostic* Diagnostic, EAssetLoadResult Result,
-    FAssetId Id = {}, StringView Path = {},
-    EContentIOResult FileResult = EContentIOResult::Success,
-    EAssetFormatResult FormatResult = EAssetFormatResult::Success,
-    EAssetRegisterResult RegistrationResult = EAssetRegisterResult::Success) noexcept
+EAssetLoadResult Report(FAssetLoadDiagnostic* Diagnostic, EAssetLoadResult Result, FAssetId Id = {}, StringView Path = {}, EContentIOResult FileResult = EContentIOResult::Success, EAssetFormatResult FormatResult = EAssetFormatResult::Success, EAssetRegisterResult RegistrationResult = EAssetRegisterResult::Success) noexcept
 {
     if (Diagnostic != nullptr)
     {
@@ -59,8 +55,7 @@ bool FoldAscii(StringView Value, String& Out) noexcept
     for (std::size_t Index = 0; Index < Value.Size(); ++Index)
     {
         const char Character = Value[Index];
-        const char Folded = Character >= 'A' && Character <= 'Z'
-            ? static_cast<char>(Character + ('a' - 'A')) : Character;
+        const char Folded = Character >= 'A' && Character <= 'Z' ? static_cast<char>(Character + ('a' - 'A')) : Character;
         if (!Out.TryAppend(StringView(&Folded, 1)))
         {
             return false;
@@ -69,8 +64,7 @@ bool FoldAscii(StringView Value, String& Out) noexcept
     return true;
 }
 
-EAssetLoadResult RememberPhysicalPrefixes(StringView Path,
-    HashMap<String, String>& Spellings, IAllocator& Allocator) noexcept
+EAssetLoadResult RememberPhysicalPrefixes(StringView Path, HashMap<String, String>& Spellings, IAllocator& Allocator) noexcept
 {
     for (std::size_t End = 0; End <= Path.Size(); ++End)
     {
@@ -94,8 +88,7 @@ EAssetLoadResult RememberPhysicalPrefixes(StringView Path,
         else
         {
             String Spelling(Allocator);
-            if (!Spelling.TryAssign(Prefix) ||
-                Spellings.TryInsert(std::move(Folded), std::move(Spelling)) != EHashInsertResult::Inserted)
+            if (!Spelling.TryAssign(Prefix) || Spellings.TryInsert(std::move(Folded), std::move(Spelling)) != EHashInsertResult::Inserted)
             {
                 return EAssetLoadResult::AllocationFailed;
             }
@@ -106,8 +99,7 @@ EAssetLoadResult RememberPhysicalPrefixes(StringView Path,
 
 struct FCatalogRecord
 {
-    explicit FCatalogRecord(IAllocator& Allocator) noexcept
-        : Path(Allocator), Relative(Allocator) {}
+    explicit FCatalogRecord(IAllocator& Allocator) noexcept : Path(Allocator), Relative(Allocator) {}
 
     FAssetCatalogEntry View() const noexcept { return {Id, Type, Path.View()}; }
 
@@ -136,8 +128,7 @@ void DestroyCpuTexture(void* Context, void* Object) noexcept
 
 struct FAssetCatalog::FIndex
 {
-    explicit FIndex(IAllocator& Allocator) noexcept
-        : Roots(Allocator), Records(Allocator), ById(Allocator), ByPath(Allocator) {}
+    explicit FIndex(IAllocator& Allocator) noexcept : Roots(Allocator), Records(Allocator), ById(Allocator), ByPath(Allocator) {}
 
     Array<String> Roots;
     Array<FCatalogRecord> Records;
@@ -149,8 +140,7 @@ FAssetCatalog::FAssetCatalog(IAllocator& InAllocator) noexcept : Allocator(InAll
 
 FAssetCatalog::~FAssetCatalog() noexcept = default;
 
-EAssetLoadResult FAssetCatalog::Rebuild(Span<const FAssetMount> Mounts,
-    FAssetLoadDiagnostic* Diagnostic) noexcept
+EAssetLoadResult FAssetCatalog::Rebuild(Span<const FAssetMount> Mounts, FAssetLoadDiagnostic* Diagnostic) noexcept
 {
     if (Mounts.Size() > MaxMounts)
     {
@@ -170,10 +160,7 @@ EAssetLoadResult FAssetCatalog::Rebuild(Span<const FAssetMount> Mounts,
         {
             return Report(Diagnostic, EAssetLoadResult::AllocationFailed, {}, Mount.Name);
         }
-        if (Mount.Name.IsEmpty() || !IsPortableName(Mount.Name) ||
-            Canonical.TryAssign(Probe.View()) != ESoftAssetPathResult::Success ||
-            Canonical.View() != Probe.View() ||
-            std::memchr(Mount.Name.Data(), '/', Mount.Name.Size()) != nullptr)
+        if (Mount.Name.IsEmpty() || !IsPortableName(Mount.Name) || Canonical.TryAssign(Probe.View()) != ESoftAssetPathResult::Success || Canonical.View() != Probe.View() || std::memchr(Mount.Name.Data(), '/', Mount.Name.Size()) != nullptr)
         {
             return Report(Diagnostic, EAssetLoadResult::InvalidMount, {}, Mount.Name);
         }
@@ -185,18 +172,15 @@ EAssetLoadResult FAssetCatalog::Rebuild(Span<const FAssetMount> Mounts,
         const EHashInsertResult MountResult = MountNames.TryInsert(std::move(FoldedMount));
         if (MountResult != EHashInsertResult::Inserted)
         {
-            return Report(Diagnostic, MountResult == EHashInsertResult::AlreadyExists
-                ? EAssetLoadResult::DuplicatePath : EAssetLoadResult::AllocationFailed, {}, Mount.Name);
+            return Report(Diagnostic, MountResult == EHashInsertResult::AlreadyExists ? EAssetLoadResult::DuplicatePath : EAssetLoadResult::AllocationFailed, {}, Mount.Name);
         }
         Array<String> Files(Allocator);
         String FailingRelativePath(Allocator);
-        const auto ListResult = EnumerateContentFiles(Mount.AbsoluteRoot, AssetSuffix,
-            MaxCatalogEntries - Candidate->Records.Size(), Files, &FailingRelativePath);
+        const auto ListResult = EnumerateContentFiles(Mount.AbsoluteRoot, AssetSuffix, MaxCatalogEntries - Candidate->Records.Size(), Files, &FailingRelativePath);
         if (ListResult != EContentIOResult::Success)
         {
             String FailingPath(Allocator);
-            if (!FailingRelativePath.IsEmpty() && FailingPath.TryAssign(Mount.Name) &&
-                FailingPath.TryAppend("/") && FailingPath.TryAppend(FailingRelativePath.View()))
+            if (!FailingRelativePath.IsEmpty() && FailingPath.TryAssign(Mount.Name) && FailingPath.TryAppend("/") && FailingPath.TryAppend(FailingRelativePath.View()))
             {
                 return Report(Diagnostic, EAssetLoadResult::FileError, {}, FailingPath.View(), ListResult);
             }
@@ -228,26 +212,20 @@ EAssetLoadResult FAssetCatalog::Rebuild(Span<const FAssetMount> Mounts,
                 return Report(Diagnostic, EAssetLoadResult::FileError, {}, Relative.View(), FileResult);
             }
             FAssetFileHeaderView Header;
-            const EAssetFormatResult HeaderResult = FileSize <= MaxAssetFileBytes
-                ? ReadAssetFileHeader({Prefix.Data(), Prefix.Size()}, static_cast<std::size_t>(FileSize), Header, Allocator)
-                : EAssetFormatResult::LimitExceeded;
+            const EAssetFormatResult HeaderResult = FileSize <= MaxAssetFileBytes ? ReadAssetFileHeader({Prefix.Data(), Prefix.Size()}, static_cast<std::size_t>(FileSize), Header, Allocator) : EAssetFormatResult::LimitExceeded;
             if (HeaderResult != EAssetFormatResult::Success)
             {
-                return Report(Diagnostic, EAssetLoadResult::FormatError, {}, Relative.View(),
-                    EContentIOResult::Success, HeaderResult);
+                return Report(Diagnostic, EAssetLoadResult::FormatError, {}, Relative.View(), EContentIOResult::Success, HeaderResult);
             }
             FCatalogRecord Entry(Allocator);
             Entry.Id = Header.Id;
             Entry.Type = Header.TypeId;
             Entry.MountIndex = MountIndex;
-            if (Relative.Size() <= AssetSuffix.Size() ||
-                Relative.View().Substr(Relative.Size() - AssetSuffix.Size(), AssetSuffix.Size()) != AssetSuffix ||
-                !IsPortableName(Header.Path))
+            if (Relative.Size() <= AssetSuffix.Size() || Relative.View().Substr(Relative.Size() - AssetSuffix.Size(), AssetSuffix.Size()) != AssetSuffix || !IsPortableName(Header.Path))
             {
                 return Report(Diagnostic, EAssetLoadResult::IdentityMismatch, Header.Id, Relative.View());
             }
-            if (!Entry.Path.TryAssign(Mount.Name) || !Entry.Path.TryAppend("/") ||
-                !Entry.Path.TryAppend(Relative.View().Substr(0, Relative.Size() - AssetSuffix.Size())))
+            if (!Entry.Path.TryAssign(Mount.Name) || !Entry.Path.TryAppend("/") || !Entry.Path.TryAppend(Relative.View().Substr(0, Relative.Size() - AssetSuffix.Size())))
             {
                 return Report(Diagnostic, EAssetLoadResult::AllocationFailed, Header.Id, Relative.View());
             }
@@ -270,8 +248,7 @@ EAssetLoadResult FAssetCatalog::Rebuild(Span<const FAssetMount> Mounts,
                 return Report(Diagnostic, PortableResult, Header.Id, Entry.Path.View());
             }
             const std::size_t Slot = Candidate->Records.Size();
-            if (Candidate->ById.TryInsert(Entry.Id, Slot) != EHashInsertResult::Inserted ||
-                Candidate->ByPath.TryInsert(std::move(Key), Slot) != EHashInsertResult::Inserted)
+            if (Candidate->ById.TryInsert(Entry.Id, Slot) != EHashInsertResult::Inserted || Candidate->ByPath.TryInsert(std::move(Key), Slot) != EHashInsertResult::Inserted)
             {
                 return Report(Diagnostic, EAssetLoadResult::AllocationFailed, Header.Id, Entry.Path.View());
             }
@@ -307,8 +284,7 @@ EAssetLoadResult FAssetCatalog::Find(StringView Path, FAssetCatalogEntry& Out) c
     const auto Result = Canonical.TryAssign(Path);
     if (Result != ESoftAssetPathResult::Success)
     {
-        return Result == ESoftAssetPathResult::AllocationFailed
-            ? EAssetLoadResult::AllocationFailed : EAssetLoadResult::InvalidInput;
+        return Result == ESoftAssetPathResult::AllocationFailed ? EAssetLoadResult::AllocationFailed : EAssetLoadResult::InvalidInput;
     }
     const std::size_t* Slot = Index ? Index->ByPath.Find(Canonical.View()) : nullptr;
     if (Slot == nullptr)
@@ -324,8 +300,7 @@ std::size_t FAssetCatalog::GetEntryCount() const noexcept
     return Index ? Index->Records.Size() : 0;
 }
 
-EAssetLoadResult FAssetCatalog::Read(FAssetId Id, Array<uint8>& Out,
-    FAssetLoadDiagnostic* Diagnostic) const noexcept
+EAssetLoadResult FAssetCatalog::Read(FAssetId Id, Array<uint8>& Out, FAssetLoadDiagnostic* Diagnostic) const noexcept
 {
     const std::size_t* Slot = Index ? Index->ById.Find(Id) : nullptr;
     if (Slot == nullptr)
@@ -334,8 +309,7 @@ EAssetLoadResult FAssetCatalog::Read(FAssetId Id, Array<uint8>& Out,
     }
     const FCatalogRecord& Entry = Index->Records[*Slot];
     String Resolved(Allocator);
-    auto FileResult = ResolveContentFile(Index->Roots[Entry.MountIndex].View(),
-        Entry.Relative.View(), Resolved);
+    auto FileResult = ResolveContentFile(Index->Roots[Entry.MountIndex].View(), Entry.Relative.View(), Resolved);
     if (FileResult == EContentIOResult::Success)
     {
         FileResult = ReadContentFile(Resolved.View(), MaxAssetFileBytes, Out);
@@ -348,8 +322,7 @@ EAssetLoadResult FAssetCatalog::Read(FAssetId Id, Array<uint8>& Out,
     const auto Result = ReadAssetFileHeader({Out.Data(), Out.Size()}, Header, Allocator);
     if (Result != EAssetFormatResult::Success)
     {
-        return Report(Diagnostic, EAssetLoadResult::FormatError, Id, Entry.Path.View(),
-            EContentIOResult::Success, Result);
+        return Report(Diagnostic, EAssetLoadResult::FormatError, Id, Entry.Path.View(), EContentIOResult::Success, Result);
     }
     if (Header.Id != Entry.Id || Header.TypeId != Entry.Type || Header.Path != Entry.Path.View())
     {
@@ -358,8 +331,7 @@ EAssetLoadResult FAssetCatalog::Read(FAssetId Id, Array<uint8>& Out,
     return EAssetLoadResult::Success;
 }
 
-template <typename Asset, typename Data>
-EAssetLoadResult FAssetCatalog::DecodeTyped(FAssetId Id, Data& Out, FAssetLoadDiagnostic* Diagnostic) const noexcept
+template <typename Asset, typename Data> EAssetLoadResult FAssetCatalog::DecodeTyped(FAssetId Id, Data& Out, FAssetLoadDiagnostic* Diagnostic) const noexcept
 {
     FAssetCatalogEntry Entry;
     const auto Found = Find(Id, Entry);
@@ -378,9 +350,7 @@ EAssetLoadResult FAssetCatalog::DecodeTyped(FAssetId Id, Data& Out, FAssetLoadDi
         return ReadResult;
     }
     const auto FormatResult = DecodeAssetFile(Bytes.AsSpan(), Out);
-    const EAssetLoadResult Result = FormatResult == EAssetFormatResult::Success ? EAssetLoadResult::Success :
-        FormatResult == EAssetFormatResult::AllocationFailed ? EAssetLoadResult::AllocationFailed :
-        EAssetLoadResult::FormatError;
+    const EAssetLoadResult Result = FormatResult == EAssetFormatResult::Success ? EAssetLoadResult::Success : FormatResult == EAssetFormatResult::AllocationFailed ? EAssetLoadResult::AllocationFailed : EAssetLoadResult::FormatError;
     return Report(Diagnostic, Result, Id, Entry.Path, EContentIOResult::Success, FormatResult);
 }
 
@@ -399,25 +369,18 @@ EAssetLoadResult FAssetCatalog::Decode(FAssetId Id, FCpuTextureAsset& Out, FAsse
     return DecodeTyped<FCpuTextureAsset>(Id, Out, Diagnostic);
 }
 
-FAssetLoadSession::FAssetLoadSession(const FAssetCatalog& InCatalog,
-    FAssetLoadProviders InProviders, IAllocator& InAllocator) noexcept
-    : Catalog(InCatalog), Providers(InProviders), Allocator(InAllocator), Registry(InAllocator) {}
+FAssetLoadSession::FAssetLoadSession(const FAssetCatalog& InCatalog, FAssetLoadProviders InProviders, IAllocator& InAllocator) noexcept : Catalog(InCatalog), Providers(InProviders), Allocator(InAllocator), Registry(InAllocator) {}
 
 FAssetLoadSession::~FAssetLoadSession() noexcept = default;
 
-template <typename Asset>
-EAssetLoadResult FAssetLoadSession::LoadPath(StringView Path, TAssetHandle<Asset>& Out,
-    FAssetLoadDiagnostic* Diagnostic) noexcept
+template <typename Asset> EAssetLoadResult FAssetLoadSession::LoadPath(StringView Path, TAssetHandle<Asset>& Out, FAssetLoadDiagnostic* Diagnostic) noexcept
 {
     FAssetCatalogEntry Entry;
     const auto Result = Catalog.Find(Path, Entry);
-    return Result == EAssetLoadResult::Success
-        ? Load(Entry.Id, Out, Diagnostic) : Report(Diagnostic, Result, {}, Path);
+    return Result == EAssetLoadResult::Success ? Load(Entry.Id, Out, Diagnostic) : Report(Diagnostic, Result, {}, Path);
 }
 
-template <typename Asset, typename Data>
-EAssetLoadResult FAssetLoadSession::LoadAsset(FAssetId Id, TAssetHandle<Asset>& Out,
-    const TAssetLoadProvider<Asset, Data>& Provider, FAssetLoadDiagnostic* Diagnostic) noexcept
+template <typename Asset, typename Data> EAssetLoadResult FAssetLoadSession::LoadAsset(FAssetId Id, TAssetHandle<Asset>& Out, const TAssetLoadProvider<Asset, Data>& Provider, FAssetLoadDiagnostic* Diagnostic) noexcept
 {
     if (bLoading)
     {
@@ -427,9 +390,7 @@ EAssetLoadResult FAssetLoadSession::LoadAsset(FAssetId Id, TAssetHandle<Asset>& 
     return LoadAssetInternal(Id, Out, Provider, Diagnostic);
 }
 
-template <typename Asset, typename Data>
-EAssetLoadResult FAssetLoadSession::LoadAssetInternal(FAssetId Id, TAssetHandle<Asset>& Out,
-    const TAssetLoadProvider<Asset, Data>& Provider, FAssetLoadDiagnostic* Diagnostic) noexcept
+template <typename Asset, typename Data> EAssetLoadResult FAssetLoadSession::LoadAssetInternal(FAssetId Id, TAssetHandle<Asset>& Out, const TAssetLoadProvider<Asset, Data>& Provider, FAssetLoadDiagnostic* Diagnostic) noexcept
 {
     FAssetCatalogEntry Entry;
     const auto FindResult = Catalog.Find(Id, Entry);
@@ -456,8 +417,7 @@ EAssetLoadResult FAssetLoadSession::LoadAssetInternal(FAssetId Id, TAssetHandle<
             return Report(Diagnostic, EAssetLoadResult::ProviderUnavailable, Id, Entry.Path);
         }
     }
-    auto DecodeAndRegister = [&](Data& Payload) noexcept
-    {
+    auto DecodeAndRegister = [&](Data& Payload) noexcept {
         const auto DecodeResult = Catalog.Decode(Id, Payload, Diagnostic);
         if (DecodeResult != EAssetLoadResult::Success)
         {
@@ -467,18 +427,14 @@ EAssetLoadResult FAssetLoadSession::LoadAssetInternal(FAssetId Id, TAssetHandle<
         FCpuTextureAssetHandle Texture;
         FAssetId TextureId;
         bool bOwnTextureEntry = false;
-        const auto RollbackTexture = [&]() noexcept
-        {
+        const auto RollbackTexture = [&]() noexcept {
             if (bOwnTextureEntry)
             {
                 static_cast<void>(Registry.Unregister(Texture));
             }
         };
-        const auto ReportMaterial = [&](EAssetLoadResult Result,
-            EAssetRegisterResult RegisterResult = EAssetRegisterResult::Success) noexcept
-        {
-            Report(Diagnostic, Result, Id, Entry.Path, EContentIOResult::Success,
-                EAssetFormatResult::Success, RegisterResult);
+        const auto ReportMaterial = [&](EAssetLoadResult Result, EAssetRegisterResult RegisterResult = EAssetRegisterResult::Success) noexcept {
+            Report(Diagnostic, Result, Id, Entry.Path, EContentIOResult::Success, EAssetFormatResult::Success, RegisterResult);
             if (Diagnostic != nullptr && Result != EAssetLoadResult::Success)
             {
                 Diagnostic->DependencyId = TextureId;
@@ -511,13 +467,14 @@ EAssetLoadResult FAssetLoadSession::LoadAssetInternal(FAssetId Id, TAssetHandle<
                 {
                     bOwnTextureEntry = Registry.TryFindById(TextureId, Texture) == EAssetFindResult::NotFound;
                     FAssetLoadDiagnostic Dependency(Allocator);
-                    const auto LoadResult = LoadAssetInternal(TextureId, Texture,
-                        TAssetLoadProvider<FCpuTextureAsset, FCpuTextureAsset>{}, &Dependency);
+                    const auto LoadResult = LoadAssetInternal(TextureId, Texture, TAssetLoadProvider<FCpuTextureAsset, FCpuTextureAsset>{}, &Dependency);
                     if (LoadResult != EAssetLoadResult::Success)
                     {
-                        Report(Diagnostic, LoadResult, Id, Entry.Path,
-                            Dependency.FileResult, Dependency.FormatResult, Dependency.RegistrationResult);
-                        if (Diagnostic != nullptr) Diagnostic->DependencyId = TextureId;
+                        Report(Diagnostic, LoadResult, Id, Entry.Path, Dependency.FileResult, Dependency.FormatResult, Dependency.RegistrationResult);
+                        if (Diagnostic != nullptr)
+                        {
+                            Diagnostic->DependencyId = TextureId;
+                        }
                         return LoadResult;
                     }
                     if (Registry.Resolve(Texture, Pixels) != EAssetResolveResult::Success)
@@ -561,38 +518,32 @@ EAssetLoadResult FAssetLoadSession::LoadAssetInternal(FAssetId Id, TAssetHandle<
     }
 }
 
-EAssetLoadResult FAssetLoadSession::Load(FAssetId Id, FMeshAssetHandle& Out,
-    FAssetLoadDiagnostic* Diagnostic) noexcept
+EAssetLoadResult FAssetLoadSession::Load(FAssetId Id, FMeshAssetHandle& Out, FAssetLoadDiagnostic* Diagnostic) noexcept
 {
     return LoadAsset(Id, Out, Providers.Mesh, Diagnostic);
 }
 
-EAssetLoadResult FAssetLoadSession::Load(FAssetId Id, FMaterialAssetHandle& Out,
-    FAssetLoadDiagnostic* Diagnostic) noexcept
+EAssetLoadResult FAssetLoadSession::Load(FAssetId Id, FMaterialAssetHandle& Out, FAssetLoadDiagnostic* Diagnostic) noexcept
 {
     return LoadAsset(Id, Out, Providers.Material, Diagnostic);
 }
 
-EAssetLoadResult FAssetLoadSession::Load(FAssetId Id, FCpuTextureAssetHandle& Out,
-    FAssetLoadDiagnostic* Diagnostic) noexcept
+EAssetLoadResult FAssetLoadSession::Load(FAssetId Id, FCpuTextureAssetHandle& Out, FAssetLoadDiagnostic* Diagnostic) noexcept
 {
     return LoadAsset(Id, Out, TAssetLoadProvider<FCpuTextureAsset, FCpuTextureAsset>{}, Diagnostic);
 }
 
-EAssetLoadResult FAssetLoadSession::Load(StringView Path, FMeshAssetHandle& Out,
-    FAssetLoadDiagnostic* Diagnostic) noexcept
+EAssetLoadResult FAssetLoadSession::Load(StringView Path, FMeshAssetHandle& Out, FAssetLoadDiagnostic* Diagnostic) noexcept
 {
     return LoadPath(Path, Out, Diagnostic);
 }
 
-EAssetLoadResult FAssetLoadSession::Load(StringView Path, FMaterialAssetHandle& Out,
-    FAssetLoadDiagnostic* Diagnostic) noexcept
+EAssetLoadResult FAssetLoadSession::Load(StringView Path, FMaterialAssetHandle& Out, FAssetLoadDiagnostic* Diagnostic) noexcept
 {
     return LoadPath(Path, Out, Diagnostic);
 }
 
-EAssetLoadResult FAssetLoadSession::Load(StringView Path, FCpuTextureAssetHandle& Out,
-    FAssetLoadDiagnostic* Diagnostic) noexcept
+EAssetLoadResult FAssetLoadSession::Load(StringView Path, FCpuTextureAssetHandle& Out, FAssetLoadDiagnostic* Diagnostic) noexcept
 {
     return LoadPath(Path, Out, Diagnostic);
 }

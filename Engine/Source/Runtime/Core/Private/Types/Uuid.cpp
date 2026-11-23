@@ -30,11 +30,7 @@ int HexValue(const char Character) noexcept
 bool FillRandomBytes(uint8* const Bytes, const std::size_t Size) noexcept
 {
 #if PLATFORM_WINDOWS
-    return BCryptGenRandom(
-        nullptr,
-        reinterpret_cast<PUCHAR>(Bytes),
-        static_cast<ULONG>(Size),
-        BCRYPT_USE_SYSTEM_PREFERRED_RNG) >= 0;
+    return BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(Bytes), static_cast<ULONG>(Size), BCRYPT_USE_SYSTEM_PREFERRED_RNG) >= 0;
 #elif PLATFORM_MAC
     return SecRandomCopyBytes(kSecRandomDefault, Size, Bytes) == errSecSuccess;
 #else
@@ -154,12 +150,8 @@ bool operator<(const FUuid& Left, const FUuid& Right) noexcept
 
 std::size_t FUuidHash::operator()(const FUuid& Value) const noexcept
 {
-    std::size_t Hash = sizeof(std::size_t) > 4
-        ? static_cast<std::size_t>(14695981039346656037ULL)
-        : static_cast<std::size_t>(2166136261U);
-    const std::size_t Prime = sizeof(std::size_t) > 4
-        ? static_cast<std::size_t>(1099511628211ULL)
-        : static_cast<std::size_t>(16777619U);
+    std::size_t Hash = sizeof(std::size_t) > 4 ? static_cast<std::size_t>(14695981039346656037ULL) : static_cast<std::size_t>(2166136261U);
+    const std::size_t Prime = sizeof(std::size_t) > 4 ? static_cast<std::size_t>(1099511628211ULL) : static_cast<std::size_t>(16777619U);
     for (const uint8 Byte : Value.GetBytes())
     {
         Hash ^= Byte;

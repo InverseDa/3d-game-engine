@@ -14,7 +14,7 @@ public:
     bool IsValid() const noexcept override { return WindowHandle != nullptr; }
     FPlatformSurface GetSurface() const noexcept override;
     void PumpEvents(FPlatformEventQueue& OutEvents) override;
-    FPlatformWindowSize GetSize() const noexcept override { return { Width, Height }; }
+    FPlatformWindowSize GetSize() const noexcept override { return {Width, Height}; }
     bool IsMinimized() const noexcept override { return bMinimized; }
     bool IsCloseRequested() const noexcept override { return bCloseRequested; }
 

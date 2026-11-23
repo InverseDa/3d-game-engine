@@ -21,8 +21,7 @@ void HashBytes(uint64& Hash, const void* Data, size_t Size)
     }
 }
 
-template<typename T>
-void HashValue(uint64& Hash, const T& Value)
+template <typename T> void HashValue(uint64& Hash, const T& Value)
 {
     HashBytes(Hash, &Value, sizeof(T));
 }
@@ -38,10 +37,7 @@ bool QueueWasDefault(ERFGQueueType QueueType)
 }
 }
 
-FRFGBuilder::FRFGBuilder(const FRFGBuilderCreateInfo& InCreateInfo)
-    : PassRegistry(InCreateInfo.PassRegistry)
-{
-}
+FRFGBuilder::FRFGBuilder(const FRFGBuilderCreateInfo& InCreateInfo) : PassRegistry(InCreateInfo.PassRegistry) {}
 
 FRFGBuilder::~FRFGBuilder() = default;
 
@@ -96,11 +92,7 @@ FRFGResourceHandle FRFGBuilder::ImportTexture(const LE::String& ResourceName, LE
         ResourceNode.Desc.Texture.MipLevels = TextureDesc.MipLevels;
         ResourceNode.Desc.Texture.ArrayLayers = TextureDesc.ArrayLayers;
         ResourceNode.Desc.Texture.Format = TextureDesc.Format;
-        ResourceNode.Desc.Texture.UsageMask =
-            (TextureDesc.bIsUAV ? (1u << 0) : 0u) |
-            (TextureDesc.bIsRenderTarget ? (1u << 1) : 0u) |
-            (TextureDesc.bIsDepthStencil ? (1u << 2) : 0u) |
-            (TextureDesc.bIsShaderResource ? (1u << 3) : 0u);
+        ResourceNode.Desc.Texture.UsageMask = (TextureDesc.bIsUAV ? (1u << 0) : 0u) | (TextureDesc.bIsRenderTarget ? (1u << 1) : 0u) | (TextureDesc.bIsDepthStencil ? (1u << 2) : 0u) | (TextureDesc.bIsShaderResource ? (1u << 3) : 0u);
     }
 
     const FRFGResourceHandle Handle = RecordedGraph.AddResourceNode(ResourceNode);
@@ -129,13 +121,7 @@ FRFGResourceHandle FRFGBuilder::ImportBuffer(const LE::String& ResourceName, LE:
     return Handle;
 }
 
-FRFGPassHandle FRFGBuilder::AddPass(
-    const LE::String& PassName,
-    const LE::String& PassTypeName,
-    const FRFGPassParameterBlock& ParameterBlock,
-    ERFGPassFlags Flags,
-    ERFGQueueType QueueType,
-    const FRFGSourceLocation& SourceLocation)
+FRFGPassHandle FRFGBuilder::AddPass(const LE::String& PassName, const LE::String& PassTypeName, const FRFGPassParameterBlock& ParameterBlock, ERFGPassFlags Flags, ERFGQueueType QueueType, const FRFGSourceLocation& SourceLocation)
 {
     FRFGPassNode PassNode;
     PassNode.Name = PassName;

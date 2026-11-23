@@ -4,7 +4,6 @@
 #include "Core/RFGHandles.h"
 #include "Core/RFGTypes.h"
 
-
 namespace LE
 {
 
@@ -21,19 +20,16 @@ struct FRFGExecutionContext
 {
     LE::FRHIDevice* Device = nullptr;
 
-    LE::FRHIQueue* GraphicsQueue  = nullptr;
-    LE::FRHIQueue* ComputeQueue   = nullptr;
-    LE::FRHIQueue* TransferQueue  = nullptr;
+    LE::FRHIQueue* GraphicsQueue = nullptr;
+    LE::FRHIQueue* ComputeQueue = nullptr;
+    LE::FRHIQueue* TransferQueue = nullptr;
 
     // 当前阶段：单 CommandList，所有 Pass 共享
     LE::FRHICommandList* CommandList = nullptr;
 
     // 多队列预留：根据 Pass 所属队列返回对应 CommandList
     // 当前实现统一返回 CommandList，后续多线程扩展时在此分发
-    LE::FRHICommandList* GetCommandList(ERFGQueueType /*Queue*/) const
-    {
-        return CommandList;
-    }
+    LE::FRHICommandList* GetCommandList(ERFGQueueType /*Queue*/) const { return CommandList; }
 
     void ResetTransientResources();
     bool TransferTransientResources(IRFGDeferredReleaseSink& DeferredReleaseSink) noexcept;

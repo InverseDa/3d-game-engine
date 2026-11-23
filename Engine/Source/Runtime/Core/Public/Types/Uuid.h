@@ -53,15 +53,13 @@ struct CORE_API FUuidHash
     std::size_t operator()(const FUuid& Value) const noexcept;
 };
 
-template <>
-struct DefaultHash<FUuid> : FUuidHash
+template <> struct DefaultHash<FUuid> : FUuidHash
 {
 };
 
 // DomainTag provides compile-time separation without assigning Entity, Asset,
 // reflection, or serialization meaning in Core.
-template <typename DomainTag>
-class TStableId
+template <typename DomainTag> class TStableId
 {
 public:
     constexpr TStableId() noexcept = default;
@@ -99,32 +97,19 @@ public:
         return true;
     }
 
-    friend bool operator==(const TStableId& Left, const TStableId& Right) noexcept
-    {
-        return Left.Value == Right.Value;
-    }
+    friend bool operator==(const TStableId& Left, const TStableId& Right) noexcept { return Left.Value == Right.Value; }
 
-    friend bool operator!=(const TStableId& Left, const TStableId& Right) noexcept
-    {
-        return !(Left == Right);
-    }
+    friend bool operator!=(const TStableId& Left, const TStableId& Right) noexcept { return !(Left == Right); }
 
-    friend bool operator<(const TStableId& Left, const TStableId& Right) noexcept
-    {
-        return Left.Value < Right.Value;
-    }
+    friend bool operator<(const TStableId& Left, const TStableId& Right) noexcept { return Left.Value < Right.Value; }
 
 private:
     FUuid Value;
 };
 
-template <typename DomainTag>
-struct DefaultHash<TStableId<DomainTag>>
+template <typename DomainTag> struct DefaultHash<TStableId<DomainTag>>
 {
-    std::size_t operator()(const TStableId<DomainTag>& Value) const noexcept
-    {
-        return FUuidHash{}(Value.GetUuid());
-    }
+    std::size_t operator()(const TStableId<DomainTag>& Value) const noexcept { return FUuidHash{}(Value.GetUuid()); }
 };
 
 } // namespace LE

@@ -21,15 +21,13 @@ FAssetTypeId ParseRequiredAssetTypeId(const StringView Text) noexcept
 
 FAssetTypeId GetMeshAssetTypeId() noexcept
 {
-    static const FAssetTypeId TypeId = ParseRequiredAssetTypeId(
-        "a2000000-0000-4000-8000-000000000001");
+    static const FAssetTypeId TypeId = ParseRequiredAssetTypeId("a2000000-0000-4000-8000-000000000001");
     return TypeId;
 }
 
 FAssetTypeId GetMaterialAssetTypeId() noexcept
 {
-    static const FAssetTypeId TypeId = ParseRequiredAssetTypeId(
-        "a2000000-0000-4000-8000-000000000002");
+    static const FAssetTypeId TypeId = ParseRequiredAssetTypeId("a2000000-0000-4000-8000-000000000002");
     return TypeId;
 }
 

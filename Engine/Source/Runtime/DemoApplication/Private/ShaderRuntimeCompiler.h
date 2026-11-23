@@ -8,17 +8,17 @@
 #include <cstdio>
 
 #if PLATFORM_WINDOWS
-    #ifndef WIN32_LEAN_AND_MEAN
-        #define WIN32_LEAN_AND_MEAN
-    #endif
-    #ifndef NOMINMAX
-        #define NOMINMAX
-    #endif
-    #include <Windows.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
 #endif
 
 #if PLATFORM_MAC
-    #include <mach-o/dyld.h>
+#include <mach-o/dyld.h>
 #endif
 
 namespace LE
@@ -103,12 +103,9 @@ inline LE::String GetExecutableDirectory()
         return {};
     }
 
-    const int ByteCount = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
-        ModulePath.Data(), static_cast<int>(PathLength), nullptr, 0, nullptr, nullptr);
+    const int ByteCount = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, ModulePath.Data(), static_cast<int>(PathLength), nullptr, 0, nullptr, nullptr);
     LE::Array<char> Bytes;
-    if (ByteCount <= 0 || !Bytes.TryResize(static_cast<std::size_t>(ByteCount)) ||
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, ModulePath.Data(), static_cast<int>(PathLength),
-            Bytes.Data(), ByteCount, nullptr, nullptr) != ByteCount)
+    if (ByteCount <= 0 || !Bytes.TryResize(static_cast<std::size_t>(ByteCount)) || WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, ModulePath.Data(), static_cast<int>(PathLength), Bytes.Data(), ByteCount, nullptr, nullptr) != ByteCount)
     {
         return {};
     }
@@ -151,22 +148,15 @@ inline LE::String ReadTextFile(const LE::String& FilePath)
 
 inline LE::String ResolveExistingPath(const char* RelativePath)
 {
-    const char* RelativePrefixes[] = {
-        "",
-        ".",
-        "..",
-        "../..",
-        "../../..",
-        "../../../..",
-        "../../../../..",
-        "../../../../../..",
-        "../../../../../../.."
-    };
+    const char* RelativePrefixes[] = {"", ".", "..", "../..", "../../..", "../../../..", "../../../../..", "../../../../../..", "../../../../../../.."};
 
     for (const char* Prefix : RelativePrefixes)
     {
         LE::String Candidate(Prefix);
-        if (Prefix[0]) { Candidate.Append("/"); }
+        if (Prefix[0])
+        {
+            Candidate.Append("/");
+        }
         Candidate.Append(RelativePath);
         if (std::filesystem::exists(Candidate.Data()))
         {
@@ -192,10 +182,14 @@ inline const char* ToGlslangStage(ERuntimeShaderStage Stage)
 {
     switch (Stage)
     {
-        case ERuntimeShaderStage::Vertex: return "vert";
-        case ERuntimeShaderStage::Fragment: return "frag";
-        case ERuntimeShaderStage::Compute: return "comp";
-        default: return "";
+    case ERuntimeShaderStage::Vertex:
+        return "vert";
+    case ERuntimeShaderStage::Fragment:
+        return "frag";
+    case ERuntimeShaderStage::Compute:
+        return "comp";
+    default:
+        return "";
     }
 }
 
@@ -213,11 +207,7 @@ inline LE::String GetCompilerExecutable()
     }
 #endif
 #if PLATFORM_MAC
-    const char* MacCandidates[] = {
-        "/opt/homebrew/bin/glslangValidator",
-        "/usr/local/bin/glslangValidator",
-        "glslangValidator"
-    };
+    const char* MacCandidates[] = {"/opt/homebrew/bin/glslangValidator", "/usr/local/bin/glslangValidator", "glslangValidator"};
 
     for (const char* Candidate : MacCandidates)
     {
@@ -245,11 +235,7 @@ inline LE::String Quote(const LE::String& Value)
     return Result;
 }
 
-inline bool CompileHlslToSpirv(
-    const char* SourceFilename,
-    ERuntimeShaderStage Stage,
-    LE::Array<char>& OutByteCode,
-    const char* EntryPoint = "Main")
+inline bool CompileHlslToSpirv(const char* SourceFilename, ERuntimeShaderStage Stage, LE::Array<char>& OutByteCode, const char* EntryPoint = "Main")
 {
     const LE::String SourcePath = ResolveExistingPath(SourceFilename);
     if (SourcePath.IsEmpty())
@@ -313,14 +299,7 @@ inline bool CompileHlslToSpirv(
     if (CompileResult != 0)
     {
         const LE::String CompileLog = ReadTextFile(LogPath);
-        LE_LOG(
-            LogXBD,
-            Error,
-            "Runtime shader compilation failed. Source={}, Stage={}, ExitCode={}, Log={}",
-            SourcePath.Data(),
-            StageArg,
-            CompileResult,
-            CompileLog.IsEmpty() ? "<empty>" : CompileLog.Data());
+        LE_LOG(LogXBD, Error, "Runtime shader compilation failed. Source={}, Stage={}, ExitCode={}, Log={}", SourcePath.Data(), StageArg, CompileResult, CompileLog.IsEmpty() ? "<empty>" : CompileLog.Data());
         return false;
     }
 

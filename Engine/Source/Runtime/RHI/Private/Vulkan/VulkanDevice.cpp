@@ -51,31 +51,60 @@ bool HasDeviceExtension(VkPhysicalDevice PhysicalDevice, const char* ExtensionNa
 #if LE_RHI_ENABLE_VALIDATION
 const char* ValidationSeverityToText(VkDebugUtilsMessageSeverityFlagBitsEXT Severity)
 {
-    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)   return "ERROR";
-    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) return "WARN";
-    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)    return "INFO";
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+    {
+        return "ERROR";
+    }
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    {
+        return "WARN";
+    }
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+    {
+        return "INFO";
+    }
     return "VERBOSE";
 }
 
 LE::LogLevel ValidationSeverityToLogLevel(VkDebugUtilsMessageSeverityFlagBitsEXT Severity)
 {
-    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)   return LE::LogLevel::Error;
-    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) return LE::LogLevel::Warn;
-    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)    return LE::LogLevel::Info;
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+    {
+        return LE::LogLevel::Error;
+    }
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    {
+        return LE::LogLevel::Warn;
+    }
+    if (Severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+    {
+        return LE::LogLevel::Info;
+    }
     return LE::LogLevel::Trace;
 }
 
 LE::String ValidationTypeToText(VkDebugUtilsMessageTypeFlagsEXT TypeFlags)
 {
     LE::String Text;
-    auto AppendType = [&Text](const char* const Name)
-    {
-        if (!Text.IsEmpty()) { Text.Append("|"); }
+    auto AppendType = [&Text](const char* const Name) {
+        if (!Text.IsEmpty())
+        {
+            Text.Append("|");
+        }
         Text.Append(Name);
     };
-    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)     AppendType("General");
-    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)  AppendType("Validation");
-    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) AppendType("Performance");
+    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)
+    {
+        AppendType("General");
+    }
+    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
+    {
+        AppendType("Validation");
+    }
+    if (TypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+    {
+        AppendType("Performance");
+    }
     return Text.IsEmpty() ? LE::String("Unknown") : Text;
 }
 
@@ -93,9 +122,7 @@ LE::String ValidationObjectsToText(const VkDebugUtilsMessengerCallbackDataEXT* C
     for (uint32 i = 0; i < CallbackData->objectCount; ++i)
     {
         const VkDebugUtilsObjectNameInfoEXT& Obj = CallbackData->pObjects[i];
-        std::snprintf(Buffer, sizeof(Buffer), " [#%u type=%u handle=0x%llx", i,
-            static_cast<uint32>(Obj.objectType),
-            static_cast<unsigned long long>(Obj.objectHandle));
+        std::snprintf(Buffer, sizeof(Buffer), " [#%u type=%u handle=0x%llx", i, static_cast<uint32>(Obj.objectType), static_cast<unsigned long long>(Obj.objectHandle));
         Text.Append(Buffer);
         if (Obj.pObjectName != nullptr)
         {
@@ -107,21 +134,13 @@ LE::String ValidationObjectsToText(const VkDebugUtilsMessengerCallbackDataEXT* C
     return Text;
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL VulkanValidationCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT MessageType,
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData)
+VKAPI_ATTR VkBool32 VKAPI_CALL VulkanValidationCallback(VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverity, VkDebugUtilsMessageTypeFlagsEXT MessageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
 {
     (void)pUserData;
 
-    const char* MessageIdName = (pCallbackData != nullptr && pCallbackData->pMessageIdName != nullptr)
-        ? pCallbackData->pMessageIdName
-        : "UnknownMessageId";
+    const char* MessageIdName = (pCallbackData != nullptr && pCallbackData->pMessageIdName != nullptr) ? pCallbackData->pMessageIdName : "UnknownMessageId";
     const int32 MessageIdNumber = (pCallbackData != nullptr) ? pCallbackData->messageIdNumber : 0;
-    const char* MessageText = (pCallbackData != nullptr && pCallbackData->pMessage != nullptr)
-        ? pCallbackData->pMessage
-        : "No validation message.";
+    const char* MessageText = (pCallbackData != nullptr && pCallbackData->pMessage != nullptr) ? pCallbackData->pMessage : "No validation message.";
 
     const LE::String TypeText = ValidationTypeToText(MessageType);
     const LE::String ObjectsText = ValidationObjectsToText(pCallbackData);
@@ -129,20 +148,16 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanValidationCallback(
     switch (ValidationSeverityToLogLevel(MessageSeverity))
     {
     case LE::LogLevel::Error:
-        LE_LOG(LogRHI, Error, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
-            ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
+        LE_LOG(LogRHI, Error, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}", ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
         break;
     case LE::LogLevel::Warn:
-        LE_LOG(LogRHI, Warn, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
-            ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
+        LE_LOG(LogRHI, Warn, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}", ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
         break;
     case LE::LogLevel::Info:
-        LE_LOG(LogRHI, Info, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
-            ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
+        LE_LOG(LogRHI, Info, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}", ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
         break;
     default:
-        LE_LOG(LogRHI, Trace, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}",
-            ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
+        LE_LOG(LogRHI, Trace, "[VK Validation][{}][{}] {}({})\nMessage: {}\n{}", ValidationSeverityToText(MessageSeverity), TypeText.Data(), MessageIdName, MessageIdNumber, MessageText, ObjectsText.Data());
         break;
     }
 
@@ -155,7 +170,7 @@ FVulkanRHIDevice::FVulkanRHIDevice()
 {
     LE_LOG(LogRHI, Info, "Initializing Vulkan RHI device...");
 
-	this->InternalCreateInstance();
+    this->InternalCreateInstance();
     if (this->VkContext.Instance == VK_NULL_HANDLE)
     {
         LE_LOG(LogRHI, Error, "Vulkan instance creation failed.");
@@ -163,32 +178,31 @@ FVulkanRHIDevice::FVulkanRHIDevice()
     }
     this->InternalSetupValidationMessenger();
 
-	this->InternalSelectPhysicalDevice();
+    this->InternalSelectPhysicalDevice();
     if (this->VkContext.PhysicalDevice == VK_NULL_HANDLE || this->VkContext.GraphicsFamilyIndex == static_cast<uint32>(-1))
     {
         LE_LOG(LogRHI, Error, "Vulkan physical device selection failed.");
         return;
     }
 
-	this->InternalCreateLogicalDevice();
+    this->InternalCreateLogicalDevice();
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE)
     {
         LE_LOG(LogRHI, Error, "Vulkan logical device creation failed.");
         return;
     }
 
-	this->InternalSetupBindlessHeap();
+    this->InternalSetupBindlessHeap();
 
-	// Create graphics queue
-	this->GraphicsQueue = new FVulkanRHIQueue(this, this->VkContext.GraphicsFamilyIndex, 0);
+    // Create graphics queue
+    this->GraphicsQueue = new FVulkanRHIQueue(this, this->VkContext.GraphicsFamilyIndex, 0);
     if (this->GraphicsQueue == nullptr || static_cast<FVulkanRHIQueue*>(this->GraphicsQueue)->Handle == VK_NULL_HANDLE)
     {
         LE_LOG(LogRHI, Error, "Failed to create graphics queue (family={}, index=0).", this->VkContext.GraphicsFamilyIndex);
     }
     else
     {
-        LE_LOG(LogRHI, Info, "Vulkan RHI device initialized successfully. GraphicsFamilyIndex={}, BindlessSupported={}",
-            this->VkContext.GraphicsFamilyIndex, this->VkContext.bBindlessSupported);
+        LE_LOG(LogRHI, Info, "Vulkan RHI device initialized successfully. GraphicsFamilyIndex={}, BindlessSupported={}", this->VkContext.GraphicsFamilyIndex, this->VkContext.bBindlessSupported);
     }
 }
 
@@ -196,41 +210,41 @@ FVulkanRHIDevice::~FVulkanRHIDevice()
 {
     LE_LOG(LogRHI, Info, "Destroying Vulkan RHI device...");
 
-	// Clean up graphics queue
-	if (this->GraphicsQueue)
-	{
-		delete this->GraphicsQueue;
-		this->GraphicsQueue = nullptr;
-	}
+    // Clean up graphics queue
+    if (this->GraphicsQueue)
+    {
+        delete this->GraphicsQueue;
+        this->GraphicsQueue = nullptr;
+    }
 
-	// Clean up bindless resources
-	if (this->VkContext.BindlessDescriptorSet != VK_NULL_HANDLE)
-	{
-		// Descriptor sets are freed when pool is destroyed, no need to free individually
-	}
-	if (this->VkContext.BindlessPool != VK_NULL_HANDLE)
-	{
-		vkDestroyDescriptorPool(this->VkContext.LogicalDevice, this->VkContext.BindlessPool, nullptr);
-		this->VkContext.BindlessPool = VK_NULL_HANDLE;
-	}
-	if (this->VkContext.BindlessLayout != VK_NULL_HANDLE)
-	{
-		vkDestroyDescriptorSetLayout(this->VkContext.LogicalDevice, this->VkContext.BindlessLayout, nullptr);
-		this->VkContext.BindlessLayout = VK_NULL_HANDLE;
-	}
+    // Clean up bindless resources
+    if (this->VkContext.BindlessDescriptorSet != VK_NULL_HANDLE)
+    {
+        // Descriptor sets are freed when pool is destroyed, no need to free individually
+    }
+    if (this->VkContext.BindlessPool != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorPool(this->VkContext.LogicalDevice, this->VkContext.BindlessPool, nullptr);
+        this->VkContext.BindlessPool = VK_NULL_HANDLE;
+    }
+    if (this->VkContext.BindlessLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(this->VkContext.LogicalDevice, this->VkContext.BindlessLayout, nullptr);
+        this->VkContext.BindlessLayout = VK_NULL_HANDLE;
+    }
 
-	// Clean up device and instance
-	if (this->VkContext.LogicalDevice != VK_NULL_HANDLE)
-	{
-		vkDestroyDevice(this->VkContext.LogicalDevice, nullptr);
-		this->VkContext.LogicalDevice = VK_NULL_HANDLE;
-	}
-	if (this->VkContext.Instance != VK_NULL_HANDLE)
-	{
+    // Clean up device and instance
+    if (this->VkContext.LogicalDevice != VK_NULL_HANDLE)
+    {
+        vkDestroyDevice(this->VkContext.LogicalDevice, nullptr);
+        this->VkContext.LogicalDevice = VK_NULL_HANDLE;
+    }
+    if (this->VkContext.Instance != VK_NULL_HANDLE)
+    {
         this->InternalDestroyValidationMessenger();
-		vkDestroyInstance(this->VkContext.Instance, nullptr);
-		this->VkContext.Instance = VK_NULL_HANDLE;
-	}
+        vkDestroyInstance(this->VkContext.Instance, nullptr);
+        this->VkContext.Instance = VK_NULL_HANDLE;
+    }
 
     LE_LOG(LogRHI, Info, "Vulkan RHI device destroyed.");
 }
@@ -253,10 +267,10 @@ void FVulkanRHIDevice::InternalCreateInstance()
     VkApplicationInfo AppInfo{};
     {
         AppInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        AppInfo.pApplicationName = "Limitless Engine"; // TODO: kodak
+        AppInfo.pApplicationName = "Limitless Engine";         // TODO: kodak
         AppInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0); // TODO: kodak
-        AppInfo.pEngineName = "Limitless RHI"; // TODO: kodak
-        AppInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0); // TODO: kodak
+        AppInfo.pEngineName = "Limitless RHI";                 // TODO: kodak
+        AppInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);      // TODO: kodak
         AppInfo.apiVersion = RequestedApiVersion;
     }
     this->VkContext.InstanceApiVersion = RequestedApiVersion;
@@ -283,8 +297,7 @@ void FVulkanRHIDevice::InternalCreateInstance()
         }
         ExtensionText.Append(CreateInfo.ppEnabledExtensionNames[i] != nullptr ? CreateInfo.ppEnabledExtensionNames[i] : "<null>");
     }
-    LE_LOG(LogRHI, Info, "Creating Vulkan instance. Flags=0x{:x}, Extensions=[{}], Layers={}",
-        static_cast<uint32>(CreateInfo.flags), ExtensionText.Data(), CreateInfo.enabledLayerCount);
+    LE_LOG(LogRHI, Info, "Creating Vulkan instance. Flags=0x{:x}, Extensions=[{}], Layers={}", static_cast<uint32>(CreateInfo.flags), ExtensionText.Data(), CreateInfo.enabledLayerCount);
 
     VkResult Result = vkCreateInstance(&CreateInfo, nullptr, &this->VkContext.Instance);
     if (Result == VK_ERROR_LAYER_NOT_PRESENT && CreateInfo.enabledLayerCount > 0)
@@ -303,9 +316,7 @@ void FVulkanRHIDevice::InternalCreateInstance()
         return;
     }
 
-    LE_LOG(LogRHI, Info, "Vulkan instance created. LoaderApiVersion={}.{}.{}, RequestedApiVersion={}.{}.{}",
-        VK_VERSION_MAJOR(LoaderApiVersion), VK_VERSION_MINOR(LoaderApiVersion), VK_VERSION_PATCH(LoaderApiVersion),
-        VK_VERSION_MAJOR(AppInfo.apiVersion), VK_VERSION_MINOR(AppInfo.apiVersion), VK_VERSION_PATCH(AppInfo.apiVersion));
+    LE_LOG(LogRHI, Info, "Vulkan instance created. LoaderApiVersion={}.{}.{}, RequestedApiVersion={}.{}.{}", VK_VERSION_MAJOR(LoaderApiVersion), VK_VERSION_MINOR(LoaderApiVersion), VK_VERSION_PATCH(LoaderApiVersion), VK_VERSION_MAJOR(AppInfo.apiVersion), VK_VERSION_MINOR(AppInfo.apiVersion), VK_VERSION_PATCH(AppInfo.apiVersion));
 }
 
 void FVulkanRHIDevice::InternalSetupValidationMessenger()
@@ -316,8 +327,7 @@ void FVulkanRHIDevice::InternalSetupValidationMessenger()
         return;
     }
 
-    auto CreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(this->VkContext.Instance, "vkCreateDebugUtilsMessengerEXT"));
+    auto CreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(this->VkContext.Instance, "vkCreateDebugUtilsMessengerEXT"));
     if (CreateDebugUtilsMessengerEXT == nullptr)
     {
         LE_LOG(LogRHI, Warn, "vkCreateDebugUtilsMessengerEXT is unavailable. Validation callback will not be installed.");
@@ -329,10 +339,7 @@ void FVulkanRHIDevice::InternalSetupValidationMessenger()
         CreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         // Validation output policy: only emit hard errors.
         CreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        CreateInfo.messageType =
-            VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        CreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         CreateInfo.pfnUserCallback = VulkanValidationCallback;
         CreateInfo.pUserData = this;
     }
@@ -357,8 +364,7 @@ void FVulkanRHIDevice::InternalDestroyValidationMessenger()
         return;
     }
 
-    auto DestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(this->VkContext.Instance, "vkDestroyDebugUtilsMessengerEXT"));
+    auto DestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(this->VkContext.Instance, "vkDestroyDebugUtilsMessengerEXT"));
     if (DestroyDebugUtilsMessengerEXT == nullptr)
     {
         LE_LOG(LogRHI, Warn, "vkDestroyDebugUtilsMessengerEXT is unavailable. Skipping validation messenger destroy.");
@@ -409,12 +415,7 @@ void FVulkanRHIDevice::InternalSelectPhysicalDevice()
     {
         VkPhysicalDeviceProperties Props{};
         vkGetPhysicalDeviceProperties(Device, &Props);
-        LE_LOG(LogRHI, Info, "Detected Vulkan GPU: {} (type={}, api={}.{}.{})",
-            Props.deviceName,
-            static_cast<uint32>(Props.deviceType),
-            VK_VERSION_MAJOR(Props.apiVersion),
-            VK_VERSION_MINOR(Props.apiVersion),
-            VK_VERSION_PATCH(Props.apiVersion));
+        LE_LOG(LogRHI, Info, "Detected Vulkan GPU: {} (type={}, api={}.{}.{})", Props.deviceName, static_cast<uint32>(Props.deviceType), VK_VERSION_MAJOR(Props.apiVersion), VK_VERSION_MINOR(Props.apiVersion), VK_VERSION_PATCH(Props.apiVersion));
         // Prefer pick discrete gpu
         if (Props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
         {
@@ -454,8 +455,7 @@ void FVulkanRHIDevice::InternalSelectPhysicalDevice()
 
     VkPhysicalDeviceProperties SelectedProps{};
     vkGetPhysicalDeviceProperties(this->VkContext.PhysicalDevice, &SelectedProps);
-    LE_LOG(LogRHI, Info, "Selected Vulkan GPU: {} (graphicsFamily={})",
-        SelectedProps.deviceName, this->VkContext.GraphicsFamilyIndex);
+    LE_LOG(LogRHI, Info, "Selected Vulkan GPU: {} (graphicsFamily={})", SelectedProps.deviceName, this->VkContext.GraphicsFamilyIndex);
 }
 
 void FVulkanRHIDevice::InternalCreateLogicalDevice()
@@ -494,10 +494,7 @@ void FVulkanRHIDevice::InternalCreateLogicalDevice()
         vkGetPhysicalDeviceProperties(this->VkContext.PhysicalDevice, &PhysicalDeviceProperties);
     }
 
-    const bool bSupportsDescriptorIndexingCore =
-        VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion) > 1 ||
-        (VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion) == 1 &&
-         VK_VERSION_MINOR(PhysicalDeviceProperties.apiVersion) >= 2);
+    const bool bSupportsDescriptorIndexingCore = VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion) > 1 || (VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion) == 1 && VK_VERSION_MINOR(PhysicalDeviceProperties.apiVersion) >= 2);
 
     const bool bSupportsDynamicRenderingCore = this->VkContext.InstanceApiVersion >= VK_API_VERSION_1_3 && PhysicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
     const bool bSupportsDynamicRenderingKHR = !bSupportsDynamicRenderingCore && HasDeviceExtension(this->VkContext.PhysicalDevice, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
@@ -505,17 +502,7 @@ void FVulkanRHIDevice::InternalCreateLogicalDevice()
 
     if (!bCanEnableDynamicRendering)
     {
-        LE_LOG(LogRHI, Error,
-            "Dynamic rendering is required but unsupported. InstanceApi={}.{}.{}, DeviceApi={}.{}.{}, Feature={}, Core={}, KHR={}",
-            VK_VERSION_MAJOR(this->VkContext.InstanceApiVersion),
-            VK_VERSION_MINOR(this->VkContext.InstanceApiVersion),
-            VK_VERSION_PATCH(this->VkContext.InstanceApiVersion),
-            VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion),
-            VK_VERSION_MINOR(PhysicalDeviceProperties.apiVersion),
-            VK_VERSION_PATCH(PhysicalDeviceProperties.apiVersion),
-            SupportedDynamicRenderingFeatures.dynamicRendering == VK_TRUE,
-            bSupportsDynamicRenderingCore,
-            bSupportsDynamicRenderingKHR);
+        LE_LOG(LogRHI, Error, "Dynamic rendering is required but unsupported. InstanceApi={}.{}.{}, DeviceApi={}.{}.{}, Feature={}, Core={}, KHR={}", VK_VERSION_MAJOR(this->VkContext.InstanceApiVersion), VK_VERSION_MINOR(this->VkContext.InstanceApiVersion), VK_VERSION_PATCH(this->VkContext.InstanceApiVersion), VK_VERSION_MAJOR(PhysicalDeviceProperties.apiVersion), VK_VERSION_MINOR(PhysicalDeviceProperties.apiVersion), VK_VERSION_PATCH(PhysicalDeviceProperties.apiVersion), SupportedDynamicRenderingFeatures.dynamicRendering == VK_TRUE, bSupportsDynamicRenderingCore, bSupportsDynamicRenderingKHR);
         this->VkContext.LogicalDevice = VK_NULL_HANDLE;
         this->VkContext.bBindlessSupported = false;
         this->VkContext.bDynamicRenderingEnabled = false;
@@ -529,11 +516,7 @@ void FVulkanRHIDevice::InternalCreateLogicalDevice()
         bSupportsDescriptorIndexingExt = HasDeviceExtension(this->VkContext.PhysicalDevice, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
     }
 
-    const bool bCanEnableBindless =
-        SupportedIndexingFeatures.descriptorBindingPartiallyBound == VK_TRUE &&
-        SupportedIndexingFeatures.runtimeDescriptorArray == VK_TRUE &&
-        SupportedIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind == VK_TRUE &&
-        (bSupportsDescriptorIndexingCore || bSupportsDescriptorIndexingExt);
+    const bool bCanEnableBindless = SupportedIndexingFeatures.descriptorBindingPartiallyBound == VK_TRUE && SupportedIndexingFeatures.runtimeDescriptorArray == VK_TRUE && SupportedIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind == VK_TRUE && (bSupportsDescriptorIndexingCore || bSupportsDescriptorIndexingExt);
     const bool bSupportsPortabilitySubset = HasDeviceExtension(this->VkContext.PhysicalDevice, GVkKhrPortabilitySubsetExtensionName);
 
     VkPhysicalDeviceDescriptorIndexingFeatures EnabledIndexingFeatures{};
@@ -605,17 +588,11 @@ void FVulkanRHIDevice::InternalCreateLogicalDevice()
     this->VkContext.bDynamicRenderingUsesKHR = bSupportsDynamicRenderingKHR;
     const char* BeginRenderingProcName = bSupportsDynamicRenderingKHR ? "vkCmdBeginRenderingKHR" : "vkCmdBeginRendering";
     const char* EndRenderingProcName = bSupportsDynamicRenderingKHR ? "vkCmdEndRenderingKHR" : "vkCmdEndRendering";
-    this->VkContext.CmdBeginRendering = reinterpret_cast<PFN_vkCmdBeginRendering>(
-        vkGetDeviceProcAddr(this->VkContext.LogicalDevice, BeginRenderingProcName));
-    this->VkContext.CmdEndRendering = reinterpret_cast<PFN_vkCmdEndRendering>(
-        vkGetDeviceProcAddr(this->VkContext.LogicalDevice, EndRenderingProcName));
+    this->VkContext.CmdBeginRendering = reinterpret_cast<PFN_vkCmdBeginRendering>(vkGetDeviceProcAddr(this->VkContext.LogicalDevice, BeginRenderingProcName));
+    this->VkContext.CmdEndRendering = reinterpret_cast<PFN_vkCmdEndRendering>(vkGetDeviceProcAddr(this->VkContext.LogicalDevice, EndRenderingProcName));
     if (this->VkContext.CmdBeginRendering == nullptr || this->VkContext.CmdEndRendering == nullptr)
     {
-        LE_LOG(LogRHI, Error,
-            "Dynamic rendering command loading failed. Path={}, BeginProc={}, EndProc={}",
-            bSupportsDynamicRenderingKHR ? "KHR" : "Core",
-            this->VkContext.CmdBeginRendering != nullptr,
-            this->VkContext.CmdEndRendering != nullptr);
+        LE_LOG(LogRHI, Error, "Dynamic rendering command loading failed. Path={}, BeginProc={}, EndProc={}", bSupportsDynamicRenderingKHR ? "KHR" : "Core", this->VkContext.CmdBeginRendering != nullptr, this->VkContext.CmdEndRendering != nullptr);
         vkDestroyDevice(this->VkContext.LogicalDevice, nullptr);
         this->VkContext.LogicalDevice = VK_NULL_HANDLE;
         this->VkContext.bBindlessSupported = false;
@@ -628,14 +605,7 @@ void FVulkanRHIDevice::InternalCreateLogicalDevice()
 
     this->VkContext.bBindlessSupported = bCanEnableBindless;
     this->VkContext.bDynamicRenderingEnabled = true;
-    LE_LOG(LogRHI, Info,
-        "Logical device created. DynamicRendering={} (path={}), BindlessSupported={} (coreIndexing={}, extIndexing={}, portabilitySubset={})",
-        this->VkContext.bDynamicRenderingEnabled,
-        this->VkContext.bDynamicRenderingUsesKHR ? "KHR" : "Core",
-        this->VkContext.bBindlessSupported,
-        bSupportsDescriptorIndexingCore,
-        bSupportsDescriptorIndexingExt,
-        bSupportsPortabilitySubset);
+    LE_LOG(LogRHI, Info, "Logical device created. DynamicRendering={} (path={}), BindlessSupported={} (coreIndexing={}, extIndexing={}, portabilitySubset={})", this->VkContext.bDynamicRenderingEnabled, this->VkContext.bDynamicRenderingUsesKHR ? "KHR" : "Core", this->VkContext.bBindlessSupported, bSupportsDescriptorIndexingCore, bSupportsDescriptorIndexingExt, bSupportsPortabilitySubset);
 }
 
 FRHISwapchain* FVulkanRHIDevice::InternalCreateSwapchain(const FRHISwapchainDesc& InDesc)
@@ -646,13 +616,11 @@ FRHISwapchain* FVulkanRHIDevice::InternalCreateSwapchain(const FRHISwapchainDesc
     return Result;
 }
 
-
 void FVulkanRHIDevice::InternalSetupBindlessHeap()
 {
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || !this->VkContext.bBindlessSupported)
     {
-        LE_LOG(LogRHI, Info, "Skip bindless heap setup. LogicalDeviceValid={}, BindlessSupported={}",
-            this->VkContext.LogicalDevice != VK_NULL_HANDLE, this->VkContext.bBindlessSupported);
+        LE_LOG(LogRHI, Info, "Skip bindless heap setup. LogicalDeviceValid={}, BindlessSupported={}", this->VkContext.LogicalDevice != VK_NULL_HANDLE, this->VkContext.bBindlessSupported);
         return;
     }
 
@@ -685,9 +653,7 @@ void FVulkanRHIDevice::InternalSetupBindlessHeap()
         Binding.descriptorCount = DescriptorCount;
         Binding.stageFlags = VK_SHADER_STAGE_ALL;
     }
-    VkDescriptorBindingFlags Flags =
-        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
-        VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+    VkDescriptorBindingFlags Flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
     VkDescriptorSetLayoutBindingFlagsCreateInfo LayoutFlagsInfo{};
     {
         LayoutFlagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
@@ -792,8 +758,7 @@ FRHIShader* FVulkanRHIDevice::CreateShaderFromFile(EShaderStage Stage, const voi
 {
     if (this->VkContext.LogicalDevice == VK_NULL_HANDLE || Data == nullptr || Size == 0 || (Size % 4) != 0)
     {
-        LE_LOG(LogRHI, Error, "CreateShaderFromFile failed: invalid input. LogicalDeviceValid={}, DataValid={}, Size={}",
-            this->VkContext.LogicalDevice != VK_NULL_HANDLE, Data != nullptr, Size);
+        LE_LOG(LogRHI, Error, "CreateShaderFromFile failed: invalid input. LogicalDeviceValid={}, DataValid={}, Size={}", this->VkContext.LogicalDevice != VK_NULL_HANDLE, Data != nullptr, Size);
         return nullptr;
     }
 
@@ -970,30 +935,30 @@ FRHISwapchain* FVulkanRHIDevice::CreateSwapchain(const FRHISwapchainDesc& Desc)
         LE_LOG(LogRHI, Error, "CreateSwapchain failed: Vulkan context is incomplete.");
         return nullptr;
     }
-	return this->InternalCreateSwapchain(Desc);
+    return this->InternalCreateSwapchain(Desc);
 }
 
 FRHIQueue* FVulkanRHIDevice::GetGraphicsQueue() const
 {
-	return this->GraphicsQueue;
+    return this->GraphicsQueue;
 }
 
 void* FVulkanRHIDevice::GetBindlessHeapGPUDescriptor() const
 {
-	return reinterpret_cast<void*>(this->VkContext.BindlessDescriptorSet);
+    return reinterpret_cast<void*>(this->VkContext.BindlessDescriptorSet);
 }
 
 uint32 FVulkanRHIDevice::AllocateBindlessIndex(FRHIResource* Resource)
 {
-	// TODO: kodak - Implement proper bindless index allocation
-	// For now, return a placeholder index
-	// This needs a proper allocation strategy (free list, etc.)
+    // TODO: kodak - Implement proper bindless index allocation
+    // For now, return a placeholder index
+    // This needs a proper allocation strategy (free list, etc.)
     if (Resource == nullptr)
     {
         LE_LOG(LogRHI, Warn, "AllocateBindlessIndex called with null resource.");
     }
-	static uint32 NextIndex = 0;
-	return NextIndex++;
+    static uint32 NextIndex = 0;
+    return NextIndex++;
 }
 
 // ***********************************************************************************************
@@ -1002,25 +967,25 @@ uint32 FVulkanRHIDevice::AllocateBindlessIndex(FRHIResource* Resource)
 
 namespace RHI
 {
-	FRHIDevice* CreateDevice()
-	{
-		// For now, always create Vulkan device
-		// TODO: kodak - Add platform selection logic (D3D12, OpenGL, etc.)
-		FVulkanRHIDevice* Device = new FVulkanRHIDevice();
-        if (Device->VkContext.LogicalDevice == VK_NULL_HANDLE || Device->GetGraphicsQueue() == nullptr)
-        {
-            LE_LOG(LogRHI, Error, "CreateDevice failed: invalid Vulkan device or graphics queue.");
-            delete Device;
-            return nullptr;
-        }
-        LE_LOG(LogRHI, Info, "CreateDevice succeeded.");
-        return Device;
-	}
+FRHIDevice* CreateDevice()
+{
+    // For now, always create Vulkan device
+    // TODO: kodak - Add platform selection logic (D3D12, OpenGL, etc.)
+    FVulkanRHIDevice* Device = new FVulkanRHIDevice();
+    if (Device->VkContext.LogicalDevice == VK_NULL_HANDLE || Device->GetGraphicsQueue() == nullptr)
+    {
+        LE_LOG(LogRHI, Error, "CreateDevice failed: invalid Vulkan device or graphics queue.");
+        delete Device;
+        return nullptr;
+    }
+    LE_LOG(LogRHI, Info, "CreateDevice succeeded.");
+    return Device;
+}
 
-	void DestroyResource(FRHIResource* Resource) noexcept
-	{
-		delete Resource;
-	}
+void DestroyResource(FRHIResource* Resource) noexcept
+{
+    delete Resource;
+}
 }
 
 } // namespace LE

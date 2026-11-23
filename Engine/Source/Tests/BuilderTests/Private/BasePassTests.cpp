@@ -37,17 +37,12 @@ int Expect(const bool bCondition, const char* const Name)
     return 1;
 }
 
-constexpr EShaderStage BasePassStages = static_cast<EShaderStage>(
-    static_cast<uint8>(EShaderStage::Vertex) |
-    static_cast<uint8>(EShaderStage::Pixel));
+constexpr EShaderStage BasePassStages = static_cast<EShaderStage>(static_cast<uint8>(EShaderStage::Vertex) | static_cast<uint8>(EShaderStage::Pixel));
 
 class FBasePassTestBuffer final : public FRHIBuffer
 {
 public:
-    void* Map(const uint64 Offset, const uint64 Size) override
-    {
-        return bMapFails || Offset != 0 || Size != sizeof(Bytes) ? nullptr : Bytes;
-    }
+    void* Map(const uint64 Offset, const uint64 Size) override { return bMapFails || Offset != 0 || Size != sizeof(Bytes) ? nullptr : Bytes; }
     void Unmap() override {}
     const FRHIBufferDesc& GetDesc() const override { return Desc; }
 
@@ -155,8 +150,7 @@ int RunFrameLightingTests()
     FBasePassFrameLighting Lighting;
     FBasePassLightBinding Slot0;
     FBasePassLightBinding Slot1;
-    int Failures = Expect(!Lighting.Initialize(Device) && Lighting.GetLayout() == nullptr &&
-        !Lighting.WriteSlot(0, {}, Slot0), "failed frame lighting initialization can be retried");
+    int Failures = Expect(!Lighting.Initialize(Device) && Lighting.GetLayout() == nullptr && !Lighting.WriteSlot(0, {}, Slot0), "failed frame lighting initialization can be retried");
     if (!Lighting.Initialize(Device))
     {
         return Failures + Expect(false, "initialize light buffers for every slot");
@@ -175,26 +169,16 @@ int RunFrameLightingTests()
     {
         return Failures + Expect(false, "write the second slot");
     }
-    const auto ReadSlot = [](FRHIBuffer* Buffer)
-    {
+    const auto ReadSlot = [](FRHIBuffer* Buffer) {
         FBasePassLightConstants Constants;
         std::memcpy(&Constants, static_cast<FBasePassTestBuffer*>(Buffer)->Bytes, sizeof(Constants));
         return Constants;
     };
-    Failures += Expect(Slot0.Buffer != Slot1.Buffer && Slot0.BindGroup != Slot1.BindGroup &&
-        ReadSlot(Slot0.Buffer).DirectionAndEnabled == Math::Vector4f(0.0f, 0.0f, 1.0f, 1.0f) &&
-        ReadSlot(Slot1.Buffer).DirectionAndEnabled == Math::Vector4f(0.0f, 0.0f, -1.0f, 1.0f) &&
-        ReadSlot(Slot0.Buffer).Radiance == Math::Vector4f(0.5f, 0.25f, 0.125f, 0.0f),
-        "alternating directional lights reach distinct frame slots");
-    Failures += Expect(Lighting.WriteSlot(0, {}, Slot0) &&
-        ReadSlot(Slot0.Buffer).DirectionAndEnabled == Math::Vector4f() &&
-        ReadSlot(Slot0.Buffer).Radiance == Math::Vector4f() && ReadSlot(Slot1.Buffer).DirectionAndEnabled[3] == 1.0f,
-        "disabling one light clears all its slot bytes and preserves the other slot");
+    Failures += Expect(Slot0.Buffer != Slot1.Buffer && Slot0.BindGroup != Slot1.BindGroup && ReadSlot(Slot0.Buffer).DirectionAndEnabled == Math::Vector4f(0.0f, 0.0f, 1.0f, 1.0f) && ReadSlot(Slot1.Buffer).DirectionAndEnabled == Math::Vector4f(0.0f, 0.0f, -1.0f, 1.0f) && ReadSlot(Slot0.Buffer).Radiance == Math::Vector4f(0.5f, 0.25f, 0.125f, 0.0f), "alternating directional lights reach distinct frame slots");
+    Failures += Expect(Lighting.WriteSlot(0, {}, Slot0) && ReadSlot(Slot0.Buffer).DirectionAndEnabled == Math::Vector4f() && ReadSlot(Slot0.Buffer).Radiance == Math::Vector4f() && ReadSlot(Slot1.Buffer).DirectionAndEnabled[3] == 1.0f, "disabling one light clears all its slot bytes and preserves the other slot");
     static_cast<FBasePassTestBuffer*>(Slot1.Buffer)->bMapFails = true;
     FBasePassLightBinding Candidate = Slot0;
-    Failures += Expect(!Lighting.WriteSlot(1, {}, Candidate) && Candidate.Buffer == Slot0.Buffer &&
-        ReadSlot(Slot1.Buffer).DirectionAndEnabled[3] == 1.0f && !Lighting.WriteSlot(2, {}, Candidate),
-        "mapping or slot errors preserve the previous binding and light bytes");
+    Failures += Expect(!Lighting.WriteSlot(1, {}, Candidate) && Candidate.Buffer == Slot0.Buffer && ReadSlot(Slot1.Buffer).DirectionAndEnabled[3] == 1.0f && !Lighting.WriteSlot(2, {}, Candidate), "mapping or slot errors preserve the previous binding and light bytes");
     return Failures;
 }
 
@@ -341,8 +325,7 @@ struct FBasePassFixture
         Resources.SceneDepthView = &DepthView;
 
         LightLayout.Desc.SetIndex = FBasePassFrameLighting::SetIndex;
-        LightLayout.Desc.Bindings.PushBack({FBasePassFrameLighting::BindingIndex, 1,
-            ERHIBindGroupItemType::UniformBuffer, EShaderStage::Pixel});
+        LightLayout.Desc.Bindings.PushBack({FBasePassFrameLighting::BindingIndex, 1, ERHIBindGroupItemType::UniformBuffer, EShaderStage::Pixel});
         LightBuffer.Desc.Size = sizeof(FBasePassLightConstants);
         LightBuffer.Desc.UsageFlag = static_cast<uint32>(EBufferUsageFlags::UniformBuffer);
         LightGroup.Desc.Layout = &LightLayout;
@@ -422,12 +405,7 @@ struct FBasePassFixture
         Pipeline.Desc.PushConstants.Size = sizeof(FBasePassObjectConstants);
     }
 
-    void ConfigureMesh(
-        FRenderMeshProxy& Mesh,
-        const uint64 PrimitiveValue,
-        const uint32 ResourceIndex,
-        const EPixelFormat IndexFormat,
-        const uint32 IndexCount)
+    void ConfigureMesh(FRenderMeshProxy& Mesh, const uint64 PrimitiveValue, const uint32 ResourceIndex, const EPixelFormat IndexFormat, const uint32 IndexCount)
     {
         Mesh.PrimitiveId = {7, PrimitiveValue};
         Mesh.GraphicsPipeline = &Pipelines[ResourceIndex];
@@ -473,10 +451,7 @@ bool ProducesBasePassPlan(FBasePassFixture& Fixture)
     return Plan.Passes.Size() == 1;
 }
 
-void RecordBasePass(
-    FBasePass& Pass,
-    const FRenderScene& Scene,
-    FBasePassTestCommandList& CommandList)
+void RecordBasePass(FBasePass& Pass, const FRenderScene& Scene, FBasePassTestCommandList& CommandList)
 {
     FRFGCompiledPlan Plan;
     Plan.GetMutablePasses().TryEmplaceBack();
@@ -515,35 +490,10 @@ int RunBasePassRecordTests()
     FBasePassTestCommandList Commands;
     RecordBasePass(Pass, Fixture.Scene, Commands);
 
-    const bool bAttachments = Commands.BeginRenderPassCount == 1 &&
-        Commands.EndRenderPassCount == 1 &&
-        Commands.RenderPass.RenderArea.Width == 640 &&
-        Commands.RenderPass.RenderArea.Height == 480 &&
-        Commands.RenderPass.ColorAttachmentCount == 1 &&
-        Commands.RenderPass.ColorAttachments[0].RenderTarget == &Fixture.ColorView &&
-        Commands.RenderPass.ColorAttachments[0].LoadOp == EAttachmentLoadOp::Clear &&
-        Commands.RenderPass.ColorAttachments[0].StoreOp == EAttachmentStoreOp::Store &&
-        Commands.RenderPass.bHasDepthStencil &&
-        Commands.RenderPass.DepthStencilAttachment.DepthStencilTarget == &Fixture.DepthView &&
-        Commands.RenderPass.DepthStencilAttachment.LoadOp == EAttachmentLoadOp::Clear &&
-        Commands.RenderPass.DepthStencilAttachment.StoreOp == EAttachmentStoreOp::Store &&
-        Commands.RenderPass.DepthStencilAttachment.ClearDepth == 1.0f &&
-        Commands.Viewport.Width == 640.0f && Commands.Viewport.Height == 480.0f &&
-        Commands.Scissor.Width == 640 && Commands.Scissor.Height == 480;
-    Failures += Expect(bAttachments,
-        "BasePass clears and stores matching SceneColor and depth attachments");
+    const bool bAttachments = Commands.BeginRenderPassCount == 1 && Commands.EndRenderPassCount == 1 && Commands.RenderPass.RenderArea.Width == 640 && Commands.RenderPass.RenderArea.Height == 480 && Commands.RenderPass.ColorAttachmentCount == 1 && Commands.RenderPass.ColorAttachments[0].RenderTarget == &Fixture.ColorView && Commands.RenderPass.ColorAttachments[0].LoadOp == EAttachmentLoadOp::Clear && Commands.RenderPass.ColorAttachments[0].StoreOp == EAttachmentStoreOp::Store && Commands.RenderPass.bHasDepthStencil && Commands.RenderPass.DepthStencilAttachment.DepthStencilTarget == &Fixture.DepthView && Commands.RenderPass.DepthStencilAttachment.LoadOp == EAttachmentLoadOp::Clear && Commands.RenderPass.DepthStencilAttachment.StoreOp == EAttachmentStoreOp::Store && Commands.RenderPass.DepthStencilAttachment.ClearDepth == 1.0f && Commands.Viewport.Width == 640.0f && Commands.Viewport.Height == 480.0f && Commands.Scissor.Width == 640 && Commands.Scissor.Height == 480;
+    Failures += Expect(bAttachments, "BasePass clears and stores matching SceneColor and depth attachments");
 
-    Failures += Expect(Commands.VertexBuffers.Size() == 2 &&
-        Commands.VertexBuffers[0] == &Fixture.VertexBuffers[0] &&
-        Commands.VertexBuffers[1] == &Fixture.VertexBuffers[1] &&
-        Commands.IndexBuffers.Size() == 2 &&
-        Commands.IndexBuffers[0].Buffer == &Fixture.IndexBuffers[0] &&
-        Commands.IndexBuffers[0].Format == EPixelFormat::R16_UINT &&
-        Commands.IndexBuffers[1].Buffer == &Fixture.IndexBuffers[1] &&
-        Commands.IndexBuffers[1].Format == EPixelFormat::R32_UINT &&
-        Commands.DrawIndexCounts.Size() == 2 &&
-        Commands.DrawIndexCounts[0] == 3 && Commands.DrawIndexCounts[1] == 6,
-        "BasePass preserves immutable snapshot order for indexed R16 and R32 draws");
+    Failures += Expect(Commands.VertexBuffers.Size() == 2 && Commands.VertexBuffers[0] == &Fixture.VertexBuffers[0] && Commands.VertexBuffers[1] == &Fixture.VertexBuffers[1] && Commands.IndexBuffers.Size() == 2 && Commands.IndexBuffers[0].Buffer == &Fixture.IndexBuffers[0] && Commands.IndexBuffers[0].Format == EPixelFormat::R16_UINT && Commands.IndexBuffers[1].Buffer == &Fixture.IndexBuffers[1] && Commands.IndexBuffers[1].Format == EPixelFormat::R32_UINT && Commands.DrawIndexCounts.Size() == 2 && Commands.DrawIndexCounts[0] == 3 && Commands.DrawIndexCounts[1] == 6, "BasePass preserves immutable snapshot order for indexed R16 and R32 draws");
 
     bool bPushConstantsValid = Commands.Pushes.Size() == 2;
     if (bPushConstantsValid)
@@ -552,18 +502,9 @@ int RunBasePassRecordTests()
         FBasePassObjectConstants Second;
         std::memcpy(&First, Commands.Pushes[0].Bytes, sizeof(First));
         std::memcpy(&Second, Commands.Pushes[1].Bytes, sizeof(Second));
-        bPushConstantsValid = Commands.Pushes[0].Stage == BasePassStages &&
-            Commands.Pushes[0].Size == sizeof(First) && Commands.Pushes[1].Stage == BasePassStages &&
-            Commands.Pushes[1].Size == sizeof(Second) &&
-            MatrixEquals(First.LocalToClip, Fixture.Scene.Meshes[0].LocalToWorld) &&
-            MatrixEquals(Second.LocalToClip, Fixture.Scene.Meshes[1].LocalToWorld) &&
-            First.BaseColor == Math::Vector4f(1.0f, 0.25f, 0.5f, 0.0f) &&
-            Second.BaseColor == Math::Vector4f(4.0f, 2.0f, 1.0f, 1.0f) &&
-            First.NormalToWorldRows[0] == Math::Vector4f() &&
-            Second.NormalToWorldRows[0] == Math::Vector4f(0.5f, 0.0f, 0.0f, 0.0f);
+        bPushConstantsValid = Commands.Pushes[0].Stage == BasePassStages && Commands.Pushes[0].Size == sizeof(First) && Commands.Pushes[1].Stage == BasePassStages && Commands.Pushes[1].Size == sizeof(Second) && MatrixEquals(First.LocalToClip, Fixture.Scene.Meshes[0].LocalToWorld) && MatrixEquals(Second.LocalToClip, Fixture.Scene.Meshes[1].LocalToWorld) && First.BaseColor == Math::Vector4f(1.0f, 0.25f, 0.5f, 0.0f) && Second.BaseColor == Math::Vector4f(4.0f, 2.0f, 1.0f, 1.0f) && First.NormalToWorldRows[0] == Math::Vector4f() && Second.NormalToWorldRows[0] == Math::Vector4f(0.5f, 0.0f, 0.0f, 0.0f);
     }
-    Failures += Expect(bPushConstantsValid,
-        "BasePass records the 128-byte transform, material, and authored normal rows");
+    Failures += Expect(bPushConstantsValid, "BasePass records the 128-byte transform, material, and authored normal rows");
 
     const EBasePassCommandEvent ExpectedEvents[] = {
         EBasePassCommandEvent::BindPipeline,
@@ -591,8 +532,7 @@ int RunBasePassRecordTests()
     {
         bEventOrder = Commands.Events[Index] == ExpectedEvents[Index];
     }
-    Failures += Expect(bEventOrder,
-        "BasePass records attachment, state, per-object binding, push, and indexed draw order");
+    Failures += Expect(bEventOrder, "BasePass records attachment, state, per-object binding, push, and indexed draw order");
 
     Fixture.Scene.Meshes.PushBack(Fixture.Scene.Meshes[0]);
     Fixture.Scene.Meshes.Back().PrimitiveId = {7, 4};
@@ -603,23 +543,17 @@ int RunBasePassRecordTests()
     Fixture.Scene.Meshes.Back().MaterialBindGroup = &Fixture.Groups[3];
     FBasePassTestCommandList MixedMaterialCommands;
     RecordBasePass(Pass, Fixture.Scene, MixedMaterialCommands);
-    bool bMixBound = MixedMaterialCommands.Materials.Size() == 4 && MixedMaterialCommands.Lights.Size() == 4 &&
-        MixedMaterialCommands.DrawIndexCounts.Size() == 4;
+    bool bMixBound = MixedMaterialCommands.Materials.Size() == 4 && MixedMaterialCommands.Lights.Size() == 4 && MixedMaterialCommands.DrawIndexCounts.Size() == 4;
     for (std::size_t Index = 0; bMixBound && Index < 4; ++Index)
     {
-        bMixBound = MixedMaterialCommands.Materials[Index] == &Fixture.Groups[Index] &&
-            MixedMaterialCommands.MaterialSets[Index] == 0 && MixedMaterialCommands.Lights[Index] == &Fixture.LightGroup;
+        bMixBound = MixedMaterialCommands.Materials[Index] == &Fixture.Groups[Index] && MixedMaterialCommands.MaterialSets[Index] == 0 && MixedMaterialCommands.Lights[Index] == &Fixture.LightGroup;
     }
-    Failures += Expect(bMixBound,
-        "BasePass rebinds each material across texture A, white, texture B and shared texture A");
+    Failures += Expect(bMixBound, "BasePass rebinds each material across texture A, white, texture B and shared texture A");
 
     Fixture.Scene.Meshes.Clear();
     FBasePassTestCommandList EmptyCommands;
     RecordBasePass(Pass, Fixture.Scene, EmptyCommands);
-    Failures += Expect(EmptyCommands.BeginRenderPassCount == 1 &&
-        EmptyCommands.EndRenderPassCount == 1 && EmptyCommands.DrawIndexCounts.IsEmpty() &&
-        EmptyCommands.Pipelines.IsEmpty(),
-        "zero-visible BasePass remains valid and clears color plus depth without a pipeline");
+    Failures += Expect(EmptyCommands.BeginRenderPassCount == 1 && EmptyCommands.EndRenderPassCount == 1 && EmptyCommands.DrawIndexCounts.IsEmpty() && EmptyCommands.Pipelines.IsEmpty(), "zero-visible BasePass remains valid and clears color plus depth without a pipeline");
     return Failures;
 }
 
@@ -629,85 +563,71 @@ int RunBasePassPlanValidationTests()
 
     {
         FBasePassFixture Fixture;
-        Failures += Expect(ProducesBasePassPlan(Fixture),
-            "valid BasePass configuration produces exactly one render pass");
+        Failures += Expect(ProducesBasePassPlan(Fixture), "valid BasePass configuration produces exactly one render pass");
         Fixture.Scene.Meshes.Clear();
-        Failures += Expect(ProducesBasePassPlan(Fixture),
-            "zero-visible BasePass still produces a clear pass");
+        Failures += Expect(ProducesBasePassPlan(Fixture), "zero-visible BasePass still produces a clear pass");
     }
     {
         FBasePassFixture Fixture;
         Fixture.Resources.SceneDepthView = nullptr;
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "invalid BasePass attachment produces an empty renderer plan");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "invalid BasePass attachment produces an empty renderer plan");
     }
     {
         FBasePassFixture Fixture;
         Fixture.Scene.Cameras.Clear();
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "missing primary camera produces an empty renderer plan");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "missing primary camera produces an empty renderer plan");
     }
     {
         FBasePassFixture Fixture;
         Fixture.Scene.Meshes[0].IndexFormat = EPixelFormat::R8_UINT;
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "invalid indexed proxy produces an empty renderer plan");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "invalid indexed proxy produces an empty renderer plan");
     }
     {
         FBasePassFixture Fixture;
         Fixture.Pipelines[0].Desc.BlendState.bEnable = true;
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "blended material pipeline is rejected by the opaque BasePass");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "blended material pipeline is rejected by the opaque BasePass");
     }
     {
         FBasePassFixture Fixture;
         Fixture.Pipelines[0].Desc.DepthStencilState.DepthFunc = ECompareFunction::LessEqual;
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "BasePass rejects a pipeline outside the exact Less depth contract");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "BasePass rejects a pipeline outside the exact Less depth contract");
     }
     {
         FBasePassFixture Fixture;
         Fixture.Scene.Meshes[0].MaterialAssetId = FAssetId{};
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "BasePass requires persistent material identity on every proxy");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "BasePass requires persistent material identity on every proxy");
     }
     {
         FBasePassFixture Fixture;
         Fixture.VertexBuffers[0].Desc.UsageFlag = 0;
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "BasePass rejects a vertex buffer without VertexBuffer usage");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "BasePass rejects a vertex buffer without VertexBuffer usage");
     }
     {
         FBasePassFixture Fixture;
         Fixture.IndexBuffers[0].Desc.UsageFlag = 0;
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "BasePass rejects an index buffer without IndexBuffer usage");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "BasePass rejects an index buffer without IndexBuffer usage");
     }
     {
         FBasePassFixture Fixture;
         Fixture.VertexBuffers[0].Desc.Size = 71;
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "BasePass rejects vertex count times stride beyond buffer capacity");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "BasePass rejects vertex count times stride beyond buffer capacity");
     }
     {
         FBasePassFixture Fixture;
         Fixture.IndexBuffers[0].Desc.Size = 5;
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "BasePass rejects index bytes beyond buffer capacity");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "BasePass rejects index bytes beyond buffer capacity");
     }
     {
         FBasePassFixture Fixture;
         Fixture.Pipelines[0].Desc.VertexBindings[0].Stride = 0;
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "BasePass requires a positive binding-zero vertex stride");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "BasePass requires a positive binding-zero vertex stride");
     }
     {
         FBasePassFixture Fixture;
         Fixture.Pipelines[0].Desc.VertexBindings.TryEmplaceBack();
         Fixture.Pipelines[0].Desc.VertexBindings.Back().Binding = 1;
         Fixture.Pipelines[0].Desc.VertexBindings.Back().Stride = 16;
-        Failures += Expect(!ProducesBasePassPlan(Fixture),
-            "single-slot BasePass rejects pipelines requiring unbound vertex slots");
+        Failures += Expect(!ProducesBasePassPlan(Fixture), "single-slot BasePass rejects pipelines requiring unbound vertex slots");
     }
     return Failures;
 }
@@ -744,88 +664,68 @@ int RunBasePassCompositePipelineTests()
     FRenderPipelinePlan Plan;
     FBasePassCompositePipeline Pipeline(Desc);
     Pipeline.BuildPasses(Frame, Fixture.Scene, View, Plan);
-    Failures += Expect(Plan.Passes.Size() == 2 &&
-        StringView(Plan.Passes[0]->GetPassName()) == StringView("BasePass") &&
-        StringView(Plan.Passes[1]->GetPassName()) ==
-            StringView("CompositeToBackBufferPass"),
-        "combined renderer pipeline emits formal BasePass then SceneColor composite");
+    Failures += Expect(Plan.Passes.Size() == 2 && StringView(Plan.Passes[0]->GetPassName()) == StringView("BasePass") && StringView(Plan.Passes[1]->GetPassName()) == StringView("CompositeToBackBufferPass"), "combined renderer pipeline emits formal BasePass then SceneColor composite");
 
     Fixture.Scene.Meshes.Clear();
     Pipeline.BuildPasses(Frame, Fixture.Scene, View, Plan);
-    Failures += Expect(Plan.Passes.Size() == 2,
-        "zero-visible combined pipeline still clears BasePass and composites SceneColor");
+    Failures += Expect(Plan.Passes.Size() == 2, "zero-visible combined pipeline still clears BasePass and composites SceneColor");
 
     Desc.CompositeBindGroup = nullptr;
     FBasePassCompositePipeline MissingBindGroup(Desc);
     MissingBindGroup.BuildPasses(Frame, Fixture.Scene, View, Plan);
-    Failures += Expect(Plan.Passes.IsEmpty(),
-        "combined pipeline rejects a missing composite resource");
+    Failures += Expect(Plan.Passes.IsEmpty(), "combined pipeline rejects a missing composite resource");
 
     Desc.CompositeBindGroup = &CompositeBindGroup;
     CompositePipeline.Desc.RenderTargetFormats[0] = EPixelFormat::R8G8B8A8_SRGB;
     FBasePassCompositePipeline MismatchedBackBuffer(Desc);
     MismatchedBackBuffer.BuildPasses(Frame, Fixture.Scene, View, Plan);
-    Failures += Expect(Plan.Passes.IsEmpty(),
-        "combined pipeline rejects composite/backbuffer format mismatch");
+    Failures += Expect(Plan.Passes.IsEmpty(), "combined pipeline rejects composite/backbuffer format mismatch");
 
     CompositePipeline.Desc.RenderTargetFormats[0] = EPixelFormat::B8G8R8A8_SRGB;
     BackBuffer.Desc.bIsRenderTarget = false;
     FBasePassCompositePipeline NonRenderTargetBackBuffer(Desc);
     NonRenderTargetBackBuffer.BuildPasses(Frame, Fixture.Scene, View, Plan);
-    Failures += Expect(Plan.Passes.IsEmpty(),
-        "combined pipeline rejects a backbuffer without render-target usage");
+    Failures += Expect(Plan.Passes.IsEmpty(), "combined pipeline rejects a backbuffer without render-target usage");
 
     BackBuffer.Desc.bIsRenderTarget = true;
     BackBuffer.Desc.Format = EPixelFormat::Unknown;
     BackBufferView.Desc.Format = EPixelFormat::Unknown;
     FBasePassCompositePipeline InvalidBackBufferFormat(Desc);
     InvalidBackBufferFormat.BuildPasses(Frame, Fixture.Scene, View, Plan);
-    Failures += Expect(Plan.Passes.IsEmpty(),
-        "combined pipeline rejects an invalid effective backbuffer format");
+    Failures += Expect(Plan.Passes.IsEmpty(), "combined pipeline rejects an invalid effective backbuffer format");
 
     BackBuffer.Desc.Format = EPixelFormat::B8G8R8A8_SRGB;
     BackBufferView.Desc.Format = EPixelFormat::R8G8B8A8_SRGB;
     FBasePassCompositePipeline MismatchedBackBufferView(Desc);
     MismatchedBackBufferView.BuildPasses(Frame, Fixture.Scene, View, Plan);
-    Failures += Expect(Plan.Passes.IsEmpty(),
-        "combined pipeline validates the effective backbuffer view format");
+    Failures += Expect(Plan.Passes.IsEmpty(), "combined pipeline validates the effective backbuffer view format");
 
     BackBufferView.Desc.Format = EPixelFormat::B8G8R8A8_SRGB;
     CompositeBindGroup.Desc.Layout = nullptr;
     FBasePassCompositePipeline NullBindGroupLayout(Desc);
     NullBindGroupLayout.BuildPasses(Frame, Fixture.Scene, View, Plan);
-    Failures += Expect(Plan.Passes.IsEmpty(),
-        "combined pipeline rejects a bind group without its declared layout");
+    Failures += Expect(Plan.Passes.IsEmpty(), "combined pipeline rejects a bind group without its declared layout");
 
     FBasePassTestBindGroupLayout OtherLayout;
     OtherLayout.Desc.SetIndex = 0;
     CompositeBindGroup.Desc.Layout = &OtherLayout;
     FBasePassCompositePipeline MismatchedBindGroupLayout(Desc);
     MismatchedBindGroupLayout.BuildPasses(Frame, Fixture.Scene, View, Plan);
-    Failures += Expect(Plan.Passes.IsEmpty(),
-        "combined pipeline rejects a bind group from a different layout");
+    Failures += Expect(Plan.Passes.IsEmpty(), "combined pipeline rejects a bind group from a different layout");
 
     CompositeBindGroup.Desc.Layout = &CompositeBindGroupLayout;
     CompositeBindGroupLayout.Desc.SetIndex = 1;
     FBasePassCompositePipeline WrongSetIndex(Desc);
     WrongSetIndex.BuildPasses(Frame, Fixture.Scene, View, Plan);
-    Failures += Expect(Plan.Passes.IsEmpty(),
-        "combined pipeline requires the composite layout at set zero");
+    Failures += Expect(Plan.Passes.IsEmpty(), "combined pipeline requires the composite layout at set zero");
     return Failures;
 }
 
-bool HasAccess(
-    const FRFGPassNode& Pass,
-    const FRFGResourceHandle Resource,
-    const ERFGAccessType Access,
-    const ERHIResourceState State,
-    const EShaderStage ExpectedStage = EShaderStage::None) noexcept
+bool HasAccess(const FRFGPassNode& Pass, const FRFGResourceHandle Resource, const ERFGAccessType Access, const ERHIResourceState State, const EShaderStage ExpectedStage = EShaderStage::None) noexcept
 {
     for (const FRFGPassResourceAccess& Candidate : Pass.ResourceAccesses)
     {
-        if (Candidate.Resource == Resource && Candidate.Access.Access == Access &&
-            Candidate.Access.State == State &&
-            (ExpectedStage == EShaderStage::None || Candidate.Access.ShaderStage == ExpectedStage))
+        if (Candidate.Resource == Resource && Candidate.Access.Access == Access && Candidate.Access.State == State && (ExpectedStage == EShaderStage::None || Candidate.Access.ShaderStage == ExpectedStage))
         {
             return true;
         }
@@ -833,16 +733,11 @@ bool HasAccess(
     return false;
 }
 
-bool HasTransition(
-    const FRFGCompiledPass& Pass,
-    const FRFGResourceHandle Resource,
-    const ERHIResourceState Before,
-    const ERHIResourceState After) noexcept
+bool HasTransition(const FRFGCompiledPass& Pass, const FRFGResourceHandle Resource, const ERHIResourceState Before, const ERHIResourceState After) noexcept
 {
     for (const FRFGBarrierTransition& Barrier : Pass.PreBarriers)
     {
-        if (Barrier.Resource == Resource && Barrier.BeforeState == Before &&
-            Barrier.AfterState == After)
+        if (Barrier.Resource == Resource && Barrier.BeforeState == Before && Barrier.AfterState == After)
         {
             return true;
         }
@@ -863,36 +758,27 @@ int RunBasePassGraphContractTests()
     FBasePass Pass(Fixture.Resources);
     FRFGBuilder Builder;
     FRenderGraphBuilderBridge Bridge(Builder);
-    const FRFGPassHandle BaseHandle = Builder.AddPass(
-        "BasePass", "BasePass", {}, ERFGPassFlags::None, ERFGQueueType::Graphics);
+    const FRFGPassHandle BaseHandle = Builder.AddPass("BasePass", "BasePass", {}, ERFGPassFlags::None, ERFGQueueType::Graphics);
     FRenderPassSetupContext Setup;
     Setup.GraphBridge = &Bridge;
     Setup.PassHandle = BaseHandle;
     Setup.RenderScene = &Fixture.Scene;
     Pass.Setup(Setup);
 
-    const FRFGResourceHandle SceneColor = Bridge.ImportTexture(
-        "SceneColor", &Fixture.Color, ERHIResourceState::Undefined);
-    const FRFGResourceHandle SceneDepth = Bridge.ImportTexture(
-        "Depth", &Fixture.Depth, ERHIResourceState::Undefined);
-    const FRFGResourceHandle Vertex0 = Bridge.ImportBuffer(
-        "BasePassVertexBuffer", &Fixture.VertexBuffers[0], ERHIResourceState::VertexBuffer);
-    const FRFGResourceHandle Index0 = Bridge.ImportBuffer(
-        "BasePassIndexBuffer", &Fixture.IndexBuffers[0], ERHIResourceState::IndexBuffer);
-    const FRFGResourceHandle Sample = Bridge.ImportTexture(
-        "BasePassColorTexture", &Fixture.Samples[0], ERHIResourceState::ShaderResource);
-    const FRFGResourceHandle Light = Bridge.ImportBuffer(
-        "BasePassFrameLight", &Fixture.LightBuffer, ERHIResourceState::ConstantBuffer);
+    const FRFGResourceHandle SceneColor = Bridge.ImportTexture("SceneColor", &Fixture.Color, ERHIResourceState::Undefined);
+    const FRFGResourceHandle SceneDepth = Bridge.ImportTexture("Depth", &Fixture.Depth, ERHIResourceState::Undefined);
+    const FRFGResourceHandle Vertex0 = Bridge.ImportBuffer("BasePassVertexBuffer", &Fixture.VertexBuffers[0], ERHIResourceState::VertexBuffer);
+    const FRFGResourceHandle Index0 = Bridge.ImportBuffer("BasePassIndexBuffer", &Fixture.IndexBuffers[0], ERHIResourceState::IndexBuffer);
+    const FRFGResourceHandle Sample = Bridge.ImportTexture("BasePassColorTexture", &Fixture.Samples[0], ERHIResourceState::ShaderResource);
+    const FRFGResourceHandle Light = Bridge.ImportBuffer("BasePassFrameLight", &Fixture.LightBuffer, ERHIResourceState::ConstantBuffer);
 
-    const FRFGPassHandle CompositeHandle = Builder.AddPass(
-        "Composite", "Composite", {}, ERFGPassFlags::None, ERFGQueueType::Graphics);
+    const FRFGPassHandle CompositeHandle = Builder.AddPass("Composite", "Composite", {}, ERFGPassFlags::None, ERFGQueueType::Graphics);
     FBasePassTestTexture BackBuffer;
     BackBuffer.Desc.Width = 640;
     BackBuffer.Desc.Height = 480;
     BackBuffer.Desc.Format = EPixelFormat::B8G8R8A8_SRGB;
     BackBuffer.Desc.bIsRenderTarget = true;
-    const FRFGResourceHandle BackBufferHandle = Bridge.ImportTexture(
-        "BackBuffer", &BackBuffer, ERHIResourceState::Undefined);
+    const FRFGResourceHandle BackBufferHandle = Bridge.ImportTexture("BackBuffer", &BackBuffer, ERHIResourceState::Undefined);
     FRFGAccessDesc ColorRead;
     ColorRead.Access = ERFGAccessType::Read;
     ColorRead.State = ERHIResourceState::ShaderResource;
@@ -907,19 +793,8 @@ int RunBasePassGraphContractTests()
 
     const FRFGRecordedGraph& Graph = Builder.GetRecordedGraph();
     const FRFGPassNode& BaseNode = Graph.GetPassNode(BaseHandle);
-    Failures += Expect(
-        Graph.GetResourceNode(SceneColor).InitialState == ERHIResourceState::Undefined &&
-        Graph.GetResourceNode(SceneDepth).InitialState == ERHIResourceState::Undefined &&
-        Graph.GetResourceNode(Vertex0).InitialState == ERHIResourceState::VertexBuffer &&
-        Graph.GetResourceNode(Index0).InitialState == ERHIResourceState::IndexBuffer &&
-        Graph.GetResourceNode(Sample).InitialState == ERHIResourceState::ShaderResource &&
-        HasAccess(BaseNode, SceneColor, ERFGAccessType::Write, ERHIResourceState::RenderTarget) &&
-        HasAccess(BaseNode, SceneDepth, ERFGAccessType::Write, ERHIResourceState::DepthStencilWrite) &&
-        HasAccess(BaseNode, Vertex0, ERFGAccessType::Read, ERHIResourceState::VertexBuffer) &&
-        HasAccess(BaseNode, Index0, ERFGAccessType::Read, ERHIResourceState::IndexBuffer) &&
-        HasAccess(BaseNode, Sample, ERFGAccessType::Read, ERHIResourceState::ShaderResource, EShaderStage::Pixel) &&
-        HasAccess(BaseNode, Light, ERFGAccessType::Read, ERHIResourceState::ConstantBuffer, EShaderStage::Pixel) &&
-        Graph.IsOutputResource(SceneDepth) && BaseNode.ResourceAccesses.Size() == 6,
+    Failures += Expect(Graph.GetResourceNode(SceneColor).InitialState == ERHIResourceState::Undefined && Graph.GetResourceNode(SceneDepth).InitialState == ERHIResourceState::Undefined && Graph.GetResourceNode(Vertex0).InitialState == ERHIResourceState::VertexBuffer && Graph.GetResourceNode(Index0).InitialState == ERHIResourceState::IndexBuffer && Graph.GetResourceNode(Sample).InitialState == ERHIResourceState::ShaderResource && HasAccess(BaseNode, SceneColor, ERFGAccessType::Write, ERHIResourceState::RenderTarget) && HasAccess(BaseNode, SceneDepth, ERFGAccessType::Write, ERHIResourceState::DepthStencilWrite) && HasAccess(BaseNode, Vertex0, ERFGAccessType::Read, ERHIResourceState::VertexBuffer) && HasAccess(BaseNode, Index0, ERFGAccessType::Read, ERHIResourceState::IndexBuffer) && HasAccess(BaseNode, Sample, ERFGAccessType::Read, ERHIResourceState::ShaderResource, EShaderStage::Pixel) &&
+                           HasAccess(BaseNode, Light, ERFGAccessType::Read, ERHIResourceState::ConstantBuffer, EShaderStage::Pixel) && Graph.IsOutputResource(SceneDepth) && BaseNode.ResourceAccesses.Size() == 6,
         "BasePass declares shared mesh resources and the frame light once alongside color and depth");
 
     FRFGCompiler Compiler;
@@ -931,8 +806,14 @@ int RunBasePassGraphContractTests()
     {
         for (const FRFGCompiledPass& CompiledPass : Compiled.Plan->GetPasses())
         {
-            if (CompiledPass.Handle == BaseHandle) CompiledBase = &CompiledPass;
-            if (CompiledPass.Handle == CompositeHandle) CompiledComposite = &CompiledPass;
+            if (CompiledPass.Handle == BaseHandle)
+            {
+                CompiledBase = &CompiledPass;
+            }
+            if (CompiledPass.Handle == CompositeHandle)
+            {
+                CompiledComposite = &CompiledPass;
+            }
         }
         bDependencyAndBarriers = CompiledBase != nullptr && CompiledComposite != nullptr;
     }
@@ -943,13 +824,9 @@ int RunBasePassGraphContractTests()
         {
             bIncomingBase |= Edge.SourcePass == BaseHandle;
         }
-        bDependencyAndBarriers = bIncomingBase &&
-            HasTransition(*CompiledBase, SceneColor, ERHIResourceState::Undefined, ERHIResourceState::RenderTarget) &&
-            HasTransition(*CompiledBase, SceneDepth, ERHIResourceState::Undefined, ERHIResourceState::DepthStencilWrite) &&
-            HasTransition(*CompiledComposite, SceneColor, ERHIResourceState::RenderTarget, ERHIResourceState::ShaderResource);
+        bDependencyAndBarriers = bIncomingBase && HasTransition(*CompiledBase, SceneColor, ERHIResourceState::Undefined, ERHIResourceState::RenderTarget) && HasTransition(*CompiledBase, SceneDepth, ERHIResourceState::Undefined, ERHIResourceState::DepthStencilWrite) && HasTransition(*CompiledComposite, SceneColor, ERHIResourceState::RenderTarget, ERHIResourceState::ShaderResource);
     }
-    Failures += Expect(bDependencyAndBarriers,
-        "SceneColor alone carries BasePass to Composite dependency while depth remains a stored output");
+    Failures += Expect(bDependencyAndBarriers, "SceneColor alone carries BasePass to Composite dependency while depth remains a stored output");
     return Failures;
 }
 
@@ -963,9 +840,7 @@ int RunRHIIndexedAndPushConstantContractTests()
     {
         bDefaultRenderTargetsUnknown &= Format == EPixelFormat::Unknown;
     }
-    Failures += Expect(DefaultBuffer.Usage == 0 && DefaultBuffer.UsageFlag == 0 &&
-        DefaultPipeline.RenderTargetCount == 0 && bDefaultRenderTargetsUnknown,
-        "default RHI descriptors expose deterministic zero usage and attachment formats");
+    Failures += Expect(DefaultBuffer.Usage == 0 && DefaultBuffer.UsageFlag == 0 && DefaultPipeline.RenderTargetCount == 0 && bDefaultRenderTargetsUnknown, "default RHI descriptors expose deterministic zero usage and attachment formats");
 
     FRHIPushConstantRangeDesc Disabled;
     FRHIPushConstantRangeDesc Valid;
@@ -977,17 +852,8 @@ int RunRHIIndexedAndPushConstantContractTests()
     Oversized.Size = 132;
     FRHIPushConstantRangeDesc MissingStage = Valid;
     MissingStage.StageFlags = EShaderStage::None;
-    Failures += Expect(Disabled.IsDisabled() && !Disabled.IsValid() && Valid.IsValid() &&
-        Valid.AcceptsWrite(BasePassStages, 80) &&
-        !Valid.AcceptsWrite(EShaderStage::Vertex, 80) &&
-        !Valid.AcceptsWrite(BasePassStages, 64) &&
-        !Misaligned.IsValid() && !Oversized.IsValid() && !MissingStage.IsValid(),
-        "RHI push constant contract accepts only staged aligned ranges up to 128 bytes");
-    Failures += Expect(IsValidIndexFormat(EPixelFormat::R16_UINT) &&
-        IsValidIndexFormat(EPixelFormat::R32_UINT) &&
-        !IsValidIndexFormat(EPixelFormat::R8_UINT) &&
-        !IsValidIndexFormat(EPixelFormat::Unknown),
-        "RHI index contract accepts only R16_UINT and R32_UINT");
+    Failures += Expect(Disabled.IsDisabled() && !Disabled.IsValid() && Valid.IsValid() && Valid.AcceptsWrite(BasePassStages, 80) && !Valid.AcceptsWrite(EShaderStage::Vertex, 80) && !Valid.AcceptsWrite(BasePassStages, 64) && !Misaligned.IsValid() && !Oversized.IsValid() && !MissingStage.IsValid(), "RHI push constant contract accepts only staged aligned ranges up to 128 bytes");
+    Failures += Expect(IsValidIndexFormat(EPixelFormat::R16_UINT) && IsValidIndexFormat(EPixelFormat::R32_UINT) && !IsValidIndexFormat(EPixelFormat::R8_UINT) && !IsValidIndexFormat(EPixelFormat::Unknown), "RHI index contract accepts only R16_UINT and R32_UINT");
 
     FRHIPipelineDesc_Graphics AttachmentPipeline;
     AttachmentPipeline.RenderTargetCount = 1;
@@ -1007,11 +873,7 @@ int RunRHIIndexedAndPushConstantContractTests()
     AttachmentPipeline.RenderTargetCount = 0;
     const bool bRejectsCount = !IsRenderingSignatureCompatible(Signature, AttachmentPipeline);
     Signature.Reset();
-    Failures += Expect(bCompatible && bRejectsColor && bRejectsDepth && bRejectsCount &&
-        Signature.RenderTargetCount == 0 &&
-        Signature.RenderTargetFormats[0] == EPixelFormat::Unknown &&
-        Signature.DepthStencilFormat == EPixelFormat::Unknown,
-        "active rendering signature gates every pipeline bind and resets between command scopes");
+    Failures += Expect(bCompatible && bRejectsColor && bRejectsDepth && bRejectsCount && Signature.RenderTargetCount == 0 && Signature.RenderTargetFormats[0] == EPixelFormat::Unknown && Signature.DepthStencilFormat == EPixelFormat::Unknown, "active rendering signature gates every pipeline bind and resets between command scopes");
     return Failures;
 }
 

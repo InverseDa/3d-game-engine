@@ -6,7 +6,6 @@
 #include "RHIPipeline.h"
 #include "RHIDescription.h"
 
-
 namespace LE
 {
 
@@ -19,19 +18,13 @@ class FRHITextureView;
 // layer 0. It is deliberately limited to one-layer, one-mip RGBA8 textures.
 inline bool IsTextureUploadDestination(const FRHITextureDesc& Desc) noexcept
 {
-    return Desc.bIsTransferDestination && Desc.bIsShaderResource && !Desc.bIsDepthStencil &&
-        Desc.Width != 0 && Desc.Height != 0 && Desc.Depth == 1 &&
-        Desc.MipLevels == 1 && Desc.ArrayLayers == 1 &&
-        (Desc.Format == EPixelFormat::R8G8B8A8_UNORM || Desc.Format == EPixelFormat::R8G8B8A8_SRGB);
+    return Desc.bIsTransferDestination && Desc.bIsShaderResource && !Desc.bIsDepthStencil && Desc.Width != 0 && Desc.Height != 0 && Desc.Depth == 1 && Desc.MipLevels == 1 && Desc.ArrayLayers == 1 && (Desc.Format == EPixelFormat::R8G8B8A8_UNORM || Desc.Format == EPixelFormat::R8G8B8A8_SRGB);
 }
 
-inline bool IsBufferToTexture2DCopyValid(
-    const FRHIBufferDesc& Source, const FRHITextureDesc& Destination, uint64 SourceOffset = 0) noexcept
+inline bool IsBufferToTexture2DCopyValid(const FRHIBufferDesc& Source, const FRHITextureDesc& Destination, uint64 SourceOffset = 0) noexcept
 {
     constexpr uint64 TexelBytes = 4;
-    if (!IsTextureUploadDestination(Destination) ||
-        (Source.UsageFlag & static_cast<uint32>(EBufferUsageFlags::TransferSrc)) == 0 ||
-        SourceOffset > Source.Size || SourceOffset % TexelBytes != 0)
+    if (!IsTextureUploadDestination(Destination) || (Source.UsageFlag & static_cast<uint32>(EBufferUsageFlags::TransferSrc)) == 0 || SourceOffset > Source.Size || SourceOffset % TexelBytes != 0)
     {
         return false;
     }

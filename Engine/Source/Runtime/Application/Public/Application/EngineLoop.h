@@ -50,9 +50,7 @@ public:
     FEngineLoop(FEngineLoop&&) = delete;
     FEngineLoop& operator=(FEngineLoop&&) = delete;
 
-    EEngineLoopInitializeResult Initialize(
-        IApplication& InApplication,
-        const FEngineLoopConfig& Config = {});
+    EEngineLoopInitializeResult Initialize(IApplication& InApplication, const FEngineLoopConfig& Config = {});
 
     // One accepted Tick samples the clock exactly once and calls the application
     // in ProcessPlatformEvents -> Update -> Render order. All phases share one

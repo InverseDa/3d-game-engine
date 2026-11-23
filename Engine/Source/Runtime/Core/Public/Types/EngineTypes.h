@@ -10,9 +10,9 @@
 #include <iosfwd>
 
 #if defined(_MSC_VER)
-    #define FORCE_INLINE __forceinline
+#define FORCE_INLINE __forceinline
 #else
-    #define FORCE_INLINE inline __attribute__((always_inline))
+#define FORCE_INLINE inline __attribute__((always_inline))
 #endif
 
 namespace LE

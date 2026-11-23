@@ -36,9 +36,7 @@ void FRFGCuller::CullPasses(const FRFGRecordedGraph& RecordedGraph, FRFGCompiled
     for (const FRFGCompiledPass& CompiledPass : Passes)
     {
         const FRFGPassNode& PassNode = RecordedGraph.GetPassNode(CompiledPass.Handle);
-        const bool bHasRetentionFlags =
-            EnumHasAnyFlags(PassNode.Flags, ERFGPassFlags::HasSideEffects) ||
-            EnumHasAnyFlags(PassNode.Flags, ERFGPassFlags::NeverCull);
+        const bool bHasRetentionFlags = EnumHasAnyFlags(PassNode.Flags, ERFGPassFlags::HasSideEffects) || EnumHasAnyFlags(PassNode.Flags, ERFGPassFlags::NeverCull);
 
         bool bProducesOutput = false;
         for (const FRFGPassResourceAccess& ResourceAccess : PassNode.ResourceAccesses)

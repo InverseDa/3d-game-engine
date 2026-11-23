@@ -185,6 +185,12 @@ P0 的语言、namespace、Core 类型、ownership 与容器规范由
 managed lifecycle/GC 契约机械约束的对象。P0 保留既有类型、函数、成员、常量和布尔命名，
 基础设施迁移不夹带 cosmetic rename。
 
+### 变量与函数
+
+- 函数名和普通变量名默认使用大驼峰（PascalCase），每个单词首字母大写。局部变量、成员和形参都遵循这一约定，例如 `FrameIndex`、`TickState` 和 `OutFlushResult`。
+- `bool` 变量在大驼峰名称前加小写 `b`，包括局部变量、成员和形参，例如 `bTransformsUpdated`、`bActive` 和 `bEnabled`。
+- 返回 `bool` 的函数仍按函数命名，例如 `IsValid()` 和 `HasTransform()`。
+
 ### 其他约定
 
 - 类型别名：使用 `int8`、`int32`、`uint32`、`float32` 等明确位宽的别名。

@@ -3,11 +3,7 @@
 namespace LE
 {
 
-FRFGRuntime::FRFGRuntime()
-    : Compiler(new FRFGCompiler())
-    , PlanCache(new FRFGPlanCache())
-{
-}
+FRFGRuntime::FRFGRuntime() : Compiler(new FRFGCompiler()), PlanCache(new FRFGPlanCache()) {}
 
 FRFGRuntime::~FRFGRuntime()
 {
@@ -82,9 +78,7 @@ LE::SharedPtr<const FRFGCompiledPlan> FRFGRuntime::FindCompiledPlan(const FRFGGr
     return PlanCache != nullptr ? PlanCache->Find(Signature) : nullptr;
 }
 
-void FRFGRuntime::StoreCompiledPlan(
-    const FRFGGraphSignature& Signature,
-    const LE::SharedPtr<const FRFGCompiledPlan>& CompiledPlan)
+void FRFGRuntime::StoreCompiledPlan(const FRFGGraphSignature& Signature, const LE::SharedPtr<const FRFGCompiledPlan>& CompiledPlan)
 {
     if (PlanCache != nullptr && CompiledPlan && Signature.Value != 0)
     {
@@ -94,12 +88,7 @@ void FRFGRuntime::StoreCompiledPlan(
 
 void FRFGRuntime::SetCompileOptions(const FRFGCompileOptions& InCompileOptions)
 {
-    const bool bOptionsChanged =
-        CompileOptions.bEnablePassCulling != InCompileOptions.bEnablePassCulling ||
-        CompileOptions.bEnableBarrierElision != InCompileOptions.bEnableBarrierElision ||
-        CompileOptions.bEnableStateMerging != InCompileOptions.bEnableStateMerging ||
-        CompileOptions.bEnablePlanCache != InCompileOptions.bEnablePlanCache ||
-        CompileOptions.bDeterministicSort != InCompileOptions.bDeterministicSort;
+    const bool bOptionsChanged = CompileOptions.bEnablePassCulling != InCompileOptions.bEnablePassCulling || CompileOptions.bEnableBarrierElision != InCompileOptions.bEnableBarrierElision || CompileOptions.bEnableStateMerging != InCompileOptions.bEnableStateMerging || CompileOptions.bEnablePlanCache != InCompileOptions.bEnablePlanCache || CompileOptions.bDeterministicSort != InCompileOptions.bDeterministicSort;
 
     if (bOptionsChanged && PlanCache != nullptr)
     {

@@ -40,9 +40,7 @@ struct FNativeGameplaySystemUpdateContext
     ENativeGameplaySystemPhase Phase = ENativeGameplaySystemPhase::Variable;
 };
 
-using FNativeGameplaySystemUpdate = ENativeGameplaySystemResult (*)(
-    void* ProviderContext,
-    const FNativeGameplaySystemUpdateContext& Context) noexcept;
+using FNativeGameplaySystemUpdate = ENativeGameplaySystemResult (*)(void* ProviderContext, const FNativeGameplaySystemUpdateContext& Context) noexcept;
 
 // Name and Dependencies are copied during registration. ProviderContext and
 // Update remain borrowed; their provider must stay alive and loaded until the

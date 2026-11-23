@@ -34,10 +34,7 @@ enum class EEnumUnderlyingType : uint8
 
 constexpr bool IsValidEnumUnderlyingType(const EEnumUnderlyingType Type) noexcept
 {
-    return Type == EEnumUnderlyingType::Int8 || Type == EEnumUnderlyingType::UInt8 ||
-        Type == EEnumUnderlyingType::Int16 || Type == EEnumUnderlyingType::UInt16 ||
-        Type == EEnumUnderlyingType::Int32 || Type == EEnumUnderlyingType::UInt32 ||
-        Type == EEnumUnderlyingType::Int64 || Type == EEnumUnderlyingType::UInt64;
+    return Type == EEnumUnderlyingType::Int8 || Type == EEnumUnderlyingType::UInt8 || Type == EEnumUnderlyingType::Int16 || Type == EEnumUnderlyingType::UInt16 || Type == EEnumUnderlyingType::Int32 || Type == EEnumUnderlyingType::UInt32 || Type == EEnumUnderlyingType::Int64 || Type == EEnumUnderlyingType::UInt64;
 }
 
 constexpr uint8 GetEnumUnderlyingBitWidth(const EEnumUnderlyingType Type) noexcept
@@ -62,34 +59,23 @@ constexpr uint8 GetEnumUnderlyingBitWidth(const EEnumUnderlyingType Type) noexce
 
 constexpr bool IsEnumUnderlyingSigned(const EEnumUnderlyingType Type) noexcept
 {
-    return Type == EEnumUnderlyingType::Int8 ||
-        Type == EEnumUnderlyingType::Int16 ||
-        Type == EEnumUnderlyingType::Int32 ||
-        Type == EEnumUnderlyingType::Int64;
+    return Type == EEnumUnderlyingType::Int8 || Type == EEnumUnderlyingType::Int16 || Type == EEnumUnderlyingType::Int32 || Type == EEnumUnderlyingType::Int64;
 }
 
 constexpr uint64 GetEnumValueMask(const EEnumUnderlyingType Type) noexcept
 {
     const uint8 Width = GetEnumUnderlyingBitWidth(Type);
-    return Width == 0 ? uint64{ 0 } :
-        (Width == 64 ? ~uint64{ 0 } : ((uint64{ 1 } << Width) - 1));
+    return Width == 0 ? uint64{0} : (Width == 64 ? ~uint64{0} : ((uint64{1} << Width) - 1));
 }
 
-constexpr bool IsCanonicalEnumValueBits(
-    const EEnumUnderlyingType Type,
-    const uint64 ValueBits) noexcept
+constexpr bool IsCanonicalEnumValueBits(const EEnumUnderlyingType Type, const uint64 ValueBits) noexcept
 {
-    return IsValidEnumUnderlyingType(Type) &&
-        (ValueBits & ~GetEnumValueMask(Type)) == 0;
+    return IsValidEnumUnderlyingType(Type) && (ValueBits & ~GetEnumValueMask(Type)) == 0;
 }
 
-inline bool TryInterpretEnumValueAsSigned(
-    const EEnumUnderlyingType Type,
-    const uint64 ValueBits,
-    int64& OutValue) noexcept
+inline bool TryInterpretEnumValueAsSigned(const EEnumUnderlyingType Type, const uint64 ValueBits, int64& OutValue) noexcept
 {
-    if (!IsValidEnumUnderlyingType(Type) || !IsEnumUnderlyingSigned(Type) ||
-        !IsCanonicalEnumValueBits(Type, ValueBits))
+    if (!IsValidEnumUnderlyingType(Type) || !IsEnumUnderlyingSigned(Type) || !IsCanonicalEnumValueBits(Type, ValueBits))
     {
         return false;
     }
@@ -99,7 +85,7 @@ inline bool TryInterpretEnumValueAsSigned(
     {
         // Convert through the two's-complement magnitude instead of relying on
         // an implementation-defined uint64-to-int64 conversion.
-        if ((ValueBits & (uint64{ 1 } << 63)) == 0)
+        if ((ValueBits & (uint64{1} << 63)) == 0)
         {
             OutValue = static_cast<int64>(ValueBits);
         }
@@ -111,7 +97,7 @@ inline bool TryInterpretEnumValueAsSigned(
         return true;
     }
 
-    const uint64 SignBit = uint64{ 1 } << (Width - 1);
+    const uint64 SignBit = uint64{1} << (Width - 1);
     if ((ValueBits & SignBit) == 0)
     {
         OutValue = static_cast<int64>(ValueBits);
@@ -123,13 +109,9 @@ inline bool TryInterpretEnumValueAsSigned(
     return true;
 }
 
-inline bool TryInterpretEnumValueAsUnsigned(
-    const EEnumUnderlyingType Type,
-    const uint64 ValueBits,
-    uint64& OutValue) noexcept
+inline bool TryInterpretEnumValueAsUnsigned(const EEnumUnderlyingType Type, const uint64 ValueBits, uint64& OutValue) noexcept
 {
-    if (!IsValidEnumUnderlyingType(Type) || IsEnumUnderlyingSigned(Type) ||
-        !IsCanonicalEnumValueBits(Type, ValueBits))
+    if (!IsValidEnumUnderlyingType(Type) || IsEnumUnderlyingSigned(Type) || !IsCanonicalEnumValueBits(Type, ValueBits))
     {
         return false;
     }

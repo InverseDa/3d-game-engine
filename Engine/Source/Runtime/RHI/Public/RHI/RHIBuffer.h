@@ -14,7 +14,7 @@ public:
 
 public:
     virtual void* Map(uint64 Offset, uint64 Size) = 0;
-    virtual void  Unmap() = 0;
+    virtual void Unmap() = 0;
 
 public:
     virtual const FRHIBufferDesc& GetDesc() const = 0;

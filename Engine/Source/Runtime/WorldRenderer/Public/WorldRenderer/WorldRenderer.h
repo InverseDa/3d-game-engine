@@ -47,8 +47,7 @@ struct FWorldRenderSnapshotBuildContext
 
 struct FWorldRenderSnapshotBuildReport
 {
-    EWorldRenderSnapshotBuildResult Result =
-        EWorldRenderSnapshotBuildResult::Success;
+    EWorldRenderSnapshotBuildResult Result = EWorldRenderSnapshotBuildResult::Success;
     std::size_t MeshIndex = 0;
     FRenderPrimitiveId PrimitiveId;
     EAssetResolveResult AssetResolveResult = EAssetResolveResult::Success;
@@ -60,12 +59,7 @@ struct FWorldRenderSnapshotBuildReport
 class WORLDRENDERER_API FWorldRenderer final
 {
 public:
-    EWorldRenderSnapshotBuildResult BuildSnapshot(
-        const FWorld& World,
-        const FAssetRegistry& Assets,
-        const FWorldRenderSnapshotBuildContext& Context,
-        FWorldRenderSnapshot& OutSnapshot,
-        FWorldRenderSnapshotBuildReport* OutReport = nullptr) const noexcept;
+    EWorldRenderSnapshotBuildResult BuildSnapshot(const FWorld& World, const FAssetRegistry& Assets, const FWorldRenderSnapshotBuildContext& Context, FWorldRenderSnapshot& OutSnapshot, FWorldRenderSnapshotBuildReport* OutReport = nullptr) const noexcept;
 };
 
 } // namespace LE

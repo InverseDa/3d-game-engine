@@ -19,9 +19,18 @@ struct FTransform
     Math::Quaternionf NormalizedRotation() const noexcept
     {
         float Maximum = std::fabs(Rotation.x);
-        if (std::fabs(Rotation.y) > Maximum) Maximum = std::fabs(Rotation.y);
-        if (std::fabs(Rotation.z) > Maximum) Maximum = std::fabs(Rotation.z);
-        if (std::fabs(Rotation.w) > Maximum) Maximum = std::fabs(Rotation.w);
+        if (std::fabs(Rotation.y) > Maximum)
+        {
+            Maximum = std::fabs(Rotation.y);
+        }
+        if (std::fabs(Rotation.z) > Maximum)
+        {
+            Maximum = std::fabs(Rotation.z);
+        }
+        if (std::fabs(Rotation.w) > Maximum)
+        {
+            Maximum = std::fabs(Rotation.w);
+        }
         if (Maximum == 0.0f)
         {
             return Math::Quaternionf::Identity();
@@ -32,11 +41,7 @@ struct FTransform
         const float Z = Rotation.z / Maximum;
         const float W = Rotation.w / Maximum;
         const float InverseLength = 1.0f / std::sqrt(X * X + Y * Y + Z * Z + W * W);
-        return Math::Quaternionf(
-            X * InverseLength,
-            Y * InverseLength,
-            Z * InverseLength,
-            W * InverseLength);
+        return Math::Quaternionf(X * InverseLength, Y * InverseLength, Z * InverseLength, W * InverseLength);
     }
 
     Math::Matrix4f ToMatrix() const noexcept
@@ -72,16 +77,9 @@ struct FTransform
         return Result;
     }
 
-    friend bool operator==(const FTransform& Left, const FTransform& Right) noexcept
-    {
-        return Left.Translation == Right.Translation &&
-            Left.Rotation == Right.Rotation && Left.Scale == Right.Scale;
-    }
+    friend bool operator==(const FTransform& Left, const FTransform& Right) noexcept { return Left.Translation == Right.Translation && Left.Rotation == Right.Rotation && Left.Scale == Right.Scale; }
 
-    friend bool operator!=(const FTransform& Left, const FTransform& Right) noexcept
-    {
-        return !(Left == Right);
-    }
+    friend bool operator!=(const FTransform& Left, const FTransform& Right) noexcept { return !(Left == Right); }
 };
 
 enum class ETransformUpdateResult : uint8
@@ -102,9 +100,7 @@ enum class ETransformParentResult : uint8
     CycleRejected,
 };
 
-static_assert(std::is_standard_layout<FTransform>::value,
-    "FTransform must remain standard-layout across the World API");
-static_assert(std::is_trivially_copyable<FTransform>::value,
-    "FTransform must remain trivially copyable across the World API");
+static_assert(std::is_standard_layout<FTransform>::value, "FTransform must remain standard-layout across the World API");
+static_assert(std::is_trivially_copyable<FTransform>::value, "FTransform must remain trivially copyable across the World API");
 
 } // namespace LE

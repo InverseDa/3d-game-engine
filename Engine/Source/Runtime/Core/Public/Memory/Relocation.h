@@ -11,16 +11,13 @@
 namespace LE
 {
 
-template <typename T>
-struct IsBitwiseRelocatable : std::is_trivially_copyable<T>
+template <typename T> struct IsBitwiseRelocatable : std::is_trivially_copyable<T>
 {
 };
 
-template <typename T>
-constexpr bool IsBitwiseRelocatableV = IsBitwiseRelocatable<T>::value;
+template <typename T> constexpr bool IsBitwiseRelocatableV = IsBitwiseRelocatable<T>::value;
 
-template <typename T>
-void DestroyRange(T* const Data, const std::size_t Count) noexcept
+template <typename T> void DestroyRange(T* const Data, const std::size_t Count) noexcept
 {
     if constexpr (!std::is_trivially_destructible<T>::value)
     {
@@ -31,8 +28,7 @@ void DestroyRange(T* const Data, const std::size_t Count) noexcept
     }
 }
 
-template <typename T>
-void RelocateConstructRange(T* const Destination, T* const Source, const std::size_t Count)
+template <typename T> void RelocateConstructRange(T* const Destination, T* const Source, const std::size_t Count)
 {
     if (Count == 0 || Destination == Source)
     {

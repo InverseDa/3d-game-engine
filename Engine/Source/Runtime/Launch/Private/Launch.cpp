@@ -33,7 +33,7 @@ int32 GuardedMain()
 }
 
 #if PLATFORM_WINDOWS
-    #include <Windows.h>
+#include <Windows.h>
 
 LE::int32 WINAPI WinMain(_In_ HINSTANCE hInInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ char* pCmdLine, _In_ LE::int32 nCmdShow)
 {
