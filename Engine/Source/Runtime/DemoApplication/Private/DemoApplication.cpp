@@ -435,7 +435,7 @@ private:
         return Result == EAssetLoadResult::Success;
     }
 
-    static void LogAssetFailure(const FAssetLoadDiagnostic& Diagnostic) noexcept { LE_LOG(LogXBD, Error, "Content asset '{}' ({}), dependency {}: load={}, file={}, format={}.", Diagnostic.Path.Data(), Diagnostic.Id.ToString().Data(), Diagnostic.DependencyId.ToString().Data(), static_cast<uint32>(Diagnostic.Result), DescribeContentIOResult(Diagnostic.FileResult), static_cast<uint32>(Diagnostic.FormatResult)); }
+    static void LogAssetFailure(const FAssetLoadDiagnostic& Diagnostic) noexcept { LE_LOG(LogXBD, Error, "Content asset '{}' ({}), dependency {}: load={}, file={}, format={}.", Diagnostic.Path.Data(), Diagnostic.Id.ToString().Data(), Diagnostic.DependencyId.ToString().Data(), static_cast<uint32>(Diagnostic.Result), DescribeFileSystemResult(Diagnostic.FileResult), static_cast<uint32>(Diagnostic.FormatResult)); }
 
     bool InitializeContent() noexcept
     {
@@ -472,7 +472,7 @@ private:
         const auto SaveResult = SaveScene(SavePath, *Scene, Assets->GetRegistry(), &SaveDiagnostic);
         if (SaveResult != ESceneOperationResult::Success)
         {
-            LE_LOG(LogXBD, Error, "Scene save '{}': {} ({}).", SavePath, DescribeSceneOperationResult(SaveResult), DescribeContentIOResult(SaveDiagnostic.FileResult));
+            LE_LOG(LogXBD, Error, "Scene save '{}': {} ({}).", SavePath, DescribeSceneOperationResult(SaveResult), DescribeFileSystemResult(SaveDiagnostic.FileResult));
             return false;
         }
         LE_LOG(LogXBD, Info, "Saved scene '{}'.", SavePath);
@@ -551,7 +551,7 @@ private:
         const auto Result = LoadScene(Path, Resolver, Candidate, &Diagnostic);
         if (Result != ESceneOperationResult::Success)
         {
-            LE_LOG(LogXBD, Error, "Scene '{}': {} ({}:{} {}, entity {}, field {}, asset {}, file {}).", PrintablePath.Data(), DescribeSceneOperationResult(Result), Diagnostic.Document.Line, Diagnostic.Document.Column, DescribeSceneDocumentResult(Diagnostic.Document.Result), Diagnostic.Entity.ToString().Data(), String(Diagnostic.Document.Field).Data(), Diagnostic.Asset.ToString().Data(), DescribeContentIOResult(Diagnostic.FileResult));
+            LE_LOG(LogXBD, Error, "Scene '{}': {} ({}:{} {}, entity {}, field {}, asset {}, file {}).", PrintablePath.Data(), DescribeSceneOperationResult(Result), Diagnostic.Document.Line, Diagnostic.Document.Column, DescribeSceneDocumentResult(Diagnostic.Document.Result), Diagnostic.Entity.ToString().Data(), String(Diagnostic.Document.Field).Data(), Diagnostic.Asset.ToString().Data(), DescribeFileSystemResult(Diagnostic.FileResult));
             return false;
         }
         if (bApplyStartupEdit && !ApplyRequestedSceneEdit(*Candidate))

@@ -1,4 +1,4 @@
-#include "ContentIO/ContentIO.h"
+#include "FileSystem/FileSystem.h"
 #include "Types/Uuid.h"
 
 #include <algorithm>
@@ -20,7 +20,7 @@ namespace LE
 namespace
 {
 
-using EResult = EContentIOResult;
+using EResult = EFileSystemResult;
 constexpr std::size_t MaxPathBytes = 32767;
 constexpr std::size_t MaxTreeDepth = 64;
 constexpr std::size_t MaxTreeEntries = 1000000;
@@ -693,18 +693,18 @@ EResult FFileEnumeration::VisitDirectory(const StringView Relative, const std::s
 
 } // namespace
 
-EContentIOResult ReadContentFile(const StringView Path, const std::size_t MaxBytes, Array<uint8>& OutBytes) noexcept
+EFileSystemResult ReadContentFile(const StringView Path, const std::size_t MaxBytes, Array<uint8>& OutBytes) noexcept
 {
     uint64 FileSize = 0;
     return ReadFileBytes(Path, MaxBytes, false, OutBytes, FileSize);
 }
 
-EContentIOResult ReadContentFilePrefix(const StringView Path, const std::size_t MaxPrefixBytes, Array<uint8>& OutBytes, uint64& OutFileSize) noexcept
+EFileSystemResult ReadContentFilePrefix(const StringView Path, const std::size_t MaxPrefixBytes, Array<uint8>& OutBytes, uint64& OutFileSize) noexcept
 {
     return ReadFileBytes(Path, MaxPrefixBytes, true, OutBytes, OutFileSize);
 }
 
-EContentIOResult WriteContentFileAtomically(const StringView Path, const Span<const uint8> Bytes) noexcept
+EFileSystemResult WriteContentFileAtomically(const StringView Path, const Span<const uint8> Bytes) noexcept
 {
     FNativePath Destination;
     if (const EResult Result = ConvertPath(Path, Destination); Result != EResult::Success)
@@ -752,7 +752,7 @@ EContentIOResult WriteContentFileAtomically(const StringView Path, const Span<co
     return EResult::Success;
 }
 
-EContentIOResult ResolveContentFile(StringView AbsoluteRoot, const StringView RelativePath, String& OutPath) noexcept
+EFileSystemResult ResolveContentFile(StringView AbsoluteRoot, const StringView RelativePath, String& OutPath) noexcept
 {
     if (!IsPathText(RelativePath))
     {
@@ -805,7 +805,7 @@ EContentIOResult ResolveContentFile(StringView AbsoluteRoot, const StringView Re
     return EResult::Success;
 }
 
-EContentIOResult EnumerateContentFiles(StringView AbsoluteRoot, const StringView Extension, const std::size_t MaxFiles, Array<String>& OutRelativePaths, String* const OutFailureRelativePath) noexcept
+EFileSystemResult EnumerateContentFiles(StringView AbsoluteRoot, const StringView Extension, const std::size_t MaxFiles, Array<String>& OutRelativePaths, String* const OutFailureRelativePath) noexcept
 {
     if (!Extension.IsEmpty() && (Extension[0] != '.' || !IsPathText(Extension)))
     {
@@ -843,33 +843,33 @@ EContentIOResult EnumerateContentFiles(StringView AbsoluteRoot, const StringView
     return EResult::Success;
 }
 
-const char* DescribeContentIOResult(const EContentIOResult Result) noexcept
+const char* DescribeFileSystemResult(const EFileSystemResult Result) noexcept
 {
     switch (Result)
     {
-    case EContentIOResult::Success:
+    case EFileSystemResult::Success:
         return "success";
-    case EContentIOResult::InvalidPath:
+    case EFileSystemResult::InvalidPath:
         return "invalid UTF-8 file or mount path";
-    case EContentIOResult::OutsideRoot:
+    case EFileSystemResult::OutsideRoot:
         return "path is not relative to the mounted root";
-    case EContentIOResult::RedirectedPath:
+    case EFileSystemResult::RedirectedPath:
         return "path contains a symbolic link or reparse point";
-    case EContentIOResult::NotFound:
+    case EFileSystemResult::NotFound:
         return "file or directory was not found";
-    case EContentIOResult::NotRegularFile:
+    case EFileSystemResult::NotRegularFile:
         return "path does not name the expected file or directory";
-    case EContentIOResult::LimitExceeded:
+    case EFileSystemResult::LimitExceeded:
         return "file size or enumeration exceeds the limit";
-    case EContentIOResult::OutOfMemory:
+    case EFileSystemResult::OutOfMemory:
         return "allocation failed";
-    case EContentIOResult::ReadFailed:
+    case EFileSystemResult::ReadFailed:
         return "could not read file";
-    case EContentIOResult::WriteFailed:
+    case EFileSystemResult::WriteFailed:
         return "could not write a sibling temporary file";
-    case EContentIOResult::ReplaceFailed:
+    case EFileSystemResult::ReplaceFailed:
         return "could not replace the destination file";
-    case EContentIOResult::EnumerationFailed:
+    case EFileSystemResult::EnumerationFailed:
         return "could not enumerate the mounted directory";
     }
     return "unknown content I/O failure";

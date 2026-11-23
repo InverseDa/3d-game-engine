@@ -188,7 +188,7 @@ bool TestNavigationAndSceneSave()
     }
     Array<uint8> Before;
     Array<uint8> After;
-    bool bPassed = ExpectNavigation(ReadContentFile(Files.Before.View(), MaxSceneDocumentBytes, Before) == EContentIOResult::Success && ReadContentFile(Files.After.View(), MaxSceneDocumentBytes, After) == EContentIOResult::Success && Before.Size() == After.Size() && std::memcmp(Before.Data(), After.Data(), Before.Size()) == 0, "explicit saves before and after navigation are byte-identical");
+    bool bPassed = ExpectNavigation(ReadContentFile(Files.Before.View(), MaxSceneDocumentBytes, Before) == EFileSystemResult::Success && ReadContentFile(Files.After.View(), MaxSceneDocumentBytes, After) == EFileSystemResult::Success && Before.Size() == After.Size() && std::memcmp(Before.Data(), After.Data(), Before.Size()) == 0, "explicit saves before and after navigation are byte-identical");
 
     UniquePtr<FScene> Reloaded;
     Context.CameraOverride = {};

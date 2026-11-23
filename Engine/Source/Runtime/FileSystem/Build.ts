@@ -4,8 +4,8 @@ import {
     type Target,
 } from "../../../Builder/Runtime/Api.ts";
 
-export default class ContentIOBuild extends ModuleBuild {
-    public readonly Name = "ContentIO";
+export default class FileSystemBuild extends ModuleBuild {
+    public readonly Name = "FileSystem";
 
     public Configure(_Target: Target, Configuration: ModuleConfiguration): void {
         Configuration.PublicDependencies.push("Core");

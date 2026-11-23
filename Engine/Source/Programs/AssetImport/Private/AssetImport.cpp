@@ -3,7 +3,7 @@
 #include "Asset/SoftAssetPath.h"
 #include "AssetFormat/AssetFormat.h"
 #include "Containers/HashMap.h"
-#include "ContentIO/ContentIO.h"
+#include "FileSystem/FileSystem.h"
 
 #include <cerrno>
 #include <charconv>
@@ -683,8 +683,8 @@ int PublishAsset(const FImportArguments& Args, const Array<uint8>& Bytes) noexce
 {
     Array<uint8> Prefix;
     uint64 ExistingSize = 0;
-    const EContentIOResult ReadResult = ReadContentFilePrefix(Args.Output, MaxAssetFileHeaderBytes, Prefix, ExistingSize);
-    if (ReadResult == EContentIOResult::Success)
+    const EFileSystemResult ReadResult = ReadContentFilePrefix(Args.Output, MaxAssetFileHeaderBytes, Prefix, ExistingSize);
+    if (ReadResult == EFileSystemResult::Success)
     {
         if (ExistingSize > MaxAssetFileBytes)
         {
@@ -706,13 +706,13 @@ int PublishAsset(const FImportArguments& Args, const Array<uint8>& Bytes) noexce
             return ReportError(Args.Output, "existing resource has a different ID, type or virtual path");
         }
     }
-    else if (ReadResult != EContentIOResult::NotFound)
+    else if (ReadResult != EFileSystemResult::NotFound)
     {
-        return ReportError(Args.Output, DescribeContentIOResult(ReadResult));
+        return ReportError(Args.Output, DescribeFileSystemResult(ReadResult));
     }
 
-    const EContentIOResult WriteResult = WriteContentFileAtomically(Args.Output, Bytes.AsSpan());
-    return WriteResult == EContentIOResult::Success ? 0 : ReportError(Args.Output, DescribeContentIOResult(WriteResult));
+    const EFileSystemResult WriteResult = WriteContentFileAtomically(Args.Output, Bytes.AsSpan());
+    return WriteResult == EFileSystemResult::Success ? 0 : ReportError(Args.Output, DescribeFileSystemResult(WriteResult));
 }
 
 void PrintUsage(FILE* Stream) noexcept
@@ -755,10 +755,10 @@ int RunAssetImport(const Span<const StringView> Arguments) noexcept
 
     Array<uint8> SourceBytes;
     const std::size_t MaxSourceBytes = Args.Kind == EImportKind::Material ? MaxMaterialSourceBytes : MaxAssetFileBytes;
-    const EContentIOResult ReadResult = ReadContentFile(Args.Source, MaxSourceBytes, SourceBytes);
-    if (ReadResult != EContentIOResult::Success)
+    const EFileSystemResult ReadResult = ReadContentFile(Args.Source, MaxSourceBytes, SourceBytes);
+    if (ReadResult != EFileSystemResult::Success)
     {
-        return ReportError(Args.Source, DescribeContentIOResult(ReadResult));
+        return ReportError(Args.Source, DescribeFileSystemResult(ReadResult));
     }
 
     const StringView Source(reinterpret_cast<const char*>(SourceBytes.Data()), SourceBytes.Size());

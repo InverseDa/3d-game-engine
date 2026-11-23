@@ -16,7 +16,7 @@ constexpr std::size_t MaxCatalogEntries = 16384;
 constexpr std::size_t MaxMounts = 64;
 constexpr StringView AssetSuffix(".leasset", 8);
 
-EAssetLoadResult Report(FAssetLoadDiagnostic* Diagnostic, EAssetLoadResult Result, FAssetId Id = {}, StringView Path = {}, EContentIOResult FileResult = EContentIOResult::Success, EAssetFormatResult FormatResult = EAssetFormatResult::Success, EAssetRegisterResult RegistrationResult = EAssetRegisterResult::Success) noexcept
+EAssetLoadResult Report(FAssetLoadDiagnostic* Diagnostic, EAssetLoadResult Result, FAssetId Id = {}, StringView Path = {}, EFileSystemResult FileResult = EFileSystemResult::Success, EAssetFormatResult FormatResult = EAssetFormatResult::Success, EAssetRegisterResult RegistrationResult = EAssetRegisterResult::Success) noexcept
 {
     if (Diagnostic != nullptr)
     {
@@ -177,7 +177,7 @@ EAssetLoadResult FAssetCatalog::Rebuild(Span<const FAssetMount> Mounts, FAssetLo
         Array<String> Files(Allocator);
         String FailingRelativePath(Allocator);
         const auto ListResult = EnumerateContentFiles(Mount.AbsoluteRoot, AssetSuffix, MaxCatalogEntries - Candidate->Records.Size(), Files, &FailingRelativePath);
-        if (ListResult != EContentIOResult::Success)
+        if (ListResult != EFileSystemResult::Success)
         {
             String FailingPath(Allocator);
             if (!FailingRelativePath.IsEmpty() && FailingPath.TryAssign(Mount.Name) && FailingPath.TryAppend("/") && FailingPath.TryAppend(FailingRelativePath.View()))
@@ -203,11 +203,11 @@ EAssetLoadResult FAssetCatalog::Rebuild(Span<const FAssetMount> Mounts, FAssetLo
             auto FileResult = ResolveContentFile(Mount.AbsoluteRoot, Relative.View(), Resolved);
             Array<uint8> Prefix(Allocator);
             uint64 FileSize = 0;
-            if (FileResult == EContentIOResult::Success)
+            if (FileResult == EFileSystemResult::Success)
             {
                 FileResult = ReadContentFilePrefix(Resolved.View(), MaxAssetFileHeaderBytes, Prefix, FileSize);
             }
-            if (FileResult != EContentIOResult::Success)
+            if (FileResult != EFileSystemResult::Success)
             {
                 return Report(Diagnostic, EAssetLoadResult::FileError, {}, Relative.View(), FileResult);
             }
@@ -215,7 +215,7 @@ EAssetLoadResult FAssetCatalog::Rebuild(Span<const FAssetMount> Mounts, FAssetLo
             const EAssetFormatResult HeaderResult = FileSize <= MaxAssetFileBytes ? ReadAssetFileHeader({Prefix.Data(), Prefix.Size()}, static_cast<std::size_t>(FileSize), Header, Allocator) : EAssetFormatResult::LimitExceeded;
             if (HeaderResult != EAssetFormatResult::Success)
             {
-                return Report(Diagnostic, EAssetLoadResult::FormatError, {}, Relative.View(), EContentIOResult::Success, HeaderResult);
+                return Report(Diagnostic, EAssetLoadResult::FormatError, {}, Relative.View(), EFileSystemResult::Success, HeaderResult);
             }
             FCatalogRecord Entry(Allocator);
             Entry.Id = Header.Id;
@@ -310,11 +310,11 @@ EAssetLoadResult FAssetCatalog::Read(FAssetId Id, Array<uint8>& Out, FAssetLoadD
     const FCatalogRecord& Entry = Index->Records[*Slot];
     String Resolved(Allocator);
     auto FileResult = ResolveContentFile(Index->Roots[Entry.MountIndex].View(), Entry.Relative.View(), Resolved);
-    if (FileResult == EContentIOResult::Success)
+    if (FileResult == EFileSystemResult::Success)
     {
         FileResult = ReadContentFile(Resolved.View(), MaxAssetFileBytes, Out);
     }
-    if (FileResult != EContentIOResult::Success)
+    if (FileResult != EFileSystemResult::Success)
     {
         return Report(Diagnostic, EAssetLoadResult::FileError, Id, Entry.Path.View(), FileResult);
     }
@@ -322,7 +322,7 @@ EAssetLoadResult FAssetCatalog::Read(FAssetId Id, Array<uint8>& Out, FAssetLoadD
     const auto Result = ReadAssetFileHeader({Out.Data(), Out.Size()}, Header, Allocator);
     if (Result != EAssetFormatResult::Success)
     {
-        return Report(Diagnostic, EAssetLoadResult::FormatError, Id, Entry.Path.View(), EContentIOResult::Success, Result);
+        return Report(Diagnostic, EAssetLoadResult::FormatError, Id, Entry.Path.View(), EFileSystemResult::Success, Result);
     }
     if (Header.Id != Entry.Id || Header.TypeId != Entry.Type || Header.Path != Entry.Path.View())
     {
@@ -351,7 +351,7 @@ template <typename Asset, typename Data> EAssetLoadResult FAssetCatalog::DecodeT
     }
     const auto FormatResult = DecodeAssetFile(Bytes.AsSpan(), Out);
     const EAssetLoadResult Result = FormatResult == EAssetFormatResult::Success ? EAssetLoadResult::Success : FormatResult == EAssetFormatResult::AllocationFailed ? EAssetLoadResult::AllocationFailed : EAssetLoadResult::FormatError;
-    return Report(Diagnostic, Result, Id, Entry.Path, EContentIOResult::Success, FormatResult);
+    return Report(Diagnostic, Result, Id, Entry.Path, EFileSystemResult::Success, FormatResult);
 }
 
 EAssetLoadResult FAssetCatalog::Decode(FAssetId Id, FMeshAssetData& Out, FAssetLoadDiagnostic* Diagnostic) const noexcept
@@ -434,7 +434,7 @@ template <typename Asset, typename Data> EAssetLoadResult FAssetLoadSession::Loa
             }
         };
         const auto ReportMaterial = [&](EAssetLoadResult Result, EAssetRegisterResult RegisterResult = EAssetRegisterResult::Success) noexcept {
-            Report(Diagnostic, Result, Id, Entry.Path, EContentIOResult::Success, EAssetFormatResult::Success, RegisterResult);
+            Report(Diagnostic, Result, Id, Entry.Path, EFileSystemResult::Success, EAssetFormatResult::Success, RegisterResult);
             if (Diagnostic != nullptr && Result != EAssetLoadResult::Success)
             {
                 Diagnostic->DependencyId = TextureId;

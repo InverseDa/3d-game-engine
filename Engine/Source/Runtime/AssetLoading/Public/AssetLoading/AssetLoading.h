@@ -2,7 +2,7 @@
 
 #include "Asset/AssetRegistry.h"
 #include "AssetFormat/AssetFormat.h"
-#include "ContentIO/ContentIO.h"
+#include "FileSystem/FileSystem.h"
 #include "Memory/UniquePtr.h"
 
 namespace LE
@@ -34,7 +34,7 @@ struct FAssetLoadDiagnostic
     explicit FAssetLoadDiagnostic(IAllocator& Allocator = GetDefaultAllocator()) noexcept : Path(Allocator) {}
 
     EAssetLoadResult Result = EAssetLoadResult::Success;
-    EContentIOResult FileResult = EContentIOResult::Success;
+    EFileSystemResult FileResult = EFileSystemResult::Success;
     EAssetFormatResult FormatResult = EAssetFormatResult::Success;
     EAssetRegisterResult RegistrationResult = EAssetRegisterResult::Success;
     FAssetId Id;

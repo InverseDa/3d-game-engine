@@ -255,7 +255,7 @@ bool TestSaveAndLoad(const FSceneTestIds& Ids, const FSceneFakeAssets& Published
     Edited.Translation[2] = -4.0f;
     bool bPassed = ExpectScene(World.SetLocalTransform(Left, Edited) == ETransformUpdateResult::Updated && SaveScene(Path, Published, PublishedAssets.Registry) == EResult::Success, "save authored transform");
     Array<uint8> OldFile;
-    bPassed &= ExpectScene(ReadContentFile(Path, MaxSceneDocumentBytes, OldFile) == EContentIOResult::Success, "read first save");
+    bPassed &= ExpectScene(ReadContentFile(Path, MaxSceneDocumentBytes, OldFile) == EFileSystemResult::Success, "read first save");
     const FWorldTickContext Tick{};
     if (ExpectScene(World.BeginTick(Tick) == EWorldTickResult::Success, "begin uncommitted frame"))
     {
@@ -279,7 +279,7 @@ bool TestSaveAndLoad(const FSceneTestIds& Ids, const FSceneFakeAssets& Published
     FSceneFakeAssets ForeignAssets;
     bPassed &= ExpectScene(SaveScene(Path, Published, ForeignAssets.Registry) == EResult::InvalidAssetHandle, "reject save with foreign registry");
     Array<uint8> CurrentFile;
-    const bool bReadCurrent = ReadContentFile(Path, MaxSceneDocumentBytes, CurrentFile) == EContentIOResult::Success;
+    const bool bReadCurrent = ReadContentFile(Path, MaxSceneDocumentBytes, CurrentFile) == EFileSystemResult::Success;
     bool bEqual = OldFile.Size() == CurrentFile.Size();
     for (std::size_t Index = 0; bEqual && Index < OldFile.Size(); ++Index)
     {
@@ -327,7 +327,7 @@ bool TestDirectionalLightSaveAndLoad(const FSceneTestIds& Ids)
     const StringView Path = Temporary.Path.View();
     Array<uint8> WithLights;
     UniquePtr<FScene> Reloaded;
-    if (!ExpectScene(SaveScene(Path, *Published, Registry) == EResult::Success && ReadContentFile(Path, MaxSceneDocumentBytes, WithLights) == EContentIOResult::Success && LoadScene(Path, Resolver, Reloaded) == EResult::Success, "save and reload v2 light scene"))
+    if (!ExpectScene(SaveScene(Path, *Published, Registry) == EResult::Success && ReadContentFile(Path, MaxSceneDocumentBytes, WithLights) == EFileSystemResult::Success && LoadScene(Path, Resolver, Reloaded) == EResult::Success, "save and reload v2 light scene"))
     {
         return false;
     }
@@ -345,7 +345,7 @@ bool TestDirectionalLightSaveAndLoad(const FSceneTestIds& Ids)
     Array<uint8> SavedAgain;
     const StringView FirstSave{reinterpret_cast<const char*>(WithLights.Data()), WithLights.Size()};
     const StringView Version2Prefix("{\n  \"version\": 2,\n");
-    bPassed &= ExpectScene(FirstSave.Substr(0, Version2Prefix.Size()) == Version2Prefix && SaveScene(Path, *Reloaded, Registry) == EResult::Success && ReadContentFile(Path, MaxSceneDocumentBytes, SavedAgain) == EContentIOResult::Success && FirstSave == StringView(reinterpret_cast<const char*>(SavedAgain.Data()), SavedAgain.Size()), "save preserves deterministic v2 bytes");
+    bPassed &= ExpectScene(FirstSave.Substr(0, Version2Prefix.Size()) == Version2Prefix && SaveScene(Path, *Reloaded, Registry) == EResult::Success && ReadContentFile(Path, MaxSceneDocumentBytes, SavedAgain) == EFileSystemResult::Success && FirstSave == StringView(reinterpret_cast<const char*>(SavedAgain.Data()), SavedAgain.Size()), "save preserves deterministic v2 bytes");
 
     FSceneOperationDiagnostic Diagnostic;
     const auto* const PublishedScene = Reloaded.Get();

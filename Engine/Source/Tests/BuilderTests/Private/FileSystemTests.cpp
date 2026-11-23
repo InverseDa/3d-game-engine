@@ -1,4 +1,4 @@
-#include "ContentIO/ContentIO.h"
+#include "FileSystem/FileSystem.h"
 #include "Types/Uuid.h"
 
 #include <cstdio>
@@ -15,13 +15,13 @@ namespace LE
 namespace
 {
 
-using EResult = EContentIOResult;
+using EResult = EFileSystemResult;
 
-bool ExpectContentIO(const bool bCondition, const char* Label)
+bool ExpectFileSystem(const bool bCondition, const char* Label)
 {
     if (!bCondition)
     {
-        std::fprintf(stderr, "FAILED: ContentIO: %s\n", Label);
+        std::fprintf(stderr, "FAILED: FileSystem: %s\n", Label);
     }
     return bCondition;
 }
@@ -204,63 +204,63 @@ bool TestFailedReplacement(const String& Path)
 
 } // namespace
 
-bool RunContentIOTests()
+bool RunFileSystemTests()
 {
     FContentDirectoryFixture Fixture;
-    if (!ExpectContentIO(Fixture.Create(), "create test directory"))
+    if (!ExpectFileSystem(Fixture.Create(), "create test directory"))
     {
         return false;
     }
     bool bPassed = true;
     constexpr uint8 Initial[] = {1, 2, 3, 4};
     constexpr uint8 Updated[] = {5, 6};
-    bPassed &= ExpectContentIO(WriteContentFileAtomically(Fixture.UnicodeFile.View(), {Initial, sizeof(Initial)}) == EResult::Success, "write Unicode path");
-    bPassed &= ExpectContentIO(WriteContentFileAtomically(Fixture.IgnoredFile.View(), {}) == EResult::Success, "write empty file");
+    bPassed &= ExpectFileSystem(WriteContentFileAtomically(Fixture.UnicodeFile.View(), {Initial, sizeof(Initial)}) == EResult::Success, "write Unicode path");
+    bPassed &= ExpectFileSystem(WriteContentFileAtomically(Fixture.IgnoredFile.View(), {}) == EResult::Success, "write empty file");
     Array<uint8> Bytes;
     uint64 FileSize = 0;
-    bPassed &= ExpectContentIO(ReadContentFilePrefix(Fixture.UnicodeFile.View(), 2, Bytes, FileSize) == EResult::Success && FileSize == 4 && Bytes.Size() == 2 && Bytes[1] == 2, "bounded prefix");
-    bPassed &= ExpectContentIO(ReadContentFile(Fixture.UnicodeFile.View(), 3, Bytes) == EResult::LimitExceeded && Bytes.Size() == 2 && Bytes[1] == 2, "whole read limit preserves bytes");
-    bPassed &= ExpectContentIO(ReadContentFile(Fixture.Child.View(), 4, Bytes) == EResult::NotRegularFile && Bytes.Size() == 2, "reject directory reads");
-    bPassed &= ExpectContentIO(ReadContentFile(StringView("bad\0path", 8), 4, Bytes) == EResult::InvalidPath, "reject embedded NUL");
-    bPassed &= ExpectContentIO(ReadContentFile(StringView("\xc0\xaf", 2), 4, Bytes) == EResult::InvalidPath, "reject overlong UTF-8");
+    bPassed &= ExpectFileSystem(ReadContentFilePrefix(Fixture.UnicodeFile.View(), 2, Bytes, FileSize) == EResult::Success && FileSize == 4 && Bytes.Size() == 2 && Bytes[1] == 2, "bounded prefix");
+    bPassed &= ExpectFileSystem(ReadContentFile(Fixture.UnicodeFile.View(), 3, Bytes) == EResult::LimitExceeded && Bytes.Size() == 2 && Bytes[1] == 2, "whole read limit preserves bytes");
+    bPassed &= ExpectFileSystem(ReadContentFile(Fixture.Child.View(), 4, Bytes) == EResult::NotRegularFile && Bytes.Size() == 2, "reject directory reads");
+    bPassed &= ExpectFileSystem(ReadContentFile(StringView("bad\0path", 8), 4, Bytes) == EResult::InvalidPath, "reject embedded NUL");
+    bPassed &= ExpectFileSystem(ReadContentFile(StringView("\xc0\xaf", 2), 4, Bytes) == EResult::InvalidPath, "reject overlong UTF-8");
 
     String Resolved("unchanged");
-    bPassed &= ExpectContentIO(ResolveContentFile(Fixture.Root.View(), "models/../ignored.txt", Resolved) == EResult::OutsideRoot && Resolved.View() == StringView("unchanged"), "reject parent traversal");
-    bPassed &= ExpectContentIO(ResolveContentFile(Fixture.Root.View(), Fixture.UnicodeFile.View(), Resolved) == EResult::OutsideRoot && Resolved.View() == StringView("unchanged"), "reject absolute second operand");
-    bPassed &= ExpectContentIO(ChangeDirectory(Fixture.Child), "change current directory");
-    bPassed &= ExpectContentIO(ResolveContentFile(Fixture.Root.View(), u8"models/模型.LEASSET", Resolved) == EResult::Success && Resolved.View() == Fixture.UnicodeFile.View(), "resolve absolute mount from another cwd");
-    bPassed &= ExpectContentIO(ReadContentFile(u8"模型.LEASSET", 4, Bytes) == EResult::Success && Bytes.Size() == 4 && Bytes[3] == 4, "standalone relative read");
-    bPassed &= ExpectContentIO(ReadContentFile("missing.bin", 4, Bytes) == EResult::NotFound && Bytes.Size() == 4, "missing file leaves old bytes");
-    bPassed &= ExpectContentIO(ChangeDirectory(Fixture.OriginalDirectory), "restore current directory");
+    bPassed &= ExpectFileSystem(ResolveContentFile(Fixture.Root.View(), "models/../ignored.txt", Resolved) == EResult::OutsideRoot && Resolved.View() == StringView("unchanged"), "reject parent traversal");
+    bPassed &= ExpectFileSystem(ResolveContentFile(Fixture.Root.View(), Fixture.UnicodeFile.View(), Resolved) == EResult::OutsideRoot && Resolved.View() == StringView("unchanged"), "reject absolute second operand");
+    bPassed &= ExpectFileSystem(ChangeDirectory(Fixture.Child), "change current directory");
+    bPassed &= ExpectFileSystem(ResolveContentFile(Fixture.Root.View(), u8"models/模型.LEASSET", Resolved) == EResult::Success && Resolved.View() == Fixture.UnicodeFile.View(), "resolve absolute mount from another cwd");
+    bPassed &= ExpectFileSystem(ReadContentFile(u8"模型.LEASSET", 4, Bytes) == EResult::Success && Bytes.Size() == 4 && Bytes[3] == 4, "standalone relative read");
+    bPassed &= ExpectFileSystem(ReadContentFile("missing.bin", 4, Bytes) == EResult::NotFound && Bytes.Size() == 4, "missing file leaves old bytes");
+    bPassed &= ExpectFileSystem(ChangeDirectory(Fixture.OriginalDirectory), "restore current directory");
 
     Array<String> RelativePaths;
-    bPassed &= ExpectContentIO(EnumerateContentFiles(Fixture.Root.View(), ".leasset", 1, RelativePaths) == EResult::Success && RelativePaths.Size() == 1 && RelativePaths[0].View() == StringView(u8"models/模型.LEASSET"), "case-insensitive extension and relative UTF-8 result");
+    bPassed &= ExpectFileSystem(EnumerateContentFiles(Fixture.Root.View(), ".leasset", 1, RelativePaths) == EResult::Success && RelativePaths.Size() == 1 && RelativePaths[0].View() == StringView(u8"models/模型.LEASSET"), "case-insensitive extension and relative UTF-8 result");
     String FailurePath;
-    bPassed &= ExpectContentIO(EnumerateContentFiles(Fixture.Root.View(), ".leasset", 0, RelativePaths, &FailurePath) == EResult::LimitExceeded && RelativePaths.Size() == 1 && FailurePath.View() == StringView(u8"models/模型.LEASSET"), "nested enumeration failure identifies the entry and preserves prior output");
-    bPassed &= ExpectContentIO(EnumerateContentFiles(Fixture.Root.View(), ".leasset", 1, RelativePaths, &FailurePath) == EResult::Success && FailurePath.IsEmpty(), "successful enumeration clears diagnostic");
+    bPassed &= ExpectFileSystem(EnumerateContentFiles(Fixture.Root.View(), ".leasset", 0, RelativePaths, &FailurePath) == EResult::LimitExceeded && RelativePaths.Size() == 1 && FailurePath.View() == StringView(u8"models/模型.LEASSET"), "nested enumeration failure identifies the entry and preserves prior output");
+    bPassed &= ExpectFileSystem(EnumerateContentFiles(Fixture.Root.View(), ".leasset", 1, RelativePaths, &FailurePath) == EResult::Success && FailurePath.IsEmpty(), "successful enumeration clears diagnostic");
 
     const bool bMadeLink = MakeDirectoryLink(Fixture.Link, Fixture.OriginalDirectory);
 #if !PLATFORM_WINDOWS
-    bPassed &= ExpectContentIO(bMadeLink, "create outside directory symlink");
+    bPassed &= ExpectFileSystem(bMadeLink, "create outside directory symlink");
 #endif
     if (bMadeLink)
     {
-        bPassed &= ExpectContentIO(ResolveContentFile(Fixture.Root.View(), "link/missing.leasset", Resolved) == EResult::RedirectedPath, "reject redirected intermediate segment");
-        bPassed &= ExpectContentIO(EnumerateContentFiles(Fixture.Root.View(), ".leasset", 10, RelativePaths, &FailurePath) == EResult::RedirectedPath && RelativePaths.Size() == 1 && FailurePath.View() == StringView("link"), "identify redirected directory in enumeration");
+        bPassed &= ExpectFileSystem(ResolveContentFile(Fixture.Root.View(), "link/missing.leasset", Resolved) == EResult::RedirectedPath, "reject redirected intermediate segment");
+        bPassed &= ExpectFileSystem(EnumerateContentFiles(Fixture.Root.View(), ".leasset", 10, RelativePaths, &FailurePath) == EResult::RedirectedPath && RelativePaths.Size() == 1 && FailurePath.View() == StringView("link"), "identify redirected directory in enumeration");
     }
     else
     {
-        std::fprintf(stderr, "SKIPPED: ContentIO directory symlink creation unavailable\n");
+        std::fprintf(stderr, "SKIPPED: FileSystem directory symlink creation unavailable\n");
     }
     if (MakeDirectoryLink(Fixture.RedirectedRoot, Fixture.Root))
     {
         String RootWithSeparator = JoinForTest(Fixture.RedirectedRoot, "");
-        bPassed &= ExpectContentIO(ResolveContentFile(RootWithSeparator.View(), u8"models/模型.LEASSET", Resolved) == EResult::RedirectedPath, "reject redirected mount root with trailing separator");
+        bPassed &= ExpectFileSystem(ResolveContentFile(RootWithSeparator.View(), u8"models/模型.LEASSET", Resolved) == EResult::RedirectedPath, "reject redirected mount root with trailing separator");
     }
 
-    bPassed &= ExpectContentIO(WriteContentFileAtomically(Fixture.UnicodeFile.View(), {Updated, sizeof(Updated)}) == EResult::Success, "atomically overwrite existing file");
-    bPassed &= ExpectContentIO(TestFailedReplacement(Fixture.UnicodeFile), "failure to publish is reported");
-    bPassed &= ExpectContentIO(ReadContentFile(Fixture.UnicodeFile.View(), 4, Bytes) == EResult::Success && Bytes.Size() == 2 && Bytes[0] == 5 && Bytes[1] == 6, "failure leaves old file intact");
+    bPassed &= ExpectFileSystem(WriteContentFileAtomically(Fixture.UnicodeFile.View(), {Updated, sizeof(Updated)}) == EResult::Success, "atomically overwrite existing file");
+    bPassed &= ExpectFileSystem(TestFailedReplacement(Fixture.UnicodeFile), "failure to publish is reported");
+    bPassed &= ExpectFileSystem(ReadContentFile(Fixture.UnicodeFile.View(), 4, Bytes) == EResult::Success && Bytes.Size() == 2 && Bytes[0] == 5 && Bytes[1] == 6, "failure leaves old file intact");
     return bPassed;
 }
 

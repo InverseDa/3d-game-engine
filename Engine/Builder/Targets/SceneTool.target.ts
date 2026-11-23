@@ -3,7 +3,7 @@ import { DefineTarget, Optimization, Platform, TargetType } from "../Runtime/Api
 export default DefineTarget({
     Name: "SceneTool",
     Modules: [
-        "Spdlog", "Core", "Asset", "Reflection", "World", "ContentIO",
+        "Spdlog", "Core", "Asset", "Reflection", "World", "FileSystem",
         "AssetFormat", "AssetLoading", "Scene", "SceneTool",
     ],
     EntryModule: "SceneTool",

@@ -17,7 +17,7 @@ bool CheckReference(StringView FilePath, FSceneEntityId Entity, const char* Fiel
     {
         return true;
     }
-    std::fprintf(stderr, "%.*s: entity %s field %s: asset %s (%s), result %u, file %s, format %u\n", static_cast<int>(FilePath.Size()), FilePath.Data(), Entity.ToString().Data(), Field, Diagnostic.Id.ToString().Data(), Diagnostic.Path.Data(), static_cast<unsigned>(Result), DescribeContentIOResult(Diagnostic.FileResult), static_cast<unsigned>(Diagnostic.FormatResult));
+    std::fprintf(stderr, "%.*s: entity %s field %s: asset %s (%s), result %u, file %s, format %u\n", static_cast<int>(FilePath.Size()), FilePath.Data(), Entity.ToString().Data(), Field, Diagnostic.Id.ToString().Data(), Diagnostic.Path.Data(), static_cast<unsigned>(Result), DescribeFileSystemResult(Diagnostic.FileResult), static_cast<unsigned>(Diagnostic.FormatResult));
     return false;
 }
 
@@ -25,9 +25,9 @@ int CheckScene(StringView FilePath, StringView MountName, StringView AbsoluteRoo
 {
     Array<uint8> Bytes;
     const auto FileResult = ReadContentFile(FilePath, MaxSceneDocumentBytes, Bytes);
-    if (FileResult != EContentIOResult::Success)
+    if (FileResult != EFileSystemResult::Success)
     {
-        std::fprintf(stderr, "%.*s: %s\n", static_cast<int>(FilePath.Size()), FilePath.Data(), DescribeContentIOResult(FileResult));
+        std::fprintf(stderr, "%.*s: %s\n", static_cast<int>(FilePath.Size()), FilePath.Data(), DescribeFileSystemResult(FileResult));
         return 1;
     }
 
@@ -46,7 +46,7 @@ int CheckScene(StringView FilePath, StringView MountName, StringView AbsoluteRoo
     FAssetLoadDiagnostic CatalogDiagnostic;
     if (Catalog.Rebuild({&Mount, 1}, &CatalogDiagnostic) != EAssetLoadResult::Success)
     {
-        std::fprintf(stderr, "%.*s: asset catalog validation failed at %s (result %u, file %s, format %u)\n", static_cast<int>(FilePath.Size()), FilePath.Data(), CatalogDiagnostic.Path.Data(), static_cast<unsigned>(CatalogDiagnostic.Result), DescribeContentIOResult(CatalogDiagnostic.FileResult), static_cast<unsigned>(CatalogDiagnostic.FormatResult));
+        std::fprintf(stderr, "%.*s: asset catalog validation failed at %s (result %u, file %s, format %u)\n", static_cast<int>(FilePath.Size()), FilePath.Data(), CatalogDiagnostic.Path.Data(), static_cast<unsigned>(CatalogDiagnostic.Result), DescribeFileSystemResult(CatalogDiagnostic.FileResult), static_cast<unsigned>(CatalogDiagnostic.FormatResult));
         return 1;
     }
 

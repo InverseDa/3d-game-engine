@@ -39,7 +39,7 @@ int RunReflectionMacroTests();
 int RunPropertySerializationTests();
 int RunWorldTests();
 int RunAssetTests();
-bool RunContentIOTests();
+bool RunFileSystemTests();
 bool RunAssetFormatTests();
 int RunAssetLoadingTests();
 bool RunRenderAssetProviderTests();
@@ -2801,7 +2801,7 @@ int main(const int ArgCount, char** Arguments)
     FailureCount += LE::RunPropertySerializationTests();
     FailureCount += LE::RunWorldTests();
     FailureCount += LE::RunAssetTests();
-    FailureCount += LE::RunContentIOTests() ? 0 : 1;
+    FailureCount += LE::RunFileSystemTests() ? 0 : 1;
     FailureCount += LE::RunAssetFormatTests() ? 0 : 1;
     FailureCount += LE::RunAssetLoadingTests();
     FailureCount += LE::RunRenderAssetProviderTests() ? 0 : 1;

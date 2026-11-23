@@ -1,11 +1,11 @@
-# ContentIO
+# FileSystem
 
-ContentIO provides synchronous local file access to the importer, asset catalog and scene persistence code. Public APIs use engine strings, spans and arrays. Paths are UTF-8. Windows calls the wide Win32 file APIs. macOS uses native UTF-8 POSIX paths.
+FileSystem provides synchronous local file access to the importer, asset catalog and scene persistence code. Public APIs use engine strings, spans and arrays. Paths are UTF-8. Windows calls the wide Win32 file APIs. macOS uses native UTF-8 POSIX paths.
 
 - `ReadContentFile` reads a regular file up to the caller's size limit. A larger file returns `LimitExceeded`. `ReadContentFilePrefix` returns up to the requested number of bytes and the observed size of the whole file. It supports header-only catalog indexing.
 - `WriteContentFileAtomically` exclusively creates a sibling temporary, writes it fully and closes it, then replaces the destination using the platform's same-volume rename operation. The parent directory must exist. A failed write or replacement keeps the original file and cleans up the temporary when the filesystem permits. On Windows the destination must permit delete sharing for replacement. On POSIX an already opened reader may finish reading the old file. The contract covers publication, with no power-loss durability guarantee.
 - `ResolveContentFile` takes an absolute mounted directory and a relative path. It rejects parent traversal, absolute child paths, symbolic links and Windows reparse points (including junctions). It returns the path only when every intermediate segment is a directory and the final segment is a regular file.
 - `EnumerateContentFiles` returns relative paths in bytewise order. The extension comparison folds ASCII case, which allows the catalog to inspect aliases. Empty extension matches all regular files. Enumeration rejects links and reparse points, visits at most one million entries, and descends at most 64 directory levels. The caller also limits the number of returned files. The optional diagnostic contains the failing entry or directory relative to the mount when available.
-- Read data, the resolved path and the enumerated file list change only on success. Callers can report the returned result using `DescribeContentIOResult`.
+- Read data, the resolved path and the enumerated file list change only on success. Callers can report the returned result using `DescribeFileSystemResult`.
 
 The application supplies a trusted absolute mount path. The root entry and paths below it are checked for redirection. Keep the directory tree stable during resolution, enumeration and reads, and serialize operations that write the same destination. Standalone file reads and writes also accept paths relative to the current directory.

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Asset/AssetRegistry.h"
-#include "ContentIO/ContentIO.h"
+#include "FileSystem/FileSystem.h"
 #include "Scene/SceneDocument.h"
 #include "World/World.h"
 
@@ -30,7 +30,7 @@ struct FSceneOperationDiagnostic
     FSceneDocumentDiagnostic Document;
     FSceneEntityId Entity;
     FAssetId Asset;
-    EContentIOResult FileResult = EContentIOResult::Success;
+    EFileSystemResult FileResult = EFileSystemResult::Success;
 };
 
 // Callbacks may register assets in this registry. Successful handles must

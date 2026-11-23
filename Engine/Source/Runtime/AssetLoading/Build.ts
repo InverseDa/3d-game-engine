@@ -8,6 +8,6 @@ export default class AssetLoadingBuild extends ModuleBuild {
     public readonly Name = "AssetLoading";
 
     public Configure(_Target: Target, Configuration: ModuleConfiguration): void {
-        Configuration.PublicDependencies.push("Core", "Asset", "AssetFormat", "ContentIO");
+        Configuration.PublicDependencies.push("Core", "Asset", "AssetFormat", "FileSystem");
     }
 }

@@ -59,7 +59,7 @@ export default class DemoApplicationBuild extends ModuleBuild {
             });
             const ToolSources = [
                 "Runtime/Core", "Runtime/Asset", "Runtime/AssetFormat", "Runtime/AssetLoading",
-                "Runtime/ContentIO", "Runtime/Reflection", "Runtime/World", "Runtime/Scene",
+                "Runtime/FileSystem", "Runtime/Reflection", "Runtime/World", "Runtime/Scene",
                 "Programs/AssetImport", "Programs/SceneTool",
             ].flatMap((Directory) => {
                 const Root = new URL(`../../${Directory}/`, import.meta.url);

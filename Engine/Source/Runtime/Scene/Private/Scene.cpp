@@ -11,7 +11,7 @@ namespace
 
 using EResult = ESceneOperationResult;
 
-EResult Report(FSceneOperationDiagnostic* const Diagnostic, const EResult Result, const FSceneEntityId Entity = {}, const FAssetId Asset = {}, const EContentIOResult File = EContentIOResult::Success, const FSceneDocumentDiagnostic& Document = {}) noexcept
+EResult Report(FSceneOperationDiagnostic* const Diagnostic, const EResult Result, const FSceneEntityId Entity = {}, const FAssetId Asset = {}, const EFileSystemResult File = EFileSystemResult::Success, const FSceneDocumentDiagnostic& Document = {}) noexcept
 {
     if (Diagnostic != nullptr)
     {
@@ -23,7 +23,7 @@ EResult Report(FSceneOperationDiagnostic* const Diagnostic, const EResult Result
 EResult ReportDocument(FSceneOperationDiagnostic* const Diagnostic, const FSceneDocumentDiagnostic& Document) noexcept
 {
     const EResult Result = Document.Result == ESceneDocumentResult::AllocationFailed ? EResult::AllocationFailed : EResult::InvalidDocument;
-    return Report(Diagnostic, Result, Document.Entity, {}, EContentIOResult::Success, Document);
+    return Report(Diagnostic, Result, Document.Entity, {}, EFileSystemResult::Success, Document);
 }
 
 EResult ReportComponent(FSceneOperationDiagnostic* const Diagnostic, const EComponentMutationResult Mutation, const FSceneEntityId Entity) noexcept
@@ -272,10 +272,10 @@ ESceneOperationResult RestoreScene(const FSceneDocument& Document, const FSceneA
 ESceneOperationResult LoadScene(const StringView Path, const FSceneAssetResolver& Assets, UniquePtr<FScene>& OutScene, FSceneOperationDiagnostic* const Diagnostic, IAllocator& Allocator) noexcept
 {
     Array<uint8> Bytes(Allocator);
-    const EContentIOResult ReadResult = ReadContentFile(Path, MaxSceneDocumentBytes, Bytes);
-    if (ReadResult != EContentIOResult::Success)
+    const EFileSystemResult ReadResult = ReadContentFile(Path, MaxSceneDocumentBytes, Bytes);
+    if (ReadResult != EFileSystemResult::Success)
     {
-        return Report(Diagnostic, ReadResult == EContentIOResult::OutOfMemory ? EResult::AllocationFailed : EResult::FileReadFailed, {}, {}, ReadResult);
+        return Report(Diagnostic, ReadResult == EFileSystemResult::OutOfMemory ? EResult::AllocationFailed : EResult::FileReadFailed, {}, {}, ReadResult);
     }
     FSceneDocument Document(Allocator);
     FSceneDocumentDiagnostic Format;
@@ -393,10 +393,10 @@ ESceneOperationResult SaveScene(const StringView Path, const FScene& Scene, cons
         return ReportDocument(Diagnostic, Format);
     }
     const Span<const uint8> Bytes(reinterpret_cast<const uint8*>(Text.Data()), Text.Size());
-    const EContentIOResult File = WriteContentFileAtomically(Path, Bytes);
-    if (File != EContentIOResult::Success)
+    const EFileSystemResult File = WriteContentFileAtomically(Path, Bytes);
+    if (File != EFileSystemResult::Success)
     {
-        return Report(Diagnostic, File == EContentIOResult::OutOfMemory ? EResult::AllocationFailed : EResult::FileWriteFailed, {}, {}, File);
+        return Report(Diagnostic, File == EFileSystemResult::OutOfMemory ? EResult::AllocationFailed : EResult::FileWriteFailed, {}, {}, File);
     }
     return Report(Diagnostic, EResult::Success);
 }

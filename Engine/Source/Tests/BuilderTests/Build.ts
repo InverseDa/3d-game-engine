@@ -18,7 +18,7 @@ export default class BuilderTestsBuild extends ModuleBuild {
             "Asset",
             "AssetFormat",
             "AssetLoading",
-            "ContentIO",
+            "FileSystem",
             "Core",
             "Platform",
             "RHI",

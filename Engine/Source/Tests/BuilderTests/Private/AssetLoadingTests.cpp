@@ -181,7 +181,7 @@ int RunAssetLoadingTests()
     Texture.Pixels.PushBack(64);
     Texture.Pixels.PushBack(128);
     Texture.Pixels.PushBack(255);
-    if (EncodeAssetFile(MaterialId, "Game/Material", FMaterialAssetData{}, MaterialBytes) != EAssetFormatResult::Success || EncodeAssetFile(TextureId, "Game/Texture", Texture, TextureBytes) != EAssetFormatResult::Success || WriteContentFileAtomically(Files.Material.View(), {MaterialBytes.Data(), MaterialBytes.Size()}) != EContentIOResult::Success || WriteContentFileAtomically(Files.Texture.View(), {TextureBytes.Data(), TextureBytes.Size()}) != EContentIOResult::Success)
+    if (EncodeAssetFile(MaterialId, "Game/Material", FMaterialAssetData{}, MaterialBytes) != EAssetFormatResult::Success || EncodeAssetFile(TextureId, "Game/Texture", Texture, TextureBytes) != EAssetFormatResult::Success || WriteContentFileAtomically(Files.Material.View(), {MaterialBytes.Data(), MaterialBytes.Size()}) != EFileSystemResult::Success || WriteContentFileAtomically(Files.Texture.View(), {TextureBytes.Data(), TextureBytes.Size()}) != EFileSystemResult::Success)
     {
         return Check(false, "write catalog fixture");
     }
@@ -217,12 +217,12 @@ int RunAssetLoadingTests()
     const FAssetMount MountAliases[] = {Mount, {"game", Files.Root.View()}};
     Failures += Check(Catalog.Rebuild({MountAliases, 2}, &Diagnostic) == EAssetLoadResult::DuplicatePath && Catalog.GetEntryCount() == 2, "case alias preserves previously published index");
     Array<uint8> OtherBytes;
-    if (EncodeAssetFile(MaterialId, "Game/Other", FMaterialAssetData{}, OtherBytes) != EAssetFormatResult::Success || WriteContentFileAtomically(Files.Other.View(), {OtherBytes.Data(), OtherBytes.Size()}) != EContentIOResult::Success)
+    if (EncodeAssetFile(MaterialId, "Game/Other", FMaterialAssetData{}, OtherBytes) != EAssetFormatResult::Success || WriteContentFileAtomically(Files.Other.View(), {OtherBytes.Data(), OtherBytes.Size()}) != EFileSystemResult::Success)
     {
         return Failures + Check(false, "write duplicate ID fixture");
     }
     Failures += Check(Catalog.Rebuild({&Mount, 1}, &Diagnostic) == EAssetLoadResult::DuplicateId && Catalog.GetEntryCount() == 2 && Catalog.Find(MaterialId, ById) == EAssetLoadResult::Success, "duplicate ID preserves index");
-    Failures += Check(WriteContentFileAtomically(Files.Other.View(), {MaterialBytes.Data(), MaterialBytes.Size()}) == EContentIOResult::Success && Catalog.Rebuild({&Mount, 1}, &Diagnostic) == EAssetLoadResult::IdentityMismatch && Catalog.GetEntryCount() == 2, "reject logical path inconsistent with file location");
+    Failures += Check(WriteContentFileAtomically(Files.Other.View(), {MaterialBytes.Data(), MaterialBytes.Size()}) == EFileSystemResult::Success && Catalog.Rebuild({&Mount, 1}, &Diagnostic) == EAssetLoadResult::IdentityMismatch && Catalog.GetEntryCount() == 2, "reject logical path inconsistent with file location");
 
     FMaterialProviderState Provider;
     FAssetLoadProviders Providers;
@@ -252,7 +252,7 @@ int RunAssetLoadingTests()
     Textured.BaseColorTexture = TextureId;
     const auto WriteMaterial = [&](FAssetId Id, StringView Path, const String& File) {
         Array<uint8> Bytes;
-        return EncodeAssetFile(Id, Path, Textured, Bytes) == EAssetFormatResult::Success && WriteContentFileAtomically(File.View(), Bytes.AsSpan()) == EContentIOResult::Success;
+        return EncodeAssetFile(Id, Path, Textured, Bytes) == EAssetFormatResult::Success && WriteContentFileAtomically(File.View(), Bytes.AsSpan()) == EFileSystemResult::Success;
     };
     if (!WriteMaterial(MaterialId, "Game/Material", Files.Material) || !WriteMaterial(OtherId, "Game/Other", Files.Other) || Catalog.Rebuild({&Mount, 1}) != EAssetLoadResult::Success)
     {
@@ -281,9 +281,9 @@ int RunAssetLoadingTests()
     {
         FAssetLoadSession Session(Catalog, Providers);
         FMaterialAssetHandle Material;
-        Failures += Check(WriteContentFileAtomically(Files.Texture.View(), {TextureBytes.Data(), 2}) == EContentIOResult::Success && Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::FormatError && Diagnostic.Id == MaterialId && Diagnostic.DependencyId == TextureId && Session.GetRegistry().GetAssetCount() == 0, "corrupt dependency identifies both assets");
+        Failures += Check(WriteContentFileAtomically(Files.Texture.View(), {TextureBytes.Data(), 2}) == EFileSystemResult::Success && Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::FormatError && Diagnostic.Id == MaterialId && Diagnostic.DependencyId == TextureId && Session.GetRegistry().GetAssetCount() == 0, "corrupt dependency identifies both assets");
         std::remove(Files.Texture.Data());
-        Failures += Check(Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::FileError && Diagnostic.FileResult == EContentIOResult::NotFound && Diagnostic.DependencyId == TextureId, "missing dependency file is diagnosed");
+        Failures += Check(Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::FileError && Diagnostic.FileResult == EFileSystemResult::NotFound && Diagnostic.DependencyId == TextureId, "missing dependency file is diagnosed");
         Textured.BaseColorTexture = OtherId;
         Failures += Check(WriteMaterial(MaterialId, "Game/Material", Files.Material) && Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::TypeMismatch && Diagnostic.DependencyId == OtherId && !Material.IsValid(), "a material cannot satisfy a texture dependency");
     }
@@ -291,10 +291,10 @@ int RunAssetLoadingTests()
     {
         FAssetLoadSession Session(Catalog, Providers);
         FMaterialAssetHandle Material;
-        Failures += Check(EncodeAssetFile(OtherId, "Game/Material", FMaterialAssetData{}, OtherBytes) == EAssetFormatResult::Success && WriteContentFileAtomically(Files.Material.View(), {OtherBytes.Data(), OtherBytes.Size()}) == EContentIOResult::Success && Session.Load(MaterialId, Material) == EAssetLoadResult::IdentityMismatch && !Material.IsValid(), "revalidate identity after the file is replaced");
-        Failures += Check(WriteContentFileAtomically(Files.Material.View(), {OtherBytes.Data(), 2}) == EContentIOResult::Success && Session.Load(MaterialId, Material) == EAssetLoadResult::FormatError, "reject truncation after indexing");
+        Failures += Check(EncodeAssetFile(OtherId, "Game/Material", FMaterialAssetData{}, OtherBytes) == EAssetFormatResult::Success && WriteContentFileAtomically(Files.Material.View(), {OtherBytes.Data(), OtherBytes.Size()}) == EFileSystemResult::Success && Session.Load(MaterialId, Material) == EAssetLoadResult::IdentityMismatch && !Material.IsValid(), "revalidate identity after the file is replaced");
+        Failures += Check(WriteContentFileAtomically(Files.Material.View(), {OtherBytes.Data(), 2}) == EFileSystemResult::Success && Session.Load(MaterialId, Material) == EAssetLoadResult::FormatError, "reject truncation after indexing");
         std::remove(Files.Material.Data());
-        Failures += Check(Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::FileError && Diagnostic.FileResult == EContentIOResult::NotFound && Session.GetRegistry().GetAssetCount() == 0, "missing file publishes nothing");
+        Failures += Check(Session.Load(MaterialId, Material, &Diagnostic) == EAssetLoadResult::FileError && Diagnostic.FileResult == EFileSystemResult::NotFound && Session.GetRegistry().GetAssetCount() == 0, "missing file publishes nothing");
     }
     return Failures;
 }
