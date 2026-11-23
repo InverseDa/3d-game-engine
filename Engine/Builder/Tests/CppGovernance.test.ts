@@ -66,7 +66,7 @@ namespace LE { using namespace Math; class FGood {}; }
 });
 
 test("approved namespace scopes pass and an unapproved shallow namespace fails", () => {
-    for (const namespace of ["LE", "LE::Detail", "LE::Math", "LE::RHI", "LE::RHI::Vulkan", "LE::Demo::ShaderRuntimeCompiler"]) {
+    for (const namespace of ["LE", "LE::Detail", "LE::Math", "LE::RHI", "LE::RHI::Vulkan"]) {
         assert.deepEqual(scan("Engine/Source/Runtime/Demo/Private/Scope.cpp", `namespace ${namespace} { struct FValue {}; }`), [], namespace);
     }
     assert.equal(scan("Engine/Source/Runtime/Demo/Private/Scope.cpp", "namespace LE::Deep { struct FValue {}; }").some((value) => value.rule === "namespace-scope"), true);
@@ -82,13 +82,6 @@ test("allowlist is exact to file and symbol", () => {
     assert.deepEqual(scan(logFile, "namespace LE { void Log::Init() { std::shared_ptr<int> Value; } }"), []);
     assert.equal(scan(logFile, "namespace LE { void NotInit() { std::shared_ptr<int> Value; } }").some((value) => value.rule === "banned-std-owner"), true);
     assert.equal(scan("Engine/Source/Runtime/Core/Private/Logger/Other.cpp", "namespace LE { void Log::Init() { std::shared_ptr<int> Value; } }").some((value) => value.rule === "banned-std-owner"), true);
-
-    const shaderCompiler = "Engine/Source/Runtime/DemoApplication/Private/ShaderRuntimeCompiler.h";
-    assert.deepEqual(scan(shaderCompiler, "namespace LE::Demo::ShaderRuntimeCompiler { void ReadBinaryFile() { std::ifstream File; } }"), []);
-    assert.equal(scan(shaderCompiler, "namespace LE::Demo::ShaderRuntimeCompiler { void KeepFileOpen() { std::ifstream File; } }").some((value) => value.rule === "banned-std-owner"), true);
-
-    assert.deepEqual(scan(shaderCompiler, "namespace LE::Demo::ShaderRuntimeCompiler { void CompileHlslToSpirv() { std::filesystem::path P; std::error_code E; P.string(); } }"), []);
-    assert.equal(scan(shaderCompiler, "namespace LE::Demo::ShaderRuntimeCompiler { void Other() { std::filesystem::path P; std::error_code E; P.string(); } }").filter((value) => value.rule === "banned-std-owner").length, 3);
 });
 
 test("the only approved global entry points remain exact", () => {

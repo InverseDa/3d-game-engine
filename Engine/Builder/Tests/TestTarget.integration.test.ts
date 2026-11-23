@@ -38,6 +38,23 @@ async function HashFiles(FilePaths: string[]): Promise<Map<string, string>> {
     return Result;
 }
 
+async function CheckStagedShaders(BinaryRoot: string): Promise<string[]> {
+    const ShaderRoot = Path.join(BinaryRoot, "Shaders", "Vulkan");
+    const ShaderFiles = [
+        "BasePassShadowVS", "BasePassShadowPS", "CompositeVS", "CompositePS", "ShadowDepthVS",
+    ].map((Name) => Path.join(ShaderRoot, `${Name}.spv`));
+    for (const File of ShaderFiles) {
+        const Bytes = await Fs.readFile(File);
+        Assert.ok(Bytes.length > 20 && Bytes.length % 4 === 0, `Invalid SPIR-V size: ${File}`);
+        Assert.equal(Bytes.readUInt32LE(0), 0x07230203, `Invalid SPIR-V magic: ${File}`);
+    }
+    return ShaderFiles;
+}
+
+async function ShaderWriteTimes(ShaderFiles: string[]): Promise<number[]> {
+    return Promise.all(ShaderFiles.map(async (File) => (await Fs.stat(File)).mtimeMs));
+}
+
 Test("Game, Editor, and Test variants build incrementally without overwriting each other", {
     skip: !IsWindows,
 }, async () => {
@@ -58,6 +75,7 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
 
     const GameBuild = RunBuild(Builder, Root, "Limitless", "Game");
     Assert.equal(GameBuild.status, 0, `${GameBuild.stdout}\n${GameBuild.stderr}`);
+    const GameShaders = await CheckStagedShaders(GameRoot);
     const GameArtifacts = [
         Path.join(GameIntermediate, "build.ninja"),
         Path.join(GameIntermediate, "compile_commands.json"),
@@ -65,8 +83,10 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         Path.join(GameRoot, "LimitlessGame.exe"),
         Path.join(GameRoot, "SolidGeometryContent/Scene.json"),
         Path.join(GameRoot, "SolidGeometryContent/Assets/Meshes/SolidBox.leasset"),
+        ...GameShaders,
     ];
     const GameBeforeEditor = await HashFiles(GameArtifacts);
+    const GameShaderTimesBeforeEditor = await ShaderWriteTimes(GameShaders);
     const Demo = Path.join(GameRoot, "DemoContent");
     const SceneTool = Path.join(GameIntermediate,
         "Generated/DemoApplication/ContentTools/Binaries/Win64/Debug/SceneTool/Program/SceneTool.exe");
@@ -303,6 +323,9 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
     const EditorBuild = RunBuild(Builder, Root, "Limitless", "Editor");
     Assert.equal(EditorBuild.status, 0, `${EditorBuild.stdout}\n${EditorBuild.stderr}`);
     Assert.deepEqual(await HashFiles(GameArtifacts), GameBeforeEditor, "Editor must not modify Game");
+    Assert.deepEqual(await ShaderWriteTimes(GameShaders), GameShaderTimesBeforeEditor,
+        "Editor must not rewrite Game shaders");
+    const EditorShaders = await CheckStagedShaders(EditorRoot);
     const EditorArtifacts = [
         Path.join(EditorIntermediate, "build.ninja"),
         Path.join(EditorIntermediate, "compile_commands.json"),
@@ -311,14 +334,19 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         Path.join(EditorRoot, "LimitlessEditor.exe"),
         Path.join(EditorRoot, "SolidGeometryContent/Scene.json"),
         Path.join(EditorRoot, "SolidGeometryContent/Assets/Meshes/SolidBox.leasset"),
+        ...EditorShaders,
     ];
     const GameAndEditorArtifacts = [...GameArtifacts, ...EditorArtifacts];
+    const StagedShaders = [...GameShaders, ...EditorShaders];
     const BeforeTest = await HashFiles(GameAndEditorArtifacts);
+    const ShaderTimesBeforeTest = await ShaderWriteTimes(StagedShaders);
 
     const TestBuild = RunBuild(Builder, Root, "LimitlessTests", "Test");
     Assert.equal(TestBuild.status, 0, `${TestBuild.stdout}\n${TestBuild.stderr}`);
     const AfterTest = await HashFiles(GameAndEditorArtifacts);
     Assert.deepEqual(AfterTest, BeforeTest, "Test must not modify Game or Editor graphs/artifacts");
+    Assert.deepEqual(await ShaderWriteTimes(StagedShaders), ShaderTimesBeforeTest,
+        "Test must not rewrite Game or Editor shaders");
     const TestArtifacts = [
         Path.join(TestIntermediate, "build.ninja"),
         Path.join(TestIntermediate, "compile_commands.json"),
@@ -342,6 +370,8 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         BeforeIncrementalBuilds,
         "incremental generation/builds must preserve every variant's graphs and artifacts",
     );
+    Assert.deepEqual(await ShaderWriteTimes(StagedShaders), ShaderTimesBeforeTest,
+        "incremental builds must preserve staged shader modification times");
 
     const Executable = Path.join(TestRoot, "LimitlessTestsDebug.exe");
     const PassingRun = spawnSync(Executable, [], { cwd: Root, encoding: "utf-8" });

@@ -38,3 +38,21 @@ try {
 初始场景有两个主相机可见网格。两个地面取样点分别测得 RGB `(0,0,0)` 和 `(159,167,170)`。移动屏幕外立柱后，两点亮暗互换。随后把相机移到 `(2.4,3.6,6)` 并向原点附近转向，同一世界坐标的取样值保持一致。最大化和最小化恢复后再次取样，结果相同。
 
 RFG 依次执行 `ShadowDepth → BasePass → CompositeToBackBufferPass`。每个在途帧槽有独立的 1024×1024 深度图，使用一次点采样和固定接收深度偏移。图形验收进程正常退出，Vulkan 验证错误为零。
+
+## 从独立目录运行
+
+在 Win64 构建 Game 时，Builder 使用 Vulkan SDK 或 PATH 中的 `glslangValidator` 生成 `Shaders/Vulkan/*.spv`。Game 从 EXE 所在目录读取这些产物。
+
+要做一个双击即可打开立体样例的目录，在仓库根目录运行以下命令。
+
+```powershell
+$game = (Resolve-Path 'Engine/Binaries/Win64/Debug/Limitless/Game').Path
+$pack = Join-Path (Get-Location).Path ('Engine/Intermediate/SolidPreview-' + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $pack | Out-Null
+Copy-Item -LiteralPath "$game/LimitlessGame.exe" -Destination $pack
+Copy-Item -LiteralPath "$game/Shaders" -Destination $pack -Recurse
+Copy-Item -LiteralPath "$game/SolidGeometryContent" -Destination "$pack/DemoContent" -Recurse
+Start-Process -FilePath "$pack/LimitlessGame.exe" -WorkingDirectory $pack
+```
+
+该目录可复制到源码树之外。运行机器需要可用的 Vulkan 驱动和加载器。启动时若有字节码缺失或损坏，可在工作目录的 `Firefly.log` 查看对应路径。

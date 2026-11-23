@@ -7,7 +7,8 @@ import Test from "node:test";
 import { NinjaBackend } from "../Source/Backend/NinjaBackend.ts";
 import { ValidateAndSortActions } from "../Source/Build/ActionGraph.ts";
 import { IRBuilder } from "../Source/Build/IRBuilder.ts";
-import { ModuleBuild } from "../Source/Configuration/ModuleBuild.ts";
+import { CollectVulkanShaderIncludes, PublishVulkanShader } from "../Source/Content/VulkanShaders.ts";
+import { CreateModuleConfiguration, ModuleBuild } from "../Source/Configuration/ModuleBuild.ts";
 import { ResolveTarget } from "../Source/Configuration/Target.ts";
 import {
     Optimization, OutputType, Platform, TargetType,
@@ -18,6 +19,7 @@ import { DependencyGraph } from "../Source/Graph/DependencyGraph.ts";
 import { EnginePaths } from "../Source/Project/EnginePaths.ts";
 import type { IToolchain } from "../Source/Toolchain/IToolchain.ts";
 import { FindNinjaExecutable } from "../Source/Toolchain/ExecutableLocator.ts";
+import DemoApplicationBuild from "../../Source/Runtime/DemoApplication/Build.ts";
 
 class FakeToolchain implements IToolchain {
     public readonly Name = "Fake";
@@ -55,6 +57,75 @@ const Target: Target = {
     Optimization: Optimization.Debug,
     TargetType: TargetType.Program,
 };
+
+Test("Demo shader actions stage each Vulkan shader and declare just its transitive includes", () => {
+    const Expected = {
+        BasePassShadowVS: ["BasePassConstants.lsi", "BasePassVS.lsf"],
+        BasePassShadowPS: ["BasePassConstants.lsi", "BasePassPS.lsf"],
+        CompositeVS: [],
+        CompositePS: [],
+        ShadowDepthVS: [],
+    };
+    for (const BuildTarget of [
+        { Platform: Platform.Win64, Optimization: Optimization.Debug, TargetType: TargetType.Game },
+        { Platform: Platform.Win64, Optimization: Optimization.Release, TargetType: TargetType.Editor },
+        { Platform: Platform.Mac, Optimization: Optimization.Debug, TargetType: TargetType.Game },
+    ]) {
+        const Configuration = CreateModuleConfiguration();
+        new DemoApplicationBuild().Configure(BuildTarget, Configuration);
+        const Actions = Configuration.CustomActions.filter((Action) => Action.Id.startsWith("CompileShader_"));
+        Assert.equal(Actions.length, 5);
+        for (const [Name, Includes] of Object.entries(Expected)) {
+            const Action = Actions.find((Candidate) => Candidate.Id === `CompileShader_${Name}`);
+            Assert.ok(Action);
+            Assert.deepEqual(Action.Inputs.map((Input) => Path.basename(Input)), [`${Name}.lsf`]);
+            Assert.deepEqual(Action.Outputs, [`[engine.Binaries]/Shaders/Vulkan/${Name}.spv`]);
+            Assert.deepEqual(Action.ImplicitInputs?.filter((Input) => /\.ls[fi]$/.test(Input)).map((Input) => Path.basename(Input)).sort(), Includes);
+            Assert.ok(Action.ImplicitInputs?.some((Input) => Path.basename(Input) === "CompileVulkanShader.ts"));
+            Assert.ok(!Action.RunBeforeCompile);
+        }
+    }
+});
+
+Test("shader include discovery skips comments and rejects files outside the shader root", async (Context) => {
+    const Root = await Fs.mkdtemp(Path.join(Os.tmpdir(), "limitless-shader-inputs-"));
+    Context.after(() => Fs.rm(Root, { recursive: true, force: true }));
+    const Shaders = Path.join(Root, "Shaders");
+    await Fs.mkdir(Shaders);
+    const Source = Path.join(Shaders, "source.lsf");
+    const Include = Path.join(Shaders, "a.lsi");
+    await Fs.writeFile(Include, "// #include \"missing.lsi\"\n");
+    await Fs.writeFile(Source, "/*\n#include \"missing.lsi\"\n*/\n# include \"a.lsi\" // dependency\n");
+    Assert.deepEqual(CollectVulkanShaderIncludes(Shaders, Source), [Include]);
+    await Fs.writeFile(Path.join(Root, "outside.lsi"), "");
+    await Fs.writeFile(Source, "#include \"../outside.lsi\"\n");
+    Assert.throws(() => CollectVulkanShaderIncludes(Shaders, Source), /outside\.lsi.*escapes/);
+});
+
+Test("shader publication preserves the previous artifact if compilation or validation fails", async (Context) => {
+    const Root = await Fs.mkdtemp(Path.join(Os.tmpdir(), "limitless-shader-output-"));
+    Context.after(() => Fs.rm(Root, { recursive: true, force: true }));
+    const Output = Path.join(Root, "staged shader.spv");
+    const Initial = Buffer.alloc(20);
+    Initial.writeUInt32LE(0x07230203);
+    Initial.writeUInt32LE(0x00010000, 4);
+    Initial.writeUInt32LE(1, 12);
+    const Replacement = Buffer.from(Initial);
+    Replacement.writeUInt32LE(2, 12);
+    await PublishVulkanShader(Output, (Candidate) => Fs.writeFile(Candidate, Initial));
+    await Assert.rejects(PublishVulkanShader(Output, async (Candidate) => {
+        await Fs.writeFile(Candidate, Replacement);
+        throw new Error("Compilation stopped.");
+    }), /Compilation stopped/);
+    await Assert.rejects(PublishVulkanShader(Output, (Candidate) => Fs.writeFile(Candidate, Buffer.alloc(20))), /SPIR-V magic/);
+    const InvalidHeader = Buffer.from(Initial);
+    InvalidHeader.writeUInt32LE(1, 16);
+    await Assert.rejects(PublishVulkanShader(Output, (Candidate) => Fs.writeFile(Candidate, InvalidHeader)), /SPIR-V header/);
+    Assert.deepEqual(await Fs.readFile(Output), Initial);
+    await PublishVulkanShader(Output, (Candidate) => Fs.writeFile(Candidate, Replacement));
+    Assert.deepEqual(await Fs.readFile(Output), Replacement);
+    Assert.deepEqual(await Fs.readdir(Root), ["staged shader.spv"]);
+});
 
 function Descriptor(Modules: string[], EntryModule: string): TargetDescriptor {
     return {

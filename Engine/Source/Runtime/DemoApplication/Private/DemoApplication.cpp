@@ -5,12 +5,12 @@
 #include "Camera/DemoCameraNavigation.h"
 #include "CoreMinimal.h"
 #include "DemoSettings.h"
+#include "DemoShaders.h"
 
 #include "Platform/Platform.h"
 #include "RHIMinimal.h"
 #include "Renderer/RenderAssetProvider.h"
 #include "Renderer/SceneRenderer.h"
-#include "ShaderRuntimeCompiler.h"
 #include "Scene/Scene.h"
 #include "World/WorldMinimal.h"
 #include "WorldRenderer/WorldRendererMinimal.h"
@@ -188,6 +188,17 @@ public:
             return false;
         }
 
+        const String ExecutableDirectory = GetDemoExecutableDirectory();
+        if (ExecutableDirectory.IsEmpty())
+        {
+            LE_LOG(LogXBD, Error, "Could not locate the executable's packaged data directory.");
+            return false;
+        }
+        if (!ShaderBundle.Load(ExecutableDirectory.View()))
+        {
+            return false;
+        }
+
         Device = LE::RHI::CreateDevice();
         if (Device == nullptr)
         {
@@ -208,30 +219,8 @@ public:
             return false;
         }
 
-        LE::Array<char> BasePassVertBytecode;
-        LE::Array<char> BasePassFragBytecode;
-        LE::Array<char> CompositeVertBytecode;
-        LE::Array<char> CompositeFragBytecode;
-        LE::Array<char> ShadowDepthBytecode;
-        using Demo::ShaderRuntimeCompiler::CompileHlslToSpirv;
-        if (!CompileHlslToSpirv("Engine/Content/Shaders/BasePassShadowVS.lsf", ERuntimeShaderStage::Vertex, BasePassVertBytecode, "MainVS") ||
-            !CompileHlslToSpirv("Engine/Content/Shaders/BasePassShadowPS.lsf", ERuntimeShaderStage::Fragment, BasePassFragBytecode, "MainPS") ||
-            !CompileHlslToSpirv("Engine/Content/Shaders/CompositeVS.lsf", ERuntimeShaderStage::Vertex, CompositeVertBytecode, "MainVS") ||
-            !CompileHlslToSpirv("Engine/Content/Shaders/CompositePS.lsf", ERuntimeShaderStage::Fragment, CompositeFragBytecode, "MainPS") ||
-            !CompileHlslToSpirv("Engine/Content/Shaders/ShadowDepthVS.lsf", ERuntimeShaderStage::Vertex, ShadowDepthBytecode, "MainVS"))
-        {
-            return false;
-        }
-
-        const FSceneRenderShaders Shaders{
-            {{BasePassVertBytecode.Data(), BasePassVertBytecode.Size()}, "MainVS"},
-            {{BasePassFragBytecode.Data(), BasePassFragBytecode.Size()}, "MainPS"},
-            {{CompositeVertBytecode.Data(), CompositeVertBytecode.Size()}, "MainVS"},
-            {{CompositeFragBytecode.Data(), CompositeFragBytecode.Size()}, "MainPS"},
-            {{ShadowDepthBytecode.Data(), ShadowDepthBytecode.Size()}, "MainVS"},
-        };
         const FSceneRenderTargetDesc InitialTarget = GetBackBufferTarget(*Swapchain, {DefaultWindowWidth, DefaultWindowHeight});
-        if (!Renderer.Initialize(*Device, Shaders, InitialTarget))
+        if (!Renderer.Initialize(*Device, ShaderBundle.GetShaders(), InitialTarget))
         {
             LE_LOG(LogXBD, Error, "Failed to initialize scene renderer.");
             return false;
@@ -242,7 +231,7 @@ public:
             LE_LOG(LogXBD, Error, "Failed to initialize demo frame scheduler.");
             return false;
         }
-        if (!InitializeContent())
+        if (!InitializeContent(ExecutableDirectory.View()))
         {
             return false;
         }
@@ -265,6 +254,7 @@ public:
         Scene.Reset();
         Assets.Reset();
         Renderer.Shutdown();
+        ShaderBundle = FDemoShaderBundle{};
         RHI::DestroyResource(Swapchain);
         Swapchain = nullptr;
         RHI::DestroyResource(Device);
@@ -488,17 +478,11 @@ private:
 
     static void LogAssetFailure(const FAssetLoadDiagnostic& Diagnostic) noexcept { LE_LOG(LogXBD, Error, "Content asset '{}' ({}), dependency {}: load={}, file={}, format={}.", Diagnostic.Path.Data(), Diagnostic.Id.ToString().Data(), Diagnostic.DependencyId.ToString().Data(), static_cast<uint32>(Diagnostic.Result), DescribeFileSystemResult(Diagnostic.FileResult), static_cast<uint32>(Diagnostic.FormatResult)); }
 
-    bool InitializeContent() noexcept
+    bool InitializeContent(StringView ExecutableDirectory) noexcept
     {
-        const String ExecutableDirectory = Demo::ShaderRuntimeCompiler::GetExecutableDirectory();
-        if (ExecutableDirectory.IsEmpty())
-        {
-            LE_LOG(LogXBD, Error, "Could not locate the executable's content directory.");
-            return false;
-        }
         const char* RootOverride = std::getenv("LIMITLESS_DEMO_CONTENT");
-        const String ContentRoot = RootOverride != nullptr ? String(RootOverride) : Demo::ShaderRuntimeCompiler::JoinPath(ExecutableDirectory.View(), "DemoContent");
-        const String AssetRoot = Demo::ShaderRuntimeCompiler::JoinPath(ContentRoot.View(), "Assets");
+        const String ContentRoot = RootOverride != nullptr ? String(RootOverride) : JoinDemoPath(ExecutableDirectory, "DemoContent");
+        const String AssetRoot = JoinDemoPath(ContentRoot.View(), "Assets");
         const FAssetMount Mount{"Game", AssetRoot.View()};
         FAssetLoadDiagnostic Diagnostic;
         if (Catalog.Rebuild({&Mount, 1}, &Diagnostic) != EAssetLoadResult::Success)
@@ -507,7 +491,7 @@ private:
             return false;
         }
         const char* InputOverride = std::getenv("LIMITLESS_DEMO_SCENE");
-        const String ScenePath = InputOverride != nullptr ? String(InputOverride) : Demo::ShaderRuntimeCompiler::JoinPath(ContentRoot.View(), "Scene.json");
+        const String ScenePath = InputOverride != nullptr ? String(InputOverride) : JoinDemoPath(ContentRoot.View(), "Scene.json");
         bTestAfterNavigation = StringView(std::getenv("LIMITLESS_DEMO_TEST_AFTER_NAVIGATION")) == StringView("1");
         return PublishScene(ScenePath.View(), true) && (bTestAfterNavigation || SaveRequestedScene());
     }
@@ -695,6 +679,7 @@ private:
     FRHIDevice* Device = nullptr;
     FRHISwapchain* Swapchain = nullptr;
     FRenderFrameScheduler FrameScheduler;
+    FDemoShaderBundle ShaderBundle;
     FSceneRenderer Renderer;
     FPlatformWindowSize CachedWindowSize{DefaultWindowWidth, DefaultWindowHeight};
     EScenePresentationReport PendingPresentationReport = EScenePresentationReport::None;

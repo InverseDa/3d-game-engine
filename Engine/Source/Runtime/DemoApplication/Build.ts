@@ -7,6 +7,8 @@ import {
 } from "../../../Builder/Runtime/Api.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import * as Path from "node:path";
+import { fileURLToPath } from "node:url";
+import { CreateVulkanShaderActions } from "../../../Builder/Source/Content/VulkanShaders.ts";
 
 export default class DemoApplicationBuild extends ModuleBuild {
     public readonly Name = "DemoApplication";
@@ -20,6 +22,7 @@ export default class DemoApplicationBuild extends ModuleBuild {
             "Asset",
             "AssetLoading",
             "Core",
+            "FileSystem",
             "Platform",
             "Spdlog",
             "RHI",
@@ -29,6 +32,16 @@ export default class DemoApplicationBuild extends ModuleBuild {
             "World",
             "WorldRenderer",
         );
+        if (Target.TargetType === TargetType.Game || Target.TargetType === TargetType.Editor) {
+            const ShaderRoot = fileURLToPath(new URL("../../../Content/Shaders/", import.meta.url));
+            Configuration.CustomActions.push(...CreateVulkanShaderActions(ShaderRoot, [
+                { Name: "BasePassShadowVS", Stage: "vert", EntryPoint: "MainVS" },
+                { Name: "BasePassShadowPS", Stage: "frag", EntryPoint: "MainPS" },
+                { Name: "CompositeVS", Stage: "vert", EntryPoint: "MainVS" },
+                { Name: "CompositePS", Stage: "frag", EntryPoint: "MainPS" },
+                { Name: "ShadowDepthVS", Stage: "vert", EntryPoint: "MainVS" },
+            ]));
+        }
         if (Target.Platform === Platform.Win64 &&
             (Target.TargetType === TargetType.Game || Target.TargetType === TargetType.Editor)) {
             const Samples = [
