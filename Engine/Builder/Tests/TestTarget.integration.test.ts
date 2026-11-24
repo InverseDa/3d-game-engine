@@ -55,6 +55,25 @@ async function ShaderWriteTimes(ShaderFiles: string[]): Promise<number[]> {
     return Promise.all(ShaderFiles.map(async (File) => (await Fs.stat(File)).mtimeMs));
 }
 
+async function CheckStagedLantern(BinaryRoot: string, SceneTool: string): Promise<string[]> {
+    const root = Path.join(BinaryRoot, "LanternContent");
+    const pointer = Path.join(root, "current.json");
+    const { generation } = JSON.parse(await Fs.readFile(pointer, "utf8"));
+    Assert.match(generation, /^[0-9a-f-]{36}$/);
+    const content = Path.join(root, "generations", generation);
+    const scene = Path.join(content, "Scene.json");
+    const assets = Path.join(content, "Assets");
+    const check = spawnSync(SceneTool, ["check", "--json", scene, "Game", assets], { encoding: "utf8" });
+    Assert.equal(check.status, 0, check.error?.message ?? check.stdout + check.stderr);
+    const manifest = Path.join(content, "Import.json");
+    const { assets: bindings, nodes, draws } = JSON.parse(await Fs.readFile(manifest, "utf8"));
+    Assert.equal(nodes.length, 4);
+    Assert.equal(draws.length, 3);
+    Assert.deepEqual(bindings.map((entry: { kind: string }) => entry.kind).sort(), ["material", "mesh", "mesh", "mesh", "texture"]);
+    return [pointer, scene, manifest, ...bindings.map((entry: { path: string }) =>
+        Path.join(assets, `${entry.path.slice("Game/".length)}.leasset`))];
+}
+
 Test("Game, Editor, and Test variants build incrementally without overwriting each other", {
     skip: !IsWindows,
 }, async () => {
@@ -76,6 +95,8 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
     const GameBuild = RunBuild(Builder, Root, "Limitless", "Game");
     Assert.equal(GameBuild.status, 0, `${GameBuild.stdout}\n${GameBuild.stderr}`);
     const GameShaders = await CheckStagedShaders(GameRoot);
+    const SceneTool = Path.join(GameIntermediate,
+        "Generated/DemoApplication/ContentTools/Binaries/Win64/Debug/SceneTool/Program/SceneTool.exe");
     const GameArtifacts = [
         Path.join(GameIntermediate, "build.ninja"),
         Path.join(GameIntermediate, "compile_commands.json"),
@@ -83,13 +104,12 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         Path.join(GameRoot, "LimitlessGame.exe"),
         Path.join(GameRoot, "SolidGeometryContent/Scene.json"),
         Path.join(GameRoot, "SolidGeometryContent/Assets/Meshes/SolidBox.leasset"),
+        ...await CheckStagedLantern(GameRoot, SceneTool),
         ...GameShaders,
     ];
     const GameBeforeEditor = await HashFiles(GameArtifacts);
     const GameShaderTimesBeforeEditor = await ShaderWriteTimes(GameShaders);
     const Demo = Path.join(GameRoot, "DemoContent");
-    const SceneTool = Path.join(GameIntermediate,
-        "Generated/DemoApplication/ContentTools/Binaries/Win64/Debug/SceneTool/Program/SceneTool.exe");
     const AssetImport = Path.join(GameIntermediate,
         "Generated/DemoApplication/ContentTools/Binaries/Win64/Debug/AssetImport/Program/AssetImport.exe");
     const SolidGeometry = Path.join(GameRoot, "SolidGeometryContent");
@@ -334,6 +354,7 @@ Test("Game, Editor, and Test variants build incrementally without overwriting ea
         Path.join(EditorRoot, "LimitlessEditor.exe"),
         Path.join(EditorRoot, "SolidGeometryContent/Scene.json"),
         Path.join(EditorRoot, "SolidGeometryContent/Assets/Meshes/SolidBox.leasset"),
+        ...await CheckStagedLantern(EditorRoot, SceneTool),
         ...EditorShaders,
     ];
     const GameAndEditorArtifacts = [...GameArtifacts, ...EditorArtifacts];

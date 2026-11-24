@@ -73,30 +73,38 @@ export default class DemoApplicationBuild extends ModuleBuild {
             const ToolSources = [
                 "Runtime/Core", "Runtime/Asset", "Runtime/AssetFormat", "Runtime/AssetLoading",
                 "Runtime/FileSystem", "Runtime/Reflection", "Runtime/World", "Runtime/Scene",
-                "Programs/AssetImport", "Programs/SceneTool",
+                "Programs/AssetImport", "Programs/SceneTool", "ThirdParty/GltfSourceCodecs",
             ].flatMap((Directory) => {
                 const Root = new URL(`../../${Directory}/`, import.meta.url);
                 return readdirSync(Root, { recursive: true, withFileTypes: true })
                     .filter((Entry) => Entry.isFile())
                     .map((Entry) => Path.join(Entry.parentPath, Entry.name));
             }).sort();
+            const LanternSource = "[engine.Root]/Engine/Content/Examples/Lantern";
+            const LanternOutput = "[engine.Binaries]/LanternContent";
+            const LanternInputs = readdirSync(new URL("../../../Content/Examples/Lantern/", import.meta.url), { withFileTypes: true })
+                .filter((Entry) => Entry.isFile() && /\.(?:gltf|bin|png|json|obj|material)$/.test(Entry.name))
+                .map((Entry) => `${LanternSource}/${Entry.name}`).sort();
             Configuration.CustomActions.push({
                 Id: "StageDemoContent",
-                Inputs: Samples.flatMap((Sample) => Sample.Inputs),
+                Inputs: [...Samples.flatMap((Sample) => Sample.Inputs), ...LanternInputs],
                 ImplicitInputs: [
                     "[engine.Root]/Engine/Builder/Source/Content/StageDemoContent.ts",
+                    "[engine.Root]/Engine/Builder/Source/Content/ImportGltf.ts",
+                    "[engine.Root]/Engine/Builder/Source/Content/GltfImportManifest.ts",
                     "[engine.Root]/Engine/Builder/Targets/AssetImport.target.ts",
                     "[engine.Root]/Engine/Builder/Targets/SceneTool.target.ts",
                     "[engine.Root]/Engine/Builder/Source/Cli/CommandLine.ts",
                     "[engine.Root]/Engine/Builder/Source/Project/EnginePaths.ts",
                     ...ToolSources,
                 ],
-                Outputs: Samples.flatMap((Sample) => Sample.Outputs),
+                Outputs: [...Samples.flatMap((Sample) => Sample.Outputs), `${LanternOutput}/current.json`],
                 Command: [
                     process.execPath, "--no-warnings", "--experimental-strip-types",
                     "[engine.Root]/Engine/Builder/Source/Content/StageDemoContent.ts",
                     "[engine.Root]", Target.Optimization, "[module.Generated]/ContentTools",
                     ...Samples.flatMap(({ Source, Destination }) => [Source, Destination]),
+                    "--gltf", `${LanternSource}/Import.json`, LanternOutput,
                 ],
                 Description: "CONTENT DemoApplication",
                 RunBeforeCompile: true,

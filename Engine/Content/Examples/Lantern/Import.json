@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "id": "194ec5c8-4f2a-4073-81e0-aef81ace0100",
+  "mount": "Game",
+  "source": "Lantern.gltf",
+  "scene": 0,
+  "sourceDocumentSha256": "2106fea76c458caf43078c34ae7da7016cedd1f22e6f4badf94590be590f53d6",
+  "assets": [
+    {
+      "key": "mesh-body",
+      "kind": "mesh",
+      "id": "194ec5c8-4f2a-4073-81e0-aef81ace0101",
+      "path": "Game/Meshes/LanternBody",
+      "selector": { "mesh": 0, "primitive": 0 }
+    },
+    {
+      "key": "mesh-chain",
+      "kind": "mesh",
+      "id": "194ec5c8-4f2a-4073-81e0-aef81ace0102",
+      "path": "Game/Meshes/LanternChain",
+      "selector": { "mesh": 1, "primitive": 0 }
+    },
+    {
+      "key": "mesh-lamp",
+      "kind": "mesh",
+      "id": "194ec5c8-4f2a-4073-81e0-aef81ace0103",
+      "path": "Game/Meshes/LanternLamp",
+      "selector": { "mesh": 2, "primitive": 0 }
+    },
+    {
+      "key": "material-lantern",
+      "kind": "material",
+      "id": "194ec5c8-4f2a-4073-81e0-aef81ace0104",
+      "path": "Game/Materials/Lantern",
+      "selector": { "material": 0 }
+    },
+    {
+      "key": "texture-lantern-base-color",
+      "kind": "texture",
+      "id": "194ec5c8-4f2a-4073-81e0-aef81ace0105",
+      "path": "Game/Textures/LanternBaseColor",
+      "selector": { "image": 0 }
+    }
+  ],
+  "nodes": [
+    { "key": "node-body", "id": "0694e55a-83ec-48fe-848b-b73a76ff0101", "selector": { "node": 0 } },
+    { "key": "node-chain", "id": "0694e55a-83ec-48fe-848b-b73a76ff0102", "selector": { "node": 1 } },
+    { "key": "node-lamp", "id": "0694e55a-83ec-48fe-848b-b73a76ff0103", "selector": { "node": 2 } },
+    { "key": "node-lantern", "id": "0694e55a-83ec-48fe-848b-b73a76ff0104", "selector": { "node": 3 } }
+  ],
+  "draws": [
+    { "key": "draw-body", "id": "0694e55a-83ec-48fe-848b-b73a76ff0111", "selector": { "node": "node-body", "mesh": "mesh-body" } },
+    { "key": "draw-chain", "id": "0694e55a-83ec-48fe-848b-b73a76ff0112", "selector": { "node": "node-chain", "mesh": "mesh-chain" } },
+    { "key": "draw-lamp", "id": "0694e55a-83ec-48fe-848b-b73a76ff0113", "selector": { "node": "node-lamp", "mesh": "mesh-lamp" } }
+  ],
+  "preview": {
+    "scene": "PreviewRig.json",
+    "parent": "0694e55a-83ec-48fe-848b-b73a76ff0201",
+    "assets": [
+      { "kind": "mesh", "source": "Ground.obj", "id": "194ec5c8-4f2a-4073-81e0-aef81ace0201", "path": "Game/Meshes/LanternGround" },
+      { "kind": "material", "source": "Ground.material", "id": "194ec5c8-4f2a-4073-81e0-aef81ace0202", "path": "Game/Materials/LanternGround" }
+    ]
+  }
+}

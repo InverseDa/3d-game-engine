@@ -13,6 +13,6 @@ export default class AssetImportBuild extends ModuleBuild {
         Configuration.Output = Target.TargetType === TargetType.Program
             ? OutputType.Exe
             : OutputType.None;
-        Configuration.PrivateDependencies.push("Core", "Asset", "AssetFormat", "FileSystem");
+        Configuration.PrivateDependencies.push("Core", "Asset", "AssetFormat", "FileSystem", "Scene", "GltfSourceCodecs");
     }
 }

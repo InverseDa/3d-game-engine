@@ -1,4 +1,5 @@
 #include "AssetImport.h"
+#include "GltfImportCommand.h"
 
 #include "Asset/SoftAssetPath.h"
 #include "AssetFormat/AssetFormat.h"
@@ -629,7 +630,9 @@ bool ParseArguments(const Span<const StringView> Arguments, FImportArguments& Ou
     return !Out.Source.IsEmpty() && !Out.Id.IsEmpty() && !Out.Path.IsEmpty() && (Out.bCheckOnly == Out.Output.IsEmpty());
 }
 
-const char* DescribeFormatError(const EAssetFormatResult Result) noexcept
+} // namespace
+
+const char* Detail::DescribeImportFormatError(const EAssetFormatResult Result) noexcept
 {
     switch (Result)
     {
@@ -655,6 +658,9 @@ const char* DescribeFormatError(const EAssetFormatResult Result) noexcept
     return "unexpected resource format failure";
 }
 
+namespace
+{
+
 int ReportError(const StringView File, const char* Message, const std::size_t Line = 0) noexcept
 {
     std::fputs("AssetImport: ", stderr);
@@ -676,7 +682,7 @@ template <typename T> int ConvertSource(const FImportArguments& Args, const FAss
         return ReportError(Args.Source, Error.Message, Error.Line);
     }
     const EAssetFormatResult Result = EncodeAssetFile(Id, Args.Path, Data, OutBytes);
-    return Result == EAssetFormatResult::Success ? 0 : ReportError(Args.Source, DescribeFormatError(Result));
+    return Result == EAssetFormatResult::Success ? 0 : ReportError(Args.Source, Detail::DescribeImportFormatError(Result));
 }
 
 int PublishAsset(const FImportArguments& Args, const Array<uint8>& Bytes) noexcept
@@ -694,7 +700,7 @@ int PublishAsset(const FImportArguments& Args, const Array<uint8>& Bytes) noexce
         const EAssetFormatResult ExistingResult = ReadAssetFileHeader(Prefix.AsSpan(), static_cast<std::size_t>(ExistingSize), Existing);
         if (ExistingResult != EAssetFormatResult::Success)
         {
-            return ReportError(Args.Output, DescribeFormatError(ExistingResult));
+            return ReportError(Args.Output, Detail::DescribeImportFormatError(ExistingResult));
         }
         FAssetFileHeaderView Replacement;
         if (ReadAssetFileHeader(Bytes.AsSpan(), Replacement) != EAssetFormatResult::Success)
@@ -726,6 +732,10 @@ void PrintUsage(FILE* Stream) noexcept
 
 int RunAssetImport(const Span<const StringView> Arguments) noexcept
 {
+    if (!Arguments.IsEmpty() && Arguments[0] == StringView("gltf"))
+    {
+        return Detail::RunGltfImportCommand(Arguments.Subspan(1, Arguments.Size() - 1));
+    }
     if (Arguments.Size() == 1 && Arguments[0] == StringView("--help"))
     {
         PrintUsage(stdout);

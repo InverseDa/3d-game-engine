@@ -1,11 +1,15 @@
 import { spawnSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import * as Path from "node:path";
+import { RunGltfImport } from "./ImportGltf.ts";
 
-const [Root, Configuration, ToolRoot, ...SamplePaths] = process.argv.slice(2);
+const [Root, Configuration, ToolRoot, ...Sources] = process.argv.slice(2);
+const GltfIndex = Sources.indexOf("--gltf");
+const SamplePaths = GltfIndex === -1 ? Sources : Sources.slice(0, GltfIndex);
+const GltfSample = GltfIndex === -1 ? undefined : Sources.slice(GltfIndex + 1);
 if (!Root || !ToolRoot || !["Debug", "Release"].includes(Configuration) ||
-    SamplePaths.length === 0 || SamplePaths.length % 2 !== 0) {
-    throw new Error("Usage: StageDemoContent ROOT Debug|Release TOOL_ROOT SOURCES DESTINATION [SOURCES DESTINATION ...]");
+    SamplePaths.length === 0 || SamplePaths.length % 2 !== 0 || (GltfSample && GltfSample.length !== 2)) {
+    throw new Error("Usage: StageDemoContent ROOT Debug|Release TOOL_ROOT SOURCES DESTINATION [...] [--gltf MANIFEST DESTINATION]");
 }
 
 function Run(Command: string, Arguments: string[]): void {
@@ -75,4 +79,9 @@ async function StageSample(Sources: string, Destination: string): Promise<void> 
 
 for (let Index = 0; Index < SamplePaths.length; Index += 2) {
     await StageSample(SamplePaths[Index], SamplePaths[Index + 1]);
+}
+
+if (GltfSample) {
+    const [Manifest, Destination] = GltfSample;
+    await RunGltfImport("import", { assetImport: Import, sceneTool: SceneTool, manifest: Manifest, output: Destination });
 }

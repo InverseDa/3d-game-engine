@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "entities": [
+    {
+      "id": "0694e55a-83ec-48fe-848b-b73a76ff0201",
+      "transform": {
+        "translation": [0.69, -0.0331, 0],
+        "rotation": [0, 0, 0, 1],
+        "scale": [0.18, 0.18, 0.18]
+      }
+    },
+    {
+      "id": "0694e55a-83ec-48fe-848b-b73a76ff0202",
+      "mesh": {
+        "mesh": "194ec5c8-4f2a-4073-81e0-aef81ace0201",
+        "material": "194ec5c8-4f2a-4073-81e0-aef81ace0202",
+        "debugName": "Lantern preview ground",
+        "sortKey": "0"
+      }
+    },
+    {
+      "id": "0694e55a-83ec-48fe-848b-b73a76ff0203",
+      "transform": {
+        "translation": [2.7, 3.8, 8.5],
+        "rotation": [-0.08759423563202075, 0.1525751678419146, 0.013577757205430602, 0.9843087485902602],
+        "scale": [1, 1, 1]
+      },
+      "camera": {
+        "debugName": "Lantern preview camera",
+        "verticalFieldOfViewRadians": 0.7679448709,
+        "nearPlane": 0.1,
+        "farPlane": 50,
+        "priority": 100,
+        "active": true
+      }
+    },
+    {
+      "id": "0694e55a-83ec-48fe-848b-b73a76ff0204",
+      "directionalLight": {
+        "direction": [-0.95, -1.35, -0.65],
+        "color": [1, 0.98, 0.94],
+        "intensity": 1.55,
+        "active": true
+      }
+    }
+  ]
+}
