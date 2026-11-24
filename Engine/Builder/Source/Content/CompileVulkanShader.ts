@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { FindVulkanShaderCompiler, PublishVulkanShader } from "./VulkanShaders.ts";
+import { FindVulkanShaderCompiler, PublishVulkanShader, VulkanShaderCompilerArguments } from "./VulkanShaders.ts";
 
 const [Source, Stage, EntryPoint, Output, ConfiguredCompiler, ...Extra] = process.argv.slice(2);
 if (!Source || !["vert", "frag"].includes(Stage) || !EntryPoint || !Output || Extra.length !== 0) {
@@ -12,7 +12,7 @@ try {
         throw new Error("glslangValidator was not found. Install the Vulkan SDK and set VULKAN_SDK or add its bin directory to PATH.");
     }
     await PublishVulkanShader(Output, (Candidate) => {
-        const Result = spawnSync(Compiler, ["-V", "-D", "-S", Stage, "-e", EntryPoint, Source, "-o", Candidate], {
+        const Result = spawnSync(Compiler, VulkanShaderCompilerArguments(Source, Stage, EntryPoint, Candidate), {
             stdio: "inherit", shell: false,
         });
         if (Result.error) {

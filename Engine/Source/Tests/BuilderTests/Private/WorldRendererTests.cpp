@@ -661,7 +661,7 @@ int RunCameraContractTests()
 
     const FRenderCameraProxy& SelectedCamera = Snapshot.GetRenderScene().Cameras[0];
     const FWorldRenderCameraPose SelectedPose = Snapshot.GetAuthoredPrimaryCameraPose();
-    Failures += Expect(SelectedCamera.PrimitiveId.Value == ExpectedCameraValue && SelectedPose.PrimitiveId == SelectedCamera.PrimitiveId && NearlyEqual(SelectedCamera.View(2, 3), -15.0f) && SelectedCamera.DebugName == StringView("HigherPriority"), "active camera selection preserves priority and ID order with a non-primary override");
+    Failures += Expect(SelectedCamera.PrimitiveId.Value == ExpectedCameraValue && SelectedPose.PrimitiveId == SelectedCamera.PrimitiveId && SelectedPose.Entity == HigherPriorityCamera && NearlyEqual(SelectedCamera.View(2, 3), -15.0f) && SelectedCamera.DebugName == StringView("HigherPriority"), "active camera selection preserves the source entity, priority and ID order with a non-primary override");
     const FWorldCameraComponent* const SelectedWorldCamera = Fixture.World.GetComponent(*Cameras, HigherPriorityCamera);
     const float NearPlane = SelectedWorldCamera == nullptr ? 0.1f : SelectedWorldCamera->NearPlane;
     const float FarPlane = SelectedWorldCamera == nullptr ? 1000.0f : SelectedWorldCamera->FarPlane;

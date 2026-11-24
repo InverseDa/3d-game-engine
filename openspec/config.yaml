@@ -9,6 +9,10 @@ schema: spec-driven
 #     Designs and tasks must cover Windows, macOS, and Linux
 #     Write all artifacts in Spanish
 
+context: |
+  引擎 C++ 代码通过引擎接口使用 C++ 标准库和第三方 C++ 库。优先复用现有接口，通用能力补到 Core 对应模块，专用依赖由所属模块的适配层封装。
+  数学工具沿用 LE::Math，例如通过 LE::Math::Max 封装 std::max。设计和实现任务遵循 Docs/ADR/0001-modern-cpp-core-types-and-containers.md 第 10 节。
+
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
 # Example:

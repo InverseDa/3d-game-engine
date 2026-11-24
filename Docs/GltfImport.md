@@ -27,6 +27,33 @@ $sceneTool = (Resolve-Path 'Engine/Binaries/Win64/Debug/SceneTool/Program/SceneT
 
 合法修改会在同一进程呈现。非法父引用或变换保留当前画面和漫游位置。F5 重载当前 Scene，并沿用启动时选定的资产版本。要预览重导入的新纹理，重新启动时解析新的 `current.json`，原 `$author` 可继续使用。
 
+## 在 Win64 Editor 刷新资产版本
+
+构建 Win64 Debug Editor 后，把 `LIMITLESS_EDITOR_CONTENT` 指向包含 `current.json` 的发布根，把 `LIMITLESS_DEMO_SCENE` 指向独立的作者场景。以下命令从 Editor 暂存的 Lantern 版本创建一个可编辑副本并启动预览。
+
+```powershell
+$editor = (Resolve-Path 'Engine/Binaries/Win64/Debug/Limitless/Editor').Path
+$published = Join-Path $editor 'LanternContent'
+$release = Get-Content -Raw -LiteralPath (Join-Path $published 'current.json') | ConvertFrom-Json
+$content = Join-Path $published "generations/$($release.generation)"
+$author = Join-Path (Get-Location).Path ('Engine/Intermediate/LanternEditorScene-' + [guid]::NewGuid() + '.json')
+Copy-Item -LiteralPath (Join-Path $content 'Scene.json') -Destination $author
+$previousEditorContent = $env:LIMITLESS_EDITOR_CONTENT
+$previousScene = $env:LIMITLESS_DEMO_SCENE
+try {
+    $env:LIMITLESS_EDITOR_CONTENT = $published
+    $env:LIMITLESS_DEMO_SCENE = $author
+    Start-Process -FilePath (Join-Path $editor 'LimitlessEditor.exe') -WorkingDirectory $editor
+} finally {
+    $env:LIMITLESS_EDITOR_CONTENT = $previousEditorContent
+    $env:LIMITLESS_DEMO_SCENE = $previousScene
+}
+```
+
+将重导入的 `--output` 指向同一个 `$published`，发布成功后回到 Editor 按 **F6**。切换仍使用同一个主相机时，继续沿用当前漫游机位。**F5** 在已挂载的资产版本上重载作者场景，并应用作者机位。场景另存的文件和已发布的资产目录都是预览的输入。
+
+在 Editor 的 `Firefly.log` 中搜索 `Editor content refresh `。单行 JSON 给出 `status`、`code`、`active`、`candidate` 和 `navigation`。`mounted` 表示启动时已挂载资产，`presented` 表示新代已出图，`unchanged` 表示当前代仍是最新版，`rejected` 表示候选未能切换。`navigation` 记录机位是沿用会话姿态还是从作者场景重新初始化。
+
 ## 手动导入与重导入
 
 先构建 `AssetImport` 和 `SceneTool` 的 Win64 Debug Program。`inspect` 和 `check` 都以一个 JSON 对象报告结果，`check` 在内存验证导入计划和编码。传入 `--output` 时，`check` 还会与当前已发布的身份快照比较。

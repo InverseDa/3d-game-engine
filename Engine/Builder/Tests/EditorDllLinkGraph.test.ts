@@ -364,10 +364,17 @@ Test("Demo WorldRenderer bridge preserves frame and asset lifetime order", async
         DestroyPipeline > ReleaseAssets,
     "shutdown must drain frames, clear the scene and its assets, then destroy the shared pipeline");
 
-    const Publish = Source.slice(Source.indexOf("bool PublishScene("), Source.indexOf("static constexpr uint32 DefaultWindowWidth"));
-    Assert.ok(Publish.indexOf("LoadScene(") < Publish.indexOf("BuildSnapshot("));
-    Assert.ok(Publish.indexOf("BuildSnapshot(") < Publish.indexOf("Scene = std::move(Candidate)"));
-    Assert.ok(Publish.indexOf("FrameScheduler.WaitForAllFrames()") < Publish.indexOf("Assets = std::move(CandidateAssets)"));
+    const Publish = Source.slice(Source.indexOf("FScenePublicationResult PublishScene("), Source.indexOf("static constexpr uint32 DefaultWindowWidth"));
+    const LoadCandidate = Publish.indexOf("LoadScene(");
+    const CheckSnapshot = Publish.indexOf("BuildSnapshot(");
+    const DrainPrevious = Publish.indexOf("FrameScheduler.WaitForAllFrames()");
+    const SwitchScene = Publish.indexOf("Scene = std::move(Candidate)");
+    const SwitchAssets = Publish.indexOf("Assets = std::move(CandidateAssets)");
+    Assert.ok(LoadCandidate >= 0 && CheckSnapshot > LoadCandidate && DrainPrevious > CheckSnapshot &&
+        SwitchScene > DrainPrevious && SwitchAssets > SwitchScene,
+    "the candidate must preflight before submitted frames drain, then swap scene and assets in order");
+    Assert.match(Source, /SharedPtr<FAssetCatalog> Catalog;\s+FRenderAssetProvider Provider;\s+FAssetLoadSession Session;/,
+        "the scene session must release before the provider and catalog it borrows");
     Assert.match(Source, /SnapshotContext\.ViewportWidth = Target\.Width/);
 });
 

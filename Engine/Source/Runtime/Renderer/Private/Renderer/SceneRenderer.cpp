@@ -138,6 +138,15 @@ struct FSceneTargets
     FSceneRenderTargetDesc Target;
 };
 
+struct FBasePassShaderPipeline
+{
+    // Destruction releases the pipeline before the shader it references and
+    // the shader before the aligned bytecode its RHI descriptor borrows.
+    Array<uint32> Bytecode;
+    UniquePtr<FRHIShader> Shader;
+    UniquePtr<FRHIPipeline_Graphics> Pipeline;
+};
+
 UniquePtr<FRHITextureView> CreateTargetView(FRHIDevice& Device, FRHITexture& Texture)
 {
     FRHITextureViewDesc Desc;
@@ -151,6 +160,40 @@ UniquePtr<FRHITextureView> CreateTargetView(FRHIDevice& Device, FRHITexture& Tex
 struct FSceneRenderer::FState
 {
     explicit FState(FRHIDevice& InDevice) noexcept : Device(InDevice) {}
+
+    EBasePassPixelShaderInstallResult CreateBasePass(const FSceneShaderBytecode& Bytecode, UniquePtr<FBasePassShaderPipeline>& OutPipeline)
+    {
+        using EResult = EBasePassPixelShaderInstallResult;
+        if (Bytecode.Code.IsEmpty() || Bytecode.EntryPoint.IsEmpty())
+        {
+            return EResult::InvalidArguments;
+        }
+        auto Candidate = TryMakeUnique<FBasePassShaderPipeline>();
+        const auto Size = Bytecode.Code.Size();
+        const auto StorageSize = Size / sizeof(uint32) + (Size % sizeof(uint32) != 0);
+        if (!Candidate || !Candidate->Bytecode.TryResize(StorageSize))
+        {
+            return EResult::ShaderCreationFailed;
+        }
+        auto* const OwnedBytes = reinterpret_cast<char*>(Candidate->Bytecode.Data());
+        for (std::size_t Index = 0; Index < Size; ++Index)
+        {
+            OwnedBytes[Index] = Bytecode.Code.Data()[Index];
+        }
+        Candidate->Shader = CreateShader(Device, EShaderStage::Pixel, {{OwnedBytes, Size}, Bytecode.EntryPoint});
+        if (!Candidate->Shader)
+        {
+            return EResult::ShaderCreationFailed;
+        }
+        Candidate->Pipeline = CreateBasePassPipeline(Device, *BasePassVertex, *Candidate->Shader, *MaterialLayout,
+                                                      *FrameLighting.GetLayout(), ShadowMaps.GetLayout());
+        if (!Candidate->Pipeline)
+        {
+            return EResult::PipelineCreationFailed;
+        }
+        OutPipeline = std::move(Candidate);
+        return EResult::Success;
+    }
 
     UniquePtr<FSceneTargets> CreateTargets(const FSceneRenderTargetDesc& Target)
     {
@@ -197,8 +240,8 @@ struct FSceneRenderer::FState
     }
 
     FRHIDevice& Device;
+    FRenderFrameScheduler* FrameScheduler = nullptr;
     UniquePtr<FRHIShader> BasePassVertex;
-    UniquePtr<FRHIShader> BasePassPixel;
     UniquePtr<FRHIShader> CompositeVertex;
     UniquePtr<FRHIShader> CompositePixel;
     UniquePtr<FRHIShader> ShadowDepthVertex;
@@ -207,7 +250,7 @@ struct FSceneRenderer::FState
     UniquePtr<FRHISampler> CompositeSampler;
     FBasePassFrameLighting FrameLighting;
     FDirectionalShadowMaps ShadowMaps;
-    UniquePtr<FRHIPipeline_Graphics> BasePassPipeline;
+    UniquePtr<FBasePassShaderPipeline> BasePass;
     UniquePtr<FSceneTargets> Targets;
     FRenderer Graph;
 };
@@ -227,13 +270,12 @@ bool FSceneRenderer::Initialize(FRHIDevice& Device, const FSceneRenderShaders& S
         return false;
     }
     Candidate->BasePassVertex = CreateShader(Device, EShaderStage::Vertex, Shaders.BasePassVertex);
-    Candidate->BasePassPixel = CreateShader(Device, EShaderStage::Pixel, Shaders.BasePassPixel);
     Candidate->CompositeVertex = CreateShader(Device, EShaderStage::Vertex, Shaders.CompositeVertex);
     Candidate->CompositePixel = CreateShader(Device, EShaderStage::Pixel, Shaders.CompositePixel);
     Candidate->MaterialLayout = OwnRHI(CreateBasePassMaterialLayout(Device));
     Candidate->CompositeLayout = CreateCompositeLayout(Device);
     Candidate->CompositeSampler = CreateCompositeSampler(Device);
-    if (!Candidate->BasePassVertex || !Candidate->BasePassPixel || !Candidate->CompositeVertex || !Candidate->CompositePixel ||
+    if (!Candidate->BasePassVertex || !Candidate->CompositeVertex || !Candidate->CompositePixel ||
         !Candidate->MaterialLayout || !Candidate->CompositeLayout || !Candidate->CompositeSampler || !Candidate->FrameLighting.Initialize(Device))
     {
         return false;
@@ -246,11 +288,12 @@ bool FSceneRenderer::Initialize(FRHIDevice& Device, const FSceneRenderShaders& S
             return false;
         }
     }
-    Candidate->BasePassPipeline = CreateBasePassPipeline(Device, *Candidate->BasePassVertex, *Candidate->BasePassPixel,
-                                                         *Candidate->MaterialLayout, *Candidate->FrameLighting.GetLayout(),
-                                                         Candidate->ShadowMaps.GetLayout());
+    if (Candidate->CreateBasePass(Shaders.BasePassPixel, Candidate->BasePass) != EBasePassPixelShaderInstallResult::Success)
+    {
+        return false;
+    }
     Candidate->Targets = Candidate->CreateTargets(Target);
-    if (!Candidate->BasePassPipeline || !Candidate->Targets)
+    if (!Candidate->Targets)
     {
         return false;
     }
@@ -290,19 +333,44 @@ bool FSceneRenderer::Resize(FRenderFrameScheduler& Scheduler, const FSceneRender
     return true;
 }
 
+EBasePassPixelShaderInstallResult FSceneRenderer::InstallBasePassPixelShader(FRenderFrameScheduler& Scheduler, const FSceneShaderBytecode& Bytecode)
+{
+    using EResult = EBasePassPixelShaderInstallResult;
+    if (!State || (State->FrameScheduler != nullptr && State->FrameScheduler != &Scheduler) ||
+        !Scheduler.IsAtFrameBoundaryFor(State->Device))
+    {
+        return EResult::InvalidArguments;
+    }
+    UniquePtr<FBasePassShaderPipeline> Candidate;
+    const EResult Created = State->CreateBasePass(Bytecode, Candidate);
+    if (Created != EResult::Success)
+    {
+        return Created;
+    }
+    Scheduler.WaitForAllFrames();
+    if (!Scheduler.IsAtFrameBoundaryFor(State->Device))
+    {
+        return EResult::FrameRetirementFailed;
+    }
+    State->BasePass = std::move(Candidate);
+    return EResult::Success;
+}
+
 ERenderFrameRecordResult FSceneRenderer::RecordFrame(FRenderFrameScope& Frame, FRHISwapchain& Swapchain, const FRenderScene& Scene)
 {
-    if (!State)
+    if (!State || Frame.Scheduler == nullptr || Frame.Scheduler->Device != &State->Device ||
+        (State->FrameScheduler != nullptr && State->FrameScheduler != Frame.Scheduler))
     {
         return ERenderFrameRecordResult::InvalidArguments;
     }
+    State->FrameScheduler = Frame.Scheduler;
     const FSceneTargets& Targets = *State->Targets;
     FBasePassCompositePipelineDesc Desc;
     Desc.BasePassResources.SceneColorTexture = Targets.Color.Get();
     Desc.BasePassResources.SceneColorView = Targets.ColorView.Get();
     Desc.BasePassResources.SceneDepthTexture = Targets.Depth.Get();
     Desc.BasePassResources.SceneDepthView = Targets.DepthView.Get();
-    Desc.BasePassResources.Pipeline = State->BasePassPipeline.Get();
+    Desc.BasePassResources.Pipeline = State->BasePass->Pipeline.Get();
     if (!State->FrameLighting.WriteSlot(Frame.GetSlotIndex(), {Scene.Lights.Data(), Scene.Lights.Size()}, Desc.BasePassResources.Light))
     {
         return ERenderFrameRecordResult::Error;

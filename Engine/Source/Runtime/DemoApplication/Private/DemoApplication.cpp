@@ -6,6 +6,12 @@
 #include "CoreMinimal.h"
 #include "DemoSettings.h"
 #include "DemoShaders.h"
+#if WITH_EDITOR
+#include "DemoContentGeneration.h"
+#endif
+#if WITH_EDITOR && PLATFORM_WINDOWS
+#include "EditorShaderPreview.h"
+#endif
 
 #include "Platform/Platform.h"
 #include "RHIMinimal.h"
@@ -30,10 +36,13 @@ LE_DECLARE_LOG_CATEGORY(LogXBD);
 
 struct FDemoSceneAssets final
 {
-    explicit FDemoSceneAssets(const FAssetCatalog& Catalog) noexcept : Session(Catalog, {{&Provider, &FRenderAssetProvider::CreateMesh, &FRenderAssetProvider::DestroyMesh}, {&Provider, &FRenderAssetProvider::CreateMaterial, &FRenderAssetProvider::DestroyMaterial}}) {}
+    explicit FDemoSceneAssets(const SharedPtr<FAssetCatalog>& InCatalog) noexcept : Catalog(InCatalog), Session(*Catalog, {{&Provider, &FRenderAssetProvider::CreateMesh, &FRenderAssetProvider::DestroyMesh}, {&Provider, &FRenderAssetProvider::CreateMaterial, &FRenderAssetProvider::DestroyMaterial}}) {}
 
     const FAssetRegistry& GetRegistry() const noexcept { return Session.GetRegistry(); }
 
+    // The session borrows its immutable catalog. It must destruct before both
+    // the provider and the catalog, including when a candidate is rejected.
+    SharedPtr<FAssetCatalog> Catalog;
     FRenderAssetProvider Provider;
     FAssetLoadSession Session;
 };
@@ -250,6 +259,9 @@ public:
         bShutdown = true;
 
         LE_LOG(LogXBD, Info, "Shutting down demo render runtime...");
+#if WITH_EDITOR && PLATFORM_WINDOWS
+        ShaderPreview.Shutdown();
+#endif
         FrameScheduler.Shutdown();
         Scene.Reset();
         Assets.Reset();
@@ -308,10 +320,18 @@ public:
 
     EApplicationTickResult Update(const FApplicationTickContext& Context)
     {
+#if WITH_EDITOR && PLATFORM_WINDOWS
+        // Scene requests may clear queued input, so capture the independent
+        // shader edge before applying any of their changes.
+        const bool bShaderRequested = WindowModule.GetInputFrame().WasKeyPressed(EPlatformKey::F7);
+#endif
         if (!ProcessSceneRequests())
         {
             return EApplicationTickResult::Exit;
         }
+#if WITH_EDITOR && PLATFORM_WINDOWS
+        ShaderPreview.Update(bShaderRequested, ShaderBundle.GetShaders().BasePassPixel.Code, FrameScheduler, Renderer);
+#endif
 
         FWorld& World = Scene->GetWorld();
         const FWorldTickContext WorldContext{Context.FrameIndex, Context.DeltaSeconds, Context.ElapsedSeconds};
@@ -342,7 +362,12 @@ public:
             return EApplicationTickResult::Continue;
         }
 
+#if WITH_EDITOR && PLATFORM_WINDOWS
+        uint64 RecordedShaderRequest = 0;
+        auto RecordFrame = [this, &RecordedShaderRequest](LE::FRenderFrameScope& ScheduledFrame) {
+#else
         auto RecordFrame = [this](LE::FRenderFrameScope& ScheduledFrame) {
+#endif
             LE::FWorldRenderSnapshot RenderSnapshot;
             LE::FWorldRenderSnapshotBuildReport SnapshotReport;
             LE::FWorldRenderSnapshotBuildContext SnapshotContext;
@@ -357,10 +382,19 @@ public:
                 return LE::ERenderFrameRecordResult::Error;
             }
 
+#if WITH_EDITOR && PLATFORM_WINDOWS
+            RecordedShaderRequest = ShaderPreview.GetPendingPresentation();
+#endif
             return Renderer.RecordFrame(ScheduledFrame, *Swapchain, RenderSnapshot.GetRenderScene());
         };
 
         const FRenderFrameResult FrameResult = FrameScheduler.ExecuteFrame(Swapchain, RecordFrame);
+#if WITH_EDITOR && PLATFORM_WINDOWS
+        if (FrameResult.PresentStatus == ERHISwapchainStatus::Success)
+        {
+            ShaderPreview.ConfirmPresentation(RecordedShaderRequest);
+        }
+#endif
         if (FrameResult.Action == ERenderFrameAction::RecreateSwapchain)
         {
             bSwapchainRecreateRequested = true;
@@ -387,6 +421,12 @@ private:
         Preserved,
     };
 
+    struct FScenePublicationResult
+    {
+        const char* Error = nullptr;
+        bool bNavigationPreserved = false;
+    };
+
     bool ProcessSceneRequests() noexcept
     {
         const bool bReloadRequested = WindowModule.GetInputFrame().WasKeyPressed(EPlatformKey::F5);
@@ -402,15 +442,29 @@ private:
                 LE_LOG(LogXBD, Info, "Presented the preserved scene with {} texture uploads.", Assets->Provider.GetTextureUploadCount());
             }
             PendingPresentationReport = EScenePresentationReport::None;
+#if WITH_EDITOR
+            if (PendingAssetPresentation)
+            {
+                LogEditorContentRefresh("presented", "ok", ActiveGeneration, PendingAssetNavigation);
+                PendingAssetPresentation = false;
+            }
+#endif
             if (!RunRequestedSceneTest())
             {
                 return false;
             }
         }
 
+#if WITH_EDITOR
+        if (WindowModule.GetInputFrame().WasKeyPressed(EPlatformKey::F6))
+        {
+            RefreshPublishedContent();
+            return true;
+        }
+#endif
         if (bReloadRequested)
         {
-            if (PublishScene(ActiveScenePath.View()))
+            if (PublishScene(ActiveScenePath.View(), Assets->Catalog).Error == nullptr)
             {
                 LE_LOG(LogXBD, Info, "Scene reload accepted '{}'.", ActiveScenePath.Data());
                 PendingPresentationReport = EScenePresentationReport::Reloaded;
@@ -426,6 +480,12 @@ private:
 
     bool RunRequestedSceneTest() noexcept
     {
+#if WITH_EDITOR
+        if (!ContentPublicationRoot.IsEmpty())
+        {
+            return true;
+        }
+#endif
         if (bSceneSwitchAttempted || (bTestAfterNavigation && !bNavigationUpdated))
         {
             return true;
@@ -441,7 +501,7 @@ private:
             }
         }
         const char* const NextScene = std::getenv("LIMITLESS_DEMO_NEXT_SCENE");
-        if (NextScene != nullptr && !PublishScene(NextScene))
+        if (NextScene != nullptr && PublishScene(NextScene, Assets->Catalog).Error != nullptr)
         {
             LE_LOG(LogXBD, Info, "Keeping the active scene after replacement failed.");
             PendingPresentationReport = EScenePresentationReport::Preserved;
@@ -478,22 +538,176 @@ private:
 
     static void LogAssetFailure(const FAssetLoadDiagnostic& Diagnostic) noexcept { LE_LOG(LogXBD, Error, "Content asset '{}' ({}), dependency {}: load={}, file={}, format={}.", Diagnostic.Path.Data(), Diagnostic.Id.ToString().Data(), Diagnostic.DependencyId.ToString().Data(), static_cast<uint32>(Diagnostic.Result), DescribeFileSystemResult(Diagnostic.FileResult), static_cast<uint32>(Diagnostic.FormatResult)); }
 
+    static SharedPtr<FAssetCatalog> BuildContentCatalog(StringView AssetRoot, const char*& Error) noexcept
+    {
+        auto Catalog = TryMakeShared<FAssetCatalog>();
+        if (!Catalog)
+        {
+            LE_LOG(LogXBD, Error, "Could not allocate a content catalog.");
+            Error = "catalog_allocation_failed";
+            return {};
+        }
+        const FAssetMount Mount{"Game", AssetRoot};
+        FAssetLoadDiagnostic Diagnostic;
+        if (Catalog->Rebuild({&Mount, 1}, &Diagnostic) != EAssetLoadResult::Success)
+        {
+            LogAssetFailure(Diagnostic);
+            Error = "asset_catalog_error";
+            return {};
+        }
+        return Catalog;
+    }
+
+#if WITH_EDITOR
+    void LogEditorContentRefresh(const char* Status, const char* Code, const FUuid Candidate, const char* Navigation = "preserved") noexcept
+    {
+        LE_LOG(LogXBD, Info, "Editor content refresh {{\"status\":\"{}\",\"code\":\"{}\",\"active\":\"{}\",\"candidate\":\"{}\",\"navigation\":\"{}\"}}",
+               Status, Code, ActiveGeneration.ToString().Data(), Candidate.ToString().Data(), Navigation);
+    }
+
+    bool ReadPublishedGeneration(FDemoContentGeneration& Generation) noexcept
+    {
+        FDemoContentGenerationDiagnostic Diagnostic;
+        if (ResolveDemoContentGeneration(ContentPublicationRoot.View(), Generation, Diagnostic))
+        {
+            return true;
+        }
+        LE_LOG(LogXBD, Error, "Editor content source '{}': {} ({}).", ContentPublicationRoot.Data(), Diagnostic.Message, DescribeFileSystemResult(Diagnostic.FileResult));
+        LogEditorContentRefresh("rejected", Diagnostic.Code, Diagnostic.GenerationId);
+        return false;
+    }
+
+    static EFileSystemResult ResolveAuthorScenePath(StringView Path, String& Out) noexcept
+    {
+        // ResolveContentFile verifies that the parent is absolute and that the
+        // leaf is an ordinary file. Scene writes are left to the author.
+        std::size_t NameOffset = Path.Size();
+        while (NameOffset != 0)
+        {
+            const char Character = Path[NameOffset - 1];
+#if PLATFORM_WINDOWS
+            if (Character == '/' || Character == '\\')
+#else
+            if (Character == '/')
+#endif
+            {
+                break;
+            }
+            --NameOffset;
+        }
+        if (NameOffset == 0 || NameOffset == Path.Size())
+        {
+            return EFileSystemResult::InvalidPath;
+        }
+        return ResolveContentFile(Path.Substr(0, NameOffset), Path.Substr(NameOffset, Path.Size() - NameOffset), Out);
+    }
+
+    bool InitializePublishedContent(StringView PublicationRoot) noexcept
+    {
+        const StringView AuthorScene(std::getenv("LIMITLESS_DEMO_SCENE"));
+        if (AuthorScene.IsEmpty())
+        {
+            LE_LOG(LogXBD, Error, "Editor content requires LIMITLESS_DEMO_SCENE pointing to a separate absolute author scene path.");
+            LogEditorContentRefresh("rejected", "author_scene_required", {});
+            return false;
+        }
+        if (!ContentPublicationRoot.TryAssign(PublicationRoot))
+        {
+            LogEditorContentRefresh("rejected", "generation_out_of_memory", {});
+            return false;
+        }
+        FDemoContentGeneration Generation;
+        if (!ReadPublishedGeneration(Generation))
+        {
+            return false;
+        }
+        String ScenePath;
+        const auto SceneFile = ResolveAuthorScenePath(AuthorScene, ScenePath);
+        if (SceneFile != EFileSystemResult::Success || ScenePath.View() == Generation.ScenePath.View())
+        {
+            LE_LOG(LogXBD, Error, "Editor author scene '{}': expected a separate absolute author scene file ({}).", AuthorScene.Data(), DescribeFileSystemResult(SceneFile));
+            LogEditorContentRefresh("rejected", "author_scene_invalid", Generation.Id);
+            return false;
+        }
+
+        const char* CatalogError = nullptr;
+        const auto Catalog = BuildContentCatalog(Generation.AssetRoot.View(), CatalogError);
+        if (!Catalog)
+        {
+            LogEditorContentRefresh("rejected", CatalogError, Generation.Id);
+            return false;
+        }
+        const auto Result = PublishScene(ScenePath.View(), Catalog);
+        if (Result.Error != nullptr)
+        {
+            LogEditorContentRefresh("rejected", Result.Error, Generation.Id);
+            return false;
+        }
+        ActiveGeneration = Generation.Id;
+        LogEditorContentRefresh("mounted", "ok", ActiveGeneration, "reseeded");
+        return true;
+    }
+
+    void RefreshPublishedContent() noexcept
+    {
+        if (ContentPublicationRoot.IsEmpty())
+        {
+            LogEditorContentRefresh("rejected", "publication_not_configured", {});
+            return;
+        }
+
+        FDemoContentGeneration Candidate;
+        if (!ReadPublishedGeneration(Candidate))
+        {
+            return;
+        }
+        if (Candidate.Id == ActiveGeneration)
+        {
+            LogEditorContentRefresh("unchanged", "same_generation", Candidate.Id);
+            return;
+        }
+        if (PendingAssetPresentation)
+        {
+            LogEditorContentRefresh("rejected", "refresh_pending", Candidate.Id);
+            return;
+        }
+
+        const char* CatalogError = nullptr;
+        const auto Catalog = BuildContentCatalog(Candidate.AssetRoot.View(), CatalogError);
+        if (!Catalog)
+        {
+            LogEditorContentRefresh("rejected", CatalogError, Candidate.Id);
+            return;
+        }
+        const auto Result = PublishScene(ActiveScenePath.View(), Catalog, false, true);
+        if (Result.Error != nullptr)
+        {
+            LogEditorContentRefresh("rejected", Result.Error, Candidate.Id);
+            return;
+        }
+        ActiveGeneration = Candidate.Id;
+        PendingAssetNavigation = Result.bNavigationPreserved ? "preserved" : "reseeded";
+        PendingAssetPresentation = true;
+    }
+#endif
+
     bool InitializeContent(StringView ExecutableDirectory) noexcept
     {
+#if WITH_EDITOR
+        if (const char* EditorContent = std::getenv("LIMITLESS_EDITOR_CONTENT"))
+        {
+            return InitializePublishedContent(EditorContent);
+        }
+#endif
         const char* RootOverride = std::getenv("LIMITLESS_DEMO_CONTENT");
         const String ContentRoot = RootOverride != nullptr ? String(RootOverride) : JoinDemoPath(ExecutableDirectory, "DemoContent");
         const String AssetRoot = JoinDemoPath(ContentRoot.View(), "Assets");
-        const FAssetMount Mount{"Game", AssetRoot.View()};
-        FAssetLoadDiagnostic Diagnostic;
-        if (Catalog.Rebuild({&Mount, 1}, &Diagnostic) != EAssetLoadResult::Success)
-        {
-            LogAssetFailure(Diagnostic);
-            return false;
-        }
+        const char* CatalogError = nullptr;
+        const auto Catalog = BuildContentCatalog(AssetRoot.View(), CatalogError);
         const char* InputOverride = std::getenv("LIMITLESS_DEMO_SCENE");
         const String ScenePath = InputOverride != nullptr ? String(InputOverride) : JoinDemoPath(ContentRoot.View(), "Scene.json");
         bTestAfterNavigation = StringView(std::getenv("LIMITLESS_DEMO_TEST_AFTER_NAVIGATION")) == StringView("1");
-        return PublishScene(ScenePath.View(), true) && (bTestAfterNavigation || SaveRequestedScene());
+        return Catalog && PublishScene(ScenePath.View(), Catalog, true).Error == nullptr && (bTestAfterNavigation || SaveRequestedScene());
     }
 
     bool SaveRequestedScene() noexcept
@@ -566,13 +780,14 @@ private:
         return true;
     }
 
-    bool PublishScene(StringView Path, const bool bApplyStartupEdit = false) noexcept
+    FScenePublicationResult PublishScene(StringView Path, const SharedPtr<FAssetCatalog>& Catalog, const bool bApplyStartupEdit = false,
+                                         [[maybe_unused]] const bool bPreserveNavigation = false) noexcept
     {
         String CandidatePath;
         if (!CandidatePath.TryAssign(Path))
         {
             LE_LOG(LogXBD, Error, "Could not store the candidate scene path.");
-            return false;
+            return {"scene_allocation_failed"};
         }
         auto CandidateAssets = TryMakeUnique<FDemoSceneAssets>(Catalog);
         UniquePtr<FScene> Candidate;
@@ -581,29 +796,40 @@ private:
         if (!CandidateAssets)
         {
             LE_LOG(LogXBD, Error, "Could not allocate a scene asset session for '{}'.", PrintablePath);
-            return false;
+            return {"scene_allocation_failed"};
         }
         if (!Renderer.InitializeAssetProvider(CandidateAssets->Provider))
         {
             LE_LOG(LogXBD, Error, "Could not initialize material GPU resources for '{}'.", PrintablePath);
-            return false;
+            return {"scene_asset_provider_failed"};
         }
         const FSceneAssetResolver Resolver{CandidateAssets.Get(), &CandidateAssets->GetRegistry(), &ResolveMesh, &ResolveMaterial};
         const auto Result = LoadScene(CandidatePath.View(), Resolver, Candidate, &Diagnostic);
         if (Result != ESceneOperationResult::Success)
         {
             LE_LOG(LogXBD, Error, "Scene '{}': {} ({}:{} {}, entity {}, field {}, asset {}, file {}).", PrintablePath, DescribeSceneOperationResult(Result), Diagnostic.Document.Line, Diagnostic.Document.Column, DescribeSceneDocumentResult(Diagnostic.Document.Result), Diagnostic.Entity.ToString().Data(), String(Diagnostic.Document.Field).Data(), Diagnostic.Asset.ToString().Data(), DescribeFileSystemResult(Diagnostic.FileResult));
-            return false;
+            switch (Result)
+            {
+            case ESceneOperationResult::InvalidDocument:
+                return {"scene_document_error"};
+            case ESceneOperationResult::FileReadFailed:
+                return {"scene_file_error"};
+            case ESceneOperationResult::AssetResolutionFailed:
+            case ESceneOperationResult::InvalidAssetHandle:
+                return {"scene_asset_error"};
+            default:
+                return {"scene_load_failed"};
+            }
         }
         if (bApplyStartupEdit && !ApplyRequestedSceneEdit(*Candidate))
         {
-            return false;
+            return {"scene_startup_edit_failed"};
         }
         FWorld& CandidateWorld = Candidate->GetWorld();
         if (CandidateWorld.CompileNativeGameplaySystemSchedule() != ENativeGameplayScheduleResult::Success)
         {
             LE_LOG(LogXBD, Error, "Could not compile gameplay schedule for '{}'.", PrintablePath);
-            return false;
+            return {"scene_schedule_failed"};
         }
 
         FWorldRenderSnapshot Preview;
@@ -635,41 +861,51 @@ private:
                     {
                         LE_LOG(LogXBD, Error, "Scene '{}': entity {} mesh {} has an invalid normal transform.", PrintablePath, EntityId.ToString().Data(), MeshId.ToString().Data());
                     }
-                    return false;
+                    return {"scene_preflight_failed"};
                 }
             }
             LE_LOG(LogXBD, Error, "Scene '{}' is not renderable: {} (mesh {}).", PrintablePath, static_cast<uint32>(PreviewReport.Result), PreviewReport.MeshIndex);
-            return false;
+            return {"scene_preflight_failed"};
         }
 
         if (Scene)
         {
             if (Scene->GetWorld().GetTickState() != EWorldTickState::Idle)
             {
-                return false;
+                return {"scene_world_busy"};
             }
             FrameScheduler.WaitForAllFrames();
         }
+        const FWorldRenderCameraPose& CameraPose = Preview.GetAuthoredPrimaryCameraPose();
+#if WITH_EDITOR
+        FSceneEntityId CameraSceneId;
+        (void)Candidate->TryGetEntityId(CameraPose.Entity, CameraSceneId);
+        const bool bKeepNavigation = bPreserveNavigation && CameraSceneId.IsValid() && CameraSceneId == NavigationSceneCameraId;
+        NavigationSceneCameraId = CameraSceneId;
+#else
+        constexpr bool bKeepNavigation = false;
+#endif
         Scene = std::move(Candidate);
         Assets = std::move(CandidateAssets);
         ActiveScenePath.Swap(CandidatePath);
-        const FWorldRenderCameraPose& CameraPose = Preview.GetAuthoredPrimaryCameraPose();
         NavigationCameraId = CameraPose.PrimitiveId;
-        CameraNavigation.Start(CameraPose.CameraToWorld);
-        WindowModule.ResetInputForScene();
+        if (!bKeepNavigation)
+        {
+            CameraNavigation.Start(CameraPose.CameraToWorld);
+            WindowModule.ResetInputForScene();
+        }
         LE_LOG(LogXBD, Info, "Loaded scene '{}' with {} entities and {} visible meshes.", ActiveScenePath.Data(), Scene->GetWorld().GetEntityCount(), Preview.GetRenderScene().Meshes.Size());
         const auto& Pose = CameraPose.CameraToWorld;
         const auto& Projection = Preview.GetRenderScene().Cameras[0].Projection;
         LE_LOG(LogXBD, Info, "Authored camera position ({}, {}, {}), forward ({}, {}, {}), vertical FOV {} rad.", Pose(0, 3), Pose(1, 3), Pose(2, 3), -Pose(0, 2), -Pose(1, 2), -Pose(2, 2), 2.0f * std::atan(1.0f / std::abs(Projection(1, 1))));
         LE_LOG(LogXBD, Info, "Scene texture uploads at publication: {}.", Assets->Provider.GetTextureUploadCount());
-        return true;
+        return {nullptr, bKeepNavigation};
     }
 
     static constexpr uint32 DefaultWindowWidth = 1280;
     static constexpr uint32 DefaultWindowHeight = 720;
 
     FDemoWindowRuntimeModule& WindowModule;
-    FAssetCatalog Catalog;
     UniquePtr<FDemoSceneAssets> Assets;
     UniquePtr<FScene> Scene;
     String ActiveScenePath;
@@ -681,8 +917,18 @@ private:
     FRenderFrameScheduler FrameScheduler;
     FDemoShaderBundle ShaderBundle;
     FSceneRenderer Renderer;
+#if WITH_EDITOR && PLATFORM_WINDOWS
+    FEditorShaderPreview ShaderPreview;
+#endif
     FPlatformWindowSize CachedWindowSize{DefaultWindowWidth, DefaultWindowHeight};
     EScenePresentationReport PendingPresentationReport = EScenePresentationReport::None;
+#if WITH_EDITOR
+    String ContentPublicationRoot;
+    FUuid ActiveGeneration;
+    FSceneEntityId NavigationSceneCameraId;
+    const char* PendingAssetNavigation = "preserved";
+    bool PendingAssetPresentation = false;
+#endif
     bool bCanRender = false;
     bool bNavigationUpdated = false;
     bool bTestAfterNavigation = false;

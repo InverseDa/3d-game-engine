@@ -27,6 +27,10 @@ EPlatformKey GetPlatformKey(const WPARAM VirtualKey) noexcept
         return EPlatformKey::D;
     case VK_F5:
         return EPlatformKey::F5;
+    case VK_F6:
+        return EPlatformKey::F6;
+    case VK_F7:
+        return EPlatformKey::F7;
     default:
         return EPlatformKey::Unknown;
     }

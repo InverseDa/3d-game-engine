@@ -1,4 +1,5 @@
 #include "Application/ApplicationMinimal.h"
+#include "AssetFormat/AssetFormat.h"
 #include "Containers/Array.h"
 #include "Containers/HashMap.h"
 #include "Containers/HashSet.h"
@@ -12,12 +13,18 @@
 #include "Math/Quaternion.h"
 #include "Math/Vector.h"
 #include "Platform/Platform.h"
+#include "RHI/RHIBindGroup.h"
 #include "RHI/RHIBuffer.h"
 #include "RHI/RHICommandAllocator.h"
 #include "RHI/RHICommandList.h"
 #include "RHI/RHIDevice.h"
+#include "RHI/RHISampler.h"
+#include "RHI/RHIShader.h"
 #include "RFGMinimal.h"
+#include "Renderer/RenderAssetProvider.h"
 #include "Renderer/RenderFrameScheduler.h"
+#include "Renderer/RenderScene.h"
+#include "Renderer/SceneRenderer.h"
 #include "Templates/Function.h"
 #include "Types/EngineTypes.h"
 #include "Types/RuntimeHandle.h"
@@ -60,6 +67,21 @@ struct FOtherStableIdTestDomain;
 struct FRuntimeHandleTestDomain;
 struct FOtherRuntimeHandleTestDomain;
 
+enum EScenePipelineEvent
+{
+    CreatePixelShader = 21,
+    CreateBasePassPipeline = 22,
+    DestroyPixelShader = 23,
+    DestroyBasePassPipeline = 24,
+};
+
+struct FSceneDrawCapture
+{
+    const LE::FRHIBindGroup* Material = nullptr;
+    char Revision = 0;
+    unsigned Draws = 0;
+};
+
 class FFakeRHICommandList final : public LE::FRHICommandList
 {
 public:
@@ -77,23 +99,54 @@ public:
 
     void Begin() override { ++BeginCount; }
     void End() override { ++EndCount; }
+    bool BeginChecked() override { return SceneDraw != nullptr; }
+    bool EndChecked() override { return SceneDraw != nullptr; }
+    bool TextureUploadBarrier(LE::FRHITexture*, LE::ERHIResourceState, LE::ERHIResourceState) override { return SceneDraw != nullptr; }
+    bool CopyBufferToTexture2D(LE::FRHIBuffer*, LE::FRHITexture*, LE::uint64) override { return SceneDraw != nullptr; }
     void ResourceBarriers(const LE::FRHIBarrierBatch&) override {}
     void BeginRenderPass(const LE::FRHIRenderPassDesc&) override {}
     void EndRenderPass() override {}
-    void SetGraphicsPipeline(LE::FRHIPipeline_Graphics*) override {}
+    void SetGraphicsPipeline(LE::FRHIPipeline_Graphics* Pipeline) override
+    {
+        if (SceneDraw != nullptr)
+        {
+            const auto& Desc = Pipeline->GetDesc();
+            bBasePass = Desc.Name.View() == LE::StringView("BasePassPipeline");
+            if (bBasePass)
+            {
+                SceneDraw->Revision = *static_cast<const char*>(Desc.PixelShader->GetByteCode());
+            }
+        }
+    }
     void SetViewport(const LE::FRHIViewport&) override {}
     void SetScissorRect(const LE::FRHIScissorRect&) override {}
     void SetVertexBuffer(LE::uint32, LE::FRHIBuffer*, LE::uint64) override {}
     void SetIndexBuffer(LE::FRHIBuffer*, LE::uint64, LE::EPixelFormat) override {}
-    void SetBindGroup(LE::uint32, LE::FRHIBindGroup*) override {}
+    void SetBindGroup(const LE::uint32 Index, LE::FRHIBindGroup* Group) override
+    {
+        if (bBasePass && Index == 0)
+        {
+            SceneDraw->Material = Group;
+        }
+    }
     void SetPushConstants(LE::EShaderStage, const void*, LE::uint32) override {}
     void Draw(LE::uint32, LE::uint32, LE::uint32) override {}
-    void DrawIndexed(LE::uint32, LE::uint32, LE::uint32, LE::int32, LE::uint32) override {}
+    void DrawIndexed(LE::uint32, LE::uint32, LE::uint32, LE::int32, LE::uint32) override
+    {
+        if (bBasePass)
+        {
+            ++SceneDraw->Draws;
+        }
+    }
 
     LE::Array<int>* Events = nullptr;
+    FSceneDrawCapture* SceneDraw = nullptr;
     int* DestroyCount = nullptr;
     int BeginCount = 0;
     int EndCount = 0;
+
+private:
+    bool bBasePass = false;
 };
 
 class FFakeRHICommandAllocator final : public LE::FRHICommandAllocator
@@ -220,13 +273,20 @@ public:
         }
     }
 
-    void* Map(LE::uint64, LE::uint64) override { return nullptr; }
+    void* Map(const LE::uint64 Offset, const LE::uint64 Size) override
+    {
+        return bMappable && Offset == 0 && Size == Desc.Size && Size <= sizeof(Bytes) ? Bytes : nullptr;
+    }
     void Unmap() override {}
     const LE::FRHIBufferDesc& GetDesc() const override { return Desc; }
 
     LE::FRHIBufferDesc Desc;
     LE::Array<int>* Events = nullptr;
     int* DestroyCount = nullptr;
+    bool bMappable = false;
+
+private:
+    char Bytes[256]{};
 };
 
 class FFakeRHITextureView final : public LE::FRHITextureView
@@ -239,6 +299,49 @@ public:
 
     LE::FRHITexture* Texture = nullptr;
     LE::FRHITextureViewDesc Desc;
+};
+
+template <typename Resource, typename Description> class TFakeDescribedResource : public Resource
+{
+public:
+    explicit TFakeDescribedResource(const Description& InDesc) : Desc(InDesc) {}
+    const Description& GetDesc() const override { return Desc; }
+
+private:
+    Description Desc;
+};
+
+class FFakeRHIShader final : public TFakeDescribedResource<LE::FRHIShader, LE::FRHIShaderDesc>
+{
+public:
+    using TFakeDescribedResource::TFakeDescribedResource;
+
+    ~FFakeRHIShader() override
+    {
+        if (Events != nullptr)
+        {
+            Events->PushBack(DestroyPixelShader);
+            Events->PushBack(*static_cast<const char*>(GetByteCode()));
+        }
+    }
+
+    LE::Array<int>* Events = nullptr;
+};
+
+class FFakeRHIPipeline final : public TFakeDescribedResource<LE::FRHIPipeline_Graphics, LE::FRHIPipelineDesc_Graphics>
+{
+public:
+    using TFakeDescribedResource::TFakeDescribedResource;
+
+    ~FFakeRHIPipeline() override
+    {
+        if (Events != nullptr)
+        {
+            Events->PushBack(DestroyBasePassPipeline);
+        }
+    }
+
+    LE::Array<int>* Events = nullptr;
 };
 
 class FFakeRHIQueue final : public LE::FRHIQueue
@@ -335,6 +438,7 @@ public:
         Buffer->Desc = Desc;
         Buffer->Events = Events;
         Buffer->DestroyCount = &DestroyedBuffers;
+        Buffer->bMappable = bCreateSceneResources;
         ++CreatedBuffers;
         return Buffer;
     }
@@ -351,9 +455,60 @@ public:
         ++CreatedTextures;
         return Texture;
     }
-    LE::FRHITextureView* CreateTextureView(const LE::FRHITextureViewDesc&) override { return nullptr; }
-    LE::FRHIShader* CreateShaderFromFile(LE::EShaderStage, const void*, LE::uint64, const LE::String&) override { return nullptr; }
-    LE::FRHIPipeline_Graphics* CreateGraphicsPipeline(const LE::FRHIPipelineDesc_Graphics&) override { return nullptr; }
+    LE::FRHITextureView* CreateTextureView(const LE::FRHITextureViewDesc& Desc) override
+    {
+        if (!bCreateSceneResources)
+        {
+            return nullptr;
+        }
+        auto* View = new FFakeRHITextureView(Desc.Texture);
+        View->Desc = Desc;
+        return View;
+    }
+    LE::FRHIShader* CreateShaderFromFile(const LE::EShaderStage Stage, const void* Bytes, const LE::uint64 Size, const LE::String& EntryPoint) override
+    {
+        if (!bCreateSceneResources)
+        {
+            return nullptr;
+        }
+        const bool bBasePassPixel = Stage == LE::EShaderStage::Pixel && EntryPoint.View() == LE::StringView("MainPS");
+        if (bBasePassPixel)
+        {
+            Events->PushBack(CreatePixelShader);
+            LastPixelCode = Bytes;
+            if (bFailPixelShader)
+            {
+                return nullptr;
+            }
+        }
+        LE::FRHIShaderDesc Desc;
+        Desc.Stage = Stage;
+        Desc.ByteCode = Bytes;
+        Desc.ByteCodeSize = Size;
+        Desc.EntryPoint = EntryPoint;
+        auto* Shader = new FFakeRHIShader(Desc);
+        Shader->Events = bBasePassPixel ? Events : nullptr;
+        return Shader;
+    }
+    LE::FRHIPipeline_Graphics* CreateGraphicsPipeline(const LE::FRHIPipelineDesc_Graphics& Desc) override
+    {
+        if (!bCreateSceneResources)
+        {
+            return nullptr;
+        }
+        const bool bBasePass = Desc.Name.View() == LE::StringView("BasePassPipeline");
+        if (bBasePass)
+        {
+            Events->PushBack(CreateBasePassPipeline);
+            if (bFailBasePass)
+            {
+                return nullptr;
+            }
+        }
+        auto* Pipeline = new FFakeRHIPipeline(Desc);
+        Pipeline->Events = bBasePass ? Events : nullptr;
+        return Pipeline;
+    }
     LE::FRHICommandAllocator* CreateCommandAllocator(LE::EQueueType) override
     {
         if (ShouldFailCreation())
@@ -375,6 +530,7 @@ public:
         ++CreatedCommandLists;
         auto* CommandList = new FFakeRHICommandList();
         CommandList->Events = Events;
+        CommandList->SceneDraw = bCreateSceneResources ? &SceneDraw : nullptr;
         CommandList->DestroyCount = &DestroyedCommandLists;
         return CommandList;
     }
@@ -404,9 +560,18 @@ public:
         return Fence;
     }
     LE::FRHISwapchain* CreateSwapchain(const LE::FRHISwapchainDesc&) override { return nullptr; }
-    LE::FRHIBindGroup* CreateBindGroup(const LE::FRHIBindGroupDesc&) override { return nullptr; }
-    LE::FRHIBindGroupLayout* CreateBindGroupLayout(const LE::FRHIBindGroupLayoutDesc&) override { return nullptr; }
-    LE::FRHISampler* CreateSampler(const LE::FRHISamplerDesc&) override { return nullptr; }
+    LE::FRHIBindGroup* CreateBindGroup(const LE::FRHIBindGroupDesc& Desc) override
+    {
+        return bCreateSceneResources ? new TFakeDescribedResource<LE::FRHIBindGroup, LE::FRHIBindGroupDesc>(Desc) : nullptr;
+    }
+    LE::FRHIBindGroupLayout* CreateBindGroupLayout(const LE::FRHIBindGroupLayoutDesc& Desc) override
+    {
+        return bCreateSceneResources ? new TFakeDescribedResource<LE::FRHIBindGroupLayout, LE::FRHIBindGroupLayoutDesc>(Desc) : nullptr;
+    }
+    LE::FRHISampler* CreateSampler(const LE::FRHISamplerDesc& Desc) override
+    {
+        return bCreateSceneResources ? new TFakeDescribedResource<LE::FRHISampler, LE::FRHISamplerDesc>(Desc) : nullptr;
+    }
 
 private:
     bool ShouldFailCreation()
@@ -417,6 +582,8 @@ private:
 
 public:
     FFakeRHIQueue Queue;
+    FSceneDrawCapture SceneDraw;
+    const void* LastPixelCode = nullptr;
     LE::Array<FFakeRHICommandAllocator*> Allocators;
     LE::Array<FFakeRHISemaphore*> Semaphores;
     LE::Array<FFakeRHIFence*> Fences;
@@ -435,6 +602,9 @@ public:
     bool LastFenceInitiallySignaled = false;
     bool bCreateOwnedTextures = false;
     bool bCreateOwnedBuffers = false;
+    bool bCreateSceneResources = false;
+    bool bFailPixelShader = false;
+    bool bFailBasePass = false;
 };
 
 struct FRenderFrameSchedulerFixture
@@ -1975,6 +2145,182 @@ int RunExplicitFrameLifecycleTests()
     return Failures;
 }
 
+struct FScenePipelineFixture
+{
+    static constexpr char OriginalRevision = 41;
+    static constexpr char NewRevision = 42;
+
+    ~FScenePipelineFixture()
+    {
+        Frame.Scheduler.WaitForAllFrames();
+        LE::FRenderAssetProvider::DestroyMaterial(&Provider, Material);
+        LE::FRenderAssetProvider::DestroyMesh(&Provider, Mesh);
+    }
+
+    bool Initialize()
+    {
+        Frame.Device.bCreateSceneResources = true;
+        Frame.Device.bCreateOwnedTextures = true;
+        Frame.Device.bCreateOwnedBuffers = true;
+        if (!Frame.Initialize())
+        {
+            return false;
+        }
+        ResizeBackBuffer(64, 64, LE::EPixelFormat::B8G8R8A8_SRGB);
+        static constexpr char OtherShader[] = {0, 0, 0, 0};
+        const char OriginalShader[] = {OriginalRevision, 0, 0, 0};
+        const LE::FSceneRenderShaders Shaders{
+            {OtherShader, "MainVS"},
+            {OriginalShader, "MainPS"},
+            {OtherShader, "CompositeVS"},
+            {OtherShader, "CompositePS"},
+            {OtherShader, "ShadowVS"},
+        };
+        if (!Renderer.Initialize(Frame.Device, Shaders, {64, 64, Frame.Texture.Desc.Format}) || !Renderer.InitializeAssetProvider(Provider))
+        {
+            return false;
+        }
+
+        LE::FMeshAssetData Geometry;
+        Geometry.Positions = {
+            LE::Math::Vector3f(-0.5f, -0.5f, 0.0f),
+            LE::Math::Vector3f(0.5f, -0.5f, 0.0f),
+            LE::Math::Vector3f(0.0f, 0.5f, 0.0f),
+        };
+        Geometry.Indices = {0, 2, 1};
+        Geometry.BoundsMin = LE::Math::Vector3f(-0.5f, -0.5f, 0.0f);
+        Geometry.BoundsMax = LE::Math::Vector3f(0.5f, 0.5f, 0.0f);
+        LE::FCpuTextureAsset Texture;
+        Texture.Width = 1;
+        Texture.Height = 1;
+        Texture.Pixels = {12, 34, 56, 255};
+        LE::FMaterialAssetData MaterialData;
+        auto& Primitive = Scene.Meshes.EmplaceBack();
+        if (!LE::FAssetId::TryParse("e8100000-0000-4000-8000-000000000001", MaterialData.BaseColorTexture) ||
+            !LE::FAssetId::TryParse("e8100000-0000-4000-8000-000000000002", Primitive.MaterialAssetId))
+        {
+            return false;
+        }
+        Mesh = LE::FRenderAssetProvider::CreateMesh(&Provider, Geometry);
+        Material = LE::FRenderAssetProvider::CreateMaterial(&Provider, MaterialData, &Texture);
+        Primitive.PrimitiveId = {1, 1};
+        Primitive.Mesh = Mesh;
+        Primitive.Material = Material;
+        auto& Camera = Scene.Cameras.EmplaceBack();
+        Camera.PrimitiveId = {1, 2};
+        Camera.ViewportWidth = 64;
+        Camera.ViewportHeight = 64;
+        return Mesh != nullptr && Material != nullptr;
+    }
+
+    void ResizeBackBuffer(const LE::uint32 Width, const LE::uint32 Height, const LE::EPixelFormat Format)
+    {
+        Frame.Texture.Desc.Width = Width;
+        Frame.Texture.Desc.Height = Height;
+        Frame.Texture.Desc.Format = Format;
+        Frame.Texture.Desc.bIsRenderTarget = true;
+    }
+
+    LE::FRenderFrameResult Record()
+    {
+        Frame.Device.SceneDraw = {};
+        return Frame.Scheduler.ExecuteFrame(&Frame.Swapchain, [this](LE::FRenderFrameScope& Scope) {
+            return Renderer.RecordFrame(Scope, Frame.Swapchain, Scene);
+        });
+    }
+
+    LE::FSceneShaderBytecode Candidate() const { return {{Bytes + 1, sizeof(Bytes) - 1}, "MainPS"}; }
+
+    FRenderFrameSchedulerFixture Frame;
+    LE::FSceneRenderer Renderer;
+    LE::FRenderAssetProvider Provider;
+    LE::FRenderScene Scene;
+    LE::FMeshAsset* Mesh = nullptr;
+    LE::FMaterialAsset* Material = nullptr;
+    alignas(LE::uint32) char Bytes[5] = {0, NewRevision, 0, 0, 0};
+};
+
+int RunBasePassShaderReplacementTests()
+{
+    using namespace LE;
+    using EInstall = EBasePassPixelShaderInstallResult;
+    FScenePipelineFixture Fixture;
+    if (!Fixture.Initialize())
+    {
+        return Expect(false, "BasePass shader replacement initializes a shadow-enabled scene and material provider");
+    }
+    auto& Frame = Fixture.Frame;
+    auto& Device = Frame.Device;
+    const auto OriginalFrame = Fixture.Record();
+    const auto* MaterialBinding = Device.SceneDraw.Material;
+    int Failures = Expect(OriginalFrame.PresentStatus == ERHISwapchainStatus::Success &&
+                          Device.SceneDraw.Revision == Fixture.OriginalRevision && Device.SceneDraw.Draws == 1 &&
+                          MaterialBinding != nullptr && Fixture.Provider.GetTextureUploadCount() == 1,
+                          "Packaged BasePass records an indexed draw using the uploaded material");
+
+    Device.bFailPixelShader = true;
+    Frame.Events.Clear();
+    const int ShaderFailure[] = {CreatePixelShader};
+    Failures += Expect(Fixture.Renderer.InstallBasePassPixelShader(Frame.Scheduler, Fixture.Candidate()) == EInstall::ShaderCreationFailed &&
+                       ExplicitFrameEventsEqual(Frame.Events, ShaderFailure, 1),
+                       "Shader creation failure leaves the active pipeline and in-flight frames alone");
+    Fixture.Record();
+    Failures += Expect(Device.SceneDraw.Revision == Fixture.OriginalRevision && Device.SceneDraw.Draws == 1,
+                       "The old BasePass still records after a Shader creation failure");
+    Device.bFailPixelShader = false;
+
+    Device.bFailBasePass = true;
+    Frame.Events.Clear();
+    const int PipelineFailure[] = {CreatePixelShader, CreateBasePassPipeline, DestroyPixelShader, Fixture.NewRevision};
+    Failures += Expect(Fixture.Renderer.InstallBasePassPixelShader(Frame.Scheduler, Fixture.Candidate()) == EInstall::PipelineCreationFailed &&
+                       ExplicitFrameEventsEqual(Frame.Events, PipelineFailure, 4),
+                       "Pipeline creation failure releases only the candidate Shader while its bytecode is live");
+    Fixture.Record();
+    Failures += Expect(Device.SceneDraw.Revision == Fixture.OriginalRevision && Device.SceneDraw.Draws == 1,
+                       "The old BasePass still records after a pipeline creation failure");
+    Device.bFailBasePass = false;
+
+    Frame.Events.Clear();
+    const int SuccessfulInstall[] = {CreatePixelShader, CreateBasePassPipeline, 1, 1, DestroyBasePassPipeline, DestroyPixelShader, Fixture.OriginalRevision};
+    Failures += Expect(Fixture.Renderer.InstallBasePassPixelShader(Frame.Scheduler, Fixture.Candidate()) == EInstall::Success &&
+                       ExplicitFrameEventsEqual(Frame.Events, SuccessfulInstall, 7) && Device.LastPixelCode != Fixture.Candidate().Code.Data() &&
+                       reinterpret_cast<std::uintptr_t>(Device.LastPixelCode) % alignof(uint32) == 0,
+                       "Replacement copies aligned bytecode and waits for both submitted slots before releasing the old pipeline and Shader in order");
+    Fixture.Bytes[1] = 0;
+    Frame.Swapchain.PresentStatus = ERHISwapchainStatus::OutOfDate;
+    const auto OutOfDate = Fixture.Record();
+    Failures += Expect(OutOfDate.Action == ERenderFrameAction::RecreateSwapchain && Device.SceneDraw.Revision == Fixture.NewRevision &&
+                       Device.SceneDraw.Material == MaterialBinding && Device.SceneDraw.Draws == 1,
+                       "The next frame records the replacement with the existing material despite an out-of-date present");
+    Frame.Swapchain.Resize(128, 96);
+    Fixture.ResizeBackBuffer(128, 96, EPixelFormat::R8G8B8A8_UNORM);
+    Fixture.Scene.Cameras[0].ViewportWidth = 128;
+    Fixture.Scene.Cameras[0].ViewportHeight = 96;
+    Frame.Swapchain.PresentStatus = ERHISwapchainStatus::Success;
+    const bool bResized = Fixture.Renderer.Resize(Frame.Scheduler, {128, 96, Frame.Texture.Desc.Format});
+    const auto AfterResize = Fixture.Record();
+    Failures += Expect(bResized && AfterResize.PresentStatus == ERHISwapchainStatus::Success &&
+                       Device.SceneDraw.Revision == Fixture.NewRevision && Device.SceneDraw.Material == MaterialBinding &&
+                       Device.SceneDraw.Draws == 1 && Fixture.Provider.GetTextureUploadCount() == 1,
+                       "Swapchain recreation retains the replacement BasePass and the existing asset provider");
+
+    EInstall DuringRecord = EInstall::Success;
+    Frame.Scheduler.ExecuteFrame(&Frame.Swapchain, [&](FRenderFrameScope& Scope) {
+        DuringRecord = Fixture.Renderer.InstallBasePassPixelShader(Frame.Scheduler, Fixture.Candidate());
+        return Fixture.Renderer.RecordFrame(Scope, Frame.Swapchain, Fixture.Scene);
+    });
+    Failures += Expect(DuringRecord == EInstall::InvalidArguments, "BasePass replacement is rejected inside frame recording");
+
+    Fixture.Bytes[1] = Fixture.OriginalRevision;
+    Device.Fences[0]->WaitResult = ERHIFenceWaitResult::DeviceLost;
+    Frame.Events.Clear();
+    const int RetirementFailure[] = {CreatePixelShader, CreateBasePassPipeline, 1, DestroyBasePassPipeline, DestroyPixelShader, Fixture.OriginalRevision};
+    Failures += Expect(Fixture.Renderer.InstallBasePassPixelShader(Frame.Scheduler, Fixture.Candidate()) == EInstall::FrameRetirementFailed &&
+                       ExplicitFrameEventsEqual(Frame.Events, RetirementFailure, 6) && Fixture.Record().Action == ERenderFrameAction::Exit,
+                       "Device loss during retirement discards the candidate pipeline before its Shader and leaves the scheduler terminal");
+    return Failures;
+}
+
 int RunRFGTransientSlotLifetimeTests()
 {
     int Failures = 0;
@@ -2819,6 +3165,7 @@ int main(const int ArgCount, char** Arguments)
     FailureCount += RunMathQuaternionTests();
     FailureCount += RunMathLayoutTests();
     FailureCount += RunExplicitFrameLifecycleTests();
+    FailureCount += RunBasePassShaderReplacementTests();
     FailureCount += RunRFGTransientSlotLifetimeTests();
     FailureCount += RunPlatformContractsTests();
     FailureCount += RunRuntimeModuleTests();

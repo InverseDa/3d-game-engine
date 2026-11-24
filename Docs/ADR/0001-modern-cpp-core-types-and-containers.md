@@ -215,6 +215,11 @@ Debug 构建至少检查 bounds、空 view 解引用、无效 alignment、size/c
 
 ## 10. Standard Library 使用边界
 
+新增或修改引擎调用时，通过引擎接口使用 C++ 标准库和第三方 C++ 库提供的能力。
+优先复用已有接口。缺少通用能力时，在 Core 对应模块补充接口，例如需要 `std::max` 时，
+可在现有数学命名空间提供 `LE::Math::Max`。模块专用依赖由所属模块的适配层封装。
+封装层可在实现中直接调用底层库，调用方只依赖引擎定义的接口和语义。
+
 C5 完成后，非 `ThirdParty` 引擎代码禁止拥有 storage/lifetime 的 Standard Library 类型，
 包括但不限于：
 
@@ -223,10 +228,9 @@ C5 完成后，非 `ThirdParty` 引擎代码禁止拥有 storage/lifetime 的 St
 - `std::unique_ptr`、`shared_ptr`、`weak_ptr`；
 - 作为持久成员或公开 API 的 `std::optional`、`std::function` 及其他拥有对象。
 
-禁令不扩展到有价值的非 owning/语言支持设施：algorithms、ranges（在语言基线允许时）、
-type traits、concept 替代的 C++17 traits、atomics、mutex/locks、同步原语、`move`/`forward`、
-numeric limits、chrono，以及其他不把 Standard Library ownership/ABI 泄漏进引擎接口的
-设施。P0 不为 atomics 和 synchronization 做 cosmetic wrapper。
+通用库和适配层的实现可使用 algorithms、ranges（在语言基线允许时）、type traits、
+atomics、mutex/locks、同步原语、`move`/`forward`、numeric limits、chrono 等非 owning
+或语言支持设施。按引擎调用方实际需要提供接口，保持依赖和相关语义集中。
 
 允许的 interoperability boundary 必须窄且有文档，例如 spdlog callback、Vulkan 输入数组、
 OS API 或一次性的第三方转换。边界应位于 Private/adapter 层，把数据立即复制/观察为引擎

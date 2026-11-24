@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Renderer/RenderScene.h"
+#include "World/Entity.h"
 
 namespace LE
 {
@@ -10,6 +11,7 @@ struct FWorldRenderCameraPose
 {
     FRenderPrimitiveId PrimitiveId;
     Math::Matrix4f CameraToWorld = Math::Matrix4f::Identity();
+    FEntity Entity;
 };
 
 // An owning, immutable-to-consumers CPU snapshot for one synchronous render

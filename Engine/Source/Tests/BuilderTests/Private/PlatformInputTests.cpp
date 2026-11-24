@@ -109,24 +109,24 @@ bool TestInputQueue()
     return bSuccess;
 }
 
-bool TestReloadInput()
+bool TestReloadInput(EPlatformKey ReloadKey, EPlatformKey OtherReloadKey)
 {
     constexpr FPlatformWindowId WindowId = 1;
     FPlatformWindowInput Input;
     const FPlatformInputFrame& Frame = Input.GetFrame();
-    const FPlatformEvent Press{EPlatformEventType::KeyPressed, WindowId, 0, 0, EPlatformKey::F5};
+    const FPlatformEvent Press{EPlatformEventType::KeyPressed, WindowId, 0, 0, ReloadKey};
     FPlatformEvent Repeat = Press;
     Repeat.bRepeat = true;
 
     Input.Apply(WindowId, Press);
-    bool bSuccess = ExpectInput(Frame.WasKeyPressed(EPlatformKey::F5) && !Frame.WasKeyPressed(EPlatformKey::W), "F5 records a dedicated reload edge");
+    bool bSuccess = ExpectInput(Frame.WasKeyPressed(ReloadKey) && !Frame.WasKeyPressed(OtherReloadKey) && !Frame.WasKeyPressed(EPlatformKey::W), "reload keys record independent press edges");
     Input.ResetKeysAndMotion();
     Input.BeginFrame();
     Input.Apply(WindowId, Repeat);
-    bSuccess &= ExpectInput(!Frame.WasKeyPressed(EPlatformKey::F5), "holding F5 after scene publication does not request a second reload");
-    Input.Apply(WindowId, {EPlatformEventType::KeyReleased, WindowId, 0, 0, EPlatformKey::F5});
+    bSuccess &= ExpectInput(!Frame.WasKeyPressed(ReloadKey), "holding a reload key after publication does not request a second reload");
+    Input.Apply(WindowId, {EPlatformEventType::KeyReleased, WindowId, 0, 0, ReloadKey});
     Input.Apply(WindowId, Press);
-    bSuccess &= ExpectInput(Frame.WasKeyPressed(EPlatformKey::F5), "releasing and pressing F5 requests another reload");
+    bSuccess &= ExpectInput(Frame.WasKeyPressed(ReloadKey), "releasing and pressing a reload key requests another reload");
     return bSuccess;
 }
 
@@ -136,8 +136,10 @@ bool RunPlatformInputTests()
 {
     const bool bWindowInput = TestWindowInput();
     const bool bEventQueue = TestInputQueue();
-    const bool bReloadInput = TestReloadInput();
-    return bWindowInput && bEventQueue && bReloadInput;
+    const bool bSceneReload = TestReloadInput(EPlatformKey::F5, EPlatformKey::F6);
+    const bool bAssetRefresh = TestReloadInput(EPlatformKey::F6, EPlatformKey::F5);
+    const bool bShaderPreview = TestReloadInput(EPlatformKey::F7, EPlatformKey::F6);
+    return bWindowInput && bEventQueue && bSceneReload && bAssetRefresh && bShaderPreview;
 }
 
 } // namespace LE

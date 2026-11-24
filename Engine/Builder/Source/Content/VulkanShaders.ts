@@ -10,6 +10,8 @@ export interface VulkanShader {
     readonly EntryPoint: string;
 }
 
+export const BasePassShadowPixelShader = { Name: "BasePassShadowPS", Stage: "frag", EntryPoint: "MainPS" } as const;
+
 const CompilerAction = fileURLToPath(new URL("./CompileVulkanShader.ts", import.meta.url));
 const ActionSupport = fileURLToPath(import.meta.url);
 const BytecodeMagic = 0x07230203;
@@ -17,8 +19,12 @@ const BytecodeHeaderBytes = 5 * 4;
 const MaxBytecodeBytes = 16 * 1024 * 1024;
 
 export function FindVulkanShaderCompiler(): string | null {
+    return FindVulkanShaderTool("glslangValidator");
+}
+
+export function FindVulkanShaderTool(Tool: string): string | null {
     const IsWindows = process.platform === "win32";
-    const Name = IsWindows ? "glslangValidator.exe" : "glslangValidator";
+    const Name = IsWindows ? `${Tool}.exe` : Tool;
     const Sdk = process.env.VULKAN_SDK;
     const Directories = Sdk && Path.isAbsolute(Sdk) ? [Path.join(Sdk, IsWindows ? "Bin" : "bin")] : [];
     Directories.push(...(process.env.PATH ?? "").split(Path.delimiter).map((Directory) => Directory.replace(/^"(.*)"$/, "$1")));
@@ -42,26 +48,47 @@ export function FindVulkanShaderCompiler(): string | null {
     return null;
 }
 
+export function VulkanShaderCompilerArguments(Source: string, Stage: string, EntryPoint: string, Output: string): string[] {
+    return ["-V", "-D", "-S", Stage, "-e", EntryPoint, Source, "-o", Output];
+}
+
 function IsWithin(Root: string, File: string): boolean {
     const Relative = Path.relative(Root, File);
     return Relative !== ".." && !Relative.startsWith(`..${Path.sep}`) && !Path.isAbsolute(Relative);
 }
 
 export function CollectVulkanShaderIncludes(ShaderRoot: string, ShaderSource: string): string[] {
-    const SourceRoot = FsSync.realpathSync(ShaderRoot);
-    const Source = FsSync.realpathSync(ShaderSource);
-    const Seen = new Set<string>();
-    function Visit(File: string): void {
+    const Files = WalkVulkanShaderSources(ShaderRoot, ShaderSource, (File) => FsSync.readFileSync(File, "utf-8"));
+    return Files.slice(1).sort();
+}
+
+export function WalkVulkanShaderSources(
+    ShaderRoot: string,
+    ShaderSource: string,
+    ReadSource: (File: string, Relative: string) => string,
+    PreserveRelativePaths = false,
+): string[] {
+    const ResolveRealPath = PreserveRelativePaths ? FsSync.realpathSync.native : FsSync.realpathSync;
+    const SourceRoot = ResolveRealPath(ShaderRoot);
+    const Source = ResolveRealPath(ShaderSource);
+    const Seen = new Map<string, string>();
+    function Visit(File: string, Requested: string): void {
         if (!IsWithin(SourceRoot, File)) {
             throw new Error(`Shader file escapes its source directory: ${File}`);
         }
-        if (Seen.has(File)) {
+        const PathInTree = PreserveRelativePaths ? Requested : File;
+        const Key = PreserveRelativePaths && process.platform === "win32" ? PathInTree.toLowerCase() : PathInTree;
+        const Previous = Seen.get(Key);
+        if (Previous !== undefined) {
+            if (Previous !== File) {
+                throw new Error("Case-conflicting shader include paths: " + Previous + " and " + File);
+            }
             return;
         }
-        Seen.add(File);
-        const Text = FsSync.readFileSync(File, "utf-8");
-        // Leave quoted tokens intact and blank comments without changing line structure.
-        const WithoutComments = Text.replace(
+        Seen.set(Key, File);
+        const Text = ReadSource(File, Path.relative(SourceRoot, PathInTree));
+        // Match logical preprocessor lines and leave quoted tokens intact when removing comments.
+        const WithoutComments = Text.replace(/^\uFEFF/, " ").replace(/\\\r?\n/g, "").replace(
             /"(?:[^"\\\r\n]|\\.)*"|'(?:[^'\\\r\n]|\\.)*'|\/\/[^\r\n]*|\/\*[\s\S]*?\*\//g,
             (Token) => Token.startsWith("/") ? Token.replace(/[^\r\n]/g, " ") : Token,
         );
@@ -70,22 +97,21 @@ export function CollectVulkanShaderIncludes(ShaderRoot: string, ShaderSource: st
             if (!Include || Path.isAbsolute(Include)) {
                 throw new Error(`Shader includes must be quoted relative paths in ${File}: ${Directive[0].trim()}`);
             }
-            const Candidate = Path.resolve(Path.dirname(File), Include);
+            const Candidate = Path.resolve(Path.dirname(PathInTree), Include);
             if (!IsWithin(SourceRoot, Candidate)) {
                 throw new Error(`Shader include "${Include}" escapes its source directory in ${File}`);
             }
             let Dependency: string;
             try {
-                Dependency = FsSync.realpathSync(Candidate);
+                Dependency = ResolveRealPath(Candidate);
             } catch (Reason) {
                 throw new Error(`Cannot resolve shader include "${Include}" in ${File}`, { cause: Reason });
             }
-            Visit(Dependency);
+            Visit(Dependency, Candidate);
         }
     }
-    Visit(Source);
-    Seen.delete(Source);
-    return [...Seen].sort();
+    Visit(Source, Path.resolve(SourceRoot, Path.relative(Path.resolve(ShaderRoot), ShaderSource)));
+    return [...Seen.values()];
 }
 
 export function CreateVulkanShaderActions(ShaderRoot: string, Shaders: readonly VulkanShader[]): CustomActionDescriptor[] {
@@ -115,21 +141,31 @@ export async function PublishVulkanShader(Output: string, Compile: (Candidate: s
     const Candidate = Path.join(Scratch, "shader.spv");
     try {
         await Compile(Candidate);
-        const { size: Size } = await Fs.stat(Candidate);
-        if (Size < BytecodeHeaderBytes || Size > MaxBytecodeBytes || (Size % 4) !== 0) {
-            throw new Error(`Invalid SPIR-V byte count: ${Size}`);
-        }
-        const Bytes = await Fs.readFile(Candidate);
-        if (Bytes.readUInt32LE(0) !== BytecodeMagic) {
-            throw new Error("Invalid SPIR-V magic");
-        }
-        const Version = Bytes.readUInt32LE(4);
-        if ((Version & 0xff0000ff) !== 0 || (Version >>> 16) === 0 || Bytes.readUInt32LE(12) === 0 || Bytes.readUInt32LE(16) !== 0) {
-            throw new Error("Invalid SPIR-V header");
-        }
+        await CheckVulkanShaderBytecode(Candidate);
         await Fs.rename(Candidate, Destination);
     } finally {
         await Fs.rm(Candidate, { force: true });
         await Fs.rmdir(Scratch);
+    }
+}
+
+export async function CheckVulkanShaderBytecode(File: string): Promise<void> {
+    const Handle = await Fs.open(File, "r");
+    try {
+        const { size: Size } = await Handle.stat();
+        if (Size < BytecodeHeaderBytes || Size > MaxBytecodeBytes || (Size % 4) !== 0) {
+            throw new Error(`Invalid SPIR-V byte count: ${Size}`);
+        }
+        const Header = Buffer.alloc(BytecodeHeaderBytes);
+        const { bytesRead: Read } = await Handle.read(Header, 0, Header.length, 0);
+        if (Read !== Header.length || Header.readUInt32LE(0) !== BytecodeMagic) {
+            throw new Error("Invalid SPIR-V magic or truncated header");
+        }
+        const Version = Header.readUInt32LE(4);
+        if ((Version & 0xff0000ff) !== 0 || (Version >>> 16) === 0 || Header.readUInt32LE(12) === 0 || Header.readUInt32LE(16) !== 0) {
+            throw new Error("Invalid SPIR-V header");
+        }
+    } finally {
+        await Handle.close();
     }
 }

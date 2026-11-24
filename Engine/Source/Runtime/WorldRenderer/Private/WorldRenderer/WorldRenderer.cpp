@@ -537,7 +537,7 @@ EWorldRenderSnapshotBuildResult FWorldRenderer::BuildSnapshot(const FWorld& Worl
         std::sort(Candidate.Meshes.Data(), Candidate.Meshes.Data() + Candidate.Meshes.Size(), &MeshProxyLess);
     }
     OutSnapshot.RenderScene = std::move(Candidate);
-    OutSnapshot.AuthoredPrimaryCameraPose = {PrimaryCameraId, CameraToWorld};
+    OutSnapshot.AuthoredPrimaryCameraPose = {PrimaryCameraId, CameraToWorld, PrimaryCameraEntity};
     OutSnapshot.FrameIndex = Context.FrameIndex;
     OutSnapshot.bPublished = true;
     if (OutReport != nullptr)

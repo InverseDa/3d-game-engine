@@ -33,6 +33,15 @@ struct FSceneRenderTargetDesc
     EPixelFormat Format = EPixelFormat::Unknown;
 };
 
+enum class EBasePassPixelShaderInstallResult : uint8
+{
+    Success,
+    InvalidArguments,
+    ShaderCreationFailed,
+    PipelineCreationFailed,
+    FrameRetirementFailed,
+};
+
 // Owns the default scene pipeline and attachments. The application owns the
 // device, swapchain, frame scheduler and scene asset sessions.
 class RENDERER_API FSceneRenderer final : public FNonCopyable
@@ -48,6 +57,11 @@ public:
     // A failed resize preserves the previous offscreen resources. A successful
     // resize retires them only after all submitted frame slots have drained.
     bool Resize(FRenderFrameScheduler& Scheduler, const FSceneRenderTargetDesc& Target);
+
+    // Call between frames with this scene renderer's scheduler. The caller
+    // validates bytecode compatibility with the current BasePass interface.
+    // The renderer copies the bytecode and preserves the pipeline on failure.
+    EBasePassPixelShaderInstallResult InstallBasePassPixelShader(FRenderFrameScheduler& Scheduler, const FSceneShaderBytecode& Bytecode);
     ERenderFrameRecordResult RecordFrame(FRenderFrameScope& Frame, FRHISwapchain& Swapchain, const FRenderScene& Scene);
 
     // Drain submitted frames and release all asset providers before shutdown.

@@ -14,6 +14,7 @@ class FRHIFence;
 class FRHIResource;
 class FRHISemaphore;
 class FRenderFrameScheduler;
+class FSceneRenderer;
 
 enum class ERenderFrameAction : uint8
 {
@@ -56,6 +57,7 @@ public:
 
 private:
     friend class FRenderFrameScheduler;
+    friend class FSceneRenderer;
 
     FRenderFrameScheduler* Scheduler = nullptr;
     FRHICommandList* CommandList = nullptr;
@@ -106,11 +108,13 @@ private:
     };
 
     bool DeferReleaseFromScope(uint32 SlotIndex, uint64 Generation, FRHIResource* Resource);
+    bool IsAtFrameBoundaryFor(const FRHIDevice& InDevice) const noexcept;
     void DrainQueueForRetirement();
     void FlushDeferredReleases(FFrameSlot& Slot) noexcept;
     void DestroySlots() noexcept;
 
     friend class FRenderFrameScope;
+    friend class FSceneRenderer;
 
     FRHIDevice* Device = nullptr;
     FFrameSlot Slots[FrameSlotCount];

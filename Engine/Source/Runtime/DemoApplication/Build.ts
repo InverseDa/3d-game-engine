@@ -8,7 +8,7 @@ import {
 import { readFileSync, readdirSync } from "node:fs";
 import * as Path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CreateVulkanShaderActions } from "../../../Builder/Source/Content/VulkanShaders.ts";
+import { BasePassShadowPixelShader, CreateVulkanShaderActions } from "../../../Builder/Source/Content/VulkanShaders.ts";
 
 export default class DemoApplicationBuild extends ModuleBuild {
     public readonly Name = "DemoApplication";
@@ -36,7 +36,7 @@ export default class DemoApplicationBuild extends ModuleBuild {
             const ShaderRoot = fileURLToPath(new URL("../../../Content/Shaders/", import.meta.url));
             Configuration.CustomActions.push(...CreateVulkanShaderActions(ShaderRoot, [
                 { Name: "BasePassShadowVS", Stage: "vert", EntryPoint: "MainVS" },
-                { Name: "BasePassShadowPS", Stage: "frag", EntryPoint: "MainPS" },
+                BasePassShadowPixelShader,
                 { Name: "CompositeVS", Stage: "vert", EntryPoint: "MainVS" },
                 { Name: "CompositePS", Stage: "frag", EntryPoint: "MainPS" },
                 { Name: "ShadowDepthVS", Stage: "vert", EntryPoint: "MainVS" },

@@ -183,6 +183,22 @@ FRenderFrameResult FRenderFrameScheduler::ExecuteFrame(FRHISwapchain* const Swap
     return Result;
 }
 
+bool FRenderFrameScheduler::IsAtFrameBoundaryFor(const FRHIDevice& InDevice) const noexcept
+{
+    if (!bInitialized || bTerminal || Device != &InDevice)
+    {
+        return false;
+    }
+    for (const FFrameSlot& Slot : Slots)
+    {
+        if (Slot.bCallbackActive)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 void FRenderFrameScheduler::WaitForAllFrames()
 {
     if (!bInitialized)
